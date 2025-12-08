@@ -1,0 +1,8 @@
+{
+  "name": "AERA - Emergency Response",
+  "description": "An innovative tool for real-time emergency response, enabling rapid reporting, communication, and aid coordination.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}

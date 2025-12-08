@@ -1,0 +1,1657 @@
+
+import React, { useEffect, useState } from 'react';
+import { ViewState, UserProfile, UserRole, RoleDefinition, MockUser, DatabaseSchema, LanguageCode, OrganizationProfile, OrgMember, HouseholdMember, ReplenishmentRequest } from '../types';
+import { Input, Textarea } from '../components/Input';
+import { Button } from '../components/Button';
+import { HouseholdManager } from '../components/HouseholdManager';
+import { SignaturePad } from '../components/SignaturePad';
+import { StorageService } from '../services/storage';
+import { t } from '../services/translations';
+import { GoogleGenAI } from "@google/genai";
+import { User, Bell, Lock, LogOut, Check, Save, Building2, ArrowLeft, ArrowRight, Link as LinkIcon, Loader2, HeartPulse, ShieldCheck, Users, ToggleLeft, ToggleRight, MoreVertical, Copy, CheckCircle, Trash2, Database, X, XCircle, Globe, Search, Truck, Phone, Mail, MapPin, Power, Ban, Activity, Radio, AlertTriangle, HelpCircle, FileText, Printer, CheckSquare, Download, RefreshCcw, Clipboard, PenTool } from 'lucide-react';
+
+// Phone Formatter Utility
+const formatPhoneNumber = (value: string) => {
+  if (!value) return value;
+  const phoneNumber = value.replace(/[^\d]/g, '');
+  const phoneNumberLength = phoneNumber.length;
+  if (phoneNumberLength < 4) return phoneNumber;
+  if (phoneNumberLength < 7) {
+    return `(${phoneNumber.slice(0, 3)}) ${phoneNumber.slice(3)}`;
+  }
+  return `(${phoneNumber.slice(0, 3)}) ${phoneNumber.slice(3, 6)}-${phoneNumber.slice(6, 10)}`;
+};
+
+// --- Mock Data for Access Control ---
+const INITIAL_ROLES: RoleDefinition[] = [
+  {
+    id: 'ADMIN',
+    label: 'Administrator',
+    description: 'Full system access and user management.',
+    permissions: { canViewPII: true, canDispatchDrone: true, canApproveFunds: true, canManageInventory: true, canBroadcastAlerts: true }
+  },
+  {
+    id: 'FIRST_RESPONDER',
+    label: 'First Responder',
+    description: 'Field access to location data and medical info.',
+    permissions: { canViewPII: true, canDispatchDrone: false, canApproveFunds: false, canManageInventory: false, canBroadcastAlerts: true }
+  },
+  {
+    id: 'LOCAL_AUTHORITY',
+    label: 'Local Authority',
+    description: 'Oversight of alerts and population tracking.',
+    permissions: { canViewPII: false, canDispatchDrone: false, canApproveFunds: true, canManageInventory: false, canBroadcastAlerts: true }
+  },
+  {
+    id: 'CONTRACTOR',
+    label: 'Contractor',
+    description: 'Logistics and repair management.',
+    permissions: { canViewPII: false, canDispatchDrone: false, canApproveFunds: false, canManageInventory: true, canBroadcastAlerts: false }
+  },
+  {
+    id: 'INSTITUTION_ADMIN',
+    label: 'Institution Admin',
+    description: 'Manage community members and hub inventory.',
+    permissions: { canViewPII: false, canDispatchDrone: false, canApproveFunds: false, canManageInventory: true, canBroadcastAlerts: true }
+  },
+  {
+    id: 'GENERAL_USER',
+    label: 'General User',
+    description: 'Standard access to report emergencies.',
+    permissions: { canViewPII: false, canDispatchDrone: false, canApproveFunds: false, canManageInventory: false, canBroadcastAlerts: false }
+  }
+];
+
+export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
+  // Main Settings State
+  const [profile, setProfile] = useState<UserProfile>({
+    id: '',
+    fullName: '',
+    phone: '',
+    address: '',
+    householdMembers: 1,
+    household: [],
+    petDetails: '',
+    medicalNeeds: '',
+    emergencyContactName: '',
+    emergencyContactPhone: '',
+    emergencyContactRelation: '',
+    communityId: '',
+    role: 'GENERAL_USER',
+    language: 'en',
+    active: true,
+    notifications: { push: true, sms: true, email: true }
+  });
+  
+  // UI States
+  const [currentSection, setCurrentSection] = useState<'MAIN' | 'ACCESS_CONTROL' | 'DB_VIEWER' | 'ORG_DIRECTORY' | 'BROADCAST_CONTROL' | 'MASTER_INVENTORY'>('MAIN');
+  const [isSaved, setIsSaved] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [connectedOrg, setConnectedOrg] = useState<string | null>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+
+  // Validation States
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [addressStatus, setAddressStatus] = useState<'IDLE' | 'VERIFYING' | 'VALID' | 'INVALID'>('IDLE');
+
+  // Access Control State
+  const [activeTab, setActiveTab] = useState<'ROLES' | 'USERS'>('USERS');
+  const [roles, setRoles] = useState<RoleDefinition[]>(INITIAL_ROLES);
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [userSearch, setUserSearch] = useState('');
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+
+  // DB Viewer State
+  const [dbContent, setDbContent] = useState<DatabaseSchema | null>(null);
+
+  // Org Directory State
+  const [orgList, setOrgList] = useState<OrganizationProfile[]>([]);
+  const [orgSearch, setOrgSearch] = useState('');
+  const [selectedOrgDetails, setSelectedOrgDetails] = useState<OrganizationProfile | null>(null);
+  const [orgMembers, setOrgMembers] = useState<OrgMember[]>([]);
+
+  // Master Inventory State
+  const [inventoryRequests, setInventoryRequests] = useState<ReplenishmentRequest[]>([]);
+  const [printingRequest, setPrintingRequest] = useState<ReplenishmentRequest | null>(null);
+  const [workOrderForm, setWorkOrderForm] = useState<Record<string, string>>({});
+
+  // Broadcast Control State
+  const [systemTicker, setSystemTicker] = useState('');
+
+  useEffect(() => {
+    const loaded = StorageService.getProfile();
+    // Ensure role exists for legacy profiles
+    if (!loaded.role) loaded.role = 'GENERAL_USER';
+    if (!loaded.language) loaded.language = 'en'; 
+    if (loaded.active === undefined) loaded.active = true;
+    if (!loaded.household) loaded.household = []; // Ensure array exists
+    setProfile(loaded);
+    
+    // Assume loaded addresses are valid if they exist
+    if (loaded.address && loaded.address.length > 5) setAddressStatus('VALID');
+    
+    if (loaded.communityId && loaded.role !== 'INSTITUTION_ADMIN') {
+      const org = StorageService.getOrganization(loaded.communityId);
+      if (org) setConnectedOrg(org.name);
+    }
+  }, []);
+
+  // Fetch members when an org is selected in directory
+  useEffect(() => {
+    if (selectedOrgDetails) {
+      const members = StorageService.getOrgMembers(selectedOrgDetails.id);
+      setOrgMembers(members);
+    } else {
+      setOrgMembers([]);
+    }
+  }, [selectedOrgDetails]);
+
+  const validatePhone = (phone: string): boolean => {
+    const phoneRegex = /^[\+]?[(]?[0-9]{3}[)]?[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4,6}$/;
+    if (!phoneRegex.test(phone)) {
+      setPhoneError("Invalid format. Use 555-123-4567");
+      return false;
+    }
+    setPhoneError(null);
+    return true;
+  };
+
+  const verifyAddressWithAI = async () => {
+    if (!profile.address || profile.address.length < 5) return;
+    setAddressStatus('VERIFYING');
+    
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: `Locate the following address: "${profile.address}". Return the official address if found on Maps.`,
+        config: { tools: [{ googleMaps: {} }] }
+      });
+      
+      const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      const hasMapResult = chunks.some((c: any) => c.maps);
+
+      if (hasMapResult) {
+        setAddressStatus('VALID');
+      } else {
+        setAddressStatus('INVALID');
+      }
+    } catch (e) {
+      console.error("AI Validation failed", e);
+      setAddressStatus('VALID'); // Fallback
+    }
+  };
+
+  const handleSave = () => {
+    if (!validatePhone(profile.phone)) {
+      alert("Please fix phone number errors before saving.");
+      return;
+    }
+    if (addressStatus === 'INVALID') {
+      alert("Please verify your address.");
+      return;
+    }
+
+    StorageService.saveProfile(profile);
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 2000);
+  };
+
+  const updateProfile = (key: keyof UserProfile, value: any) => {
+    setProfile(prev => ({ ...prev, [key]: value }));
+    if (key === 'communityId') {
+      setConnectedOrg(null);
+      setVerifyError(null);
+    }
+    if (key === 'address') setAddressStatus('IDLE');
+  };
+
+  const verifyCommunityId = () => {
+    if (!profile.communityId) return;
+    setIsVerifying(true);
+    setVerifyError(null);
+    setConnectedOrg(null);
+
+    // Simulate API delay
+    setTimeout(() => {
+      const org = StorageService.getOrganization(profile.communityId);
+      setIsVerifying(false);
+      
+      if (org) {
+        setConnectedOrg(org.name);
+        // We do NOT auto-save here anymore, explicit save is safer
+      } else {
+        setVerifyError("Invalid Community ID");
+      }
+    }, 800);
+  };
+
+  const toggleNotification = (key: keyof UserProfile['notifications']) => {
+    setProfile(prev => ({
+      ...prev,
+      notifications: {
+        ...prev.notifications,
+        [key]: !prev.notifications[key]
+      }
+    }));
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    alert('Copied to clipboard');
+  };
+
+  const handleReset = () => {
+    if (confirm("This will clear all data and reset the demo. Are you sure?")) {
+      StorageService.resetDB();
+    }
+  };
+
+  const handleLogout = () => {
+    StorageService.logoutUser();
+    setView('LOGIN');
+  };
+
+  const openDbViewer = () => {
+    const db = StorageService.getDB();
+    setDbContent(db);
+    setCurrentSection('DB_VIEWER');
+  };
+
+  const openOrgDirectory = () => {
+    const db = StorageService.getDB();
+    setOrgList(db.organizations);
+    setCurrentSection('ORG_DIRECTORY');
+    setSelectedOrgDetails(null);
+  };
+
+  const openAccessControl = () => {
+    const db = StorageService.getDB();
+    setUsers(db.users);
+    setCurrentSection('ACCESS_CONTROL');
+    setSelectedUser(null);
+  };
+
+  const openBroadcastControl = () => {
+    const db = StorageService.getDB();
+    setOrgList(db.organizations);
+    setSystemTicker(db.tickerMessage);
+    setCurrentSection('BROADCAST_CONTROL');
+  };
+
+  const openMasterInventory = () => {
+    const reqs = StorageService.getAllReplenishmentRequests();
+    setInventoryRequests(reqs);
+    setCurrentSection('MASTER_INVENTORY');
+  };
+
+  // --- Access Control Handlers ---
+  const togglePermission = (roleId: UserRole, perm: keyof RoleDefinition['permissions']) => {
+    setRoles(prev => prev.map(r => {
+      if (r.id === roleId) {
+        return {
+          ...r,
+          permissions: { ...r.permissions, [perm]: !r.permissions[perm] }
+        };
+      }
+      return r;
+    }));
+  };
+
+  const updateUserRole = (userId: string, newRole: UserRole) => {
+    // Update local state and backend
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+    
+    // In a real app we would call an API, here we just update state, 
+    // but we need to persist it.
+    const user = users.find(u => u.id === userId);
+    if (user) {
+      StorageService.saveProfile({ ...user, role: newRole });
+    }
+  };
+
+  const toggleUserStatus = (userId: string, currentStatus: boolean) => {
+    const newStatus = !currentStatus;
+    StorageService.updateUserStatus(userId, newStatus);
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, active: newStatus } : u));
+    if (selectedUser && selectedUser.id === userId) {
+      setSelectedUser(prev => prev ? { ...prev, active: newStatus } : null);
+    }
+  };
+
+  const handleExportUsers = () => {
+    const headers = ['ID', 'Name', 'Phone', 'Role', 'Status', 'Address', 'Community ID', 'Household Size'];
+    const rows = users.map(u => [
+      u.id,
+      `"${u.fullName.replace(/"/g, '""')}"`,
+      u.phone,
+      u.role,
+      u.active ? 'Active' : 'Inactive',
+      `"${u.address.replace(/"/g, '""')}"`,
+      u.communityId || 'N/A',
+      u.householdMembers
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `AERA_User_Directory_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const toggleOrgStatus = (orgId: string, currentStatus: boolean) => {
+    const newStatus = !currentStatus;
+    StorageService.updateOrgStatus(orgId, newStatus);
+    // Update both list and selected detail view
+    setOrgList(prev => prev.map(o => o.id === orgId ? { ...o, active: newStatus } : o));
+    if (selectedOrgDetails && selectedOrgDetails.id === orgId) {
+      setSelectedOrgDetails(prev => prev ? { ...prev, active: newStatus } : null);
+    }
+  };
+
+  const handleUpdateSystemTicker = () => {
+    StorageService.updateSystemTicker(systemTicker);
+    alert("Global System Alert Updated");
+  };
+
+  const handleClearOrgBroadcast = (orgId: string) => {
+    StorageService.clearOrgBroadcast(orgId);
+    setOrgList(prev => prev.map(o => o.id === orgId ? { ...o, currentBroadcast: undefined } : o));
+  };
+
+  const changeLanguage = (lang: LanguageCode) => {
+    setProfile(prev => {
+      const updated = { ...prev, language: lang };
+      StorageService.saveProfile(updated);
+      return updated;
+    });
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 1000);
+  };
+
+  const handleMarkFulfilled = (requestId: string) => {
+    StorageService.updateReplenishmentRequestStatus(requestId, 'FULFILLED');
+    // Refresh list
+    setInventoryRequests(prev => prev.map(req => 
+      req.id === requestId ? { ...req, status: 'FULFILLED' } : req
+    ));
+  };
+
+  const handleReopenRequest = (requestId: string) => {
+    StorageService.updateReplenishmentRequestStatus(requestId, 'PENDING');
+    // Refresh list
+    setInventoryRequests(prev => prev.map(req => 
+      req.id === requestId ? { ...req, status: 'PENDING' } : req
+    ));
+  };
+
+  const handlePrintOrder = (req: ReplenishmentRequest) => {
+    setWorkOrderForm({}); // Reset form for new order
+    setPrintingRequest(req);
+  };
+
+  const updateWorkOrderForm = (key: string, value: string) => {
+    setWorkOrderForm(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleSaveSignature = (dataUrl: string, type: 'RELEASE' | 'RECEIVE') => {
+    if (printingRequest) {
+      StorageService.signReplenishmentRequest(printingRequest.id, dataUrl, type);
+      
+      const updatedReq = { ...printingRequest };
+      if (type === 'RELEASE') {
+        updatedReq.signature = dataUrl;
+        updatedReq.signedAt = new Date().toISOString();
+      } else {
+        updatedReq.receivedSignature = dataUrl;
+        updatedReq.receivedAt = new Date().toISOString();
+      }
+      
+      setPrintingRequest(updatedReq);
+      // Also update the main list
+      setInventoryRequests(prev => prev.map(r => r.id === printingRequest.id ? updatedReq : r));
+    }
+  };
+
+  const handleExportCSV = () => {
+    const headers = ['Request ID', 'Org Name', 'Org ID', 'Item', 'Quantity', 'Status', 'Date', 'Provider', 'Released', 'Received'];
+    const rows = inventoryRequests.map(req => [
+      req.id,
+      `"${req.orgName.replace(/"/g, '""')}"`,
+      req.orgId,
+      `"${req.item.replace(/"/g, '""')}"`,
+      req.quantity,
+      req.status,
+      new Date(req.timestamp).toLocaleDateString(),
+      `"${req.provider.replace(/"/g, '""')}"`,
+      req.signature ? 'Yes' : 'No',
+      req.receivedSignature ? 'Yes' : 'No'
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `AERA_Master_Inventory_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExportTotalsCSV = () => {
+    const totals = inventoryRequests.reduce((acc, req) => {
+      acc[req.item] = (acc[req.item] || 0) + req.quantity;
+      return acc;
+    }, {} as Record<string, number>);
+
+    const headers = ['Item Name', 'Total Quantity'];
+    const rows = Object.entries(totals).map(([item, count]) => [
+      `"${item.replace(/"/g, '""')}"`,
+      count
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `AERA_Inventory_Tally_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // --- Render: Printable Work Order (Overlay) ---
+  if (printingRequest) {
+    const org = StorageService.getOrganization(printingRequest.orgId);
+    
+    return (
+      <div className="fixed inset-0 z-[100] overflow-y-auto bg-white p-8 font-serif text-black animate-fade-in print:p-0 print:bg-white print:text-black print:static print:overflow-visible">
+        {/* Navigation (Hidden in Print) */}
+        <div className="fixed top-0 left-0 right-0 p-4 bg-slate-900 text-white flex justify-between items-center print:hidden shadow-lg z-50">
+           <span className="font-bold">Work Order Preview</span>
+           <div className="flex gap-2">
+             <Button size="sm" className="bg-brand-600 text-white" onClick={() => window.print()}>
+               <Printer size={16} className="mr-2" /> Print Now
+             </Button>
+             <Button size="sm" variant="secondary" onClick={() => setPrintingRequest(null)}>
+               <X size={16} className="mr-2" /> Close
+             </Button>
+           </div>
+        </div>
+
+        {/* Paper Layout */}
+        <div className="max-w-3xl mx-auto border border-black p-8 mt-16 print:mt-0 print:border-0 print:w-full">
+           <div className="flex justify-between items-start border-b-2 border-black pb-4 mb-6">
+              <div>
+                <h1 className="text-4xl font-bold uppercase tracking-tight">Work Order</h1>
+                <p className="text-sm font-bold uppercase mt-1">AERA Logistics Fulfillment</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm"><strong>Order ID:</strong> {printingRequest.id}</p>
+                <p className="text-sm"><strong>Printed On:</strong> {new Date().toLocaleDateString()}</p>
+                <p className="text-sm"><strong>Request Date:</strong> {new Date(printingRequest.timestamp).toLocaleDateString()}</p>
+                <p className="text-sm"><strong>Provider:</strong> {printingRequest.provider}</p>
+              </div>
+           </div>
+
+           <div className="grid grid-cols-2 gap-8 mb-8">
+              <div>
+                 <h3 className="font-bold uppercase border-b border-black mb-2 text-sm">Ship To (Organization)</h3>
+                 <p className="text-lg font-bold">{printingRequest.orgName}</p>
+                 <p>{org?.address || 'Address Unknown'}</p>
+                 <p>{org?.adminContact}</p>
+                 <p>{org?.adminPhone}</p>
+                 <p className="mt-2 text-sm font-mono">ID: {printingRequest.orgId}</p>
+              </div>
+              <div>
+                 <h3 className="font-bold uppercase border-b border-black mb-2 text-sm">Fulfillment Instructions</h3>
+                 <p className="text-sm mb-2">Please pick and pack the items listed below. Ensure quality check is performed before release.</p>
+                 <div className="border border-black p-2 text-center mt-4">
+                    <p className="text-xs uppercase font-bold">Priority Status</p>
+                    <p className="text-xl font-bold">URGENT</p>
+                 </div>
+              </div>
+           </div>
+
+           <div className="mb-12">
+              <table className="w-full border-collapse border border-black">
+                 <thead>
+                    <tr className="bg-slate-100 print:bg-slate-200">
+                       <th className="border border-black p-2 text-left w-12 print:text-black">#</th>
+                       <th className="border border-black p-2 text-left print:text-black">Requested Item</th>
+                       <th className="border border-black p-2 text-center w-24 print:text-black">Qty Req</th>
+                       <th className="border border-black p-2 text-center w-28 print:text-black">Qty Picked</th>
+                       <th className="border border-black p-2 text-center w-28 print:text-black">Verified</th>
+                    </tr>
+                 </thead>
+                 <tbody>
+                    <tr>
+                       <td className="border border-black p-3 text-center print:text-black">1</td>
+                       <td className="border border-black p-3 font-bold text-lg print:text-black">{printingRequest.item}</td>
+                       <td className="border border-black p-3 text-center font-bold text-lg print:text-black">{printingRequest.quantity}</td>
+                       <td className="border border-black p-1">
+                         <input 
+                           className="w-full h-full text-center font-bold text-lg bg-yellow-50/50 hover:bg-yellow-50 focus:bg-white outline-none transition-colors print:bg-transparent print:border-none"
+                           placeholder=""
+                           value={workOrderForm['item_picked'] || ''}
+                           onChange={(e) => updateWorkOrderForm('item_picked', e.target.value)}
+                         />
+                       </td>
+                       <td className="border border-black p-1">
+                         <input 
+                           className="w-full h-full text-center font-medium text-lg bg-yellow-50/50 hover:bg-yellow-50 focus:bg-white outline-none transition-colors print:bg-transparent print:border-none"
+                           placeholder=""
+                           value={workOrderForm['item_verified'] || ''}
+                           onChange={(e) => updateWorkOrderForm('item_verified', e.target.value)}
+                         />
+                       </td>
+                    </tr>
+                    {/* Note Rows with Inputs */}
+                    {[2,3].map(i => (
+                       <tr key={i}>
+                          <td className="border border-black p-3 text-center opacity-50 print:text-black">{i}</td>
+                          <td className="border border-black p-2">
+                            <div className="flex items-center gap-2 h-full">
+                              <span className="italic text-slate-500 text-sm whitespace-nowrap print:text-black">Notes/Substitutions:</span>
+                              <input 
+                                className="flex-1 bg-transparent border-b border-slate-300 focus:border-blue-500 outline-none text-slate-900 print:border-none print:text-black font-mono"
+                                value={workOrderForm[`note_${i}`] || ''}
+                                onChange={(e) => updateWorkOrderForm(`note_${i}`, e.target.value)}
+                              />
+                            </div>
+                          </td>
+                          <td className="border border-black p-3"></td>
+                          <td className="border border-black p-3"></td>
+                          <td className="border border-black p-3"></td>
+                       </tr>
+                    ))}
+                 </tbody>
+              </table>
+           </div>
+
+           <div className="grid grid-cols-2 gap-12 mt-12 pt-12">
+              <div className="break-inside-avoid">
+                 <p className="text-xs font-bold uppercase mb-2">Released By (Signature)</p>
+                 {printingRequest.signature ? (
+                   <div className="border border-slate-200 p-2 print:border-none">
+                     <img src={printingRequest.signature} alt="Digital Signature" className="h-16 mb-1"/>
+                     <p className="text-[10px] text-slate-500 font-mono print:text-black">
+                       Signed: {new Date(printingRequest.signedAt || '').toLocaleString()}
+                     </p>
+                   </div>
+                 ) : (
+                   <div className="print:hidden">
+                     <SignaturePad onSave={(data) => handleSaveSignature(data, 'RELEASE')} />
+                   </div>
+                 )}
+                 {/* Print-only signature line if digital not present */}
+                 {!printingRequest.signature && (
+                   <div className="hidden print:block border-b border-black mb-2 h-16"></div>
+                 )}
+              </div>
+              
+              <div className="break-inside-avoid">
+                 <p className="text-xs font-bold uppercase mb-2">Received By (Signature)</p>
+                 {printingRequest.receivedSignature ? (
+                   <div className="border border-slate-200 p-2 print:border-none">
+                     <img src={printingRequest.receivedSignature} alt="Digital Signature" className="h-16 mb-1"/>
+                     <p className="text-[10px] text-slate-500 font-mono print:text-black">
+                       Signed: {new Date(printingRequest.receivedAt || '').toLocaleString()}
+                     </p>
+                   </div>
+                 ) : (
+                   <div className="print:hidden">
+                     <SignaturePad onSave={(data) => handleSaveSignature(data, 'RECEIVE')} />
+                   </div>
+                 )}
+                 {/* Print-only signature line if digital not present */}
+                 {!printingRequest.receivedSignature && (
+                   <div className="hidden print:block border-b border-black mb-2 h-16"></div>
+                 )}
+              </div>
+           </div>
+           
+           <div className="text-center mt-12 text-xs text-slate-500 print:text-black">
+              <p>Generated by AERA System • {new Date().toLocaleString()}</p>
+           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- Render: Master Inventory Database ---
+  if (currentSection === 'MASTER_INVENTORY') {
+    const totals = inventoryRequests.reduce((acc, req) => {
+      acc[req.item] = (acc[req.item] || 0) + req.quantity;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return (
+      <div className="p-6 pb-28 space-y-6 animate-fade-in bg-white min-h-screen print:p-0 print:pb-0">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-4 sticky top-0 bg-white z-10 print:hidden">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setCurrentSection('MAIN')} className="p-2 -ml-2 text-slate-500 hover:text-slate-800">
+              <ArrowLeft size={24} />
+            </button>
+            <div>
+              <h1 className="text-xl font-bold text-slate-900">Master Inventory Database</h1>
+              <p className="text-xs text-slate-500">System-Wide Supply Request Aggregation</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Print Header (Only visible in print if printing main list) */}
+        <div className="hidden print:block mb-6">
+           <h1 className="text-2xl font-bold text-slate-900">AERA Master Inventory Report</h1>
+           <p className="text-sm text-slate-500">Generated on {new Date().toLocaleString()}</p>
+        </div>
+
+        {/* Summary Tally */}
+        <div className="space-y-4 print:break-inside-avoid">
+           <div className="flex justify-between items-end border-b-2 border-slate-900 pb-1">
+              <h3 className="font-bold text-slate-900 uppercase tracking-wider">Total Tally (All Organizations)</h3>
+              <button onClick={handleExportTotalsCSV} className="text-xs font-bold text-brand-600 hover:text-brand-700 flex items-center gap-1 print:hidden">
+                <Download size={14} /> Export Tally CSV
+              </button>
+           </div>
+           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {Object.entries(totals).map(([item, count]) => (
+                <div key={item} className="bg-slate-50 border border-slate-200 p-4 rounded-lg print:border-black print:bg-white print:border">
+                   <p className="text-xs font-bold text-slate-500 uppercase">{item}</p>
+                   <p className="text-2xl font-mono font-bold text-slate-900">{count}</p>
+                </div>
+              ))}
+              {Object.keys(totals).length === 0 && <p className="text-slate-500 italic">No requests logged.</p>}
+           </div>
+        </div>
+
+        {/* Detailed List */}
+        <div className="space-y-4 mt-8">
+           <div className="flex justify-between items-end border-b-2 border-slate-900 pb-1">
+             <h3 className="font-bold text-slate-900 uppercase tracking-wider">Request Log</h3>
+             <Button 
+                size="sm" 
+                variant="outline" 
+                className="border-slate-300 text-slate-900 hover:bg-slate-50 print:hidden h-8"
+                onClick={handleExportCSV}
+              >
+                <Download size={14} className="mr-2" /> Export Log CSV
+              </Button>
+           </div>
+           
+           <div className="overflow-x-auto print:overflow-visible">
+             <table className="w-full text-left text-sm print:text-xs">
+               <thead className="print:table-header-group">
+                 <tr className="bg-slate-100 print:bg-slate-200">
+                   <th className="p-3 font-bold text-slate-700">Organization</th>
+                   <th className="p-3 font-bold text-slate-700">Item</th>
+                   <th className="p-3 font-bold text-slate-700">Qty</th>
+                   <th className="p-3 font-bold text-slate-700">Date</th>
+                   <th className="p-3 font-bold text-slate-700">Status</th>
+                   <th className="p-3 font-bold text-slate-700 print:hidden">Action</th>
+                 </tr>
+               </thead>
+               <tbody className="divide-y divide-slate-200">
+                 {inventoryRequests.map(req => (
+                   <tr key={req.id} className="print:break-inside-avoid">
+                     <td className="p-3 font-medium text-slate-900">{req.orgName} <span className="text-xs text-slate-500 block">{req.orgId}</span></td>
+                     <td className="p-3 text-slate-700">{req.item}</td>
+                     <td className="p-3 font-mono font-bold text-slate-900">{req.quantity}</td>
+                     <td className="p-3 text-slate-500">{new Date(req.timestamp).toLocaleDateString()}</td>
+                     <td className="p-3">
+                       <span className={`px-2 py-1 rounded text-xs font-bold ${req.status === 'FULFILLED' ? 'bg-green-100 text-green-700 print:border print:border-black' : 'bg-yellow-100 text-yellow-700 print:border print:border-black'}`}>
+                         {req.status}
+                       </span>
+                     </td>
+                     <td className="p-3 print:hidden">
+                       <div className="flex flex-col gap-2">
+                         {req.status === 'PENDING' ? (
+                           <div className="flex gap-2">
+                             <Button 
+                               size="sm" 
+                               onClick={() => handleMarkFulfilled(req.id)}
+                               className="bg-green-600 hover:bg-green-700 text-xs py-1 h-8"
+                             >
+                               <CheckSquare size={14} className="mr-1" /> Fulfill
+                             </Button>
+                             <Button
+                               size="sm"
+                               variant="outline"
+                               onClick={() => handlePrintOrder(req)}
+                               className="text-xs py-1 h-8 px-2 border-slate-300"
+                               title={req.signature ? "Print Work Order" : "Sign Work Order"}
+                             >
+                               {req.signature && req.receivedSignature ? <Printer size={14} /> : <PenTool size={14} />}
+                             </Button>
+                           </div>
+                         ) : (
+                           <div className="flex items-center gap-2">
+                             <Button
+                               size="sm"
+                               variant="outline"
+                               onClick={() => handlePrintOrder(req)}
+                               className="text-xs py-1 h-8 px-2 border-slate-300 mr-2"
+                               title="View Signed Order"
+                             >
+                               {req.signature && req.receivedSignature ? <CheckCircle size={14} className="text-green-600" /> : <Printer size={14} />}
+                             </Button>
+                             <button 
+                               onClick={() => handleReopenRequest(req.id)}
+                               className="text-xs text-slate-400 hover:text-blue-600 hover:underline flex items-center gap-0.5"
+                               title="Undo Completion"
+                             >
+                               <RefreshCcw size={10} /> Undo
+                             </button>
+                           </div>
+                         )}
+                       </div>
+                     </td>
+                   </tr>
+                 ))}
+                 {inventoryRequests.length === 0 && (
+                   <tr><td colSpan={6} className="p-4 text-center text-slate-500">No requests found.</td></tr>
+                 )}
+               </tbody>
+             </table>
+           </div>
+        </div>
+        
+        {/* Print Footer */}
+        <div className="hidden print:block mt-8 pt-4 border-t border-slate-300 text-center text-xs text-slate-500 fixed bottom-0 left-0 right-0">
+           <p>End of Report • AERA System</p>
+        </div>
+      </div>
+    );
+  }
+
+  // --- Render: Broadcast Control ---
+  if (currentSection === 'BROADCAST_CONTROL') {
+    return (
+      <div className="p-6 pb-28 space-y-6 animate-fade-in bg-slate-50 min-h-screen">
+        <div className="flex items-center gap-3 border-b border-slate-200 pb-4 sticky top-0 bg-slate-50 z-10">
+          <button onClick={() => setCurrentSection('MAIN')} className="p-2 -ml-2 text-slate-500 hover:text-slate-800">
+            <ArrowLeft size={24} />
+          </button>
+          <div>
+            <h1 className="text-xl font-bold text-slate-900">Broadcast Control</h1>
+            <p className="text-xs text-slate-500">Manage System & Organization Alerts</p>
+          </div>
+        </div>
+
+        <div className="bg-red-50 border border-red-200 p-4 rounded-xl shadow-sm">
+           <h3 className="font-bold text-red-900 mb-2 flex items-center gap-2">
+             <Activity size={18} /> Global System Alert
+           </h3>
+           <p className="text-xs text-red-700 mb-3">
+             This message overrides ALL organization broadcasts and is visible to every user.
+           </p>
+           <Textarea 
+             className="bg-white border-red-200 mb-3"
+             value={systemTicker}
+             onChange={(e) => setSystemTicker(e.target.value)}
+             placeholder="Enter high-priority system alert..."
+           />
+           <div className="flex justify-end gap-2">
+             <Button size="sm" variant="ghost" onClick={() => setSystemTicker('')} className="text-slate-500">Clear</Button>
+             <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={handleUpdateSystemTicker}>Update Global Alert</Button>
+           </div>
+        </div>
+
+        <h3 className="font-bold text-slate-900 mt-4">Active Organization Broadcasts</h3>
+        <div className="space-y-3">
+           {orgList.filter(o => o.currentBroadcast).map(org => (
+             <div key={org.id} className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
+                <div className="flex justify-between items-start mb-2">
+                   <div className="font-bold text-slate-900">{org.name}</div>
+                   <button 
+                     onClick={() => handleClearOrgBroadcast(org.id)}
+                     className="text-xs text-red-600 font-bold hover:underline"
+                   >
+                     Remove
+                   </button>
+                </div>
+                <div className="bg-slate-50 p-3 rounded text-sm text-slate-700 italic">
+                  "{org.currentBroadcast}"
+                </div>
+                <div className="text-xs text-slate-400 mt-2 text-right">
+                  Last Updated: {new Date(org.lastBroadcastTime || '').toLocaleString()}
+                </div>
+             </div>
+           ))}
+           {orgList.filter(o => o.currentBroadcast).length === 0 && (
+             <p className="text-center text-slate-400 py-4 italic">No active organization broadcasts.</p>
+           )}
+        </div>
+      </div>
+    );
+  }
+
+  // --- Render: DB Viewer ---
+  if (currentSection === 'DB_VIEWER') {
+    return (
+      <div className="p-6 pb-28 space-y-6 animate-fade-in bg-slate-900 min-h-screen text-slate-300 font-mono">
+        <div className="flex items-center justify-between border-b border-slate-700 pb-4 sticky top-0 bg-slate-900 z-10">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setCurrentSection('MAIN')} className="p-2 -ml-2 text-slate-400 hover:text-white">
+              <ArrowLeft size={24} />
+            </button>
+            <h1 className="text-xl font-bold text-white">Database Viewer</h1>
+          </div>
+          <Button 
+            size="sm" 
+            variant="ghost" 
+            className="text-brand-400 hover:text-brand-300 hover:bg-slate-800"
+            onClick={() => copyToClipboard(JSON.stringify(dbContent, null, 2))}
+          >
+            <Copy size={16} className="mr-2" /> Copy JSON
+          </Button>
+        </div>
+
+        <div className="space-y-6">
+          <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 overflow-hidden">
+             <h3 className="text-brand-400 font-bold mb-2">Users ({dbContent?.users.length})</h3>
+             <pre className="text-xs overflow-auto max-h-60 text-slate-300">
+               {JSON.stringify(dbContent?.users, null, 2)}
+             </pre>
+          </div>
+          <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 overflow-hidden">
+             <h3 className="text-purple-400 font-bold mb-2">Organizations ({dbContent?.organizations.length})</h3>
+             <div className="space-y-2">
+                {dbContent?.organizations.map(org => (
+                  <div key={org.id} className="p-2 bg-slate-900 rounded border border-slate-600 flex justify-between">
+                    <span>{org.name}</span>
+                    <span className="text-purple-300 select-all font-bold">{org.id}</span>
+                  </div>
+                ))}
+             </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- Render: Org Directory ---
+  if (currentSection === 'ORG_DIRECTORY') {
+    const filteredOrgs = orgList.filter(o => 
+      o.name.toLowerCase().includes(orgSearch.toLowerCase()) || 
+      o.id.toLowerCase().includes(orgSearch.toLowerCase()) ||
+      o.type.toLowerCase().includes(orgSearch.toLowerCase())
+    );
+
+    return (
+      <div className="p-6 pb-28 space-y-6 animate-fade-in bg-slate-50 min-h-screen">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-4 sticky top-0 bg-slate-50 z-10">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setCurrentSection('MAIN')} className="p-2 -ml-2 text-slate-500 hover:text-slate-800">
+              <ArrowLeft size={24} />
+            </button>
+            <div>
+              <h1 className="text-xl font-bold text-slate-900">Organization Directory</h1>
+              <p className="text-xs text-slate-500">Search and View Registered Hubs</p>
+            </div>
+          </div>
+        </div>
+
+        {selectedOrgDetails ? (
+          <div className="animate-slide-up space-y-6">
+            <Button variant="ghost" onClick={() => setSelectedOrgDetails(null)} className="pl-0 text-slate-500">
+              <ArrowLeft size={16} className="mr-1" /> Back to list
+            </Button>
+
+            <div className={`bg-white rounded-2xl border ${selectedOrgDetails.active ? 'border-slate-200' : 'border-red-300'} shadow-lg overflow-hidden`}>
+               <div className={`${selectedOrgDetails.active ? 'bg-purple-600' : 'bg-slate-600'} p-6 text-white`}>
+                 <div className="flex items-start justify-between">
+                   <div>
+                     <div className="flex gap-2 mb-2">
+                       <span className="inline-block px-2 py-1 bg-white/20 rounded text-xs font-bold border border-white/30">{selectedOrgDetails.type}</span>
+                       {!selectedOrgDetails.active && <span className="inline-block px-2 py-1 bg-red-500 rounded text-xs font-bold">SUSPENDED</span>}
+                     </div>
+                     <h2 className="text-2xl font-bold">{selectedOrgDetails.name}</h2>
+                     <p className="flex items-center gap-1 text-white/80 text-sm mt-1">
+                       <ShieldCheck size={14} /> {selectedOrgDetails.verified ? 'Verified Partner' : 'Unverified'}
+                     </p>
+                   </div>
+                   <div className="text-right">
+                     <p className="text-xs text-white/60 font-bold uppercase tracking-wider">Community ID</p>
+                     <p className="text-3xl font-mono font-black tracking-widest">{selectedOrgDetails.id}</p>
+                   </div>
+                 </div>
+               </div>
+
+               <div className="p-6 space-y-6">
+                 {/* Detail Grids */}
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-3">
+                      <h3 className="font-bold text-slate-900 border-b border-slate-100 pb-2">Location & Contact</h3>
+                      <div className="flex items-start gap-3">
+                        <MapPin className="text-slate-400 mt-1" size={18} />
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">Address</p>
+                          <p className="text-sm text-slate-600">{selectedOrgDetails.address}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <User className="text-slate-400 mt-1" size={18} />
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">Admin</p>
+                          <p className="text-sm text-slate-600">{selectedOrgDetails.adminContact}</p>
+                          <p className="text-xs text-slate-500">{selectedOrgDetails.adminPhone}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <h3 className="font-bold text-slate-900 border-b border-slate-100 pb-2">Logistics Profile</h3>
+                      <div className="flex items-start gap-3">
+                        <Truck className="text-slate-400 mt-1" size={18} />
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">Replenishment Provider</p>
+                          <p className="text-sm text-slate-600">{selectedOrgDetails.replenishmentProvider}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <Mail className="text-slate-400 mt-1" size={18} />
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">Supply Email</p>
+                          <p className="text-sm text-slate-600 break-all">{selectedOrgDetails.replenishmentEmail || 'N/A'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <Phone className="text-slate-400 mt-1" size={18} />
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">Supply Phone</p>
+                          <p className="text-sm text-slate-600">{selectedOrgDetails.replenishmentPhone || 'N/A'}</p>
+                        </div>
+                      </div>
+                    </div>
+                 </div>
+
+                 {/* Member List Section */}
+                 <div className="space-y-3">
+                    <h3 className="font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
+                      <Users size={18} className="text-slate-400" /> Registered Members ({orgMembers.length})
+                    </h3>
+                    {orgMembers.length === 0 ? (
+                      <p className="text-slate-500 text-sm italic">No members linked yet.</p>
+                    ) : (
+                      <div className="max-h-60 overflow-y-auto space-y-2 border border-slate-100 rounded-lg p-2 bg-slate-50">
+                        {orgMembers.map(member => (
+                          <div key={member.id} className="bg-white p-3 rounded-lg border border-slate-200 flex justify-between items-center shadow-sm">
+                             <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs text-white ${
+                                  member.status === 'SAFE' ? 'bg-green-500' : member.status === 'DANGER' ? 'bg-red-500' : 'bg-slate-400'
+                                }`}>
+                                  {member.name.charAt(0)}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-bold text-slate-900">{member.name}</p>
+                                  <p className="text-[10px] text-slate-500">{member.phone}</p>
+                                </div>
+                             </div>
+                             <div className="text-right">
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                                  member.status === 'SAFE' ? 'bg-green-100 text-green-700' : 
+                                  member.status === 'DANGER' ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-600'
+                                }`}>
+                                  {member.status}
+                                </span>
+                             </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                 </div>
+               </div>
+               
+               <div className="bg-slate-50 p-4 border-t border-slate-200 flex justify-between items-center">
+                  <Button 
+                    size="sm" 
+                    variant={selectedOrgDetails.active ? "danger" : "primary"}
+                    onClick={() => toggleOrgStatus(selectedOrgDetails.id, selectedOrgDetails.active)}
+                    className={selectedOrgDetails.active ? "bg-red-50 text-red-600 border border-red-200 hover:bg-red-100" : "bg-green-600 text-white"}
+                  >
+                    {selectedOrgDetails.active ? (
+                      <>
+                        <Ban size={16} className="mr-2" /> Deactivate Org
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle size={16} className="mr-2" /> Activate Org
+                      </>
+                    )}
+                  </Button>
+
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => copyToClipboard(selectedOrgDetails.id)}
+                  >
+                    <Copy size={16} className="mr-2" /> Copy Code
+                  </Button>
+               </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="relative">
+              <Search className="absolute left-3 top-3.5 text-slate-400" size={20} />
+              <Input 
+                className="pl-10" 
+                placeholder="Search by Name, Type, or ID..." 
+                value={orgSearch} 
+                onChange={(e) => setOrgSearch(e.target.value)} 
+              />
+            </div>
+
+            <div className="space-y-3">
+              {filteredOrgs.length === 0 ? (
+                <div className="text-center py-10 text-slate-400">
+                  <Building2 size={48} className="mx-auto mb-2 opacity-20" />
+                  <p>No organizations found matching "{orgSearch}"</p>
+                </div>
+              ) : (
+                filteredOrgs.map(org => (
+                  <button 
+                    key={org.id}
+                    onClick={() => setSelectedOrgDetails(org)}
+                    className={`w-full bg-white p-4 rounded-xl border shadow-sm hover:shadow-md transition-all text-left flex justify-between items-center group ${org.active ? 'border-slate-200 hover:border-purple-300' : 'border-red-200 bg-red-50/30'}`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg border ${org.active ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-slate-200 text-slate-500 border-slate-300'}`}>
+                        {org.name.charAt(0)}
+                      </div>
+                      <div>
+                        <h3 className={`font-bold transition-colors ${org.active ? 'text-slate-900 group-hover:text-purple-700' : 'text-slate-500'}`}>
+                          {org.name} {!org.active && <span className="text-[10px] text-red-500 ml-2 font-bold uppercase">(Inactive)</span>}
+                        </h3>
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                          <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{org.type}</span>
+                          <span className="font-mono">{org.id}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <ArrowRight size={20} className="text-slate-300 group-hover:text-purple-500" />
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // --- Render: Access Control Section ---
+  if (currentSection === 'ACCESS_CONTROL') {
+    const filteredUsers = users.filter(u => 
+      u.fullName.toLowerCase().includes(userSearch.toLowerCase()) ||
+      u.phone.includes(userSearch) ||
+      u.role.toLowerCase().includes(userSearch.toLowerCase())
+    );
+
+    // If a user is selected, show their detail view
+    if (selectedUser) {
+      return (
+        <div className="p-6 pb-28 space-y-6 animate-fade-in bg-slate-50 min-h-screen">
+          <div className="flex items-center gap-3 border-b border-slate-200 pb-4 sticky top-0 bg-slate-50 z-10">
+            <button onClick={() => setSelectedUser(null)} className="p-2 -ml-2 text-slate-500 hover:text-slate-800">
+              <ArrowLeft size={24} />
+            </button>
+            <h1 className="text-xl font-bold text-slate-900">User Profile</h1>
+          </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-slide-up">
+             <div className="bg-slate-800 p-6 text-white flex justify-between items-start">
+               <div className="flex items-center gap-4">
+                 <div className="w-16 h-16 rounded-full bg-slate-600 flex items-center justify-center text-2xl font-bold border-2 border-slate-500">
+                   {selectedUser.fullName.charAt(0)}
+                 </div>
+                 <div>
+                   <h2 className="text-2xl font-bold">{selectedUser.fullName}</h2>
+                   <div className="flex gap-2 mt-1">
+                     <span className="px-2 py-0.5 bg-white/20 rounded text-xs font-bold uppercase">{selectedUser.role.replace('_', ' ')}</span>
+                     <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${selectedUser.active ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
+                       {selectedUser.active ? 'Active' : 'Suspended'}
+                     </span>
+                   </div>
+                 </div>
+               </div>
+               <div className="text-right text-xs opacity-60 font-mono">ID: {selectedUser.id}</div>
+             </div>
+
+             <div className="p-6 space-y-6">
+                {/* Contact Info */}
+                <div className="grid md:grid-cols-2 gap-6">
+                   <div className="space-y-3">
+                      <h3 className="font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
+                        <Phone size={16} className="text-slate-400" /> Contact Details
+                      </h3>
+                      <div>
+                        <p className="text-xs text-slate-500 font-bold uppercase">Mobile Phone</p>
+                        <a href={`tel:${selectedUser.phone}`} className="text-blue-600 font-bold hover:underline">{selectedUser.phone}</a>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-bold uppercase">Home Address</p>
+                        <div className="flex items-start gap-1">
+                          <MapPin size={14} className="mt-0.5 text-slate-400" />
+                          <p className="text-slate-900">{selectedUser.address || 'Not Provided'}</p>
+                        </div>
+                      </div>
+                      {selectedUser.communityId && (
+                        <div>
+                          <p className="text-xs text-slate-500 font-bold uppercase">Community Connection</p>
+                          <p className="text-purple-700 font-bold bg-purple-50 px-2 py-1 rounded w-fit text-sm mt-1">{selectedUser.communityId}</p>
+                        </div>
+                      )}
+                   </div>
+
+                   <div className="space-y-3">
+                      <h3 className="font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
+                        <HeartPulse size={16} className="text-slate-400" /> Emergency Profile
+                      </h3>
+                      {selectedUser.medicalNeeds && (
+                        <div className="bg-red-50 p-3 rounded-lg border border-red-100">
+                           <p className="text-xs text-red-600 font-bold uppercase mb-1">Medical Needs</p>
+                           <p className="text-red-900 font-medium text-sm">{selectedUser.medicalNeeds}</p>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-xs text-slate-500 font-bold uppercase">Household</p>
+                        <p className="text-slate-900 font-bold text-lg">{selectedUser.householdMembers} Member(s)</p>
+                        {selectedUser.household.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {selectedUser.household.map(mem => (
+                              <div key={mem.id} className="text-xs bg-slate-100 p-2 rounded flex justify-between">
+                                <span className="font-bold">{mem.name}</span>
+                                <span className="text-slate-500">{mem.age} • {mem.needs || 'No needs'}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-bold uppercase">Emergency Contact</p>
+                        <p className="text-slate-900 text-sm font-medium">{selectedUser.emergencyContactName} <span className="text-slate-500">({selectedUser.emergencyContactRelation})</span></p>
+                        <a href={`tel:${selectedUser.emergencyContactPhone}`} className="text-sm font-bold text-slate-700">{selectedUser.emergencyContactPhone}</a>
+                      </div>
+                   </div>
+                </div>
+
+                {/* Controls */}
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mt-4 space-y-4">
+                   <h3 className="font-bold text-slate-900 text-sm uppercase tracking-wider">Account Management</h3>
+                   
+                   <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium text-slate-700">System Role</label>
+                      <select 
+                        value={selectedUser.role}
+                        onChange={(e) => updateUserRole(selectedUser.id, e.target.value as UserRole)}
+                        className="text-sm p-2 rounded border border-slate-300 bg-white font-medium disabled:opacity-50"
+                        disabled={!selectedUser.active}
+                      >
+                        {roles.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+                      </select>
+                   </div>
+
+                   <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+                      <span className="text-sm font-medium text-slate-700">Account Status</span>
+                      <Button 
+                        size="sm"
+                        onClick={() => toggleUserStatus(selectedUser.id, selectedUser.active !== false)}
+                        className={selectedUser.active ? "bg-red-100 text-red-700 hover:bg-red-200 border-red-200" : "bg-green-600 text-white"}
+                      >
+                        {selectedUser.active ? "Suspend Account" : "Activate Account"}
+                      </Button>
+                   </div>
+                </div>
+             </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="p-6 pb-28 space-y-6 animate-fade-in bg-slate-50 min-h-screen">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-4 sticky top-0 bg-slate-50 z-10">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setCurrentSection('MAIN')} className="p-2 -ml-2 text-slate-500 hover:text-slate-800">
+              <ArrowLeft size={24} />
+            </button>
+            <div>
+              <h1 className="text-xl font-bold text-slate-900">User Directory</h1>
+              <p className="text-xs text-slate-500">Manage All Registered Users & Permissions</p>
+            </div>
+          </div>
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="border-slate-300 text-slate-900 hover:bg-slate-100 h-9"
+            onClick={handleExportUsers}
+          >
+            <Download size={16} className="mr-2" /> Export CSV
+          </Button>
+        </div>
+        
+        {/* Toggle Tabs */}
+        <div className="flex bg-white rounded-lg p-1 border border-slate-200">
+          <button 
+            onClick={() => setActiveTab('USERS')}
+            className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${
+              activeTab === 'USERS' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            All Users ({users.length})
+          </button>
+          <button 
+            onClick={() => setActiveTab('ROLES')}
+            className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${
+              activeTab === 'ROLES' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            Role Definitions
+          </button>
+        </div>
+
+        {activeTab === 'ROLES' && (
+          <div className="space-y-4">
+             {roles.map(role => (
+               <div key={role.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                 <div className="p-4 bg-slate-50 border-b border-slate-100">
+                   <h3 className="font-bold text-slate-900">{role.label}</h3>
+                   <p className="text-xs text-slate-500">{role.description}</p>
+                 </div>
+                 <div className="p-4 space-y-3">
+                    {Object.entries(role.permissions).map(([key, val]) => (
+                      <div key={key} className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-slate-700 capitalize">
+                          {key.replace('can', '').replace(/([A-Z])/g, ' $1').trim()}
+                        </span>
+                        <button 
+                          onClick={() => togglePermission(role.id, key as keyof RoleDefinition['permissions'])}
+                          className={`w-10 h-5 rounded-full relative transition-colors ${val ? 'bg-green-500' : 'bg-slate-300'}`}
+                        >
+                          <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm ${val ? 'left-[22px]' : 'left-0.5'}`} />
+                        </button>
+                      </div>
+                    ))}
+                 </div>
+               </div>
+             ))}
+          </div>
+        )}
+
+        {activeTab === 'USERS' && (
+          <div className="space-y-4">
+             <div className="relative">
+                <Search className="absolute left-3 top-3.5 text-slate-400" size={18} />
+                <Input 
+                  className="pl-10 h-10" 
+                  placeholder="Search users by name, phone, or role..." 
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                />
+             </div>
+             {filteredUsers.map(user => (
+               <div 
+                 key={user.id} 
+                 onClick={() => setSelectedUser(user)}
+                 className={`bg-white p-4 rounded-xl border shadow-sm flex flex-col gap-3 cursor-pointer hover:border-brand-400 hover:shadow-md transition-all group ${user.active ? 'border-slate-200' : 'border-red-200 bg-red-50/10'}`}
+               >
+                 <div className="flex items-center justify-between">
+                   <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-full ${user.active ? 'bg-slate-100 text-slate-600' : 'bg-red-100 text-red-500'}`}>
+                         <User size={18} />
+                      </div>
+                      <div>
+                        <h3 className={`font-bold group-hover:text-brand-700 transition-colors ${user.active ? 'text-slate-900' : 'text-slate-500 line-through'}`}>{user.fullName}</h3>
+                        <p className="text-xs text-slate-500">{user.phone} {user.role === 'ADMIN' && <span className="text-brand-600 font-bold ml-1">(Admin)</span>}</p>
+                      </div>
+                   </div>
+                   <ArrowRight size={18} className="text-slate-300 group-hover:text-brand-500" />
+                 </div>
+                 
+                 <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
+                    <span className={`text-[10px] font-bold uppercase ${user.active ? 'text-green-600' : 'text-red-600'}`}>
+                      Status: {user.active ? 'Active' : 'Deactivated'}
+                    </span>
+                    <span className="text-xs px-2 py-1 bg-slate-100 rounded text-slate-600 font-medium">
+                      {user.role.replace('_', ' ')}
+                    </span>
+                 </div>
+               </div>
+             ))}
+             {filteredUsers.length === 0 && <p className="text-center text-slate-400 py-4">No users found.</p>}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // --- Render: Main Settings ---
+  return (
+    <div className="p-6 pb-28 space-y-8 animate-fade-in bg-slate-50 min-h-screen">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div className="flex items-center gap-3">
+           <button onClick={() => setView('DASHBOARD')} className="p-2 -ml-2 text-slate-500 hover:text-slate-800 md:hidden">
+             <ArrowLeft size={24} />
+           </button>
+           <h1 className="text-2xl font-bold text-slate-900">{t('settings.title')}</h1>
+        </div>
+        
+        {isSaved && (
+          <span className="text-sm font-medium text-green-600 flex items-center gap-1 animate-fade-in">
+            <Check size={16} /> Saved
+          </span>
+        )}
+      </div>
+
+      {/* Language Selector */}
+      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4">
+        <div className="flex items-center gap-4 mb-2">
+          <div className="p-3 bg-indigo-50 rounded-full text-indigo-600">
+            <Globe size={24} />
+          </div>
+          <h2 className="text-lg font-semibold text-slate-800">{t('settings.language')}</h2>
+        </div>
+        
+        <div className="flex gap-2">
+          <button 
+            onClick={() => changeLanguage('en')}
+            className={`flex-1 py-3 px-4 rounded-xl border-2 font-bold transition-all ${
+              profile.language === 'en' 
+                ? 'border-indigo-600 bg-indigo-50 text-indigo-800' 
+                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+            }`}
+          >
+            English
+          </button>
+          <button 
+            onClick={() => changeLanguage('es')}
+            className={`flex-1 py-3 px-4 rounded-xl border-2 font-bold transition-all ${
+              profile.language === 'es' 
+                ? 'border-indigo-600 bg-indigo-50 text-indigo-800' 
+                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+            }`}
+          >
+            Español
+          </button>
+          <button 
+            onClick={() => changeLanguage('fr')}
+            className={`flex-1 py-3 px-4 rounded-xl border-2 font-bold transition-all ${
+              profile.language === 'fr' 
+                ? 'border-indigo-600 bg-indigo-50 text-indigo-800' 
+                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+            }`}
+          >
+            Français
+          </button>
+        </div>
+      </section>
+
+      {/* Admin / Org Admin Entry Point */}
+      <section className="bg-slate-900 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-6 opacity-10">
+          <ShieldCheck size={80} />
+        </div>
+        <div className="relative z-10">
+          <div className="flex items-center gap-2 mb-2 text-brand-400 font-bold text-xs uppercase tracking-wider">
+            <Lock size={12} /> Administrator Area
+          </div>
+          <h2 className="text-xl font-bold mb-4">Roles & Dashboards</h2>
+          <div className="space-y-3">
+            {profile.role === 'ADMIN' && (
+              <>
+                <Button 
+                  onClick={openAccessControl} 
+                  className="bg-brand-600 hover:bg-brand-500 text-white border-0 w-full justify-between"
+                >
+                  <span>User Directory & Access Control</span>
+                  <Users size={18} />
+                </Button>
+                <Button 
+                  onClick={openOrgDirectory} 
+                  className="bg-purple-600 hover:bg-purple-500 text-white border-0 w-full justify-between"
+                >
+                  <span>Organization Directory</span>
+                  <Building2 size={18} />
+                </Button>
+                <Button 
+                  onClick={openMasterInventory} 
+                  className="bg-orange-600 hover:bg-orange-500 text-white border-0 w-full justify-between"
+                >
+                  <span>Master Inventory Database</span>
+                  <FileText size={18} />
+                </Button>
+                <Button 
+                  onClick={openBroadcastControl} 
+                  className="bg-red-600 hover:bg-red-500 text-white border-0 w-full justify-between"
+                >
+                  <span>Manage Broadcasts</span>
+                  <Radio size={18} />
+                </Button>
+              </>
+            )}
+            {profile.role === 'INSTITUTION_ADMIN' && (
+               <Button 
+                onClick={() => setView('ORG_DASHBOARD')}
+                className="bg-purple-600 hover:bg-purple-500 text-white border-0 w-full justify-between"
+              >
+                <span>Open Org Dashboard</span>
+                <Building2 size={18} />
+              </Button>
+            )}
+            <Button 
+              onClick={openDbViewer}
+              variant="outline"
+              className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 w-full justify-between"
+            >
+               <span>View Raw Database</span>
+               <Database size={18} />
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* Registration Info */}
+      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4">
+        <div className="flex items-center gap-4 mb-2">
+          <div className="p-3 bg-brand-50 rounded-full text-brand-600">
+            <User size={24} />
+          </div>
+          <h2 className="text-lg font-semibold text-slate-800">{t('settings.personal_info')}</h2>
+        </div>
+        <div className="text-xs text-slate-400 font-mono -mt-4 mb-2">ID: {profile.id}</div>
+
+        <Input 
+          label="Full Name" 
+          value={profile.fullName}
+          onChange={(e) => updateProfile('fullName', e.target.value)}
+          placeholder="e.g. Jane Doe"
+        />
+        <Input 
+          label="Mobile Phone" 
+          value={profile.phone}
+          onChange={(e) => updateProfile('phone', formatPhoneNumber(e.target.value))}
+          onBlur={() => validatePhone(profile.phone)}
+          placeholder="e.g. (555) 123-4567"
+          className={phoneError ? 'border-red-500 bg-red-50' : ''}
+          error={phoneError || undefined}
+        />
+        
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">Home Address</label>
+          <div className="flex gap-2">
+            <input 
+              placeholder="123 Main St..."
+              value={profile.address}
+              onChange={(e) => updateProfile('address', e.target.value)}
+              className={`w-full px-4 py-3 rounded-lg border focus:ring-2 outline-none transition-all font-medium ${
+                addressStatus === 'VALID' ? 'border-green-500 bg-green-50 focus:ring-green-500' :
+                addressStatus === 'INVALID' ? 'border-red-500 bg-red-50 focus:ring-red-500' :
+                'border-slate-300 focus:ring-brand-500 focus:border-brand-500'
+              }`}
+            />
+            <Button 
+              onClick={verifyAddressWithAI}
+              disabled={addressStatus === 'VERIFYING' || !profile.address}
+              className={`min-w-[50px] ${addressStatus === 'VALID' ? 'bg-green-600' : 'bg-slate-800'}`}
+            >
+              {addressStatus === 'VERIFYING' ? <Loader2 className="animate-spin" /> : 
+               addressStatus === 'VALID' ? <CheckCircle size={20}/> : "Verify"}
+            </Button>
+          </div>
+          {addressStatus === 'VALID' && <p className="text-xs text-green-600 font-bold mt-1">Verified with Google Maps</p>}
+          {addressStatus === 'INVALID' && <p className="text-xs text-red-600 font-bold mt-1">Address not found on Maps</p>}
+        </div>
+        
+        {/* Emergency Contact */}
+        <div className="border-t border-slate-200 pt-4">
+           <label className="text-sm font-medium text-slate-700 mb-2 block">Emergency Contact</label>
+           <div className="space-y-3">
+              <Input 
+                placeholder="Contact Name"
+                value={profile.emergencyContactName}
+                onChange={(e) => updateProfile('emergencyContactName', e.target.value)}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <Input 
+                  placeholder="Mobile Phone"
+                  type="tel"
+                  value={profile.emergencyContactPhone}
+                  onChange={(e) => updateProfile('emergencyContactPhone', formatPhoneNumber(e.target.value))}
+                />
+                <Input 
+                  placeholder="Relationship"
+                  value={profile.emergencyContactRelation}
+                  onChange={(e) => updateProfile('emergencyContactRelation', e.target.value)}
+                />
+              </div>
+           </div>
+        </div>
+        
+        <Button 
+          onClick={handleSave} 
+          fullWidth 
+          className="shadow-md mt-4 bg-slate-800 hover:bg-slate-700" 
+          size="lg"
+        >
+          <Save size={20} className="mr-2" /> Update Profile
+        </Button>
+      </section>
+
+      {/* Vital Intake Info */}
+      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-red-100">
+        <div className="flex items-center gap-4 mb-2">
+          <div className="p-3 bg-red-50 rounded-full text-red-600">
+            <HeartPulse size={24} />
+          </div>
+          <h2 className="text-lg font-semibold text-slate-800">{t('settings.vital_info')}</h2>
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Household Members</label>
+          <HouseholdManager 
+            members={profile.household}
+            onChange={(updated) => updateProfile('household', updated)}
+          />
+        </div>
+
+        <Input 
+          label="Pets" 
+          placeholder="e.g. 2 Dogs"
+          value={profile.petDetails}
+          onChange={(e) => updateProfile('petDetails', e.target.value)}
+        />
+        <Textarea 
+          label="Medical / Special Needs" 
+          value={profile.medicalNeeds}
+          onChange={(e) => updateProfile('medicalNeeds', e.target.value)}
+        />
+        
+        <Button onClick={handleSave} fullWidth className="bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 shadow-sm">
+           Update Vitals
+        </Button>
+      </section>
+
+      {/* Community Onboarding */}
+      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-purple-100 relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-4 opacity-10">
+          <Building2 size={64} className="text-purple-600" />
+        </div>
+        <div className="flex items-center gap-4 mb-2 relative z-10">
+          <div className="p-3 bg-purple-50 rounded-full text-purple-600">
+            <Building2 size={24} />
+          </div>
+          <h2 className="text-lg font-semibold text-slate-800">{t('settings.trusted_conn')}</h2>
+        </div>
+        
+        {profile.role === 'INSTITUTION_ADMIN' ? (
+          <div className="relative z-10">
+             <div className="bg-purple-100 border border-purple-200 p-4 rounded-xl flex items-center justify-between">
+                <div>
+                   <p className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">Your Organization ID</p>
+                   <p className="text-2xl font-mono font-black text-purple-900 tracking-widest">{profile.communityId || 'NOT SET'}</p>
+                </div>
+                <Button 
+                   size="sm"
+                   variant="ghost" 
+                   onClick={() => copyToClipboard(profile.communityId)}
+                   className="text-purple-700 hover:bg-purple-200"
+                >
+                   <Copy size={20} />
+                </Button>
+             </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex gap-3 items-end relative z-10">
+              <div className="flex-1">
+                 <Input 
+                  label="Community ID" 
+                  value={profile.communityId}
+                  onChange={(e) => {
+                     updateProfile('communityId', e.target.value);
+                     setConnectedOrg(null);
+                     setVerifyError(null);
+                  }}
+                  className={connectedOrg ? "border-green-500 focus:ring-green-500 bg-green-50/30" : verifyError ? "border-red-500 focus:ring-red-500" : ""}
+                />
+              </div>
+              <Button 
+                className={`mb-[1px] min-w-[50px] ${connectedOrg ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'}`}
+                onClick={verifyCommunityId}
+                disabled={isVerifying || !profile.communityId}
+              >
+                {isVerifying ? <Loader2 className="animate-spin" size={20} /> : connectedOrg ? <Check size={20} /> : <LinkIcon size={20} />}
+              </Button>
+            </div>
+            {verifyError && (
+               <div className="flex items-center gap-2 text-red-600 text-sm font-bold bg-red-50 p-2 rounded-lg animate-fade-in border border-red-100 relative z-10">
+                  <XCircle size={16} /> {verifyError}
+               </div>
+            )}
+          </>
+        )}
+      </section>
+
+      <div className="space-y-4 pt-4 border-t border-slate-200">
+        <Button onClick={handleReset} variant="outline" fullWidth className="text-slate-600 hover:text-red-600 border-slate-300">
+          <Trash2 className="mr-2" size={18} />
+          Reset Demo Data
+        </Button>
+
+        <Button onClick={handleLogout} variant="ghost" fullWidth className="text-red-600 hover:bg-red-50 hover:text-red-700">
+          <LogOut className="mr-2" size={18} />
+          Log Out
+        </Button>
+      </div>
+    </div>
+  );
+};
