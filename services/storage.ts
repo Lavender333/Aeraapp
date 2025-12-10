@@ -335,6 +335,14 @@ export const StorageService = {
     return db.replenishmentRequests || [];
   },
 
+  getOrgReplenishmentRequests(orgId: string): ReplenishmentRequest[] {
+    const db = this.getDB();
+    const requests = db.replenishmentRequests || [];
+    return requests
+      .filter(r => r.orgId === orgId)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  },
+
   fulfillReplenishmentRequest(
     requestId: string,
     delivered: Partial<OrgInventory>,

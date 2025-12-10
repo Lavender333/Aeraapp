@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ViewState, OrgMember, OrgInventory } from '../types';
+import { ViewState, OrgMember, OrgInventory, ReplenishmentRequest } from '../types';
 import { Button } from '../components/Button';
 import { StorageService } from '../services/storage';
 import { t } from '../services/translations';
@@ -14,6 +14,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
   const [activeTab, setActiveTab] = useState<'MEMBERS' | 'INVENTORY'>('MEMBERS');
   const [orgName, setOrgName] = useState('Community Organization');
   const [communityId, setCommunityId] = useState('');
+  const [requests, setRequests] = useState<ReplenishmentRequest[]>([]);
   
   // Member Detail State
   const [selectedMember, setSelectedMember] = useState<OrgMember | null>(null);
@@ -31,6 +32,8 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
   const [selectedItem, setSelectedItem] = useState('Water Cases');
   const [requestAmount, setRequestAmount] = useState(10);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [fulfillDraft, setFulfillDraft] = useState<{ id: string | null; quantity: number }>({ id: null, quantity: 0 });
+  const [fulfillLoading, setFulfillLoading] = useState(false);
 
   // Broadcast State
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
@@ -55,6 +58,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     // Load Live Data from Backend
     setMembers(StorageService.getOrgMembers(id));
     setInventory(StorageService.getOrgInventory(id));
+    setRequests(StorageService.getOrgReplenishmentRequests(id));
 
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
@@ -80,6 +84,8 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
   };
 
   const saveInventory = () => {
+    const summary = `Water: ${inventory.water}\nFood: ${inventory.food}\nBlankets: ${inventory.blankets}\nMed Kits: ${inventory.medicalKits}\n\nSave these counts?`;
+    if (!window.confirm(summary)) return;
     StorageService.updateOrgInventory(communityId, inventory);
     setHasChanges(false);
     alert("Inventory Updated in Central Database");
@@ -166,6 +172,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
   const handleSubmitRequest = () => {
     // 1. Submit to Backend (will handle offline queue)
     StorageService.submitReplenishmentRequest(communityId, selectedItem, requestAmount);
+    setRequests(StorageService.getOrgReplenishmentRequests(communityId));
     setRequestSuccess(true);
 
     // 2. Trigger Email (Simulated external comms - only works if online)
@@ -179,6 +186,43 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
       setIsRequesting(false);
       setRequestSuccess(false);
     }, 4000);
+  };
+
+  const handleStartFulfill = (req: ReplenishmentRequest) => {
+    setFulfillDraft({ id: req.id, quantity: req.quantity });
+  };
+
+  const handleSubmitFulfill = () => {
+    if (!fulfillDraft.id) return;
+    if (!Number.isFinite(fulfillDraft.quantity) || fulfillDraft.quantity < 0) {
+      alert("Enter a valid delivered quantity.");
+      return;
+    }
+
+    const request = requests.find(r => r.id === fulfillDraft.id);
+    if (!request) return;
+
+    const itemMap: Record<string, keyof OrgInventory> = {
+      'Water Cases': 'water',
+      'Food Boxes': 'food',
+      'Blankets': 'blankets',
+      'Medical Kits': 'medicalKits'
+    };
+    const key = itemMap[request.item];
+    if (!key) {
+      alert("Unknown item type.");
+      return;
+    }
+
+    const confirmMsg = `Mark as fulfilled?\nItem: ${request.item}\nDelivered: ${fulfillDraft.quantity}\nOrg: ${request.orgName}`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setFulfillLoading(true);
+    StorageService.fulfillReplenishmentRequest(request.id, { [key]: fulfillDraft.quantity }, 'FULFILLED');
+    setInventory(StorageService.getOrgInventory(communityId));
+    setRequests(StorageService.getOrgReplenishmentRequests(communityId));
+    setFulfillDraft({ id: null, quantity: 0 });
+    setFulfillLoading(false);
   };
 
   return (
@@ -578,6 +622,58 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
                     </div>
                  </div>
               )}
+
+              <div className="mt-6 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-slate-900">Recent Requests</h4>
+                  <span className="text-xs text-slate-500 font-bold">Latest first</span>
+                </div>
+                {requests.length === 0 && (
+                  <p className="text-sm text-slate-500">No requests yet.</p>
+                )}
+                {requests.slice(0, 5).map((req) => (
+                  <div key={req.id} className="border border-slate-200 rounded-lg p-3 bg-white shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-bold text-slate-900">{req.item}</p>
+                        <p className="text-xs text-slate-500">Qty: {req.quantity} • {new Date(req.timestamp).toLocaleString()}</p>
+                      </div>
+                      <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                        req.status === 'FULFILLED' ? 'bg-green-100 text-green-700' :
+                        req.status === 'APPROVED' ? 'bg-blue-100 text-blue-700' :
+                        'bg-amber-100 text-amber-700'
+                      }`}>
+                        {req.status}
+                      </span>
+                    </div>
+
+                    {req.status !== 'FULFILLED' && (
+                      <div className="mt-3 space-y-2">
+                        {fulfillDraft.id === req.id ? (
+                          <div className="flex gap-2 items-center">
+                            <input
+                              type="number"
+                              min="0"
+                              className="w-28 p-2 rounded border border-slate-300 text-sm font-bold text-slate-900"
+                              value={fulfillDraft.quantity}
+                              onChange={(e) => setFulfillDraft(prev => ({ ...prev, quantity: parseInt(e.target.value) || 0 }))}
+                            />
+                            <Button size="sm" onClick={handleSubmitFulfill} disabled={fulfillLoading}>
+                              {fulfillLoading ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+                              Mark Fulfilled
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setFulfillDraft({ id: null, quantity: 0 })}>Cancel</Button>
+                          </div>
+                        ) : (
+                          <Button size="sm" variant="outline" onClick={() => handleStartFulfill(req)}>
+                            Mark Fulfilled
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
