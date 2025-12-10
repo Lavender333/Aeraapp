@@ -292,7 +292,14 @@ export const StorageService = {
 
   updateOrgInventory(orgId: string, inventory: OrgInventory) {
     const db = this.getDB();
-    db.inventories[orgId] = inventory;
+    const sanitized: OrgInventory = {
+      water: Math.max(0, Number(inventory.water) || 0),
+      food: Math.max(0, Number(inventory.food) || 0),
+      blankets: Math.max(0, Number(inventory.blankets) || 0),
+      medicalKits: Math.max(0, Number(inventory.medicalKits) || 0)
+    };
+
+    db.inventories[orgId] = sanitized;
     this.saveDB(db);
   },
 
@@ -326,6 +333,32 @@ export const StorageService = {
   getAllReplenishmentRequests(): ReplenishmentRequest[] {
     const db = this.getDB();
     return db.replenishmentRequests || [];
+  },
+
+  fulfillReplenishmentRequest(
+    requestId: string,
+    delivered: Partial<OrgInventory>,
+    status: 'FULFILLED' | 'APPROVED' = 'FULFILLED'
+  ) {
+    const db = this.getDB();
+    const reqIdx = db.replenishmentRequests.findIndex(r => r.id === requestId);
+    if (reqIdx === -1) return false;
+
+    const request = db.replenishmentRequests[reqIdx];
+    const existing = this.getOrgInventory(request.orgId);
+
+    const updatedInventory: OrgInventory = {
+      water: existing.water + (Number(delivered.water) || 0),
+      food: existing.food + (Number(delivered.food) || 0),
+      blankets: existing.blankets + (Number(delivered.blankets) || 0),
+      medicalKits: existing.medicalKits + (Number(delivered.medicalKits) || 0)
+    };
+
+    db.replenishmentRequests[reqIdx].status = status;
+    db.replenishmentRequests[reqIdx].fulfilledAt = new Date().toISOString();
+    this.updateOrgInventory(request.orgId, updatedInventory);
+    this.saveDB(db);
+    return true;
   },
 
   updateReplenishmentRequestStatus(id: string, status: 'PENDING' | 'APPROVED' | 'FULFILLED') {

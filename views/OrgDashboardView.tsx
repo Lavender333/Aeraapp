@@ -73,11 +73,9 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     unknown: members.filter(m => m.status === 'UNKNOWN').length,
   };
 
-  const updateInventory = (key: keyof OrgInventory, change: number) => {
-    setInventory(prev => {
-      const newVal = Math.max(0, prev[key] + change);
-      return { ...prev, [key]: newVal };
-    });
+  const handleInventoryChange = (key: keyof OrgInventory, value: number) => {
+    const safeVal = Math.max(0, Number.isFinite(value) ? value : 0);
+    setInventory(prev => ({ ...prev, [key]: safeVal }));
     setHasChanges(true);
   };
 
@@ -505,19 +503,15 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
                  <div key={item.label} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm text-center">
                     <p className="text-slate-500 text-xs font-bold uppercase mb-1">{item.label}</p>
                     {/* @ts-ignore */}
-                    <p className="text-3xl font-extrabold text-slate-900">{inventory[item.key]}</p>
-                    <p className="text-slate-400 text-xs">{item.unit}</p>
-                    <div className="flex justify-center gap-2 mt-3">
-                      <button 
-                        onClick={() => updateInventory(item.key as keyof OrgInventory, -1)}
-                        className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center font-bold text-slate-700"
-                      >-</button>
-                      <button 
-                        onClick={() => updateInventory(item.key as keyof OrgInventory, 1)}
-                        className="w-8 h-8 rounded-full bg-brand-100 hover:bg-brand-200 flex items-center justify-center font-bold text-brand-700"
-                      >+</button>
-                    </div>
-                 </div>
+                    <input 
+                      type="number"
+                      min="0"
+                      className="w-full mt-2 p-2 rounded-lg border border-slate-300 text-center font-bold text-slate-900"
+                      value={inventory[item.key as keyof OrgInventory]}
+                      onChange={(e) => handleInventoryChange(item.key as keyof OrgInventory, parseInt(e.target.value))}
+                    />
+                    <p className="text-slate-400 text-xs mt-1">{item.unit}</p>
+                  </div>
                ))}
             </div>
             
