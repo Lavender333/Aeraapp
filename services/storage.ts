@@ -438,6 +438,26 @@ export const StorageService = {
     }
   },
 
+  getLastKnownLocation(): { location: string; timestamp: string } | null {
+    const db = this.getDB();
+    const userId = db.currentUser;
+
+    const requests = userId
+      ? db.requests.filter(r => r.userId === userId)
+      : db.requests;
+
+    if (!requests.length) return null;
+
+    const sorted = [...requests].sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+    const latest = sorted[0];
+
+    if (!latest.location) return null;
+
+    return { location: latest.location, timestamp: latest.timestamp };
+  },
+
   getActiveRequest(): HelpRequestRecord | null {
     const db = this.getDB();
     if (!db.currentUser) return null;

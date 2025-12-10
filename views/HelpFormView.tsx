@@ -52,6 +52,7 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
   const [lastLocUpdate, setLastLocUpdate] = useState<string>('');
   const [isIpFallback, setIsIpFallback] = useState(false);
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
+  const hasPrefilledLocation = useRef(false);
   
   // Camera State
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -77,6 +78,19 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
+  }, []);
+
+  // Prefill with last known location if GPS hasn't populated yet
+  useEffect(() => {
+    if (hasPrefilledLocation.current) return;
+    const lastKnown = StorageService.getLastKnownLocation();
+    if (lastKnown) {
+      hasPrefilledLocation.current = true;
+      setData(prev => prev.location ? prev : { ...prev, location: lastKnown.location });
+      setLastLocUpdate(new Date(lastKnown.timestamp).toLocaleTimeString());
+      setIsTracking(false);
+      setIsIpFallback(false);
+    }
   }, []);
 
   // IP Location Fallback
@@ -242,8 +256,14 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
     if (!data.consentToShare) return;
     setIsSubmitting(true);
     
+    const lastKnown = StorageService.getLastKnownLocation();
+    const locationToUse = data.location || lastKnown?.location || '';
+    if (locationToUse && !data.location) {
+      setData(prev => ({ ...prev, location: locationToUse }));
+    }
+    
     // Save to our "backend" service
-    const record = StorageService.submitRequest(data);
+    const record = StorageService.submitRequest({ ...data, location: locationToUse });
     setSubmittedId(record.id);
     
     setTimeout(() => {
