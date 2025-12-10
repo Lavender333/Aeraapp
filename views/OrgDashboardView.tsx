@@ -356,6 +356,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
              <span className="text-xs text-slate-500 font-bold uppercase">{t('status.unknown')}</span>
           </div>
         </div>
+        <div className="text-xs text-slate-500 font-bold mt-2">Total Members: {stats.total}</div>
       </div>
 
       {/* Navigation Tabs */}
