@@ -80,6 +80,9 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     unknown: members.filter(m => m.status === 'UNKNOWN').length,
   };
 
+  // Use member count for coverage; fallback to registeredPopulation if no linked members yet
+  const coverageBase = stats.total || registeredPopulation;
+
   const handleInventoryChange = (key: keyof OrgInventory, value: number) => {
     const safeVal = Math.max(0, Number.isFinite(value) ? value : 0);
     setInventory(prev => ({ ...prev, [key]: safeVal }));
@@ -214,7 +217,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     setStockLoading(false);
   };
 
-  const status = getInventoryStatuses(inventory, registeredPopulation);
+  const status = getInventoryStatuses(inventory, coverageBase);
   const lowItems = [
     { label: 'Water Cases', key: 'water' as const, unit: 'cases' },
     { label: 'Food Boxes', key: 'food' as const, unit: 'boxes' },
@@ -535,15 +538,15 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
               </div>
             </div>
 
-            {registeredPopulation > 0 && lowItems.length > 0 && (
+            {coverageBase > 0 && lowItems.length > 0 && (
               <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
                 <div className="flex items-center gap-2 text-red-700">
                   <AlertTriangle size={18} />
-                  <p className="font-bold text-sm">Low stock relative to population of {registeredPopulation}</p>
+                  <p className="font-bold text-sm">Low stock relative to population of {coverageBase}</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {lowItems.map(item => {
-                    const needed = getRecommendedResupply(inventory[item.key], registeredPopulation) || 0;
+                    const needed = getRecommendedResupply(inventory[item.key], coverageBase) || 0;
                     return (
                       <div key={item.key} className="bg-white border border-red-100 rounded-lg p-3 shadow-sm">
                         <div className="flex items-center justify-between">
