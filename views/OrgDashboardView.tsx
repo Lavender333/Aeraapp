@@ -4,7 +4,7 @@ import { ViewState, OrgMember, OrgInventory, ReplenishmentRequest } from '../typ
 import { Button } from '../components/Button';
 import { StorageService } from '../services/storage';
 import { REQUEST_ITEM_MAP } from '../services/validation';
-import { getInventoryStatuses } from '../services/inventoryStatus';
+import { getInventoryStatuses, getRecommendedResupply } from '../services/inventoryStatus';
 import { t } from '../services/translations';
 import { Building2, CheckCircle, AlertTriangle, HelpCircle, Package, ArrowLeft, Send, Truck, Copy, Save, Phone, MapPin, User, HeartPulse, BellRing, X, AlertOctagon, Loader2, Wand2, ShieldCheck, WifiOff } from 'lucide-react';
 import { Textarea } from '../components/Input';
@@ -215,6 +215,12 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
   };
 
   const status = getInventoryStatuses(inventory, registeredPopulation);
+  const lowItems = [
+    { label: 'Water Cases', key: 'water' as const, unit: 'cases' },
+    { label: 'Food Boxes', key: 'food' as const, unit: 'boxes' },
+    { label: 'Blankets', key: 'blankets' as const, unit: 'units' },
+    { label: 'Med Kits', key: 'medicalKits' as const, unit: 'kits' },
+  ].filter(item => status[item.key].level === 'LOW');
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col pb-safe animate-fade-in relative">
@@ -527,6 +533,45 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
                 <p className="text-sm text-blue-800">{t('org.manage_desc')}</p>
               </div>
             </div>
+
+            {registeredPopulation > 0 && lowItems.length > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2 text-red-700">
+                  <AlertTriangle size={18} />
+                  <p className="font-bold text-sm">Low stock relative to population of {registeredPopulation}</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {lowItems.map(item => {
+                    const needed = getRecommendedResupply(inventory[item.key], registeredPopulation) || 0;
+                    return (
+                      <div key={item.key} className="bg-white border border-red-100 rounded-lg p-3 shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <p className="font-bold text-red-700 text-sm">{item.label}</p>
+                          <span className="text-[11px] font-bold text-red-600">LOW</span>
+                        </div>
+                        <p className="text-xs text-slate-600 mt-1">
+                          Current: <span className="font-bold">{inventory[item.key]} {item.unit}</span>
+                        </p>
+                        <p className="text-xs text-slate-600">
+                          Recommend: <span className="font-bold">{needed} {item.unit}</span> to reach 80% coverage
+                        </p>
+                        <Button 
+                          size="sm" 
+                          className="mt-2 w-full" 
+                          onClick={() => {
+                            setSelectedItem(item.label);
+                            setRequestAmount(Math.max(1, needed));
+                            setIsRequesting(true);
+                          }}
+                        >
+                          Prefill Request
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
                 {[
