@@ -74,7 +74,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
   }, []);
 
   const stats = {
-    total: registeredPopulation || members.length,
+    total: members.length,
     safe: members.filter(m => m.status === 'SAFE').length,
     danger: members.filter(m => m.status === 'DANGER').length,
     unknown: members.filter(m => m.status === 'UNKNOWN').length,
