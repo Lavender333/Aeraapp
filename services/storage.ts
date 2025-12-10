@@ -352,6 +352,20 @@ export const StorageService = {
     const reqIdx = db.replenishmentRequests.findIndex(r => r.id === requestId);
     if (reqIdx === -1) return false;
 
+    db.replenishmentRequests[reqIdx].status = status;
+    db.replenishmentRequests[reqIdx].fulfilledAt = new Date().toISOString();
+    this.saveDB(db);
+    return true;
+  },
+
+  stockReplenishmentRequest(
+    requestId: string,
+    delivered: Partial<OrgInventory>
+  ) {
+    const db = this.getDB();
+    const reqIdx = db.replenishmentRequests.findIndex(r => r.id === requestId);
+    if (reqIdx === -1) return false;
+
     const request = db.replenishmentRequests[reqIdx];
     const existing = this.getOrgInventory(request.orgId);
 
@@ -362,8 +376,9 @@ export const StorageService = {
       medicalKits: existing.medicalKits + (Number(delivered.medicalKits) || 0)
     };
 
-    db.replenishmentRequests[reqIdx].status = status;
-    db.replenishmentRequests[reqIdx].fulfilledAt = new Date().toISOString();
+    db.replenishmentRequests[reqIdx].stocked = true;
+    db.replenishmentRequests[reqIdx].stockedAt = new Date().toISOString();
+    db.replenishmentRequests[reqIdx].stockedQuantity = Object.values(delivered).reduce((sum, v) => sum + (Number(v) || 0), 0);
     this.updateOrgInventory(request.orgId, updatedInventory);
     this.saveDB(db);
     return true;

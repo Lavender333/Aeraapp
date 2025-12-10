@@ -113,6 +113,9 @@ export interface ReplenishmentRequest {
   signedAt?: string; // Timestamp of signature (Released By)
   receivedSignature?: string; // Base64 data URL (Received By)
   receivedAt?: string; // Timestamp of signature (Received By)
+  stocked?: boolean; // Marked as stocked in hub inventory
+  stockedAt?: string; // Timestamp when stocked was confirmed
+  stockedQuantity?: number; // Quantity applied to inventory
   synced?: boolean; // Offline sync status
 }
 

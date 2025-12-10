@@ -34,6 +34,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [fulfillDraft, setFulfillDraft] = useState<{ id: string | null; quantity: number }>({ id: null, quantity: 0 });
   const [fulfillLoading, setFulfillLoading] = useState(false);
+  const [stockLoading, setStockLoading] = useState(false);
 
   // Broadcast State
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
@@ -219,10 +220,38 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
 
     setFulfillLoading(true);
     StorageService.fulfillReplenishmentRequest(request.id, { [key]: fulfillDraft.quantity }, 'FULFILLED');
-    setInventory(StorageService.getOrgInventory(communityId));
     setRequests(StorageService.getOrgReplenishmentRequests(communityId));
     setFulfillDraft({ id: null, quantity: 0 });
     setFulfillLoading(false);
+  };
+
+  const handleStock = (req: ReplenishmentRequest) => {
+    const itemMap: Record<string, keyof OrgInventory> = {
+      'Water Cases': 'water',
+      'Food Boxes': 'food',
+      'Blankets': 'blankets',
+      'Medical Kits': 'medicalKits'
+    };
+    const key = itemMap[req.item];
+    if (!key) {
+      alert("Unknown item type.");
+      return;
+    }
+    const defaultQty = req.quantity;
+    const input = window.prompt(`Enter stocked quantity for ${req.item}:`, String(defaultQty));
+    if (input === null) return;
+    const qty = parseInt(input);
+    if (!Number.isFinite(qty) || qty < 0) {
+      alert("Enter a valid non-negative quantity.");
+      return;
+    }
+    if (!window.confirm(`Confirm stocked:\nItem: ${req.item}\nQuantity: ${qty}`)) return;
+
+    setStockLoading(true);
+    StorageService.stockReplenishmentRequest(req.id, { [key]: qty });
+    setInventory(StorageService.getOrgInventory(communityId));
+    setRequests(StorageService.getOrgReplenishmentRequests(communityId));
+    setStockLoading(false);
   };
 
   return (
@@ -668,6 +697,31 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
                           <Button size="sm" variant="outline" onClick={() => handleStartFulfill(req)}>
                             Mark Fulfilled
                           </Button>
+                        )}
+                      </div>
+                    )}
+
+                    {req.status === 'FULFILLED' && (
+                      <div className="mt-3 flex items-center gap-2">
+                        <Button 
+                          size="sm" 
+                          variant={req.stocked ? "ghost" : "outline"} 
+                          onClick={() => !req.stocked && handleStock(req)}
+                          disabled={req.stocked || stockLoading}
+                        >
+                          {req.stocked ? (
+                            <>Stocked</>
+                          ) : (
+                            <>
+                              {stockLoading ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+                              Mark Stocked
+                            </>
+                          )}
+                        </Button>
+                        {req.stocked && req.stockedAt && (
+                          <span className="text-[11px] text-slate-500 font-bold">
+                            Stocked at {new Date(req.stockedAt).toLocaleTimeString()}
+                          </span>
                         )}
                       </div>
                     )}
