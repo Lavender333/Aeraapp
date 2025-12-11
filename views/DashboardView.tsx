@@ -237,6 +237,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               <p className="text-base font-bold text-slate-900">{connectedOrg}</p>
               <p className="text-[11px] text-slate-500 font-bold">Members: {orgMemberCount || orgPopulation}</p>
             </div>
+            <Button size="sm" variant="outline" onClick={() => setView('ORG_DASHBOARD')}>
+              Manage
+            </Button>
           </div>
           <div className="grid grid-cols-2 gap-3">
             {[
@@ -269,24 +272,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         </div>
           );
         })()
-      )}
-
-      {/* Org Admin Shortcut */}
-      {isOrgAdmin && (
-        <div 
-          onClick={() => setView('ORG_DASHBOARD')}
-          className="bg-purple-600 text-white p-4 rounded-xl shadow-lg shadow-purple-200 flex items-center justify-between cursor-pointer hover:bg-purple-700 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-50 rounded-lg">
-              <Building2 size={24} />
-            </div>
-            <div>
-              <h3 className="font-bold">{t('dash.manage_org')}</h3>
-            </div>
-          </div>
-          <ChevronRight />
-        </div>
       )}
 
       {/* Real-time Data Feed / Status Ticker - Clickable */}
