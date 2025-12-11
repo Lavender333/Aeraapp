@@ -1593,7 +1593,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         </div>
         
         {profile.role === 'INSTITUTION_ADMIN' ? (
-          <div className="relative z-10">
+          <div className="relative z-10 space-y-3">
              <div className="bg-purple-100 border border-purple-200 p-4 rounded-xl flex items-center justify-between">
                 <div>
                    <p className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">Your Organization ID</p>
@@ -1608,6 +1608,32 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                    <Copy size={20} />
                 </Button>
              </div>
+             <div className="flex gap-3 items-end">
+                <div className="flex-1">
+                   <Input 
+                     label="Change Organization ID" 
+                     value={profile.communityId}
+                     onChange={(e) => {
+                        updateProfile('communityId', e.target.value);
+                        setConnectedOrg(null);
+                        setVerifyError(null);
+                     }}
+                     className={connectedOrg ? "border-green-500 focus:ring-green-500 bg-green-50/30" : verifyError ? "border-red-500 focus:ring-red-500" : ""}
+                   />
+                </div>
+                <Button 
+                  className={`mb-[1px] min-w-[50px] ${connectedOrg ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'}`}
+                  onClick={verifyCommunityId}
+                  disabled={isVerifying || !profile.communityId}
+                >
+                  {isVerifying ? <Loader2 className="animate-spin" size={20} /> : connectedOrg ? <Check size={20} /> : <LinkIcon size={20} />}
+                </Button>
+             </div>
+             {verifyError && (
+               <div className="flex items-center gap-2 text-red-600 text-sm font-bold bg-red-50 p-2 rounded-lg animate-fade-in border border-red-100 relative z-10">
+                  <XCircle size={16} /> {verifyError}
+               </div>
+             )}
           </div>
         ) : (
           <>
