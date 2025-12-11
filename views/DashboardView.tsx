@@ -36,6 +36,19 @@ import {
   BarChart3,
   Shield
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  BarChart,
+  Bar,
+  ReferenceLine,
+} from 'recharts';
 import { Button } from '../components/Button';
 
 interface DashboardViewProps {
@@ -55,6 +68,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [orgMemberCount, setOrgMemberCount] = useState<number>(0);
   const [tickerMessage, setTickerMessage] = useState('');
   const [showFinanceModal, setShowFinanceModal] = useState(false);
+  const [financeTierKey, setFinanceTierKey] = useState<'tier1' | 'tier2' | 'tier3'>('tier2');
+  const [financeScenario, setFinanceScenario] = useState<'low' | 'medium' | 'high'>('medium');
   
   // Status Ping State
   const [pendingPing, setPendingPing] = useState<{ requesterName: string, timestamp: string } | undefined>(undefined);
@@ -148,20 +163,83 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const isGeneralUser = userRole === 'GENERAL_USER';
 
   const financeTierDefaults = {
-    tier1: { name: 'MVP / Sandbox', targetUsers: 100, activeUsers: 50, platformCost: 12, peopleCost: 3500, securityCost: 4, grantRevenue: 50000 },
-    tier2: { name: 'Neighborhood Pilot', targetUsers: 5000, activeUsers: 650, platformCost: 130, peopleCost: 13000, securityCost: 1000, grantRevenue: 50000 },
-    tier3: { name: 'City-Level', targetUsers: 50000, activeUsers: 11000, platformCost: 1000, peopleCost: 38000, securityCost: 2000, grantRevenue: 50000 },
+    tier1: { 
+      name: 'MVP / Sandbox', 
+      targetUsers: 300, 
+      activeUsers: 150, 
+      costs: { low: [2500, 2500] as [number, number], medium: [3600, 5300] as [number, number], high: [8500, 9000] as [number, number] },
+      capacity: { total: '100-300', mau: '50-150', dau: '10-50', concurrent: '5-20' },
+      grantRevenue: 0
+    },
+    tier2: { 
+      name: 'Neighborhood', 
+      targetUsers: 15000, 
+      activeUsers: 3000, 
+      costs: { low: [12800, 12800] as [number, number], medium: [14800, 23500] as [number, number], high: [33500, 44000] as [number, number] },
+      capacity: { total: '5k-15k', mau: '1.5k-3k', dau: '500-1.2k', concurrent: '50-150' },
+      grantRevenue: 0
+    },
+    tier3: { 
+      name: 'City-Level', 
+      targetUsers: 250000, 
+      activeUsers: 20000, 
+      costs: { low: [38500, 38500] as [number, number], medium: [44500, 67500] as [number, number], high: [86000, 155000] as [number, number] },
+      capacity: { total: '50k-250k', mau: '10k-70k', dau: '3k-20k', concurrent: '400-2.5k' },
+      grantRevenue: 0
+    },
   };
-  const financeTier = financeTierDefaults.tier2;
-  const financeMonthlyCost = financeTier.platformCost + financeTier.peopleCost + financeTier.securityCost;
+  const financeTier = financeTierDefaults[financeTierKey];
+  const financeMonthlyCost = Math.round((financeTier.costs[financeScenario][0] + financeTier.costs[financeScenario][1]) / 2);
   const financeBurn = financeMonthlyCost - financeTier.grantRevenue;
   const financeUsers = financeTier.activeUsers;
-  const defaultPricePerUser = 0; // base case: free model
+  const defaultPricePerUser = 2; // subscription price per active subscriber
   const monthlyRevenue = financeTier.grantRevenue + (financeUsers * defaultPricePerUser);
   const monthlyProfit = monthlyRevenue - financeMonthlyCost;
   const breakEvenUsersPrice = defaultPricePerUser > 0 ? Math.max(0, Math.ceil(financeBurn / defaultPricePerUser)) : null;
   const projected12MonthProfit = monthlyProfit * 12;
   const initials = userName ? userName.trim().charAt(0).toUpperCase() : 'A';
+
+  const userGrowthSeries = Array.from({ length: 12 }).map((_, idx) => {
+    const month = idx + 1;
+    const projected = Math.round(financeUsers * Math.pow(1.1, idx));
+    const target = Math.round(financeTier.targetUsers * (month / 12));
+    return { month, projected, target };
+  });
+
+  const revenueProfitSeries = Array.from({ length: 12 }).map((_, idx) => {
+    const month = idx + 1;
+    const users = Math.round(financeUsers * Math.pow(1.1, idx));
+    const revenue = financeTier.grantRevenue + (users * defaultPricePerUser);
+    const profit = revenue - financeMonthlyCost;
+    return { month, revenue, cost: financeMonthlyCost, profit };
+  });
+
+  const costBands = [
+    { name: 'Low', cost: financeTier.costs.low, label: `$${financeTier.costs.low[0].toLocaleString()}${financeTier.costs.low[1] !== financeTier.costs.low[0] ? ' - $' + financeTier.costs.low[1].toLocaleString() : ''}` },
+    { name: 'Medium', cost: financeTier.costs.medium, label: `$${financeTier.costs.medium[0].toLocaleString()} - $${financeTier.costs.medium[1].toLocaleString()}` },
+    { name: 'High', cost: financeTier.costs.high, label: `$${financeTier.costs.high[0].toLocaleString()} - $${financeTier.costs.high[1].toLocaleString()}` },
+  ];
+  const subscriberBaselineCost = { tier1: 3516, tier2: 14130, tier3: 41000 };
+  const subscriberBreakEvenUsers = Math.ceil(subscriberBaselineCost[financeTierKey] / defaultPricePerUser);
+  const subscriberBreakEvenPerTier = {
+    tier1: Math.ceil(subscriberBaselineCost.tier1 / defaultPricePerUser),
+    tier2: Math.ceil(subscriberBaselineCost.tier2 / defaultPricePerUser),
+    tier3: Math.ceil(subscriberBaselineCost.tier3 / defaultPricePerUser),
+  };
+  const currentTotalUsers = financeUsers;
+  const currentMAU = Math.max(1, Math.round(currentTotalUsers * 0.6));
+  const currentDAU = Math.max(1, Math.round(currentTotalUsers * 0.2));
+  const currentConcurrent = Math.max(1, Math.round(currentTotalUsers * 0.05));
+  const conversionNeededPct = financeTier.targetUsers > 0 && breakEvenUsersPrice !== null
+    ? Math.min(100, Math.round((breakEvenUsersPrice / financeTier.targetUsers) * 100))
+    : null;
+
+  const breakEvenCurveData = Array.from({ length: 6 }).map((_, idx) => {
+    const subs = Math.round((financeTier.targetUsers * idx) / 5);
+    const revenue = subs * defaultPricePerUser + financeTier.grantRevenue;
+    const profit = revenue - financeMonthlyCost;
+    return { subs, profit };
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-indigo-50 animate-fade-in pb-28">
@@ -222,40 +300,131 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                 <div>
                   <p className="text-xs uppercase font-bold text-slate-500">Current Tier</p>
                   <p className="text-xl font-bold text-slate-900">{financeTier.name}</p>
+                  <p className="text-xs text-slate-500">Scenario: {financeScenario.toUpperCase()} • ${financeMonthlyCost.toLocaleString()}/mo</p>
+                  <p className="text-[11px] text-slate-500">All current users assumed paying ${defaultPricePerUser}/mo (base model).</p>
                 </div>
                 <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-lg font-semibold">
                   Month 3 of 12
                 </div>
               </div>
 
-              <div className="bg-white rounded-xl p-4 shadow border border-slate-200 space-y-2">
-                <h4 className="text-sm font-bold text-slate-800">Quick Integration Checklist</h4>
-                <ul className="text-sm text-slate-600 list-disc list-inside space-y-1">
-                  <li>Include <code>recharts</code> and <code>lucide-react</code></li>
-                  <li>Create the component file</li>
-                  <li>Verify Tailwind CSS is working</li>
-                </ul>
+              <div className="flex flex-wrap gap-2">
+                {(['tier1','tier2','tier3'] as const).map((tier) => (
+                  <button
+                    key={tier}
+                    onClick={() => setFinanceTierKey(tier)}
+                    className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+                      financeTierKey === tier ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300'
+                    }`}
+                  >
+                    {financeTierDefaults[tier].name}
+                  </button>
+                ))}
+                <div className="flex items-center gap-1 ml-auto">
+                  {(['low','medium','high'] as const).map((scenario) => (
+                    <button
+                      key={scenario}
+                      onClick={() => setFinanceScenario(scenario)}
+                      className={`px-3 py-2 rounded-lg text-xs font-bold border uppercase tracking-wide ${
+                        financeScenario === scenario ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white border-slate-200 text-slate-700 hover:border-emerald-300'
+                      }`}
+                    >
+                      {scenario}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="bg-white rounded-xl p-4 shadow border border-slate-200 space-y-2">
+                  <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                    <Users size={16} className="text-blue-600" /> Users, Capacity & Scale Model
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm text-slate-600">
+                    <p>Current Total Users: <span className="font-bold text-slate-900">{currentTotalUsers.toLocaleString()}</span></p>
+                    <p>MAU: <span className="font-bold text-slate-900">{currentMAU.toLocaleString()}</span></p>
+                    <p>DAU: <span className="font-bold text-slate-900">{currentDAU.toLocaleString()}</span></p>
+                    <p>Concurrent Load: <span className="font-bold text-slate-900">{currentConcurrent.toLocaleString()}</span></p>
+                    <p>Target: <span className="font-bold text-slate-900">{financeTier.targetUsers.toLocaleString()}</span></p>
+                    <p>Growth needed/mo: <span className="font-bold text-slate-900">+{Math.max(0, Math.ceil((financeTier.targetUsers - financeTier.activeUsers)/9)).toLocaleString()}</span></p>
+                  </div>
+                  <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2 mt-2 space-y-1">
+                    <p><span className="font-semibold text-slate-700">MVP:</span> 100–300 total | 50–150 MAU | 10–50 DAU | 5–20 concurrent</p>
+                    <p><span className="font-semibold text-slate-700">Neighborhood:</span> 5,000–15,000 | 1,500–3,000 MAU | 500–1,200 DAU | 50–150 concurrent</p>
+                    <p><span className="font-semibold text-slate-700">City:</span> 50,000–250,000 | 10,000–70,000 MAU | 3,000–20,000 DAU | 400–2,500 concurrent</p>
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow border border-slate-200 space-y-2">
+                  <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                    <DollarSign size={16} className="text-emerald-600" /> Cost Modeling (Low/Medium/High)
+                  </h4>
+                  <p className="text-sm text-slate-600">Low: <span className="font-bold text-slate-900">{costBands[0].label}</span></p>
+                  <p className="text-sm text-slate-600">Medium: <span className="font-bold text-slate-900">{costBands[1].label}</span></p>
+                  <p className="text-sm text-slate-600">High: <span className="font-bold text-slate-900">{costBands[2].label}</span></p>
+                  <p className="text-sm font-bold text-slate-900 mt-1">Selected burn: ${financeBurn.toLocaleString()}/mo (midpoint of chosen band)</p>
+                  <p className="text-xs text-slate-500">Annualized burn: ${(financeBurn * 12).toLocaleString()} — notes: staffing/security scale with load; infra grows with concurrency and DB size.</p>
+                </div>
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="bg-white rounded-xl p-4 shadow border border-slate-200">
-                  <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-3">
-                    <Users size={16} className="text-blue-600" /> Users & Goals
+                  <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-2">
+                    <BarChart2 size={16} className="text-indigo-600" /> Users vs Target (12 mo)
                   </h4>
-                  <p className="text-sm text-slate-600">Active: <span className="font-bold text-slate-900">{financeUsers.toLocaleString()}</span></p>
-                  <p className="text-sm text-slate-600">Target: <span className="font-bold text-slate-900">{financeTier.targetUsers.toLocaleString()}</span></p>
-                  <p className="text-sm text-slate-600">Growth needed/mo: <span className="font-bold text-slate-900">+{Math.ceil((financeTier.targetUsers - financeTier.activeUsers)/9)}</span></p>
+                  <div className="h-56">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={userGrowthSeries}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Line type="monotone" dataKey="projected" stroke="#2563eb" name="Projected Users" strokeWidth={3} dot={false} />
+                        <Line type="monotone" dataKey="target" stroke="#10b981" name="Target" strokeDasharray="5 5" strokeWidth={2} dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
                 <div className="bg-white rounded-xl p-4 shadow border border-slate-200">
-                  <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-3">
-                    <DollarSign size={16} className="text-emerald-600" /> Monthly Costs
+                  <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-2">
+                    <BarChart3 size={16} className="text-amber-600" /> Cost Bands
                   </h4>
-                  <p className="text-sm text-slate-600">Platform: <span className="font-bold text-slate-900">${financeTier.platformCost.toLocaleString()}</span></p>
-                  <p className="text-sm text-slate-600">People: <span className="font-bold text-slate-900">${financeTier.peopleCost.toLocaleString()}</span></p>
-                  <p className="text-sm text-slate-600">Security: <span className="font-bold text-slate-900">${financeTier.securityCost.toLocaleString()}</span></p>
-                  <p className="text-sm text-slate-600 mt-2">Total: <span className="font-bold text-slate-900">${financeMonthlyCost.toLocaleString()}</span></p>
-                  <p className="text-sm text-slate-600">Grant: <span className="font-bold text-slate-900">${financeTier.grantRevenue.toLocaleString()}</span></p>
-                  <p className="text-sm font-bold text-slate-900 mt-1">Burn: ${financeBurn.toLocaleString()}/mo</p>
+                  <div className="h-56">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={costBands}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip formatter={(val: number | string, _name, entry) => {
+                          const idx = entry?.dataKey === 'cost' ? costBands.findIndex(b => b.name === entry?.payload?.name) : -1;
+                          return idx >= 0 ? costBands[idx].label : `$${Number(val).toLocaleString()}`;
+                        }} />
+                        <Bar dataKey={(d) => Math.round((d.cost[0] + d.cost[1]) / 2)} fill="#f59e0b" radius={[6,6,0,0]} name="Midpoint" />
+                        <ReferenceLine y={financeMonthlyCost} stroke="#10b981" strokeDasharray="4 4" label="Selected" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl p-4 shadow border border-slate-200">
+                <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-2">
+                  <TrendingUp size={16} className="text-emerald-600" /> Revenue, Cost & Profit (12 mo)
+                </h4>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={revenueProfitSeries}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis />
+                      <Tooltip formatter={(val: number | string) => `$${Number(val).toLocaleString()}`} />
+                      <Legend />
+                      <Line type="monotone" dataKey="revenue" stroke="#2563eb" strokeWidth={3} name="Revenue" dot={false} />
+                      <Line type="monotone" dataKey="cost" stroke="#f59e0b" strokeWidth={2} name="Cost" dot={false} />
+                      <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} name="Profit" dot={false} />
+                      <ReferenceLine y={0} stroke="#94a3b8" />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
 
@@ -264,61 +433,97 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                   <Target size={16} className="text-indigo-600" /> Profitability Snapshot
                 </h4>
                 <p className="text-sm text-slate-700">
-                  With current grant funding, burn is <span className="font-bold">${financeBurn.toLocaleString()}/mo</span>.
-                  To break even without grants, set pricing or increase funding.
+                  Subscription price defaults to ${defaultPricePerUser}/active subscriber. Burn at selected scenario: <span className="font-bold">${financeBurn.toLocaleString()}/mo</span>.
                 </p>
                 <p className="text-sm text-slate-700">
-                  Break-even users at $5/user: <span className="font-bold">{Math.max(0, Math.ceil(financeBurn / 5)).toLocaleString()}</span>
+                  Break-even users @ ${defaultPricePerUser}/user: <span className="font-bold">{breakEvenUsersPrice === null ? 'N/A' : breakEvenUsersPrice.toLocaleString()}</span>
                 </p>
                 <p className="text-sm text-slate-700">
-                  Break-even users at $15/user: <span className="font-bold">{Math.max(0, Math.ceil(financeBurn / 15)).toLocaleString()}</span>
+                  Conversion needed: <span className="font-bold">{conversionNeededPct ?? 'N/A'}%</span> of tier capacity to cover burn.
+                </p>
+                <p className="text-sm text-slate-700">
+                  Narrative: Tier 1 climb is steep, Tier 2 moderates, Tier 3 flattens—city contracts + larger base make profitability achievable even at $2/user with ~13–41% conversion or subsidy. Break-even is unrealistic at Tier1–2 without org/city purchase.
                 </p>
               </div>
 
-              <div className="bg-white rounded-xl p-4 shadow border border-slate-200 space-y-3">
-                <h4 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                  <Calculator size={16} className="text-indigo-600" /> Revenue Scenarios - What If Analysis
+              <div className="bg-white rounded-xl p-4 shadow border border-slate-200 space-y-2">
+                <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                  <Calculator size={16} className="text-blue-600" /> Subscriber Modeling @ ${defaultPricePerUser}/user
                 </h4>
-                <p className="text-sm text-slate-600">
-                  Costs: ~${financeMonthlyCost.toLocaleString()}/mo (platform, people, security). Grants: ${financeTier.grantRevenue.toLocaleString()}/mo. Current users: {financeUsers.toLocaleString()}.
-                </p>
-                <div className="grid md:grid-cols-2 gap-3">
-                  {[
-                    { label: 'Model', price: 2, accent: 'blue' },
-                    { label: 'Low-Cost Tier', price: 3, accent: 'emerald' },
-                    { label: 'Standard', price: 15, accent: 'purple' },
-                    { label: 'Premium', price: 30, accent: 'amber' },
-                  ].map((scenario, idx) => {
-                    const revenue = financeTier.grantRevenue + (financeUsers * scenario.price);
-                    const profit = revenue - financeMonthlyCost;
-                    const breakEvenUsers = financeBurn > 0 ? Math.max(0, Math.ceil(financeBurn / scenario.price)) : 0;
-                    const moreNeeded = Math.max(0, breakEvenUsers - financeUsers);
-                    const colors: Record<string,string> = {
-                      blue: 'border-blue-200 bg-blue-50 text-blue-700',
-                      emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-                      purple: 'border-purple-200 bg-purple-50 text-purple-700',
-                      amber: 'border-amber-200 bg-amber-50 text-amber-700',
-                    };
-                    return (
-                      <div key={idx} className={`border-2 rounded-lg p-3 ${colors[scenario.accent]}`}>
-                        <div className="flex items-center justify-between mb-2">
-                          <h5 className="font-bold text-slate-800">{scenario.label}</h5>
-                          <span className="text-xs font-semibold">${scenario.price}/user</span>
-                        </div>
-                        <p className="text-xs text-slate-600">Users needed: <span className="font-bold text-slate-900">{breakEvenUsers.toLocaleString()}</span></p>
-                        <p className="text-xs text-slate-600">Revenue now: <span className="font-bold text-slate-900">${revenue.toLocaleString()}</span></p>
-                        <p className={`text-sm font-bold mt-1 ${profit >=0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                          {profit >= 0 ? `✓ Profit ${profit.toLocaleString()}/mo` : `${moreNeeded.toLocaleString()} more users needed`}
-                        </p>
-                      </div>
-                    );
-                  })}
+                <p className="text-sm text-slate-700">Baseline costs for break-even math: Tier1 ${subscriberBaselineCost.tier1.toLocaleString()}, Tier2 ${subscriberBaselineCost.tier2.toLocaleString()}, Tier3 ${subscriberBaselineCost.tier3.toLocaleString()}.</p>
+                <p className="text-sm text-slate-700">Break-even subscribers @ $2: Tier1 {subscriberBreakEvenPerTier.tier1.toLocaleString()}, Tier2 {subscriberBreakEvenPerTier.tier2.toLocaleString()}, Tier3 {subscriberBreakEvenPerTier.tier3.toLocaleString()}.</p>
+                <p className="text-sm text-slate-700">Current tier break-even: <span className="font-bold">{subscriberBreakEvenUsers.toLocaleString()}</span> (burn ÷ ${defaultPricePerUser}).</p>
+                <p className="text-sm text-slate-700">Because small communities rarely reach that conversion, the model assumes organizational sponsors and city contracts at Tier2–3, with resident opt-ins as upside.</p>
+              </div>
+
+              <div className="bg-white rounded-xl p-4 shadow border border-slate-200">
+                <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-2">
+                  <LineChart size={16} className="text-emerald-600" /> Break-even Curve (Subs vs Profit)
+                </h4>
+                <p className="text-xs text-slate-500 mb-2">Break-even subscribers = Monthly Cost ÷ Price per user. Shows profit/loss across subscriber counts at ${defaultPricePerUser}/user.</p>
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={breakEvenCurveData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="subs" />
+                      <YAxis />
+                      <Tooltip formatter={(val: number | string) => `$${Number(val).toLocaleString()}`} labelFormatter={(l) => `Subscribers: ${l.toLocaleString()}`} />
+                      <ReferenceLine y={0} stroke="#94a3b8" />
+                      <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} name="Profit/Loss" dot />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </div>
+                <p className="text-xs text-slate-600 mt-2">
+                  Tier 1: early pilot, not expected to break even. Tier 2: needs sponsors/orgs. Tier 3: scale/economies; profitable with municipal contracts or ~13–41% resident conversion.
+                </p>
+              </div>
+
+                <div className="bg-white rounded-xl p-4 shadow border border-slate-200 space-y-3">
+                  <h4 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <Calculator size={16} className="text-indigo-600" /> Revenue Scenarios - What If Analysis
+                  </h4>
+                  <p className="text-sm text-slate-600">
+                    Costs: ~${financeMonthlyCost.toLocaleString()}/mo (selected scenario). Grants: ${financeTier.grantRevenue.toLocaleString()}/mo. Current users: {financeUsers.toLocaleString()}.
+                  </p>
+                  <div className="grid md:grid-cols-2 gap-3">
+                    {[
+                      { label: '$2 Model', price: 2, accent: 'blue' },
+                      { label: '$3 Low-Cost', price: 3, accent: 'emerald' },
+                      { label: '$15 Standard', price: 15, accent: 'purple' },
+                      { label: '$30 Premium', price: 30, accent: 'amber' },
+                    ].map((scenario, idx) => {
+                      const revenue = financeTier.grantRevenue + (financeUsers * scenario.price);
+                      const profit = revenue - financeMonthlyCost;
+                      const breakEvenUsers = financeBurn > 0 ? Math.max(0, Math.ceil(financeBurn / scenario.price)) : 0;
+                      const moreNeeded = Math.max(0, breakEvenUsers - financeUsers);
+                      const colors: Record<string,string> = {
+                        blue: 'border-blue-200 bg-blue-50 text-blue-700',
+                        emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+                        purple: 'border-purple-200 bg-purple-50 text-purple-700',
+                        amber: 'border-amber-200 bg-amber-50 text-amber-700',
+                      };
+                      return (
+                        <div key={idx} className={`border-2 rounded-lg p-3 ${colors[scenario.accent]}`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <h5 className="font-bold text-slate-800">{scenario.label}</h5>
+                            <span className="text-xs font-semibold">${scenario.price}/user</span>
+                          </div>
+                          <p className="text-xs text-slate-600">Users needed to break even: <span className="font-bold text-slate-900">{breakEvenUsers.toLocaleString()}</span></p>
+                          <p className="text-xs text-slate-600">Revenue now: <span className="font-bold text-slate-900">${revenue.toLocaleString()}</span></p>
+                          <p className="text-xs text-slate-600">Conversion vs tier: <span className="font-bold text-slate-900">{financeTier.targetUsers ? Math.round((breakEvenUsers / financeTier.targetUsers) * 100) : 0}%</span></p>
+                          <p className={`text-sm font-bold mt-1 ${profit >=0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                            {profit >= 0 ? `✓ Profit ${profit.toLocaleString()}/mo` : `${moreNeeded.toLocaleString()} more users needed`}
+                          </p>
+                          <p className="text-[11px] text-slate-600">Break-even time: {profit >=0 ? 'Immediate at current users' : 'Requires growth or contracts'}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
                 <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-sm text-slate-700 space-y-1">
                   <p className="font-semibold">Key Insights</p>
-                  <p>- Break-even shifts with pricing: at $2/user need ~{Math.max(0, Math.ceil(financeBurn / 2)).toLocaleString()} users; at $3/user need ~{Math.max(0, Math.ceil(financeBurn / 3)).toLocaleString()}.</p>
-                  <p>- Current users ({financeUsers.toLocaleString()}) {financeUsers >= Math.max(0, Math.ceil(financeBurn / 3)) ? 'meet' : 'do not meet'} the $3/user break-even threshold.</p>
-                  <p>- Grants reduce or eliminate the needed paying users; if grants exceed costs, all scenarios are profitable.</p>
+                  <p>- Break-even @ $2/user is steep: Tier1 ~{Math.max(0, Math.ceil(financeTierDefaults.tier1.costs.medium/2)).toLocaleString()} subs, Tier2 ~{Math.max(0, Math.ceil(financeTierDefaults.tier2.costs.medium/2)).toLocaleString()}, Tier3 ~{Math.max(0, Math.ceil(financeTierDefaults.tier3.costs.medium/2)).toLocaleString()}.</p>
+                  <p>- Organizational sponsors + city contracts are required for Tier1–2; resident opt-ins become meaningful at Tier3.</p>
+                  <p>- Grants or subsidies reduce required paying users instantly; if grant &gt; cost, all scenarios turn green.</p>
                 </div>
                 <div className="bg-white rounded-xl p-4 shadow border border-slate-200 space-y-3">
                   <h4 className="text-lg font-bold text-slate-800">Break-even & Profit Status</h4>
@@ -337,6 +542,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                       </p>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl p-4 shadow border border-slate-200 space-y-2">
+                <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                  <Shield size={16} className="text-blue-600" /> Growth & Revenue Projection (1–3 Years)
+                </h4>
+                <p className="text-sm text-slate-700">Low: Y1 3,500 → Y2 7,000 → Y3 12,000. Realistic: 5,000 → 20,000 → 75,000. High: 12,000 → 65,000 → 200,000+.</p>
+                <p className="text-sm text-slate-700">Mixed revenue (subs + sponsors + city contracts): Y1 ~$150k rev / ~$250k cost (net –$100k), Y2 ~$650k / ~$550k (net +$100k), Y3 ~$2.2M / ~$900k (net +$1.3M).</p>
+                <div className="text-xs text-slate-600 space-y-1 bg-slate-50 border border-slate-200 rounded-lg p-2">
+                  <p>Low scenario: revenue tracks slow growth; net stays negative longer.</p>
+                  <p>Realistic: profitability around Y2–Y3.</p>
+                  <p>High: outsized ARR, faster payback and surplus.</p>
                 </div>
               </div>
             </div>
