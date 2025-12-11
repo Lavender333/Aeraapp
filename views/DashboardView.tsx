@@ -26,7 +26,9 @@ import {
   X,
   Info,
   RefreshCw,
-  Check
+  Check,
+  Droplets,
+  Package
 } from 'lucide-react';
 import { Button } from '../components/Button';
 
@@ -138,8 +140,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const isContractor = userRole === 'CONTRACTOR';
   const isGeneralUser = userRole === 'GENERAL_USER';
 
+  const initials = userName ? userName.trim().charAt(0).toUpperCase() : 'A';
+
   return (
-    <div className="p-6 pb-28 space-y-6 animate-fade-in bg-slate-50 min-h-screen relative">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-indigo-50 animate-fade-in pb-28">
+      <div className="max-w-5xl mx-auto p-6 space-y-6 relative">
       
       {/* Broadcast Detail Modal */}
       {showTickerModal && (
@@ -199,13 +204,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
       )}
 
       {/* Header */}
-      <div className="flex justify-between items-start">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{t('dash.welcome')}</h1>
-          <p className="text-slate-500 text-sm">{userName.split(' ')[0]}</p>
+          <h1 className="text-4xl font-bold text-slate-800 mb-1">{t('dash.welcome')}</h1>
+          <p className="text-lg text-slate-500">{userName.split(' ')[0]}</p>
         </div>
         <div className="flex items-center gap-2">
-          {/* FEMA Integration Badge (Visible to Pros) */}
           {isResponder && (
             <div className="hidden md:flex items-center gap-1.5 px-2 py-1 bg-slate-200 rounded text-[10px] font-bold text-slate-600">
                <Database size={10} /> FEMA SYNC: {isOnline ? 'ACTIVE' : 'QUEUED'}
@@ -213,13 +217,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
           )}
           <div 
             onClick={() => setView('SETTINGS')}
-            className={`h-10 w-10 rounded-full flex items-center justify-center cursor-pointer transition-colors ${
-              isResponder ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 
-              isOrgAdmin ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' :
-              'bg-brand-100 text-brand-700 hover:bg-brand-200'
-            }`}
+            className="w-14 h-14 rounded-full bg-gradient-to-br from-teal-400 to-cyan-500 flex items-center justify-center text-white text-xl font-semibold shadow-md cursor-pointer"
           >
-             <span className="font-bold text-sm">{userName.charAt(0)}</span>
+            {initials}
           </div>
         </div>
       </div>
@@ -229,36 +229,41 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
           const coverageBase = orgMemberCount || orgPopulation;
           const status = getInventoryStatuses(orgInventory, coverageBase);
           return (
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
+        <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 rounded-2xl p-6 shadow-md space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs uppercase font-bold text-slate-500">Hub Inventory</p>
+              <p className="text-xs uppercase font-bold text-emerald-700">Hub Inventory</p>
               <p className="text-base font-bold text-slate-900">{connectedOrg}</p>
+              <p className="text-[11px] text-slate-500 font-bold">Members: {orgMemberCount || orgPopulation}</p>
             </div>
             <Button size="sm" variant="outline" onClick={() => setView('ORG_DASHBOARD')}>
               Manage
             </Button>
           </div>
-          <p className="text-[11px] text-slate-500 font-bold">Members: {orgMemberCount || orgPopulation}</p>
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: 'Water Cases', value: orgInventory.water, unit: 'cases', key: 'water' as const },
-              { label: 'Food Boxes', value: orgInventory.food, unit: 'boxes', key: 'food' as const },
-              { label: 'Blankets', value: orgInventory.blankets, unit: 'units', key: 'blankets' as const },
-              { label: 'Med Kits', value: orgInventory.medicalKits, unit: 'kits', key: 'medicalKits' as const },
+              { label: 'Water Cases', value: orgInventory.water, unit: 'cases', key: 'water' as const, icon: <Droplets size={16} className="text-blue-600" /> },
+              { label: 'Food Boxes', value: orgInventory.food, unit: 'boxes', key: 'food' as const, icon: <Package size={16} className="text-emerald-600" /> },
+              { label: 'Blankets', value: orgInventory.blankets, unit: 'units', key: 'blankets' as const, icon: <Box size={16} className="text-amber-600" /> },
+              { label: 'Med Kits', value: orgInventory.medicalKits, unit: 'kits', key: 'medicalKits' as const, icon: <AlertTriangle size={16} className="text-red-600" /> },
             ].map(item => (
-              <div key={item.label} className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                <p className="text-[11px] uppercase font-bold text-slate-500">{item.label}</p>
-                <p className="text-2xl font-black text-slate-900 leading-tight">{item.value}</p>
-                <div className="flex items-center justify-between text-[11px] text-slate-400">
-                  <span>{item.unit}</span>
-                  <span className={`font-bold ${
-                    status[item.key].level === 'HIGH' ? 'text-green-600' :
-                    status[item.key].level === 'MEDIUM' ? 'text-amber-600' :
-                    status[item.key].level === 'LOW' ? 'text-red-600' : 'text-slate-400'
-                  }`}>
-                    {status[item.key].level === 'UNKNOWN' ? 'N/A' : status[item.key].level}
-                  </span>
+              <div key={item.label} className="bg-white border border-emerald-100 rounded-xl p-3 shadow-sm flex items-center gap-3">
+                <div className="p-2 bg-slate-50 rounded-lg">
+                  {item.icon}
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-[11px] uppercase font-bold text-slate-500">{item.label}</p>
+                  <p className="text-2xl font-black text-slate-900 leading-tight">{item.value}</p>
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span>{item.unit}</span>
+                    <span className={`font-bold ${
+                      status[item.key].level === 'HIGH' ? 'text-green-600' :
+                      status[item.key].level === 'MEDIUM' ? 'text-amber-600' :
+                      status[item.key].level === 'LOW' ? 'text-red-600' : 'text-slate-400'
+                    }`}>
+                      {status[item.key].level === 'UNKNOWN' ? 'N/A' : status[item.key].level}
+                    </span>
+                  </div>
                 </div>
               </div>
             ))}
@@ -439,20 +444,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
           </Card>
         )}
         
-        {/* Logistics - For Pros and Org Admins (Retail availability management) */}
         {(isResponder || isOrgAdmin || isContractor) && (
           <Card 
-            className="col-span-1 hover:border-brand-300"
+            className="col-span-2 bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-100 hover:border-emerald-200"
             onClick={() => setView('LOGISTICS')}
           >
-            <div className="flex flex-col items-start gap-3">
-              <div className="p-2 bg-teal-100 rounded-lg text-teal-700">
-                <Truck size={24} />
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-white rounded-xl shadow-sm">
+                <MapPin size={24} className="text-emerald-700" />
               </div>
-              <div>
-                <h3 className="font-semibold text-slate-900">{t('dash.logistics')}</h3>
-                <p className="text-xs text-slate-500 mt-1">{t('dash.logistics.desc')}</p>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-slate-900">{t('dash.logistics')}</h3>
+                <p className="text-sm text-slate-600">{t('dash.logistics.desc')}</p>
+                <div className="flex items-center gap-3 mt-3 flex-wrap">
+                  <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 shadow-sm">
+                    <Droplets size={16} className="text-blue-600" />
+                    <span className="text-sm font-semibold text-slate-800">Water</span>
+                  </div>
+                  <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 shadow-sm">
+                    <Package size={16} className="text-emerald-600" />
+                    <span className="text-sm font-semibold text-slate-800">Food</span>
+                  </div>
+                </div>
               </div>
+              <ChevronRight className="w-5 h-5 text-emerald-400 group-hover:translate-x-1 transition-transform flex-shrink-0" />
             </div>
           </Card>
         )}
@@ -530,10 +545,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               <div>
                  <div className="text-xl font-bold text-green-400">12</div>
                  <div className="text-[10px] text-slate-400">Shelters Open</div>
-              </div>
+             </div>
            </div>
         </Card>
       )}
     </div>
-  );
+  </div>
+);
 };
