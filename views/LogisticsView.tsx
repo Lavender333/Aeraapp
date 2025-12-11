@@ -1,12 +1,15 @@
 
 import React, { useEffect, useState } from 'react';
-import { ViewState, OrganizationProfile } from '../types';
+import { ViewState, OrganizationProfile, OrgInventory } from '../types';
 import { ArrowLeft, ShoppingCart, Box, MapPin, Truck, Navigation } from 'lucide-react';
 import { t } from '../services/translations';
 import { StorageService } from '../services/storage';
+import { getInventoryStatuses } from '../services/inventoryStatus';
 
 export const LogisticsView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const [depot, setDepot] = useState<OrganizationProfile | null>(null);
+  const [inventory, setInventory] = useState<OrgInventory>({ water: 0, food: 0, blankets: 0, medicalKits: 0 });
+  const [memberCount, setMemberCount] = useState<number>(0);
 
   useEffect(() => {
     const profile = StorageService.getProfile();
@@ -14,6 +17,19 @@ export const LogisticsView: React.FC<{ setView: (v: ViewState) => void }> = ({ s
     const orgId = profile.communityId || 'CH-9921';
     const org = StorageService.getOrganization(orgId);
     setDepot(org);
+    setInventory(StorageService.getOrgInventory(orgId));
+    setMemberCount(StorageService.getOrgMembers(orgId).length);
+
+    const handleInventoryUpdate = () => {
+      setInventory(StorageService.getOrgInventory(orgId));
+      setMemberCount(StorageService.getOrgMembers(orgId).length);
+    };
+    window.addEventListener('inventory-update', handleInventoryUpdate);
+    window.addEventListener('storage', handleInventoryUpdate);
+    return () => {
+      window.removeEventListener('inventory-update', handleInventoryUpdate);
+      window.removeEventListener('storage', handleInventoryUpdate);
+    };
   }, []);
 
   const handleGetDirections = () => {
@@ -22,6 +38,9 @@ export const LogisticsView: React.FC<{ setView: (v: ViewState) => void }> = ({ s
       window.open(url, '_blank');
     }
   };
+
+  const coverageBase = memberCount || depot?.registeredPopulation || 0;
+  const status = getInventoryStatuses(inventory, coverageBase);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col pb-safe animate-fade-in">
@@ -67,16 +86,26 @@ export const LogisticsView: React.FC<{ setView: (v: ViewState) => void }> = ({ s
                
                <div className="mt-4 pt-3 border-t border-brand-200/50">
                  <p className="text-[10px] uppercase font-bold text-brand-600 mb-2">Current Stock Levels</p>
-                 <div className="flex gap-2 flex-wrap">
-                   <span className="text-xs px-2 py-1 bg-white rounded border border-brand-200 text-brand-700 font-bold shadow-sm">
-                     Water: High
-                   </span>
-                   <span className="text-xs px-2 py-1 bg-white rounded border border-brand-200 text-brand-700 font-bold shadow-sm">
-                     Food: Medium
-                   </span>
-                   <span className="text-xs px-2 py-1 bg-white rounded border border-brand-200 text-brand-700 font-bold shadow-sm">
-                     Meds: Low
-                   </span>
+                 <div className="grid grid-cols-2 gap-2">
+                   {[
+                     { label: 'Water', key: 'water' as const, unit: 'cases' },
+                     { label: 'Food', key: 'food' as const, unit: 'boxes' },
+                     { label: 'Blankets', key: 'blankets' as const, unit: 'units' },
+                     { label: 'Med Kits', key: 'medicalKits' as const, unit: 'kits' },
+                   ].map(item => {
+                     const level = status[item.key].level;
+                     const color =
+                      level === 'HIGH' ? 'text-green-700 border-green-200 bg-green-50' :
+                      level === 'MEDIUM' ? 'text-amber-700 border-amber-200 bg-amber-50' :
+                      level === 'LOW' ? 'text-red-700 border-red-200 bg-red-50' :
+                      'text-slate-500 border-slate-200 bg-white';
+                     return (
+                       <div key={item.label} className={`text-xs px-3 py-2 rounded border font-bold shadow-sm ${color} flex justify-between`}>
+                         <span>{item.label}</span>
+                         <span>{level === 'UNKNOWN' ? 'N/A' : level}</span>
+                       </div>
+                     );
+                   })}
                  </div>
                </div>
              </div>
