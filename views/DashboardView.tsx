@@ -155,6 +155,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const financeTier = financeTierDefaults.tier2;
   const financeMonthlyCost = financeTier.platformCost + financeTier.peopleCost + financeTier.securityCost;
   const financeBurn = financeMonthlyCost - financeTier.grantRevenue;
+  const financeUsers = financeTier.activeUsers;
   const initials = userName ? userName.trim().charAt(0).toUpperCase() : 'A';
 
   return (
@@ -227,7 +228,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                   <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-3">
                     <Users size={16} className="text-blue-600" /> Users & Goals
                   </h4>
-                  <p className="text-sm text-slate-600">Active: <span className="font-bold text-slate-900">{financeTier.activeUsers.toLocaleString()}</span></p>
+                  <p className="text-sm text-slate-600">Active: <span className="font-bold text-slate-900">{financeUsers.toLocaleString()}</span></p>
                   <p className="text-sm text-slate-600">Target: <span className="font-bold text-slate-900">{financeTier.targetUsers.toLocaleString()}</span></p>
                   <p className="text-sm text-slate-600">Growth needed/mo: <span className="font-bold text-slate-900">+{Math.ceil((financeTier.targetUsers - financeTier.activeUsers)/9)}</span></p>
                 </div>
@@ -253,11 +254,58 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                   To break even without grants, set pricing or increase funding.
                 </p>
                 <p className="text-sm text-slate-700">
-                  Break-even users at $5/user: <span className="font-bold">{Math.ceil(financeBurn / 5).toLocaleString()}</span>
+                  Break-even users at $5/user: <span className="font-bold">{Math.max(0, Math.ceil(financeBurn / 5)).toLocaleString()}</span>
                 </p>
                 <p className="text-sm text-slate-700">
-                  Break-even users at $15/user: <span className="font-bold">{Math.ceil(financeBurn / 15).toLocaleString()}</span>
+                  Break-even users at $15/user: <span className="font-bold">{Math.max(0, Math.ceil(financeBurn / 15)).toLocaleString()}</span>
                 </p>
+              </div>
+
+              <div className="bg-white rounded-xl p-4 shadow border border-slate-200 space-y-3">
+                <h4 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                  <Calculator size={16} className="text-indigo-600" /> Revenue Scenarios - What If Analysis
+                </h4>
+                <p className="text-sm text-slate-600">
+                  Costs: ~${financeMonthlyCost.toLocaleString()}/mo (platform, people, security). Grants: ${financeTier.grantRevenue.toLocaleString()}/mo. Current users: {financeUsers.toLocaleString()}.
+                </p>
+                <div className="grid md:grid-cols-2 gap-3">
+                  {[
+                    { label: 'Model', price: 2, accent: 'blue' },
+                    { label: 'Low-Cost Tier', price: 3, accent: 'emerald' },
+                    { label: 'Standard', price: 15, accent: 'purple' },
+                    { label: 'Premium', price: 30, accent: 'amber' },
+                  ].map((scenario, idx) => {
+                    const revenue = financeTier.grantRevenue + (financeUsers * scenario.price);
+                    const profit = revenue - financeMonthlyCost;
+                    const breakEvenUsers = financeBurn > 0 ? Math.max(0, Math.ceil(financeBurn / scenario.price)) : 0;
+                    const moreNeeded = Math.max(0, breakEvenUsers - financeUsers);
+                    const colors: Record<string,string> = {
+                      blue: 'border-blue-200 bg-blue-50 text-blue-700',
+                      emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+                      purple: 'border-purple-200 bg-purple-50 text-purple-700',
+                      amber: 'border-amber-200 bg-amber-50 text-amber-700',
+                    };
+                    return (
+                      <div key={idx} className={`border-2 rounded-lg p-3 ${colors[scenario.accent]}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <h5 className="font-bold text-slate-800">{scenario.label}</h5>
+                          <span className="text-xs font-semibold">${scenario.price}/user</span>
+                        </div>
+                        <p className="text-xs text-slate-600">Users needed: <span className="font-bold text-slate-900">{breakEvenUsers.toLocaleString()}</span></p>
+                        <p className="text-xs text-slate-600">Revenue now: <span className="font-bold text-slate-900">${revenue.toLocaleString()}</span></p>
+                        <p className={`text-sm font-bold mt-1 ${profit >=0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                          {profit >= 0 ? `✓ Profit ${profit.toLocaleString()}/mo` : `${moreNeeded.toLocaleString()} more users needed`}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-sm text-slate-700 space-y-1">
+                  <p className="font-semibold">Key Insights</p>
+                  <p>- Break-even shifts with pricing: at $2/user need ~{Math.max(0, Math.ceil(financeBurn / 2)).toLocaleString()} users; at $3/user need ~{Math.max(0, Math.ceil(financeBurn / 3)).toLocaleString()}.</p>
+                  <p>- Current users ({financeUsers.toLocaleString()}) {financeUsers >= Math.max(0, Math.ceil(financeBurn / 3)) ? 'meet' : 'do not meet'} the $3/user break-even threshold.</p>
+                  <p>- Grants reduce or eliminate the needed paying users; if grants exceed costs, all scenarios are profitable.</p>
+                </div>
               </div>
             </div>
           </div>
