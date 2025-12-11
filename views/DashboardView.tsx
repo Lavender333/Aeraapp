@@ -29,7 +29,12 @@ import {
   Check,
   Droplets,
   Package,
-  Box
+  Box,
+  Calendar,
+  Target,
+  Calculator,
+  BarChart3,
+  Shield
 } from 'lucide-react';
 import { Button } from '../components/Button';
 
@@ -49,6 +54,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [orgInventory, setOrgInventory] = useState<OrgInventory | null>(null);
   const [orgMemberCount, setOrgMemberCount] = useState<number>(0);
   const [tickerMessage, setTickerMessage] = useState('');
+  const [showFinanceModal, setShowFinanceModal] = useState(false);
   
   // Status Ping State
   const [pendingPing, setPendingPing] = useState<{ requesterName: string, timestamp: string } | undefined>(undefined);
@@ -141,6 +147,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const isContractor = userRole === 'CONTRACTOR';
   const isGeneralUser = userRole === 'GENERAL_USER';
 
+  const financeTierDefaults = {
+    tier1: { name: 'MVP / Sandbox', targetUsers: 100, activeUsers: 50, platformCost: 12, peopleCost: 3500, securityCost: 4, grantRevenue: 50000 },
+    tier2: { name: 'Neighborhood Pilot', targetUsers: 5000, activeUsers: 650, platformCost: 130, peopleCost: 13000, securityCost: 1000, grantRevenue: 50000 },
+    tier3: { name: 'City-Level', targetUsers: 50000, activeUsers: 11000, platformCost: 1000, peopleCost: 38000, securityCost: 2000, grantRevenue: 50000 },
+  };
+  const financeTier = financeTierDefaults.tier2;
+  const financeMonthlyCost = financeTier.platformCost + financeTier.peopleCost + financeTier.securityCost;
+  const financeBurn = financeMonthlyCost - financeTier.grantRevenue;
   const initials = userName ? userName.trim().charAt(0).toUpperCase() : 'A';
 
   return (
@@ -176,6 +190,76 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                  Close Message
                </Button>
              </div>
+          </div>
+        </div>
+      )}
+      {showFinanceModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in"
+          onClick={() => setShowFinanceModal(false)}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden animate-slide-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-slate-900 text-white p-4 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <BarChart3 size={18} />
+                <h3 className="font-bold">AERA Financial Dashboard</h3>
+              </div>
+              <button onClick={() => setShowFinanceModal(false)} className="text-slate-400 hover:text-white">
+                <X size={22} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4 bg-gradient-to-br from-slate-50 to-blue-50">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <p className="text-xs uppercase font-bold text-slate-500">Current Tier</p>
+                  <p className="text-xl font-bold text-slate-900">{financeTier.name}</p>
+                </div>
+                <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-lg font-semibold">
+                  Month 3 of 12
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="bg-white rounded-xl p-4 shadow border border-slate-200">
+                  <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-3">
+                    <Users size={16} className="text-blue-600" /> Users & Goals
+                  </h4>
+                  <p className="text-sm text-slate-600">Active: <span className="font-bold text-slate-900">{financeTier.activeUsers.toLocaleString()}</span></p>
+                  <p className="text-sm text-slate-600">Target: <span className="font-bold text-slate-900">{financeTier.targetUsers.toLocaleString()}</span></p>
+                  <p className="text-sm text-slate-600">Growth needed/mo: <span className="font-bold text-slate-900">+{Math.ceil((financeTier.targetUsers - financeTier.activeUsers)/9)}</span></p>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow border border-slate-200">
+                  <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-3">
+                    <DollarSign size={16} className="text-emerald-600" /> Monthly Costs
+                  </h4>
+                  <p className="text-sm text-slate-600">Platform: <span className="font-bold text-slate-900">${financeTier.platformCost.toLocaleString()}</span></p>
+                  <p className="text-sm text-slate-600">People: <span className="font-bold text-slate-900">${financeTier.peopleCost.toLocaleString()}</span></p>
+                  <p className="text-sm text-slate-600">Security: <span className="font-bold text-slate-900">${financeTier.securityCost.toLocaleString()}</span></p>
+                  <p className="text-sm text-slate-600 mt-2">Total: <span className="font-bold text-slate-900">${financeMonthlyCost.toLocaleString()}</span></p>
+                  <p className="text-sm text-slate-600">Grant: <span className="font-bold text-slate-900">${financeTier.grantRevenue.toLocaleString()}</span></p>
+                  <p className="text-sm font-bold text-slate-900 mt-1">Burn: ${financeBurn.toLocaleString()}/mo</p>
+                </div>
+              </div>
+
+              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 space-y-2">
+                <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                  <Target size={16} className="text-indigo-600" /> Profitability Snapshot
+                </h4>
+                <p className="text-sm text-slate-700">
+                  With current grant funding, burn is <span className="font-bold">${financeBurn.toLocaleString()}/mo</span>.
+                  To break even without grants, set pricing or increase funding.
+                </p>
+                <p className="text-sm text-slate-700">
+                  Break-even users at $5/user: <span className="font-bold">{Math.ceil(financeBurn / 5).toLocaleString()}</span>
+                </p>
+                <p className="text-sm text-slate-700">
+                  Break-even users at $15/user: <span className="font-bold">{Math.ceil(financeBurn / 15).toLocaleString()}</span>
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -287,6 +371,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
           </span>
         </div>
         <ChevronRight size={16} className="text-slate-500 group-hover:text-white shrink-0" />
+      </div>
+      <div className="flex justify-end">
+        <button
+          onClick={() => setShowFinanceModal(true)}
+          className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-semibold shadow hover:from-blue-600 hover:to-indigo-700 transition-colors"
+        >
+          <BarChart3 size={16} /> Financial Dashboard
+        </button>
       </div>
 
       {/* PENDING PING ACTION - Top Priority */}
