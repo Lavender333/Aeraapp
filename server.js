@@ -1,7 +1,8 @@
 import express from 'express';
 import cors from 'cors';
-import { MongoClient } from 'mongodb';
+import mongoose from 'mongoose';
 import 'dotenv/config';
+import { Inventory } from './models/inventory.js';
 
 const app = express();
 app.use(cors());
@@ -13,10 +14,9 @@ if (!mongoUri) {
   process.exit(1);
 }
 
-const client = new MongoClient(mongoUri);
-await client.connect();
-const dbName = process.env.MONGODB_DB || client.options?.dbName;
-const db = dbName ? client.db(dbName) : client.db();
+await mongoose.connect(mongoUri, {
+  dbName: process.env.MONGODB_DB,
+});
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
@@ -24,14 +24,14 @@ app.get('/api/health', (_req, res) => {
 
 app.get('/api/orgs/:orgId/inventory', async (req, res) => {
   const orgId = req.params.orgId;
-  const doc = await db.collection('inventories').findOne({ orgId });
+  const doc = await Inventory.findOne({ orgId }).lean();
   res.json(doc || { orgId, water: 0, food: 0, blankets: 0, medicalKits: 0 });
 });
 
 app.post('/api/orgs/:orgId/inventory', async (req, res) => {
   const orgId = req.params.orgId;
   const { water = 0, food = 0, blankets = 0, medicalKits = 0 } = req.body || {};
-  await db.collection('inventories').updateOne(
+  await Inventory.updateOne(
     { orgId },
     { $set: { water, food, blankets, medicalKits } },
     { upsert: true }
