@@ -91,8 +91,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
        if (org) {
          setConnectedOrg(org.name);
          setOrgPopulation(org.registeredPopulation || 0);
-         setOrgInventory(StorageService.getOrgInventory(org.id));
          setOrgMemberCount(StorageService.getOrgMembers(org.id).length);
+         StorageService.fetchOrgInventoryRemote(org.id).then(setOrgInventory);
        }
     }
     
@@ -123,10 +123,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
        setPendingPing(updatedProfile.pendingStatusRequest);
        setActiveRequest(StorageService.getActiveRequest());
        if (updatedProfile.communityId) {
-         setOrgInventory(StorageService.getOrgInventory(updatedProfile.communityId));
          const org = StorageService.getOrganization(updatedProfile.communityId);
-         if (org) setOrgPopulation(org.registeredPopulation || 0);
-         setOrgMemberCount(StorageService.getOrgMembers(updatedProfile.communityId).length);
+         if (org) {
+           setOrgPopulation(org.registeredPopulation || 0);
+           setOrgMemberCount(StorageService.getOrgMembers(updatedProfile.communityId).length);
+           StorageService.fetchOrgInventoryRemote(org.id).then(setOrgInventory);
+         }
        }
     };
     
