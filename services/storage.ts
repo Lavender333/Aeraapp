@@ -2,6 +2,7 @@
 import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest } from '../types';
 import { REQUEST_ITEM_MAP } from './validation';
 import { getInventory, saveInventory } from './api';
+import { getMemberStatus, setMemberStatus } from './api';
 
 const DB_KEY = 'aera_backend_db_v1';
 
@@ -312,6 +313,24 @@ export const StorageService = {
     } catch (e) {
       console.warn('API inventory save failed, keeping local only', e);
       return false;
+    }
+  },
+
+  async fetchMemberStatus(orgId: string) {
+    try {
+      return await getMemberStatus(orgId);
+    } catch (e) {
+      console.warn('API member status fetch failed', e);
+      return null;
+    }
+  },
+
+  async saveMemberStatus(orgId: string, memberId: string, name: string, status: 'SAFE' | 'DANGER' | 'UNKNOWN') {
+    try {
+      return await setMemberStatus(orgId, { memberId, name, status });
+    } catch (e) {
+      console.warn('API member status save failed', e);
+      return null;
     }
   },
 
@@ -635,6 +654,7 @@ export const StorageService = {
     
     const currentUser = db.currentUser;
     const isOnline = navigator.onLine;
+    const profile = db.users.find(u => u.id === currentUser);
 
     const record: HelpRequestRecord = {
       isSafe: isSafe,
@@ -674,6 +694,11 @@ export const StorageService = {
     }
 
     this.saveDB(db);
+    // Best-effort remote status update
+    if (profile?.communityId && profile?.fullName) {
+      const status = isSafe ? 'SAFE' : 'DANGER';
+      this.saveMemberStatus(profile.communityId, profile.id, profile.fullName, status as any);
+    }
   },
 
   // --- Ticker / Broadcast (Scoped) ---

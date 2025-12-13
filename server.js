@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import 'dotenv/config';
 import { Inventory } from './models/inventory.js';
 import { Request } from './models/request.js';
+import { MemberStatus } from './models/memberStatus.js';
 
 const app = express();
 app.use(cors());
@@ -90,6 +91,42 @@ app.post('/api/requests/:id/status', async (req, res) => {
   }
 
   res.json(doc);
+});
+
+// Member Status (Safe/Danger/Unknown)
+app.get('/api/orgs/:orgId/status', async (req, res) => {
+  const orgId = req.params.orgId;
+  const members = await MemberStatus.find({ orgId }).lean();
+  const counts = members.reduce(
+    (acc, m) => {
+      acc[m.status.toLowerCase()] = (acc[m.status.toLowerCase()] || 0) + 1;
+      return acc;
+    },
+    { safe: 0, danger: 0, unknown: 0 }
+  );
+  res.json({ counts, members });
+});
+
+app.post('/api/orgs/:orgId/status', async (req, res) => {
+  const orgId = req.params.orgId;
+  const { memberId, name, status } = req.body || {};
+  if (!memberId || !status) return res.status(400).json({ error: 'memberId and status required' });
+  const allowed = ['SAFE', 'DANGER', 'UNKNOWN'];
+  if (!allowed.includes(status)) return res.status(400).json({ error: 'invalid status' });
+  await MemberStatus.updateOne(
+    { orgId, memberId },
+    { $set: { name, status } },
+    { upsert: true }
+  );
+  const members = await MemberStatus.find({ orgId }).lean();
+  const counts = members.reduce(
+    (acc, m) => {
+      acc[m.status.toLowerCase()] = (acc[m.status.toLowerCase()] || 0) + 1;
+      return acc;
+    },
+    { safe: 0, danger: 0, unknown: 0 }
+  );
+  res.json({ ok: true, counts, members });
 });
 
 const port = process.env.PORT || 4000;

@@ -29,6 +29,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
   
   // Inventory Edit State
   const [hasChanges, setHasChanges] = useState(false);
+  const [statusCounts, setStatusCounts] = useState({ safe: 0, danger: 0, unknown: 0 });
 
   // Request Feature State
   const [isRequesting, setIsRequesting] = useState(false);
@@ -63,6 +64,10 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     setMembers(StorageService.getOrgMembers(id));
     setInventory(StorageService.getOrgInventory(id));
     listRequests(id).then(setRequests).catch(() => setRequests(StorageService.getOrgReplenishmentRequests(id)));
+    StorageService.fetchMemberStatus(id).then((resp) => {
+      if (resp?.counts) setStatusCounts(resp.counts);
+      if (resp?.members?.length) setMembers(resp.members as any);
+    });
 
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
@@ -76,9 +81,9 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
 
   const stats = {
     total: members.length,
-    safe: members.filter(m => m.status === 'SAFE').length,
-    danger: members.filter(m => m.status === 'DANGER').length,
-    unknown: members.filter(m => m.status === 'UNKNOWN').length,
+    safe: statusCounts.safe || members.filter(m => m.status === 'SAFE').length,
+    danger: statusCounts.danger || members.filter(m => m.status === 'DANGER').length,
+    unknown: statusCounts.unknown || members.filter(m => m.status === 'UNKNOWN').length,
   };
 
   // Use member count for coverage; fallback to registeredPopulation if no linked members yet

@@ -42,3 +42,19 @@ export async function updateRequestStatus(id: string, payload: { status: string;
   if (!res.ok) throw new Error('Failed to update request');
   return res.json();
 }
+
+export async function getMemberStatus(orgId: string) {
+  const res = await fetch(`${API_BASE}/api/orgs/${orgId}/status`);
+  if (!res.ok) throw new Error('Failed to load member status');
+  return res.json(); // { counts, members }
+}
+
+export async function setMemberStatus(orgId: string, payload: { memberId: string; name?: string; status: 'SAFE' | 'DANGER' | 'UNKNOWN' }) {
+  const res = await fetch(`${API_BASE}/api/orgs/${orgId}/status`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to save member status');
+  return res.json();
+}
