@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { ViewState, OrgMember, OrgInventory, ReplenishmentRequest } from '../types';
 import { Button } from '../components/Button';
 import { StorageService } from '../services/storage';
+import { listRequests, createRequest, updateRequestStatus } from '../services/api';
 import { REQUEST_ITEM_MAP } from '../services/validation';
 import { getInventoryStatuses, getRecommendedResupply } from '../services/inventoryStatus';
 import { t } from '../services/translations';
@@ -61,7 +62,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     // Load Live Data from Backend
     setMembers(StorageService.getOrgMembers(id));
     setInventory(StorageService.getOrgInventory(id));
-    setRequests(StorageService.getOrgReplenishmentRequests(id));
+    listRequests(id).then(setRequests).catch(() => setRequests(StorageService.getOrgReplenishmentRequests(id)));
 
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
@@ -175,13 +176,18 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     }
   };
 
-  const handleSubmitRequest = () => {
-    // 1. Submit to Backend (will handle offline queue)
-    StorageService.submitReplenishmentRequest(communityId, selectedItem, requestAmount);
-    setRequests(StorageService.getOrgReplenishmentRequests(communityId));
-    setRequestSuccess(true);
+  const handleSubmitRequest = async () => {
+    try {
+      await createRequest(communityId, { item: selectedItem, quantity: requestAmount, provider: replenishmentProvider, orgName });
+      const refreshed = await listRequests(communityId);
+      setRequests(refreshed);
+      setRequestSuccess(true);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to submit request. Please try again.');
+    }
 
-    // 2. Trigger Email (Simulated external comms - only works if online)
+    // Simulated email (optional)
     if (replenishmentEmail && navigator.onLine) {
       const subject = `Urgent Resupply Request - ${communityId} - ${orgName}`;
       const body = `To ${replenishmentProvider},%0D%0A%0D%0APlease fulfill the following emergency supply request:%0D%0A%0D%0AItem: ${selectedItem}%0D%0AQuantity: ${requestAmount}%0D%0A%0D%0AHub: ${orgName}%0D%0AID: ${communityId}%0D%0A%0D%0ASent via AERA App`;
@@ -195,11 +201,6 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
   };
 
   const handleStock = (req: ReplenishmentRequest) => {
-    const key = REQUEST_ITEM_MAP[req.item];
-    if (!key) {
-      alert("Unknown item type.");
-      return;
-    }
     const defaultQty = req.quantity;
     const input = window.prompt(`Enter stocked quantity for ${req.item}:`, String(defaultQty));
     if (input === null) return;
@@ -211,10 +212,14 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     if (!window.confirm(`Confirm stocked:\nItem: ${req.item}\nQuantity: ${qty}`)) return;
 
     setStockLoading(true);
-    StorageService.stockReplenishmentRequest(req.id, { [key]: qty });
-    setInventory(StorageService.getOrgInventory(communityId));
-    setRequests(StorageService.getOrgReplenishmentRequests(communityId));
-    setStockLoading(false);
+    updateRequestStatus(req.id, { status: 'STOCKED', deliveredQuantity: qty })
+      .then(async () => {
+        const refreshedReqs = await listRequests(communityId);
+        setRequests(refreshedReqs);
+        StorageService.fetchOrgInventoryRemote(communityId).then(setInventory);
+      })
+      .catch(() => alert("Failed to update request."))
+      .finally(() => setStockLoading(false));
   };
 
   const status = getInventoryStatuses(inventory, coverageBase);
