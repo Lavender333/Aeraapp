@@ -74,3 +74,106 @@ export async function setBroadcast(orgId: string, message: string) {
   if (!res.ok) throw new Error('Failed to save broadcast');
   return res.json();
 }
+
+// Auth
+export async function registerAuth(payload: { email?: string; phone?: string; password: string; fullName?: string; role?: string; orgId?: string }) {
+  const res = await fetch(`${API_BASE}/api/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to register');
+  return res.json(); // { token, user }
+}
+
+export async function loginAuth(payload: { email?: string; phone?: string; password: string }) {
+  const res = await fetch(`${API_BASE}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to login');
+  return res.json(); // { token, user }
+}
+
+export async function forgotPassword(payload: { email: string }) {
+  const res = await fetch(`${API_BASE}/api/auth/forgot`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to request reset');
+  return res.json(); // { ok, resetToken? }
+}
+
+export async function resetPassword(payload: { email: string; token: string; newPassword: string }) {
+  const res = await fetch(`${API_BASE}/api/auth/reset`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to reset password');
+  return res.json(); // { ok }
+}
+
+// Help Requests
+export async function createHelpRequest(userId: string, payload: any) {
+  const res = await fetch(`${API_BASE}/api/users/${userId}/help`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to create help request');
+  return res.json();
+}
+
+export async function getActiveHelpRequest(userId: string) {
+  const res = await fetch(`${API_BASE}/api/users/${userId}/help/active`);
+  if (!res.ok) throw new Error('Failed to load help request');
+  return res.json();
+}
+
+export async function updateHelpRequestLocation(id: string, location: string) {
+  const res = await fetch(`${API_BASE}/api/help/${id}/location`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ location }),
+  });
+  if (!res.ok) throw new Error('Failed to update help request location');
+  return res.json();
+}
+
+// Member CRUD
+export async function listMembers(orgId: string) {
+  const res = await fetch(`${API_BASE}/api/orgs/${orgId}/members`);
+  if (!res.ok) throw new Error('Failed to load members');
+  return res.json();
+}
+
+export async function addMember(orgId: string, payload: any) {
+  const res = await fetch(`${API_BASE}/api/orgs/${orgId}/members`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to add member');
+  return res.json();
+}
+
+export async function updateMember(orgId: string, memberId: string, payload: any) {
+  const res = await fetch(`${API_BASE}/api/orgs/${orgId}/members/${memberId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to update member');
+  return res.json();
+}
+
+export async function removeMember(orgId: string, memberId: string) {
+  const res = await fetch(`${API_BASE}/api/orgs/${orgId}/members/${memberId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to remove member');
+  return res.json();
+}

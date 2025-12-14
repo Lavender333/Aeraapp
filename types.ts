@@ -1,5 +1,5 @@
 
-export type ViewState = 'SPLASH' | 'LOGIN' | 'REGISTRATION' | 'ORG_REGISTRATION' | 'DASHBOARD' | 'HELP_WIZARD' | 'SETTINGS' | 'MAP' | 'ALERTS' | 'GAP' | 'ASSESSMENT' | 'POPULATION' | 'RECOVERY' | 'DRONE' | 'LOGISTICS' | 'ORG_DASHBOARD' | 'PRESENTATION';
+export type ViewState = 'SPLASH' | 'LOGIN' | 'REGISTRATION' | 'ACCOUNT_SETUP' | 'ORG_REGISTRATION' | 'DASHBOARD' | 'HELP_WIZARD' | 'SETTINGS' | 'MAP' | 'ALERTS' | 'GAP' | 'ASSESSMENT' | 'POPULATION' | 'RECOVERY' | 'DRONE' | 'LOGISTICS' | 'ORG_DASHBOARD' | 'PRESENTATION';
 
 export interface HelpRequestData {
   // Step 1: Safety
@@ -57,6 +57,7 @@ export interface HouseholdMember {
 export interface UserProfile {
   id: string; // Unique ID (UUID)
   fullName: string;
+  email?: string;
   phone: string;
   address: string; // Home Address for dispatch
   householdMembers: number; // Legacy count (kept for backward compat, derived from household array)
@@ -73,6 +74,7 @@ export interface UserProfile {
   role: UserRole; // Current user's role
   language: LanguageCode; // Preferred Language
   active: boolean; // Account status
+  onboardComplete?: boolean; // Required account setup done
   notifications: {
     push: boolean;
     sms: boolean;
@@ -191,6 +193,7 @@ export interface DatabaseSchema {
   inventories: Record<string, OrgInventory>; // OrgID -> Inventory
   requests: HelpRequestRecord[];
   replenishmentRequests: ReplenishmentRequest[]; // New: System-wide supply requests
+  orgMembers?: Record<string, OrgMember[]>; // Cached members from API
   currentUser: string | null; // ID of logged in user
   tickerMessage: string; // System-wide scrolling broadcast (ADMIN ONLY)
 }

@@ -252,7 +252,7 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
   const nextStep = () => setStep(prev => Math.min(prev + 1, 5) as StepId);
   const prevStep = () => setStep(prev => Math.max(prev - 1, 1) as StepId);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!data.consentToShare) return;
     setIsSubmitting(true);
     
@@ -261,15 +261,16 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
     if (locationToUse && !data.location) {
       setData(prev => ({ ...prev, location: locationToUse }));
     }
-    
-    // Save to our "backend" service
-    const record = StorageService.submitRequest({ ...data, location: locationToUse });
-    setSubmittedId(record.id);
-    
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      const record = await StorageService.submitRequest({ ...data, location: locationToUse });
+      setSubmittedId(record.id);
       setIsSuccess(true);
-    }, 1500);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to submit request. Saved locally; will retry when online.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleTextContact = () => {

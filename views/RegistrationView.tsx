@@ -21,11 +21,17 @@ const formatPhoneNumber = (value: string) => {
   return `(${phoneNumber.slice(0, 3)}) ${phoneNumber.slice(3, 6)}-${phoneNumber.slice(6, 10)}`;
 };
 
-export const RegistrationView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
+interface RegistrationViewProps {
+  setView: (v: ViewState) => void;
+  mode?: 'REGISTRATION' | 'SETUP';
+}
+
+export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mode = 'REGISTRATION' }) => {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState<UserProfile>({
     id: '', // Will be generated
     fullName: '',
+    email: '',
     phone: '',
     address: '',
     householdMembers: 1,
@@ -39,6 +45,7 @@ export const RegistrationView: React.FC<{ setView: (v: ViewState) => void }> = (
     role: 'GENERAL_USER',
     language: 'en',
     active: true,
+    onboardComplete: false,
     notifications: { push: true, sms: true, email: true }
   });
 
@@ -50,6 +57,11 @@ export const RegistrationView: React.FC<{ setView: (v: ViewState) => void }> = (
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [addressStatus, setAddressStatus] = useState<'IDLE' | 'VERIFYING' | 'VALID' | 'INVALID'>('IDLE');
   const [addressFeedback, setAddressFeedback] = useState<string>('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authSuccess, setAuthSuccess] = useState<string | null>(null);
   
   // Org Search
   const [showOrgSearch, setShowOrgSearch] = useState(false);
@@ -65,6 +77,9 @@ export const RegistrationView: React.FC<{ setView: (v: ViewState) => void }> = (
     const profile = StorageService.getProfile();
     if (profile.language) {
       setFormData(prev => ({ ...prev, language: profile.language }));
+    }
+    if (mode === 'SETUP' && profile.email) {
+       setFormData(prev => ({ ...prev, email: profile.email || prev.email }));
     }
     
     // Check permissions status
@@ -199,6 +214,26 @@ export const RegistrationView: React.FC<{ setView: (v: ViewState) => void }> = (
     setFoundOrgs(matches);
   };
 
+  const handleAuthRegister = async () => {
+    setAuthError(null);
+    setAuthSuccess(null);
+    if (!email || !password || !confirmPassword) {
+      setAuthError('Email and password required.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setAuthError('Passwords do not match.');
+      return;
+    }
+    try {
+      await StorageService.registerWithCredentials(email, password, formData.fullName);
+      setAuthSuccess('Account created. Continue with required setup.');
+      setView('ACCOUNT_SETUP');
+    } catch (e: any) {
+      setAuthError(e?.message || 'Registration failed.');
+    }
+  };
+
   const selectOrg = (orgId: string) => {
     updateForm('communityId', orgId);
     setShowOrgSearch(false);
@@ -207,9 +242,58 @@ export const RegistrationView: React.FC<{ setView: (v: ViewState) => void }> = (
 
   const handleComplete = () => {
     // Save to our Backend
-    StorageService.saveProfile(formData);
+    const payload = { ...formData, onboardComplete: true };
+    StorageService.saveProfile(payload);
     setView('DASHBOARD');
   };
+
+  // If in REGISTRATION mode, show only credential page, then force SETUP
+  if (mode === 'REGISTRATION') {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col p-6 animate-fade-in pb-safe">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Create Account</p>
+            <h1 className="text-3xl font-black text-slate-900">Email & Password</h1>
+          </div>
+          <Button variant="ghost" onClick={() => setView('LOGIN')} className="font-semibold text-brand-600">
+            Have an account? Log in
+          </Button>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 max-w-lg w-full">
+          <Input 
+            label="Email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input 
+              label="Password"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <Input 
+              label="Confirm Password"
+              type="password"
+              placeholder="••••••••"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+          </div>
+          <Button size="lg" onClick={handleAuthRegister} className="font-bold">
+            Create Account & Continue
+          </Button>
+          {authError && <p className="text-sm text-red-600">{authError}</p>}
+          {authSuccess && <p className="text-sm text-emerald-600">{authSuccess}</p>}
+          <p className="text-xs text-slate-500">You’ll complete required account setup next.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col p-6 animate-fade-in pb-safe">
@@ -243,6 +327,24 @@ export const RegistrationView: React.FC<{ setView: (v: ViewState) => void }> = (
             />
           ))}
         </div>
+      </div>
+
+      {/* Credentials summary (read-only) */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm mb-4 max-w-md">
+        <h3 className="text-sm font-bold text-slate-800">Account Credentials</h3>
+        <p className="text-xs text-slate-500 mb-2">
+          {formData.email ? 'Email shown for reference. Password changes via Login → “Forgot password”.'
+          : 'No email on file. Add one to enable login and password reset by email.'}
+        </p>
+        <Input 
+          label="Email"
+          placeholder="you@example.com"
+          value={formData.email || ''}
+          onChange={(e) => updateForm('email', e.target.value)}
+        />
+        <p className="text-[11px] text-amber-600 mt-1">
+          Keep this up to date so you can log in and reset your password.
+        </p>
       </div>
 
       <div className="flex-1 flex flex-col justify-center max-w-sm mx-auto w-full">

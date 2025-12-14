@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: aera-api
+    env: node
+    plan: free
+    buildCommand: "npm install"
+    startCommand: "npm run server"
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB
+        value: aeraapp
+      - key: JWT_SECRET
+        sync: false
+      - key: FRONTEND_ORIGIN
+        value: https://appandwebsitetesting.site
+    autoDeploy: true
+  - type: static
+    name: aera-frontend
+    env: static
+    buildCommand: "npm install && VITE_API_URL=$AERA_API_URL npm run build"
+    staticPublishPath: dist
+    envVars:
+      - key: AERA_API_URL
+        value: https://<your-api-host>

@@ -92,7 +92,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
        if (org) {
          setConnectedOrg(org.name);
          setOrgPopulation(org.registeredPopulation || 0);
-         setOrgMemberCount(StorageService.getOrgMembers(org.id).length);
+         StorageService.fetchOrgMembersRemote(org.id).then(({ members }) => setOrgMemberCount(members.length));
          StorageService.fetchOrgInventoryRemote(org.id).then(({ inventory, fromCache }) => {
            setOrgInventory(inventory);
            setInventoryFallback(fromCache);
@@ -101,7 +101,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     }
     
     // Load Active Request
-    setActiveRequest(StorageService.getActiveRequest());
+    StorageService.getActiveRequest().then(setActiveRequest);
     
     // Load Ticker with user context for scoped broadcasts
     setTickerMessage(StorageService.getTicker(profile));
@@ -125,12 +125,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
        const updatedProfile = StorageService.getProfile();
        setTickerMessage(StorageService.getTicker(updatedProfile));
        setPendingPing(updatedProfile.pendingStatusRequest);
-       setActiveRequest(StorageService.getActiveRequest());
+       StorageService.getActiveRequest().then(setActiveRequest);
        if (updatedProfile.communityId) {
          const org = StorageService.getOrganization(updatedProfile.communityId);
          if (org) {
            setOrgPopulation(org.registeredPopulation || 0);
-           setOrgMemberCount(StorageService.getOrgMembers(updatedProfile.communityId).length);
+           StorageService.fetchOrgMembersRemote(updatedProfile.communityId).then(({ members }) => setOrgMemberCount(members.length));
            StorageService.fetchOrgInventoryRemote(org.id).then(({ inventory, fromCache }) => {
              setOrgInventory(inventory);
              setInventoryFallback(fromCache);
@@ -183,7 +183,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     StorageService.respondToPing(isSafe);
     setPendingPing(undefined);
     // Refresh active request state as submitting a status creates a request record
-    setActiveRequest(StorageService.getActiveRequest());
+    StorageService.getActiveRequest().then(setActiveRequest);
   };
 
   // Role Helper Checks

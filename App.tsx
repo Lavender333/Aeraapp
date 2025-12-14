@@ -29,7 +29,8 @@ export default function App() {
     if (StorageService.hasProfile()) {
       const profile = StorageService.getProfile();
       // Smart Routing
-      setView('DASHBOARD');
+      if (profile.onboardComplete) setView('DASHBOARD');
+      else setView('ACCOUNT_SETUP');
     } else {
       setView('REGISTRATION');
     }
@@ -54,7 +55,9 @@ export default function App() {
       case 'PRESENTATION':
         return <PresentationView setView={setView} />;
       case 'REGISTRATION':
-        return <RegistrationView setView={setView} />;
+        return <RegistrationView setView={setView} mode="REGISTRATION" />;
+      case 'ACCOUNT_SETUP':
+        return <RegistrationView setView={setView} mode="SETUP" />;
       case 'LOGIN':
         return <LoginView setView={setView} />;
       case 'ORG_REGISTRATION':
@@ -92,6 +95,7 @@ export default function App() {
                   currentView !== 'PRESENTATION' &&
                   currentView !== 'HELP_WIZARD' && 
                   currentView !== 'REGISTRATION' && 
+                  currentView !== 'ACCOUNT_SETUP' &&
                   currentView !== 'LOGIN' && 
                   currentView !== 'ORG_REGISTRATION' &&
                   currentView !== 'ORG_DASHBOARD';

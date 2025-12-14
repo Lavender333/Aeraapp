@@ -109,6 +109,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [orgSearch, setOrgSearch] = useState('');
   const [selectedOrgDetails, setSelectedOrgDetails] = useState<OrganizationProfile | null>(null);
   const [orgMembers, setOrgMembers] = useState<OrgMember[]>([]);
+  const [membersFallback, setMembersFallback] = useState(false);
 
   // Master Inventory State
   const [inventoryRequests, setInventoryRequests] = useState<ReplenishmentRequest[]>([]);
@@ -141,6 +142,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     if (selectedOrgDetails) {
       const members = StorageService.getOrgMembers(selectedOrgDetails.id);
       setOrgMembers(members);
+      StorageService.fetchOrgMembersRemote(selectedOrgDetails.id).then(({ members, fromCache }) => {
+        setOrgMembers(members);
+        setMembersFallback(fromCache);
+      }).catch(() => setMembersFallback(true));
     } else {
       setOrgMembers([]);
     }
@@ -973,13 +978,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                  </div>
 
                  {/* Member List Section */}
-                 <div className="space-y-3">
-                    <h3 className="font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
-                      <Users size={18} className="text-slate-400" /> Registered Members ({orgMembers.length})
-                    </h3>
-                    {orgMembers.length === 0 ? (
-                      <p className="text-slate-500 text-sm italic">No members linked yet.</p>
-                    ) : (
+                <div className="space-y-3">
+                   <h3 className="font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
+                     <Users size={18} className="text-slate-400" /> Registered Members ({orgMembers.length})
+                     {membersFallback && (
+                       <span className="text-[11px] text-amber-600 font-semibold">Using cached list</span>
+                     )}
+                   </h3>
+                   {orgMembers.length === 0 ? (
+                     <p className="text-slate-500 text-sm italic">No members linked yet.</p>
+                   ) : (
                       <div className="max-h-60 overflow-y-auto space-y-2 border border-slate-100 rounded-lg p-2 bg-slate-50">
                         {orgMembers.map(member => (
                           <div key={member.id} className="bg-white p-3 rounded-lg border border-slate-200 flex justify-between items-center shadow-sm">

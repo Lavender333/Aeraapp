@@ -21,6 +21,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
   const [requests, setRequests] = useState<ReplenishmentRequest[]>([]);
   const [inventoryFallback, setInventoryFallback] = useState(false);
   const [requestsFallback, setRequestsFallback] = useState(false);
+  const [, setMembersFallback] = useState(false);
   
   // Member Detail State
   const [selectedMember, setSelectedMember] = useState<OrgMember | null>(null);
@@ -64,6 +65,10 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     
     // Load Live Data from Backend
     setMembers(StorageService.getOrgMembers(id));
+    StorageService.fetchOrgMembersRemote(id).then(({ members, fromCache }) => {
+      setMembers(members);
+      setMembersFallback(fromCache);
+    }).catch(() => setMembersFallback(true));
     StorageService.fetchOrgInventoryRemote(id).then(({ inventory, fromCache }) => {
       setInventory(inventory);
       setInventoryFallback(fromCache);

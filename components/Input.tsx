@@ -14,7 +14,7 @@ export const Input: React.FC<InputProps> = ({ label, error, className, ...props 
         </label>
       )}
       <input
-        className={`w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all placeholder:text-slate-400 ${
+        className={`w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all placeholder:text-slate-400 text-slate-900 ${
           error ? 'border-red-500 focus:ring-red-500' : ''
         } ${className}`}
         {...props}
@@ -38,7 +38,7 @@ export const Textarea: React.FC<TextareaProps> = ({ label, error, className, ...
         </label>
       )}
       <textarea
-        className={`w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all placeholder:text-slate-400 min-h-[100px] ${
+        className={`w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all placeholder:text-slate-400 text-slate-900 min-h-[100px] ${
           error ? 'border-red-500 focus:ring-red-500' : ''
         } ${className}`}
         {...props}

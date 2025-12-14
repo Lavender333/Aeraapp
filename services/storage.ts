@@ -1,10 +1,11 @@
 
 import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest } from '../types';
 import { REQUEST_ITEM_MAP } from './validation';
-import { getInventory, saveInventory, getBroadcast, setBroadcast } from './api';
+import { getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword } from './api';
 import { getMemberStatus, setMemberStatus } from './api';
 
 const DB_KEY = 'aera_backend_db_v1';
+const AUTH_TOKEN_KEY = 'aera_auth_token';
 
 // --- Seed Data ---
 const SEED_ORGS: OrganizationProfile[] = [
@@ -41,13 +42,13 @@ const SEED_ORGS: OrganizationProfile[] = [
 
 const SEED_USERS: UserProfile[] = [
   { 
-    id: 'u0', fullName: 'System Admin', phone: '555-0000', address: 'HQ', 
+    id: 'u0', fullName: 'System Admin', email: 'admin@example.com', phone: '555-0000', address: 'HQ', 
     householdMembers: 1, household: [], petDetails: '', medicalNeeds: '', 
     emergencyContactName: 'Ops Center', emergencyContactPhone: '555-9999', emergencyContactRelation: 'Supervisor',
-    communityId: '', role: 'ADMIN', language: 'en', active: true, notifications: { push: true, sms: true, email: true }
+    communityId: '', role: 'ADMIN', language: 'en', active: true, onboardComplete: true, notifications: { push: true, sms: true, email: true }
   },
   { 
-    id: 'u1', fullName: 'Alice Johnson', phone: '555-1001', address: '101 Pine St', 
+    id: 'u1', fullName: 'Alice Johnson', email: 'alice@example.com', phone: '555-1001', address: '101 Pine St', 
     householdMembers: 3, 
     household: [
       { id: 'h1', name: 'Bob Johnson', age: '35', needs: '' },
@@ -55,16 +56,16 @@ const SEED_USERS: UserProfile[] = [
     ],
     petDetails: '1 Cat', medicalNeeds: '', 
     emergencyContactName: 'Bob Johnson', emergencyContactPhone: '555-2001', emergencyContactRelation: 'Spouse',
-    communityId: 'CH-9921', role: 'GENERAL_USER', language: 'en', active: true, notifications: { push: true, sms: true, email: true }
+    communityId: 'CH-9921', role: 'GENERAL_USER', language: 'en', active: true, onboardComplete: true, notifications: { push: true, sms: true, email: true }
   },
   { 
-    id: 'u2', fullName: 'David Brown', phone: '555-1002', address: '202 Oak Ave', 
+    id: 'u2', fullName: 'David Brown', email: 'david@example.com', phone: '555-1002', address: '202 Oak Ave', 
     householdMembers: 1, household: [], petDetails: '', medicalNeeds: 'Insulin Dependent', 
     emergencyContactName: 'Martha Brown', emergencyContactPhone: '555-2002', emergencyContactRelation: 'Mother',
-    communityId: 'CH-9921', role: 'GENERAL_USER', language: 'en', active: true, notifications: { push: true, sms: true, email: true }
+    communityId: 'CH-9921', role: 'GENERAL_USER', language: 'en', active: true, onboardComplete: true, notifications: { push: true, sms: true, email: true }
   },
   { 
-    id: 'u3', fullName: 'Pastor John', phone: '555-0101', address: '4500 Main St', 
+    id: 'u3', fullName: 'Pastor John', email: 'pastor@example.com', phone: '555-0101', address: '4500 Main St', 
     householdMembers: 4, 
     household: [
       { id: 'h3', name: 'Mary Smith', age: '45', needs: '' },
@@ -73,13 +74,13 @@ const SEED_USERS: UserProfile[] = [
     ],
     petDetails: '', medicalNeeds: '', 
     emergencyContactName: 'Church Office', emergencyContactPhone: '555-0100', emergencyContactRelation: 'Work',
-    communityId: 'CH-9921', role: 'INSTITUTION_ADMIN', language: 'en', active: true, notifications: { push: true, sms: true, email: true }
+    communityId: 'CH-9921', role: 'INSTITUTION_ADMIN', language: 'en', active: true, onboardComplete: true, notifications: { push: true, sms: true, email: true }
   },
   { 
-    id: 'u4', fullName: 'Sarah Connor', phone: '555-9111', address: 'Fire Station 1', 
+    id: 'u4', fullName: 'Sarah Connor', email: 'sarah@example.com', phone: '555-9111', address: 'Fire Station 1', 
     householdMembers: 1, household: [], petDetails: '', medicalNeeds: '', 
     emergencyContactName: 'Dispatcher', emergencyContactPhone: '555-9000', emergencyContactRelation: 'Work',
-    communityId: '', role: 'FIRST_RESPONDER', language: 'en', active: true, notifications: { push: true, sms: true, email: true }
+    communityId: '', role: 'FIRST_RESPONDER', language: 'en', active: true, onboardComplete: true, notifications: { push: true, sms: true, email: true }
   }
 ];
 
@@ -99,7 +100,9 @@ export const StorageService = {
     try {
       const stored = localStorage.getItem(DB_KEY);
       if (stored) {
-        return JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        if (!parsed.orgMembers) parsed.orgMembers = {};
+        return parsed;
       }
     } catch (e) {
       console.error("DB Load Error", e);
@@ -122,6 +125,7 @@ export const StorageService = {
       inventories: SEED_INVENTORY,
       requests: [],
       replenishmentRequests: SEED_REPLENISHMENT_REQUESTS,
+      orgMembers: {},
       currentUser: null,
       tickerMessage: "" // Default system ticker empty
     };
@@ -131,10 +135,89 @@ export const StorageService = {
 
   resetDB() {
     localStorage.removeItem(DB_KEY);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
     window.location.reload();
   },
 
   // --- Profile / Auth ---
+  setAuthToken(token: string) {
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+  },
+
+  getAuthToken(): string | null {
+    return localStorage.getItem(AUTH_TOKEN_KEY);
+  },
+
+  clearAuthToken() {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+  },
+
+  async registerWithCredentials(email: string, password: string, fullName?: string) {
+    const resp = await registerAuth({ email, password, fullName });
+    if (resp?.token) this.setAuthToken(resp.token);
+    if (resp?.user) {
+      const profile: UserProfile = {
+        id: resp.user.id,
+        fullName: resp.user.fullName || fullName || '',
+        email: resp.user.email || '',
+        phone: resp.user.phone || '',
+        address: '',
+        householdMembers: 1,
+        household: [],
+        petDetails: '',
+        medicalNeeds: '',
+        emergencyContactName: '',
+        emergencyContactPhone: '',
+        emergencyContactRelation: '',
+        communityId: resp.user.orgId || '',
+        role: resp.user.role || 'GENERAL_USER',
+        language: 'en',
+        active: true,
+        onboardComplete: false,
+        notifications: { push: true, sms: true, email: true }
+      };
+      this.saveProfile(profile);
+    }
+    return resp;
+  },
+
+  async loginWithCredentials(email: string, password: string) {
+    const resp = await loginAuth({ email, password });
+    if (resp?.token) this.setAuthToken(resp.token);
+    if (resp?.user) {
+      const profile: UserProfile = {
+        id: resp.user.id,
+        fullName: resp.user.fullName || '',
+        email: resp.user.email || '',
+        phone: resp.user.phone || '',
+        address: '',
+        householdMembers: 1,
+        household: [],
+        petDetails: '',
+        medicalNeeds: '',
+        emergencyContactName: '',
+        emergencyContactPhone: '',
+        emergencyContactRelation: '',
+        communityId: resp.user.orgId || '',
+        role: resp.user.role || 'GENERAL_USER',
+        language: 'en',
+        active: true,
+        onboardComplete: false,
+        notifications: { push: true, sms: true, email: true }
+      };
+      this.saveProfile(profile);
+    }
+    return resp;
+  },
+
+  async requestPasswordReset(email: string) {
+    return forgotPassword({ email });
+  },
+
+  async resetPassword(email: string, token: string, newPassword: string) {
+    return resetPassword({ email, token, newPassword });
+  },
+
   hasProfile(): boolean {
     const db = this.getDB();
     return !!db.currentUser;
@@ -152,6 +235,7 @@ export const StorageService = {
     return {
       id: 'guest',
       fullName: '',
+      email: '',
       phone: '',
       address: '',
       householdMembers: 1,
@@ -183,6 +267,9 @@ export const StorageService = {
     // Default active to true if not specified
     if (profile.active === undefined) {
       profile.active = true;
+    }
+    if (profile.onboardComplete === undefined) {
+      profile.onboardComplete = false;
     }
 
     const index = db.users.findIndex(u => u.id === profile.id);
@@ -218,6 +305,7 @@ export const StorageService = {
     const db = this.getDB();
     db.currentUser = null;
     this.saveDB(db);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
   },
   
   // --- Admin User Management ---
@@ -511,15 +599,11 @@ export const StorageService = {
   },
 
   // --- Backend Queries (Relational) ---
-  getOrgMembers(orgId: string): OrgMember[] {
+  getOrgMembersLocal(orgId: string): OrgMember[] {
     const db = this.getDB();
-    
-    // 1. Find all users linked to this org
     const linkedUsers = db.users.filter(u => u.communityId === orgId);
 
-    // 2. Map to OrgMember format, joining with their latest Request
     return linkedUsers.map(user => {
-      // Find latest request for this user
       const userRequests = db.requests
         .filter(r => r.userId === user.id)
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -558,8 +642,61 @@ export const StorageService = {
     });
   },
 
+  getOrgMembers(orgId: string): OrgMember[] {
+    const db = this.getDB();
+    if (db.orgMembers && db.orgMembers[orgId]) return db.orgMembers[orgId];
+    return this.getOrgMembersLocal(orgId);
+  },
+
+  async fetchOrgMembersRemote(orgId: string): Promise<{ members: OrgMember[]; fromCache: boolean }> {
+    try {
+      const res = await listMembers(orgId);
+      const mapped: OrgMember[] = res.map((m: any) => ({
+        id: m.id || m._id,
+        name: m.name,
+        status: m.status || 'UNKNOWN',
+        lastUpdate: m.lastUpdate || '',
+        location: m.location || 'Unknown',
+        needs: m.needs || [],
+        phone: m.phone || '',
+        address: m.address || '',
+        emergencyContactName: m.emergencyContactName || '',
+        emergencyContactPhone: m.emergencyContactPhone || '',
+        emergencyContactRelation: m.emergencyContactRelation || ''
+      }));
+      const db = this.getDB();
+      db.orgMembers = db.orgMembers || {};
+      db.orgMembers[orgId] = mapped;
+      this.saveDB(db);
+      return { members: mapped, fromCache: false };
+    } catch (e) {
+      console.warn('API members fetch failed, falling back to local', e);
+      return { members: this.getOrgMembersLocal(orgId), fromCache: true };
+    }
+  },
+
+  async addOrgMemberRemote(orgId: string, payload: Partial<OrgMember>) {
+    const created = await addMember(orgId, payload);
+    await this.fetchOrgMembersRemote(orgId);
+    return created;
+  },
+
+  async updateOrgMemberRemote(orgId: string, memberId: string, payload: Partial<OrgMember>) {
+    const updated = await updateMember(orgId, memberId, payload);
+    await this.fetchOrgMembersRemote(orgId);
+    return updated;
+  },
+
+  async deleteOrgMemberRemote(orgId: string, memberId: string) {
+    await removeMember(orgId, memberId);
+    const db = this.getDB();
+    db.orgMembers = db.orgMembers || {};
+    db.orgMembers[orgId] = (db.orgMembers[orgId] || []).filter((m: OrgMember) => m.id !== memberId);
+    this.saveDB(db);
+  },
+
   // --- Help Requests ---
-  submitRequest(data: HelpRequestData): HelpRequestRecord {
+  async submitRequest(data: HelpRequestData): Promise<HelpRequestRecord> {
     const db = this.getDB();
     const currentUser = db.currentUser || 'guest';
     const priority = this.calculatePriority(data);
@@ -584,15 +721,48 @@ export const StorageService = {
     }
 
     this.saveDB(db);
+
+    // Try to persist remotely
+    const profile = db.users.find(u => u.id === currentUser);
+    try {
+      const remote = await createHelpRequest(currentUser, {
+        orgId: profile?.communityId,
+        data,
+        priority,
+        location: data.location,
+        status: 'RECEIVED',
+      });
+      // Cache server id
+      db.requests[0].id = remote.id || db.requests[0].id;
+      db.requests[0].synced = true;
+      this.saveDB(db);
+      return {
+        ...data,
+        id: remote.id || record.id,
+        userId: currentUser,
+        timestamp: remote.timestamp || record.timestamp,
+        status: remote.status || 'RECEIVED',
+        priority: remote.priority || priority,
+        synced: true,
+      };
+    } catch (e) {
+      console.warn('Help request API failed; keeping local only', e);
+    }
+
     return record;
   },
 
-  updateRequestLocation(requestId: string, location: string) {
+  async updateRequestLocation(requestId: string, location: string) {
     const db = this.getDB();
     const reqIdx = db.requests.findIndex(r => r.id === requestId);
     if (reqIdx >= 0) {
       db.requests[reqIdx].location = location;
       this.saveDB(db);
+    }
+    try {
+      await updateHelpRequestLocation(requestId, location);
+    } catch (e) {
+      console.warn('Failed to update request location remotely', e);
     }
   },
 
@@ -616,11 +786,29 @@ export const StorageService = {
     return { location: latest.location, timestamp: latest.timestamp };
   },
 
-  getActiveRequest(): HelpRequestRecord | null {
+  async getActiveRequest(): Promise<HelpRequestRecord | null> {
     const db = this.getDB();
     if (!db.currentUser) return null;
-    
-    // Find latest request for current user
+
+    try {
+      const remote = await getActiveHelpRequest(db.currentUser);
+      if (remote) {
+        const normalized: HelpRequestRecord = {
+          ...remote.data,
+          id: remote.id || remote._id,
+          userId: remote.userId,
+          timestamp: remote.timestamp || remote.createdAt,
+          status: remote.status || 'RECEIVED',
+          priority: remote.priority || 'LOW',
+          synced: true,
+          location: remote.location || remote.data?.location || ''
+        } as any;
+        return normalized;
+      }
+    } catch (e) {
+      console.warn('API active request fetch failed, falling back to local', e);
+    }
+
     const userRequests = db.requests.filter(r => r.userId === db.currentUser);
     return userRequests.length > 0 ? userRequests[0] : null;
   },

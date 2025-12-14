@@ -5,7 +5,7 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { StorageService } from '../services/storage';
 import { t } from '../services/translations';
-import { LogIn, ArrowLeft, User, ShieldCheck, HeartPulse, Navigation, Lock, AlertOctagon } from 'lucide-react';
+import { LogIn, User, ShieldCheck, HeartPulse, Navigation, Lock, AlertOctagon, Mail, KeyRound, HelpCircle } from 'lucide-react';
 
 // Phone Formatter Utility
 const formatPhoneNumber = (value: string) => {
@@ -21,21 +21,27 @@ const formatPhoneNumber = (value: string) => {
 
 export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetToken, setResetToken] = useState('');
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [showReset, setShowReset] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setError('');
-    const result = StorageService.loginUser(phone);
-    if (result.success) {
-      // Smart Routing based on Role
+    setInfo('');
+    try {
+      await StorageService.loginWithCredentials(email, password);
       const profile = StorageService.getProfile();
-      if (profile.role === 'INSTITUTION_ADMIN') {
-        setView('ORG_DASHBOARD');
-      } else {
-        setView('DASHBOARD');
-      }
-    } else {
-      setError(result.message || 'Login failed.');
+      const needsSetup = !profile.onboardComplete;
+      if (needsSetup) setView('ACCOUNT_SETUP');
+      else if (profile.role === 'INSTITUTION_ADMIN') setView('ORG_DASHBOARD');
+      else setView('DASHBOARD');
+    } catch (e: any) {
+      setError(e?.message || 'Login failed.');
     }
   };
 
@@ -51,11 +57,10 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
     
     // Check role immediately for the direct action
     const profile = StorageService.getProfile(); 
-    if (profile.role === 'INSTITUTION_ADMIN') {
-      setView('ORG_DASHBOARD');
-    } else {
-      setView('DASHBOARD');
-    }
+    const needsSetup = !profile.onboardComplete;
+    if (needsSetup) setView('ACCOUNT_SETUP');
+    else if (profile.role === 'INSTITUTION_ADMIN') setView('ORG_DASHBOARD');
+    else setView('DASHBOARD');
   };
 
   return (
@@ -68,32 +73,107 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
         <p className="text-slate-600 font-medium">{t('login.subtitle')}</p>
       </div>
 
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+        <h2 className="text-sm font-bold text-slate-700 uppercase">Email Login</h2>
         <Input 
-          label={t('login.phone_label')}
-          placeholder="(555) 000-0000"
-          value={phone}
-          onChange={(e) => setPhone(formatPhoneNumber(e.target.value))}
+          label="Email"
+          placeholder="you@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           className="border-slate-300"
-          error={error}
+          leftIcon={<Mail size={16} />}
         />
-        
+        <Input 
+          label="Password"
+          placeholder="••••••••"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="border-slate-300"
+          leftIcon={<KeyRound size={16} />}
+        />
         {error && (
           <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 p-3 rounded-lg">
             <AlertOctagon size={16} className="mt-0.5 shrink-0" />
             <span>{error}</span>
           </div>
         )}
-
+        {info && (
+          <div className="flex items-start gap-2 text-sm text-emerald-700 bg-emerald-50 p-3 rounded-lg">
+            <HelpCircle size={16} className="mt-0.5 shrink-0" />
+            <span>{info}</span>
+          </div>
+        )}
         <Button 
           fullWidth 
           size="lg" 
           onClick={handleLogin}
           className="font-bold shadow-md"
-          disabled={!phone}
+          disabled={!email || !password}
         >
           {t('login.btn')}
         </Button>
+        <button className="text-sm text-brand-600 font-semibold underline" onClick={() => setShowReset(!showReset)}>
+          Forgot password?
+        </button>
+        {showReset && (
+          <div className="space-y-2 border border-slate-200 rounded-lg p-3 bg-slate-50">
+            <Input 
+              label="Email for reset"
+              placeholder="you@example.com"
+              value={resetEmail}
+              onChange={(e) => setResetEmail(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <Input 
+                label="Reset Token"
+                placeholder="Token from email"
+                value={resetToken}
+                onChange={(e) => setResetToken(e.target.value)}
+              />
+              <Input 
+                label="New Password"
+                type="password"
+                placeholder="New password"
+                value={resetNewPassword}
+                onChange={(e) => setResetNewPassword(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  setError('');
+                  setInfo('');
+                  try {
+                    const resp = await StorageService.requestPasswordReset(resetEmail);
+                    setInfo(resp?.resetToken ? `Reset token (demo): ${resp.resetToken}` : 'Check your email for reset token');
+                  } catch (e: any) {
+                    setError(e?.message || 'Reset request failed');
+                  }
+                }}
+              >
+                Request Token
+              </Button>
+              <Button 
+                size="sm"
+                onClick={async () => {
+                  setError('');
+                  setInfo('');
+                  try {
+                    await StorageService.resetPassword(resetEmail, resetToken, resetNewPassword);
+                    setInfo('Password updated. You can log in now.');
+                  } catch (e: any) {
+                    setError(e?.message || 'Reset failed');
+                  }
+                }}
+              >
+                Reset Password
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Demo Credentials Helper */}
