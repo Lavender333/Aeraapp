@@ -58,6 +58,22 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isCameraOn, setIsCameraOn] = useState(false);
 
+  // Reset form state on mount to allow multiple requests
+  useEffect(() => {
+    setStep(1);
+    setData(INITIAL_DATA);
+    setIsSubmitting(false);
+    setIsSuccess(false);
+    setSubmittedId(null);
+    setLocationError(null);
+    setPermissionDenied(false);
+    setIsTracking(true);
+    setGpsAccuracy(null);
+    setLastLocUpdate('');
+    setIsIpFallback(false);
+    hasPrefilledLocation.current = false;
+  }, []);
+
   // Load profile for contact info
   useEffect(() => {
     const profile = StorageService.getProfile();
