@@ -4,7 +4,7 @@ import { REQUEST_ITEM_MAP } from './validation';
 import { getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword } from './api';
 import { getMemberStatus, setMemberStatus } from './api';
 
-const DB_KEY = 'aera_backend_db_v1';
+const DB_KEY = 'aera_backend_db_v3'; // Force fresh database
 const AUTH_TOKEN_KEY = 'aera_auth_token';
 
 // --- Seed Data ---
