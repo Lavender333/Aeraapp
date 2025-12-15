@@ -93,18 +93,34 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
 
 export async function loginAuth(payload: { email?: string; phone?: string; password: string }) {
   try {
-    const res = await fetch(`${API_BASE}/api/auth/login`, {
+    const url = `${API_BASE}/api/auth/login`;
+    console.log('📡 Attempting login to:', url);
+    console.log('📝 Payload:', payload);
+    
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
+    
+    console.log('📊 Response status:', res.status, res.statusText);
+    
     if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.error || 'Failed to login');
+      try {
+        const errorData = await res.json();
+        console.error('❌ Server error:', errorData);
+        throw new Error(errorData.error || `Failed to login: ${res.statusText}`);
+      } catch (parseErr) {
+        console.error('❌ Could not parse error response:', parseErr);
+        throw new Error(`Login failed with status ${res.status}`);
+      }
     }
-    return res.json(); // { token, user }
+    
+    const data = await res.json();
+    console.log('✅ Login successful, got token:', data.token ? 'YES' : 'NO');
+    return data;
   } catch (err: any) {
-    console.error('Login API error:', err);
+    console.error('❌ Login API error:', err.message || err);
     throw err;
   }
 }
