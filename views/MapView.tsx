@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ViewState } from '../types';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from "../services/mockGenAI";
 import { ArrowLeft, Search, MapPin, Navigation, Loader2, ExternalLink } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';

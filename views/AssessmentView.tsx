@@ -5,7 +5,7 @@ import { Button } from '../components/Button';
 import { Input, Textarea } from '../components/Input';
 import { ArrowLeft, Camera, Home, Zap, Droplets, Triangle, CheckCircle, AlertTriangle, Loader2, Sparkles, X, MapPin, RefreshCw, Aperture, Keyboard } from 'lucide-react';
 import { t } from '../services/translations';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from "../services/mockGenAI";
 
 // Mock AI Analysis for demo purposes (since we can't upload real files in this env)
 const MOCK_AI_RESPONSE = "Analysis: Detected significant shingle loss on approximately 40% of the visible roof surface. Potential water intrusion points identified near the chimney. Estimated Severity: High.";

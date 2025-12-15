@@ -9,7 +9,7 @@ import { getInventoryStatuses, getRecommendedResupply } from '../services/invent
 import { t } from '../services/translations';
 import { Building2, CheckCircle, AlertTriangle, HelpCircle, Package, ArrowLeft, Send, Truck, Copy, Save, Phone, MapPin, User, HeartPulse, BellRing, X, AlertOctagon, Loader2, Wand2, ShieldCheck, WifiOff } from 'lucide-react';
 import { Textarea } from '../components/Input';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from "../services/mockGenAI";
 
 export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const [members, setMembers] = useState<OrgMember[]>([]);

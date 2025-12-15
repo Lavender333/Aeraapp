@@ -6,7 +6,7 @@ import { Input, Textarea } from '../components/Input';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { StorageService } from '../services/storage';
 import { t } from '../services/translations';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from "../services/mockGenAI";
 import { User, Shield, ShieldCheck, Building2, Check, ArrowRight, Link as LinkIcon, Loader2, Lock, HeartPulse, XCircle, Search, MapPin, CheckCircle, AlertTriangle, Globe, Map, Camera } from 'lucide-react';
 
 // Phone Formatter Utility
