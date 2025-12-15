@@ -119,6 +119,7 @@ export const StorageService = {
   },
 
   seedDB(): DatabaseSchema {
+    console.log('Seeding database with users:', SEED_USERS.map(u => ({ id: u.id, name: u.fullName, onboardComplete: u.onboardComplete })));
     const db: DatabaseSchema = {
       users: SEED_USERS,
       organizations: SEED_ORGS,
@@ -252,9 +253,11 @@ export const StorageService = {
 
   getProfile(): UserProfile {
     const db = this.getDB();
+    console.log('getProfile called, currentUser:', db.currentUser);
     if (!db.currentUser) return this.createGuestProfile();
     
     const user = db.users.find(u => u.id === db.currentUser);
+    console.log('Found user profile:', user ? { id: user.id, name: user.fullName, onboardComplete: user.onboardComplete } : 'NOT FOUND');
     return user || this.createGuestProfile();
   },
 
@@ -317,12 +320,16 @@ export const StorageService = {
     // Simple matching by phone number
     const user = db.users.find(u => u.phone === phone);
     
+    console.log('loginUser called with phone:', phone);
+    console.log('Found user:', user ? { id: user.id, name: user.fullName, onboardComplete: user.onboardComplete } : 'NOT FOUND');
+    
     if (user) {
       if (user.active === false) {
         return { success: false, message: 'Account deactivated. Contact Admin.' };
       }
       db.currentUser = user.id;
       this.saveDB(db);
+      console.log('User logged in, currentUser set to:', user.id);
       return { success: true };
     }
     return { success: false, message: 'User not found. Please check number or register.' };

@@ -57,8 +57,11 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
     }
     
     // Check role immediately for the direct action
-    const profile = StorageService.getProfile(); 
+    const profile = StorageService.getProfile();
+    console.log('Demo login profile:', profile); // Debug log
     const needsSetup = !profile.onboardComplete;
+    console.log('Needs setup?', needsSetup, 'onboardComplete:', profile.onboardComplete); // Debug log
+    
     if (needsSetup) setView('ACCOUNT_SETUP');
     else if (profile.role === 'INSTITUTION_ADMIN') setView('ORG_DASHBOARD');
     else setView('DASHBOARD');
