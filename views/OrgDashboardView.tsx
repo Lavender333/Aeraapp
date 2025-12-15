@@ -202,9 +202,23 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
 
   const handleSubmitRequest = async () => {
     try {
-      await createRequest(communityId, { item: selectedItem, quantity: requestAmount, provider: replenishmentProvider, orgName });
-      const refreshed = await listRequests(communityId);
-      setRequests(refreshed);
+      // Try API first, but fall back to local storage
+      try {
+        await createRequest(communityId, { item: selectedItem, quantity: requestAmount, provider: replenishmentProvider, orgName });
+        const refreshed = await listRequests(communityId);
+        setRequests(refreshed);
+      } catch (apiError) {
+        console.warn('API request failed, using local storage:', apiError);
+        // Use local storage as fallback
+        StorageService.createReplenishmentRequest(communityId, {
+          item: selectedItem,
+          quantity: requestAmount,
+          provider: replenishmentProvider,
+          orgName
+        });
+        const localRequests = StorageService.getOrgReplenishmentRequests(communityId);
+        setRequests(localRequests);
+      }
       setRequestSuccess(true);
     } catch (e) {
       console.error(e);
@@ -229,13 +243,30 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     if (!window.confirm(`Confirm stocked:\nItem: ${req.item}\nQuantity: ${qty}`)) return;
 
     setStockLoading(true);
+    
+    // Try API first, fall back to local storage
     updateRequestStatus(req.id, { status: 'STOCKED', deliveredQuantity: qty })
       .then(async () => {
         const refreshedReqs = await listRequests(communityId);
         setRequests(refreshedReqs);
         StorageService.fetchOrgInventoryRemote(communityId).then(setInventory);
       })
-      .catch(() => alert("Failed to update request."))
+      .catch(() => {
+        // Use local storage as fallback
+        console.warn('API update failed, using local storage');
+        const itemKey = req.item.toLowerCase().includes('water') ? 'water' :
+                       req.item.toLowerCase().includes('food') ? 'food' :
+                       req.item.toLowerCase().includes('blanket') ? 'blankets' : 'medicalKits';
+        
+        const delivered = { [itemKey]: qty };
+        StorageService.stockReplenishment(req.id, delivered);
+        
+        const localRequests = StorageService.getOrgReplenishmentRequests(communityId);
+        setRequests(localRequests);
+        
+        const updatedInv = StorageService.getOrgInventory(communityId);
+        setInventory(updatedInv);
+      })
       .finally(() => setStockLoading(false));
   };
 
