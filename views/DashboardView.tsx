@@ -3,6 +3,7 @@ import { Card } from '../components/Card';
 import { ViewState, HelpRequestRecord, UserRole, OrgInventory } from '../types';
 import { StorageService } from '../services/storage';
 import { getInventoryStatuses } from '../services/inventoryStatus';
+import { getBroadcast } from '../services/api';
 import { t } from '../services/translations';
 import { 
   AlertTriangle, 
