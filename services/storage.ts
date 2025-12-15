@@ -182,32 +182,59 @@ export const StorageService = {
   },
 
   async loginWithCredentials(email: string, password: string) {
-    const resp = await loginAuth({ email, password });
-    if (resp?.token) this.setAuthToken(resp.token);
-    if (resp?.user) {
-      const profile: UserProfile = {
-        id: resp.user.id,
-        fullName: resp.user.fullName || '',
-        email: resp.user.email || '',
-        phone: resp.user.phone || '',
-        address: '',
-        householdMembers: 1,
-        household: [],
-        petDetails: '',
-        medicalNeeds: '',
-        emergencyContactName: '',
-        emergencyContactPhone: '',
-        emergencyContactRelation: '',
-        communityId: resp.user.orgId || '',
-        role: resp.user.role || 'GENERAL_USER',
-        language: 'en',
-        active: true,
-        onboardComplete: false,
-        notifications: { push: true, sms: true, email: true }
+    // Try local database first (for demo/offline mode)
+    const db = this.getDB();
+    const user = db.users.find(u => u.email === email);
+    
+    if (user) {
+      if (user.active === false) {
+        throw new Error('Account deactivated. Contact Admin.');
+      }
+      db.currentUser = user.id;
+      this.saveDB(db);
+      return { 
+        token: 'local-demo-token', 
+        user: { 
+          id: user.id, 
+          email: user.email, 
+          fullName: user.fullName, 
+          role: user.role,
+          onboardComplete: user.onboardComplete 
+        } 
       };
-      this.saveProfile(profile);
     }
-    return resp;
+    
+    // Fall back to API if user not in local DB
+    try {
+      const resp = await loginAuth({ email, password });
+      if (resp?.token) this.setAuthToken(resp.token);
+      if (resp?.user) {
+        const profile: UserProfile = {
+          id: resp.user.id,
+          fullName: resp.user.fullName || '',
+          email: resp.user.email || '',
+          phone: resp.user.phone || '',
+          address: '',
+          householdMembers: 1,
+          household: [],
+          petDetails: '',
+          medicalNeeds: '',
+          emergencyContactName: '',
+          emergencyContactPhone: '',
+          emergencyContactRelation: '',
+          communityId: resp.user.orgId || '',
+          role: resp.user.role || 'GENERAL_USER',
+          language: 'en',
+          active: true,
+          onboardComplete: false,
+          notifications: { push: true, sms: true, email: true }
+        };
+        this.saveProfile(profile);
+      }
+      return resp;
+    } catch (err) {
+      throw new Error('Login failed. User not found in local database or backend unavailable.');
+    }
   },
 
   async requestPasswordReset(email: string) {
