@@ -34,7 +34,8 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
     setError('');
     setInfo('');
     try {
-      await StorageService.loginWithCredentials(email, password);
+      // Login without password - just use email
+      await StorageService.loginWithCredentials(email, '');
       const profile = StorageService.getProfile();
       const needsSetup = !profile.onboardComplete;
       if (needsSetup) setView('ACCOUNT_SETUP');
@@ -83,15 +84,6 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
           className="border-slate-300"
           leftIcon={<Mail size={16} />}
         />
-        <Input 
-          label="Password"
-          placeholder="••••••••"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="border-slate-300"
-          leftIcon={<KeyRound size={16} />}
-        />
         {error && (
           <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 p-3 rounded-lg">
             <AlertOctagon size={16} className="mt-0.5 shrink-0" />
@@ -109,7 +101,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
           size="lg" 
           onClick={handleLogin}
           className="font-bold shadow-md"
-          disabled={!email || !password}
+          disabled={!email}
         >
           {t('login.btn')}
         </Button>

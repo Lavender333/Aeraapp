@@ -329,23 +329,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
         </div>
       </div>
 
-      {/* Credentials summary (read-only) */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm mb-4 max-w-md">
-        <h3 className="text-sm font-bold text-slate-800">Account Credentials</h3>
-        <p className="text-xs text-slate-500 mb-2">
-          {formData.email ? 'Email shown for reference. Password changes via Login → “Forgot password”.'
-          : 'No email on file. Add one to enable login and password reset by email.'}
-        </p>
-        <Input 
-          label="Email"
-          placeholder="you@example.com"
-          value={formData.email || ''}
-          onChange={(e) => updateForm('email', e.target.value)}
-        />
-        <p className="text-[11px] text-amber-600 mt-1">
-          Keep this up to date so you can log in and reset your password.
-        </p>
-      </div>
+
 
       <div className="flex-1 flex flex-col justify-center max-w-sm mx-auto w-full">
         

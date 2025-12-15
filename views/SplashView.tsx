@@ -13,6 +13,8 @@ interface SplashViewProps {
 
 // NOTE: We need to update the prop signature in App.tsx to pass the presentation handler
 export const SplashView: React.FC<SplashViewProps & { onPresentation?: () => void; onFinance?: () => void }> = ({ onEnter, onPresentation, onFinance }) => {
+  const profile = StorageService.getProfile();
+  const isAdmin = profile?.role === 'ADMIN';
   const [lang, setLang] = useState<LanguageCode>('en');
 
   useEffect(() => {
@@ -80,9 +82,9 @@ export const SplashView: React.FC<SplashViewProps & { onPresentation?: () => voi
             {t('splash.enter')}
           </Button>
           
-          {onPresentation && (
-            <Button 
-              onClick={onPresentation} 
+          {onPresentation && isAdmin && (
+            <Button
+              onClick={onPresentation}
               variant="secondary"
               fullWidth 
               className="bg-white/60 hover:bg-white border-white/50 text-slate-600 font-semibold"
@@ -90,7 +92,7 @@ export const SplashView: React.FC<SplashViewProps & { onPresentation?: () => voi
               <Presentation size={18} className="mr-2" /> View Presentation
             </Button>
           )}
-          {onFinance && (
+          {onFinance && isAdmin && (
             <Button 
               onClick={onFinance} 
               variant="outline"
