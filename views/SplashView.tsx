@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Button } from '../components/Button';
-import { ShieldAlert, Globe, Presentation } from 'lucide-react';
+import { ShieldAlert, Globe, Presentation, RotateCcw } from 'lucide-react';
 import { t, LanguageCode } from '../services/translations';
 import { StorageService } from '../services/storage';
 
@@ -102,6 +102,15 @@ export const SplashView: React.FC<SplashViewProps & { onPresentation?: () => voi
               <Presentation size={18} className="mr-2" /> Financial Dashboard
             </Button>
           )}
+
+          <Button
+            onClick={() => StorageService.resetDB()}
+            variant="outline"
+            fullWidth
+            className="border-red-300 text-red-600 hover:bg-red-50 font-semibold mt-4"
+          >
+            <RotateCcw size={18} className="mr-2" /> Reset Application
+          </Button>
 
           <p className="mt-4 text-xs text-slate-400">{t('splash.disclaimer')}</p>
         </div>
