@@ -234,13 +234,12 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
   const handleStock = (req: ReplenishmentRequest) => {
     const defaultQty = req.quantity;
     const input = window.prompt(`Enter stocked quantity for ${req.item}:`, String(defaultQty));
-    if (input === null) return;
+    if (input === null) return; // User clicked Cancel
     const qty = parseInt(input);
     if (!Number.isFinite(qty) || qty < 0) {
       alert("Enter a valid non-negative quantity.");
       return;
     }
-    if (!window.confirm(`Confirm stocked:\nItem: ${req.item}\nQuantity: ${qty}`)) return;
 
     setStockLoading(true);
     
