@@ -504,6 +504,31 @@ export const StorageService = {
     return true;
   },
 
+  // Compatibility wrapper used by UI fallback code
+  createReplenishmentRequest(orgId: string, payload: { item: string; quantity: number; provider?: string; orgName?: string }): boolean {
+    const db = this.getDB();
+    const org = db.organizations.find(o => o.id === orgId);
+    if (!org) return false;
+
+    const isOnline = navigator.onLine;
+    const request = {
+      id: 'RR-' + Date.now(),
+      orgId: org.id,
+      orgName: payload.orgName || org.name,
+      item: payload.item,
+      quantity: payload.quantity,
+      status: 'PENDING',
+      timestamp: new Date().toISOString(),
+      provider: payload.provider || org.replenishmentProvider || 'Unknown',
+      synced: isOnline
+    } as any;
+
+    if (!db.replenishmentRequests) db.replenishmentRequests = [];
+    db.replenishmentRequests.unshift(request);
+    this.saveDB(db);
+    return true;
+  },
+
   getAllReplenishmentRequests(): ReplenishmentRequest[] {
     const db = this.getDB();
     return db.replenishmentRequests || [];
@@ -606,6 +631,11 @@ export const StorageService = {
       window.dispatchEvent(new Event('inventory-update'));
     }
     return true;
+  },
+
+  // Alias used by UI fallback
+  stockReplenishment(requestId: string, delivered: Partial<OrgInventory>) {
+    return this.stockReplenishmentRequest(requestId, delivered as any);
   },
 
   updateReplenishmentRequestStatus(id: string, status: 'PENDING' | 'APPROVED' | 'FULFILLED') {
