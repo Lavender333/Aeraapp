@@ -5,8 +5,8 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
-      // Use subdirectory base for GitHub Pages
-      base: '/Aeratest/',
+      // Use root base so assets resolve correctly on the custom domain
+      base: '/',
       server: {
         port: 3000,
         host: '0.0.0.0',

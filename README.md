@@ -8,8 +8,6 @@ This contains everything you need to run your app locally.
 
 View your app in AI Studio: https://ai.studio/apps/drive/1z0n3mrvjVjwao3_IjdQea7eqKa3Bm36S
 
-**GitHub Repository:** https://github.com/Lavender333/Aeratest.git
-
 ## Run Locally
 
 **Prerequisites:**  Node.js
