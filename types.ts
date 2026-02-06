@@ -36,6 +36,8 @@ export interface HelpRequestData {
 
 export interface HelpRequestRecord extends HelpRequestData {
   id: string;
+  clientId?: string;
+  serverId?: string;
   userId: string; // Link to User
   timestamp: string;
   status: 'PENDING' | 'RECEIVED' | 'DISPATCHED' | 'RESOLVED';

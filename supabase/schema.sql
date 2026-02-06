@@ -32,6 +32,7 @@ CREATE TYPE member_status AS ENUM (
 -- Request status (replenishment)
 CREATE TYPE request_status AS ENUM (
   'PENDING',
+  'APPROVED',
   'FULFILLED',
   'STOCKED'
 );
@@ -133,6 +134,15 @@ CREATE TABLE replenishment_requests (
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
+  signature TEXT,
+  signed_at TIMESTAMPTZ,
+  received_signature TEXT,
+  received_at TIMESTAMPTZ,
+  stocked BOOLEAN DEFAULT false,
+  stocked_at TIMESTAMPTZ,
+  stocked_quantity INTEGER DEFAULT 0,
+  org_confirmed BOOLEAN DEFAULT false,
+  org_confirmed_at TIMESTAMPTZ
 );
 
 CREATE INDEX idx_replenishment_org_id ON replenishment_requests(org_id);
@@ -162,6 +172,7 @@ CREATE TABLE broadcasts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   org_id UUID UNIQUE NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   message TEXT DEFAULT '',
+  history JSONB DEFAULT '[]',
   posted_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()

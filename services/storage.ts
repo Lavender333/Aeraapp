@@ -8,6 +8,8 @@ const DB_KEY = 'aera_backend_db_v4'; // Force fresh database
 const AUTH_TOKEN_KEY = 'aera_auth_token';
 const AUTH_REFRESH_TOKEN_KEY = 'aera_refresh_token';
 const OFFLINE_QUEUE_KEY = 'aera_offline_queue_v1';
+const SYNC_ID_MAP_KEY = 'aera_sync_id_map_v1';
+const STORAGE_STATE_KEY = 'aera_storage_state_v1';
 const MAX_CACHED_REQUESTS = 200;
 const MAX_CACHED_REPLENISHMENTS = 200;
 
@@ -67,6 +69,13 @@ const pruneDatabaseForStorage = (db: DatabaseSchema): DatabaseSchema => {
     requests: (db.requests || []).slice(0, MAX_CACHED_REQUESTS),
     replenishmentRequests: (db.replenishmentRequests || []).slice(0, MAX_CACHED_REPLENISHMENTS),
   };
+};
+
+const saveStorageState = (state: { degraded: boolean; lastError?: string }) => {
+  safeSetItem(STORAGE_STATE_KEY, JSON.stringify({
+    ...state,
+    timestamp: new Date().toISOString(),
+  }));
 };
 
 const sanitizeInventory = (inventory: OrgInventory): OrgInventory => ({
@@ -186,12 +195,50 @@ export const StorageService = {
         const pruned = pruneDatabaseForStorage(db);
         const prunedSaved = safeSetItem(DB_KEY, JSON.stringify(pruned));
         if (!prunedSaved) {
+          saveStorageState({ degraded: true, lastError: 'Unable to persist after pruning' });
           console.error('DB Save Error: Unable to persist even after pruning');
+        } else {
+          saveStorageState({ degraded: true, lastError: 'Pruned database due to quota limits' });
         }
+      } else {
+        saveStorageState({ degraded: false });
       }
     } catch (e) {
+      saveStorageState({ degraded: true, lastError: String(e) });
       console.error("DB Save Error", e);
     }
+  },
+
+  getStorageState(): { degraded: boolean; lastError?: string; timestamp?: string } {
+    const raw = safeGetItem(STORAGE_STATE_KEY);
+    if (!raw) return { degraded: false };
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed || { degraded: false };
+    } catch {
+      return { degraded: false };
+    }
+  },
+
+  shouldUseBackendAsSourceOfTruth(): boolean {
+    const state = this.getStorageState();
+    return !!state.degraded;
+  },
+
+  getSyncIdMap(): Record<string, string> {
+    const raw = safeGetItem(SYNC_ID_MAP_KEY);
+    if (!raw) return {};
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+      console.warn('Failed to parse sync id map', e);
+      return {};
+    }
+  },
+
+  saveSyncIdMap(map: Record<string, string>) {
+    safeSetItem(SYNC_ID_MAP_KEY, JSON.stringify(map));
   },
 
   seedDB(): DatabaseSchema {
@@ -900,9 +947,11 @@ export const StorageService = {
     const priority = this.calculatePriority(data);
     const isOnline = navigator.onLine;
 
+    const clientId = Date.now().toString();
     const record: HelpRequestRecord = {
       ...data,
-      id: Date.now().toString(),
+      id: clientId,
+      clientId,
       userId: currentUser,
       timestamp: new Date().toISOString(),
       status: 'RECEIVED',
@@ -941,13 +990,24 @@ export const StorageService = {
     // Try to persist remotely
     try {
       const remote = await createHelpRequest(currentUser, requestPayload);
+      const serverId = remote.id || db.requests[0].id;
+      const clientId = record.clientId || record.id;
+      const syncMap = this.getSyncIdMap();
+      if (clientId && serverId) {
+        syncMap[clientId] = serverId;
+        this.saveSyncIdMap(syncMap);
+      }
       // Cache server id
-      db.requests[0].id = remote.id || db.requests[0].id;
+      db.requests[0].id = serverId;
+      db.requests[0].serverId = serverId;
+      db.requests[0].clientId = clientId;
       db.requests[0].synced = true;
       this.saveDB(db);
       return {
         ...data,
-        id: remote.id || record.id,
+        id: serverId || record.id,
+        clientId,
+        serverId,
         userId: currentUser,
         timestamp: remote.timestamp || record.timestamp,
         status: remote.status || 'RECEIVED',
@@ -977,7 +1037,9 @@ export const StorageService = {
       if (!navigator.onLine) {
         throw new Error('offline');
       }
-      await updateHelpRequestLocation(requestId, location);
+      const syncMap = this.getSyncIdMap();
+      const serverId = syncMap[requestId] || db.requests[reqIdx]?.serverId || requestId;
+      await updateHelpRequestLocation(serverId, location);
     } catch (e) {
       console.warn('Failed to update request location remotely', e);
       this.enqueueOfflineOperation({
@@ -1171,7 +1233,8 @@ export const StorageService = {
 
     let processed = 0;
     const remaining: OfflineOperation[] = [];
-    const idMap = new Map<string, string>();
+    const syncMap = this.getSyncIdMap();
+    const idMap = new Map<string, string>(Object.entries(syncMap));
 
     for (const op of queue) {
       try {
@@ -1185,11 +1248,14 @@ export const StorageService = {
           if (localId) {
             const newId = remote.id || localId;
             idMap.set(localId, newId);
+            syncMap[localId] = newId;
             const idx = db.requests.findIndex(r => r.id === localId);
             if (idx >= 0) {
               db.requests[idx] = {
                 ...db.requests[idx],
                 id: newId,
+                clientId: db.requests[idx].clientId || localId,
+                serverId: newId,
                 timestamp: remote.timestamp || db.requests[idx].timestamp,
                 status: remote.status || db.requests[idx].status,
                 priority: remote.priority || db.requests[idx].priority,
@@ -1223,6 +1289,7 @@ export const StorageService = {
     }
 
     this.saveOfflineQueue(remaining);
+    this.saveSyncIdMap(syncMap);
     if (processed > 0) {
       this.saveDB(db);
       if (typeof window !== 'undefined') {

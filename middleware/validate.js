@@ -18,8 +18,12 @@ export const validate = (schema, source = 'body') => {
       }));
       
       return res.status(400).json({
-        error: 'validation failed',
-        details: errors,
+        error: {
+          code: 400,
+          message: 'validation failed',
+          details: errors,
+          requestId: req.requestId,
+        },
       });
     }
     
