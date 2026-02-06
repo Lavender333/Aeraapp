@@ -8,7 +8,12 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Checkout
@@ -30,24 +35,18 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Copy dist to docs
+      - name: Add CNAME
         run: |
-          rm -rf docs
-          cp -R dist docs
-          echo "appandwebsitetesting.site" > docs/CNAME
-          cp docs/index.html docs/404.html
+          echo "appandwebsitetesting.site" > dist/CNAME
 
-      - name: Commit and push if changes
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
-          git add docs/
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
-            exit 0
-          fi
-          git commit -m "Deploy: Update docs folder from dist"
-          git push origin HEAD:${GITHUB_REF_NAME}
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
