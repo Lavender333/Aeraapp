@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local docs/media
+01-whats-going-right-merged copy.pdf

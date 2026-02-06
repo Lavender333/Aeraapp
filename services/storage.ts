@@ -6,6 +6,75 @@ import { getMemberStatus, setMemberStatus } from './api';
 
 const DB_KEY = 'aera_backend_db_v4'; // Force fresh database
 const AUTH_TOKEN_KEY = 'aera_auth_token';
+const AUTH_REFRESH_TOKEN_KEY = 'aera_refresh_token';
+const OFFLINE_QUEUE_KEY = 'aera_offline_queue_v1';
+const MAX_CACHED_REQUESTS = 200;
+const MAX_CACHED_REPLENISHMENTS = 200;
+
+type OfflineOperation = {
+  id: string;
+  type: 'createHelpRequest' | 'updateHelpRequestLocation';
+  timestamp: string;
+  localRequestId?: string;
+  payload: any;
+};
+
+const isQuotaExceeded = (error: unknown) => {
+  const err = error as { name?: string; code?: number; message?: string };
+  return (
+    err?.name === 'QuotaExceededError' ||
+    err?.code === 22 ||
+    err?.code === 1014 ||
+    (err?.message || '').toLowerCase().includes('quota')
+  );
+};
+
+const safeGetItem = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key);
+  } catch (e) {
+    console.warn('localStorage getItem failed', { key, error: e });
+    return null;
+  }
+};
+
+const safeSetItem = (key: string, value: string): boolean => {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (e) {
+    if (isQuotaExceeded(e)) {
+      console.warn('localStorage quota exceeded, will attempt cleanup', { key });
+      return false;
+    }
+    console.error('localStorage setItem failed', { key, error: e });
+    return false;
+  }
+};
+
+const safeRemoveItem = (key: string) => {
+  try {
+    localStorage.removeItem(key);
+  } catch (e) {
+    console.warn('localStorage removeItem failed', { key, error: e });
+  }
+};
+
+const pruneDatabaseForStorage = (db: DatabaseSchema): DatabaseSchema => {
+  return {
+    ...db,
+    orgMembers: {},
+    requests: (db.requests || []).slice(0, MAX_CACHED_REQUESTS),
+    replenishmentRequests: (db.replenishmentRequests || []).slice(0, MAX_CACHED_REPLENISHMENTS),
+  };
+};
+
+const sanitizeInventory = (inventory: OrgInventory): OrgInventory => ({
+  water: Math.max(0, Number(inventory.water) || 0),
+  food: Math.max(0, Number(inventory.food) || 0),
+  blankets: Math.max(0, Number(inventory.blankets) || 0),
+  medicalKits: Math.max(0, Number(inventory.medicalKits) || 0),
+});
 
 // --- Seed Data ---
 const SEED_ORGS: OrganizationProfile[] = [
@@ -98,7 +167,7 @@ export const StorageService = {
   // --- Core Database Engine ---
   getDB(): DatabaseSchema {
     try {
-      const stored = localStorage.getItem(DB_KEY);
+      const stored = safeGetItem(DB_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (!parsed.orgMembers) parsed.orgMembers = {};
@@ -112,7 +181,14 @@ export const StorageService = {
 
   saveDB(db: DatabaseSchema) {
     try {
-      localStorage.setItem(DB_KEY, JSON.stringify(db));
+      const saved = safeSetItem(DB_KEY, JSON.stringify(db));
+      if (!saved) {
+        const pruned = pruneDatabaseForStorage(db);
+        const prunedSaved = safeSetItem(DB_KEY, JSON.stringify(pruned));
+        if (!prunedSaved) {
+          console.error('DB Save Error: Unable to persist even after pruning');
+        }
+      }
     } catch (e) {
       console.error("DB Save Error", e);
     }
@@ -135,27 +211,87 @@ export const StorageService = {
   },
 
   resetDB() {
-    localStorage.removeItem(DB_KEY);
-    localStorage.removeItem(AUTH_TOKEN_KEY);
+    safeRemoveItem(DB_KEY);
+    safeRemoveItem(AUTH_TOKEN_KEY);
+    safeRemoveItem(AUTH_REFRESH_TOKEN_KEY);
     window.location.reload();
   },
 
   // --- Profile / Auth ---
   setAuthToken(token: string) {
-    localStorage.setItem(AUTH_TOKEN_KEY, token);
+    safeSetItem(AUTH_TOKEN_KEY, token);
+  },
+
+  setRefreshToken(token: string) {
+    safeSetItem(AUTH_REFRESH_TOKEN_KEY, token);
   },
 
   getAuthToken(): string | null {
-    return localStorage.getItem(AUTH_TOKEN_KEY);
+    return safeGetItem(AUTH_TOKEN_KEY);
+  },
+
+  getRefreshToken(): string | null {
+    return safeGetItem(AUTH_REFRESH_TOKEN_KEY);
   },
 
   clearAuthToken() {
-    localStorage.removeItem(AUTH_TOKEN_KEY);
+    safeRemoveItem(AUTH_TOKEN_KEY);
+    safeRemoveItem(AUTH_REFRESH_TOKEN_KEY);
+  },
+
+  getOfflineQueue(): OfflineOperation[] {
+    const raw = safeGetItem(OFFLINE_QUEUE_KEY);
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      console.warn('Failed to parse offline queue', e);
+      return [];
+    }
+  },
+
+  saveOfflineQueue(queue: OfflineOperation[]) {
+    safeSetItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+  },
+
+  enqueueOfflineOperation(op: Omit<OfflineOperation, 'id' | 'timestamp'>) {
+    const queue = this.getOfflineQueue();
+    const operation: OfflineOperation = {
+      ...op,
+      id: `op_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      timestamp: new Date().toISOString(),
+    };
+
+    if (operation.type === 'updateHelpRequestLocation' && operation.payload?.requestId) {
+      const existingIdx = queue.findIndex(
+        (q) => q.type === 'updateHelpRequestLocation' && q.payload?.requestId === operation.payload.requestId
+      );
+      if (existingIdx >= 0) {
+        queue[existingIdx] = operation;
+        this.saveOfflineQueue(queue);
+        return;
+      }
+    }
+
+    queue.push(operation);
+    this.saveOfflineQueue(queue);
+  },
+
+  startOfflineSyncListener() {
+    if (typeof window === 'undefined') return;
+    const flag = '__aera_offline_sync_listener__';
+    if ((window as any)[flag]) return;
+    (window as any)[flag] = true;
+    window.addEventListener('online', () => {
+      this.syncPendingData().catch((e) => console.warn('Offline sync failed', e));
+    });
   },
 
   async registerWithCredentials(email: string, password: string, fullName?: string) {
     const resp = await registerAuth({ email, password, fullName });
     if (resp?.token) this.setAuthToken(resp.token);
+    if (resp?.refreshToken) this.setRefreshToken(resp.refreshToken);
     if (resp?.user) {
       const profile: UserProfile = {
         id: resp.user.id,
@@ -209,6 +345,7 @@ export const StorageService = {
     try {
       const resp = await loginAuth({ email, password });
       if (resp?.token) this.setAuthToken(resp.token);
+      if (resp?.refreshToken) this.setRefreshToken(resp.refreshToken);
       if (resp?.user) {
         const profile: UserProfile = {
           id: resp.user.id,
@@ -339,7 +476,8 @@ export const StorageService = {
     const db = this.getDB();
     db.currentUser = null;
     this.saveDB(db);
-    localStorage.removeItem(AUTH_TOKEN_KEY);
+    safeRemoveItem(AUTH_TOKEN_KEY);
+    safeRemoveItem(AUTH_REFRESH_TOKEN_KEY);
   },
   
   // --- Admin User Management ---
@@ -429,9 +567,10 @@ export const StorageService = {
 
   async saveOrgInventoryRemote(orgId: string, inventory: OrgInventory): Promise<boolean> {
     try {
-      await saveInventory(orgId, inventory);
+      const sanitized = sanitizeInventory(inventory);
+      await saveInventory(orgId, sanitized);
       // cache locally too
-      this.saveOrgInventory(orgId, inventory);
+      this.saveOrgInventory(orgId, sanitized);
       return true;
     } catch (e) {
       console.warn('API inventory save failed, keeping local only', e);
@@ -459,12 +598,7 @@ export const StorageService = {
 
   updateOrgInventory(orgId: string, inventory: OrgInventory) {
     const db = this.getDB();
-    const sanitized: OrgInventory = {
-      water: Math.max(0, Number(inventory.water) || 0),
-      food: Math.max(0, Number(inventory.food) || 0),
-      blankets: Math.max(0, Number(inventory.blankets) || 0),
-      medicalKits: Math.max(0, Number(inventory.medicalKits) || 0)
-    };
+    const sanitized = sanitizeInventory(inventory);
 
     db.inventories[orgId] = sanitized;
     this.saveDB(db);
@@ -786,16 +920,27 @@ export const StorageService = {
 
     this.saveDB(db);
 
-    // Try to persist remotely
     const profile = db.users.find(u => u.id === currentUser);
-    try {
-      const remote = await createHelpRequest(currentUser, {
-        orgId: profile?.communityId,
-        data,
-        priority,
-        location: data.location,
-        status: 'RECEIVED',
+    const requestPayload = {
+      orgId: profile?.communityId,
+      data,
+      priority,
+      location: data.location,
+      status: 'RECEIVED',
+    };
+
+    if (!isOnline) {
+      this.enqueueOfflineOperation({
+        type: 'createHelpRequest',
+        localRequestId: record.id,
+        payload: { userId: currentUser, requestPayload },
       });
+      return record;
+    }
+
+    // Try to persist remotely
+    try {
+      const remote = await createHelpRequest(currentUser, requestPayload);
       // Cache server id
       db.requests[0].id = remote.id || db.requests[0].id;
       db.requests[0].synced = true;
@@ -811,6 +956,11 @@ export const StorageService = {
       };
     } catch (e) {
       console.warn('Help request API failed; keeping local only', e);
+      this.enqueueOfflineOperation({
+        type: 'createHelpRequest',
+        localRequestId: record.id,
+        payload: { userId: currentUser, requestPayload },
+      });
     }
 
     return record;
@@ -824,9 +974,16 @@ export const StorageService = {
       this.saveDB(db);
     }
     try {
+      if (!navigator.onLine) {
+        throw new Error('offline');
+      }
       await updateHelpRequestLocation(requestId, location);
     } catch (e) {
       console.warn('Failed to update request location remotely', e);
+      this.enqueueOfflineOperation({
+        type: 'updateHelpRequestLocation',
+        payload: { requestId, location },
+      });
     }
   },
 
@@ -1006,37 +1163,73 @@ export const StorageService = {
 
   // --- Offline Sync Logic ---
   async syncPendingData(): Promise<number> {
+    if (!navigator.onLine) return 0;
+
     const db = this.getDB();
-    let count = 0;
+    const queue = this.getOfflineQueue();
+    if (!queue.length) return 0;
 
-    // 1. Sync Help Requests
-    db.requests = db.requests.map(r => {
-      if (r.synced === false) {
-        count++;
-        return { ...r, synced: true };
-      }
-      return r;
-    });
+    let processed = 0;
+    const remaining: OfflineOperation[] = [];
+    const idMap = new Map<string, string>();
 
-    // 2. Sync Replenishment Requests
-    if (db.replenishmentRequests) {
-      db.replenishmentRequests = db.replenishmentRequests.map(r => {
-        if (r.synced === false) {
-          count++;
-          return { ...r, synced: true };
+    for (const op of queue) {
+      try {
+        if (op.type === 'createHelpRequest') {
+          const { userId, requestPayload } = op.payload || {};
+          if (!userId || !requestPayload) {
+            throw new Error('Invalid createHelpRequest payload');
+          }
+          const remote = await createHelpRequest(userId, requestPayload);
+          const localId = op.localRequestId;
+          if (localId) {
+            const newId = remote.id || localId;
+            idMap.set(localId, newId);
+            const idx = db.requests.findIndex(r => r.id === localId);
+            if (idx >= 0) {
+              db.requests[idx] = {
+                ...db.requests[idx],
+                id: newId,
+                timestamp: remote.timestamp || db.requests[idx].timestamp,
+                status: remote.status || db.requests[idx].status,
+                priority: remote.priority || db.requests[idx].priority,
+                synced: true,
+              };
+            }
+          }
+          processed++;
+          continue;
         }
-        return r;
-      });
+
+        if (op.type === 'updateHelpRequestLocation') {
+          let { requestId, location } = op.payload || {};
+          if (requestId && idMap.has(requestId)) {
+            requestId = idMap.get(requestId);
+            op.payload.requestId = requestId;
+          }
+          if (!requestId || !location) {
+            throw new Error('Invalid updateHelpRequestLocation payload');
+          }
+          await updateHelpRequestLocation(requestId, location);
+          processed++;
+          continue;
+        }
+
+        remaining.push(op);
+      } catch (e) {
+        console.warn('Offline operation failed, will retry later', op, e);
+        remaining.push(op);
+      }
     }
 
-    if (count > 0) {
-      // Simulate network latency for realism
-      await new Promise(resolve => setTimeout(resolve, 1500));
+    this.saveOfflineQueue(remaining);
+    if (processed > 0) {
       this.saveDB(db);
-      // Notify components that data has updated
-      window.dispatchEvent(new Event('storage'));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('storage'));
+      }
     }
-    
-    return count;
+
+    return processed;
   }
 };

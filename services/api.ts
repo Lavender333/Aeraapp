@@ -1,6 +1,79 @@
 import type { OrgInventory } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const AUTH_TOKEN_KEY = 'aera_auth_token';
+const REFRESH_TOKEN_KEY = 'aera_refresh_token';
+const REFRESH_THRESHOLD_SECONDS = 300; // 5 minutes
+
+const canUseStorage = typeof window !== 'undefined' && typeof localStorage !== 'undefined';
+
+const getStoredToken = () => (canUseStorage ? localStorage.getItem(AUTH_TOKEN_KEY) : null);
+const getStoredRefreshToken = () => (canUseStorage ? localStorage.getItem(REFRESH_TOKEN_KEY) : null);
+const setStoredTokens = (accessToken?: string, refreshToken?: string) => {
+  if (!canUseStorage) return;
+  if (accessToken) localStorage.setItem(AUTH_TOKEN_KEY, accessToken);
+  if (refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+};
+
+const decodeJwt = (token: string): { exp?: number } | null => {
+  try {
+    const payload = token.split('.')[1];
+    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+};
+
+const needsRefresh = (token: string) => {
+  const decoded = decodeJwt(token);
+  if (!decoded?.exp) return false;
+  const now = Math.floor(Date.now() / 1000);
+  return decoded.exp - now < REFRESH_THRESHOLD_SECONDS;
+};
+
+const refreshAccessToken = async (): Promise<string | null> => {
+  const refreshToken = getStoredRefreshToken();
+  if (!refreshToken) return null;
+
+  const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refreshToken }),
+  });
+
+  if (!res.ok) return null;
+  const data = await res.json();
+  const accessToken = data.accessToken || data.token;
+  if (accessToken) {
+    setStoredTokens(accessToken, data.refreshToken);
+  }
+  return accessToken || null;
+};
+
+const authFetch = async (url: string, options: RequestInit = {}) => {
+  const headers = { ...(options.headers || {}) } as Record<string, string>;
+  let token = getStoredToken();
+
+  if (token && needsRefresh(token)) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) token = refreshed;
+  }
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const res = await fetch(url, { ...options, headers });
+  if (res.status === 401) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) {
+      headers.Authorization = `Bearer ${refreshed}`;
+      return fetch(url, { ...options, headers });
+    }
+  }
+  return res;
+};
 
 // Log API base URL for debugging
 if (typeof window !== 'undefined') {
@@ -8,13 +81,13 @@ if (typeof window !== 'undefined') {
 }
 
 export async function getInventory(orgId: string): Promise<OrgInventory> {
-  const res = await fetch(`${API_BASE}/api/orgs/${orgId}/inventory`);
+  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/inventory`);
   if (!res.ok) throw new Error('Failed to load inventory');
   return res.json();
 }
 
 export async function saveInventory(orgId: string, inventory: OrgInventory): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/orgs/${orgId}/inventory`, {
+  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/inventory`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(inventory),
@@ -23,13 +96,13 @@ export async function saveInventory(orgId: string, inventory: OrgInventory): Pro
 }
 
 export async function listRequests(orgId: string) {
-  const res = await fetch(`${API_BASE}/api/orgs/${orgId}/requests`);
+  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/requests`);
   if (!res.ok) throw new Error('Failed to load requests');
   return res.json();
 }
 
 export async function createRequest(orgId: string, payload: { item: string; quantity: number; provider?: string; orgName?: string }) {
-  const res = await fetch(`${API_BASE}/api/orgs/${orgId}/requests`, {
+  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/requests`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -39,7 +112,7 @@ export async function createRequest(orgId: string, payload: { item: string; quan
 }
 
 export async function updateRequestStatus(id: string, payload: { status: string; deliveredQuantity?: number }) {
-  const res = await fetch(`${API_BASE}/api/requests/${id}/status`, {
+  const res = await authFetch(`${API_BASE}/api/requests/${id}/status`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -49,13 +122,13 @@ export async function updateRequestStatus(id: string, payload: { status: string;
 }
 
 export async function getMemberStatus(orgId: string) {
-  const res = await fetch(`${API_BASE}/api/orgs/${orgId}/status`);
+  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/status`);
   if (!res.ok) throw new Error('Failed to load member status');
   return res.json(); // { counts, members }
 }
 
 export async function setMemberStatus(orgId: string, payload: { memberId: string; name?: string; status: 'SAFE' | 'DANGER' | 'UNKNOWN' }) {
-  const res = await fetch(`${API_BASE}/api/orgs/${orgId}/status`, {
+  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/status`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -65,13 +138,13 @@ export async function setMemberStatus(orgId: string, payload: { memberId: string
 }
 
 export async function getBroadcast(orgId: string) {
-  const res = await fetch(`${API_BASE}/api/orgs/${orgId}/broadcast`);
+  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/broadcast`);
   if (!res.ok) throw new Error('Failed to load broadcast');
   return res.json();
 }
 
 export async function setBroadcast(orgId: string, message: string) {
-  const res = await fetch(`${API_BASE}/api/orgs/${orgId}/broadcast`, {
+  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/broadcast`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message }),
@@ -147,7 +220,7 @@ export async function resetPassword(payload: { email: string; token: string; new
 
 // Help Requests
 export async function createHelpRequest(userId: string, payload: any) {
-  const res = await fetch(`${API_BASE}/api/users/${userId}/help`, {
+  const res = await authFetch(`${API_BASE}/api/users/${userId}/help`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -157,13 +230,13 @@ export async function createHelpRequest(userId: string, payload: any) {
 }
 
 export async function getActiveHelpRequest(userId: string) {
-  const res = await fetch(`${API_BASE}/api/users/${userId}/help/active`);
+  const res = await authFetch(`${API_BASE}/api/users/${userId}/help/active`);
   if (!res.ok) throw new Error('Failed to load help request');
   return res.json();
 }
 
 export async function updateHelpRequestLocation(id: string, location: string) {
-  const res = await fetch(`${API_BASE}/api/help/${id}/location`, {
+  const res = await authFetch(`${API_BASE}/api/help/${id}/location`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ location }),
@@ -174,13 +247,13 @@ export async function updateHelpRequestLocation(id: string, location: string) {
 
 // Member CRUD
 export async function listMembers(orgId: string) {
-  const res = await fetch(`${API_BASE}/api/orgs/${orgId}/members`);
+  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/members`);
   if (!res.ok) throw new Error('Failed to load members');
   return res.json();
 }
 
 export async function addMember(orgId: string, payload: any) {
-  const res = await fetch(`${API_BASE}/api/orgs/${orgId}/members`, {
+  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/members`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -190,7 +263,7 @@ export async function addMember(orgId: string, payload: any) {
 }
 
 export async function updateMember(orgId: string, memberId: string, payload: any) {
-  const res = await fetch(`${API_BASE}/api/orgs/${orgId}/members/${memberId}`, {
+  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/members/${memberId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -200,7 +273,7 @@ export async function updateMember(orgId: string, memberId: string, payload: any
 }
 
 export async function removeMember(orgId: string, memberId: string) {
-  const res = await fetch(`${API_BASE}/api/orgs/${orgId}/members/${memberId}`, {
+  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/members/${memberId}`, {
     method: 'DELETE',
   });
   if (!res.ok) throw new Error('Failed to remove member');

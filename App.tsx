@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { SplashView } from './views/SplashView';
 import { DashboardView } from './views/DashboardView';
 import { HelpFormView } from './views/HelpFormView';
@@ -23,6 +23,10 @@ import { StorageService } from './services/storage';
 
 export default function App() {
   const [currentView, setView] = useState<ViewState>('SPLASH');
+
+  useEffect(() => {
+    StorageService.startOfflineSyncListener();
+  }, []);
 
   const handleSplashComplete = () => {
     // Check if user has a profile saved

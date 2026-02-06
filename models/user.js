@@ -8,7 +8,8 @@ const userSchema = new mongoose.Schema(
     role: { type: String, enum: ['ADMIN', 'CONTRACTOR', 'LOCAL_AUTHORITY', 'FIRST_RESPONDER', 'GENERAL_USER', 'INSTITUTION_ADMIN'], default: 'GENERAL_USER' },
     orgId: { type: String, index: true },
     fullName: { type: String, default: '' },
-    resetToken: { type: String },
+    // Secure password reset fields - store only hashed token
+    resetTokenHash: { type: String },
     resetTokenExpiresAt: { type: Date },
   },
   { timestamps: true }
