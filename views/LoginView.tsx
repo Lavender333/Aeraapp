@@ -5,7 +5,7 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { StorageService } from '../services/storage';
 import { t } from '../services/translations';
-import { LogIn, User, ShieldCheck, HeartPulse, Navigation, Lock, AlertOctagon, Mail, KeyRound, HelpCircle } from 'lucide-react';
+import { LogIn, AlertOctagon, Mail, KeyRound, HelpCircle } from 'lucide-react';
 
 const IS_PRODUCTION = import.meta.env.PROD;
 
@@ -28,8 +28,6 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [resetEmail, setResetEmail] = useState('');
-  const [resetToken, setResetToken] = useState('');
-  const [resetNewPassword, setResetNewPassword] = useState('');
   const [showReset, setShowReset] = useState(false);
 
   const handleLogin = async () => {
@@ -162,61 +160,28 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
           Forgot password?
         </button>
         {showReset && (
-          <div className="space-y-2 border border-slate-200 rounded-lg p-3 bg-slate-50">
+          <div className="space-y-3 border border-slate-200 rounded-lg p-3 bg-slate-50">
             <Input 
               label="Email for reset"
               placeholder="you@example.com"
               value={resetEmail}
               onChange={(e) => setResetEmail(e.target.value)}
             />
-            <div className="flex gap-2">
-              <Input 
-                label="Reset Token"
-                placeholder="Token from email"
-                value={resetToken}
-                onChange={(e) => setResetToken(e.target.value)}
-              />
-              <Input 
-                label="New Password"
-                type="password"
-                placeholder="New password"
-                value={resetNewPassword}
-                onChange={(e) => setResetNewPassword(e.target.value)}
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button 
-                size="sm"
-                variant="outline"
-                onClick={async () => {
-                  setError('');
-                  setInfo('');
-                  try {
-                    const resp = await StorageService.requestPasswordReset(resetEmail);
-                    setInfo('Check your email for reset token');
-                  } catch (e: any) {
-                    setError(e?.message || 'Reset request failed');
-                  }
-                }}
-              >
-                Request Token
-              </Button>
-              <Button 
-                size="sm"
-                onClick={async () => {
-                  setError('');
-                  setInfo('');
-                  try {
-                    await StorageService.resetPassword(resetEmail, resetToken, resetNewPassword);
-                    setInfo('Password updated. You can log in now.');
-                  } catch (e: any) {
-                    setError(e?.message || 'Reset failed');
-                  }
-                }}
-              >
-                Reset Password
-              </Button>
-            </div>
+            <Button 
+              size="sm"
+              onClick={async () => {
+                setError('');
+                setInfo('');
+                try {
+                  await StorageService.requestPasswordReset(resetEmail);
+                  setInfo('Check your email to reset your password.');
+                } catch (e: any) {
+                  setError(e?.message || 'Reset request failed');
+                }
+              }}
+            >
+              Send reset email
+            </Button>
           </div>
         )}
       </div>
