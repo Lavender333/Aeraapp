@@ -22,6 +22,7 @@ import { ViewState } from './types';
 import { StorageService } from './services/storage';
 import { hasSupabaseConfig, supabaseConfigMessage, supabase } from './services/supabase';
 import PrivacyPolicyView from './views/PrivacyPolicyView';
+import { Link, Routes, Route } from 'react-router-dom';
 
 export default function App() {
   const [currentView, setView] = useState<ViewState>('SPLASH');

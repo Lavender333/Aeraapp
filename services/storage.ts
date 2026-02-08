@@ -355,7 +355,7 @@ export const StorageService = {
         emergencyContactPhone: '',
         emergencyContactRelation: '',
         communityId: resp.user.orgId || '',
-        role: resp.user.role || 'GENERAL_USER',
+        role: resp.user.role as UserRole || 'GENERAL_USER',
         language: 'en',
         active: true,
         onboardComplete: false,
@@ -1081,9 +1081,9 @@ export const StorageService = {
       if (remote) {
         const normalized: HelpRequestRecord = {
           ...remote.data,
-          id: remote.id || remote._id,
+          id: remote.id || (remote as any)._id,
           userId: remote.userId,
-          timestamp: remote.timestamp || remote.createdAt,
+          timestamp: remote.timestamp || (remote as any).createdAt,
           status: remote.status || 'RECEIVED',
           priority: remote.priority || 'LOW',
           synced: true,
