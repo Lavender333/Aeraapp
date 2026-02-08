@@ -27,10 +27,12 @@ export type OrgLookup = {
 };
 
 export async function getOrgByCode(orgCode: string): Promise<OrgLookup | null> {
+  const normalized = orgCode?.trim().toUpperCase();
+  if (!normalized) return null;
   const { data, error } = await supabase
     .from('organizations')
     .select('id, org_code, name')
-    .eq('org_code', orgCode)
+    .eq('org_code', normalized)
     .single();
 
   if (error || !data) return null;

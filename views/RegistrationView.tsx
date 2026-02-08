@@ -275,10 +275,10 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     }
   };
 
-  const selectOrg = (orgId: string) => {
-    updateForm('communityId', orgId);
+  const selectOrg = (orgCode: string) => {
+    updateForm('communityId', orgCode);
     setShowOrgSearch(false);
-    verifyCommunityId(orgId);
+    verifyCommunityId(orgCode);
   };
 
   const handleComplete = async () => {
