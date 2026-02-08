@@ -22,7 +22,7 @@ import { ViewState } from './types';
 import { StorageService } from './services/storage';
 import { hasSupabaseConfig, supabaseConfigMessage, supabase } from './services/supabase';
 import PrivacyPolicyView from './views/PrivacyPolicyView';
-import { Link, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Link, Routes, Route } from 'react-router-dom';
 
 export default function App() {
   const [currentView, setView] = useState<ViewState>('SPLASH');
@@ -140,22 +140,24 @@ export default function App() {
                   currentView !== 'ORG_DASHBOARD';
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-slate-50 shadow-2xl relative overflow-hidden md:border-x md:border-slate-200 print:max-w-none print:w-full print:h-auto print:overflow-visible print:shadow-none print:border-0">
-      {showSetupNotice && (
-        <div className="absolute top-0 inset-x-0 z-50">
-          <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2 text-xs text-center">
-            {supabaseConfigMessage} — set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY, then rebuild.
+    <BrowserRouter>
+      <div className="max-w-md mx-auto min-h-screen bg-slate-50 shadow-2xl relative overflow-hidden md:border-x md:border-slate-200 print:max-w-none print:w-full print:h-auto print:overflow-visible print:shadow-none print:border-0">
+        {showSetupNotice && (
+          <div className="absolute top-0 inset-x-0 z-50">
+            <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2 text-xs text-center">
+              {supabaseConfigMessage} — set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY, then rebuild.
+            </div>
           </div>
-        </div>
-      )}
-      {renderView()}
-      {showNav && <BottomNav currentView={currentView} setView={setView} />}
-      <footer style={{ textAlign: 'center', margin: '2rem 0', fontSize: '0.95em' }}>
-        <Link to="/privacy">Proof of Consent & Privacy Policy</Link>
-      </footer>
-      <Routes>
-        <Route path="/privacy" element={<PrivacyPolicyView />} />
-      </Routes>
-    </div>
+        )}
+        {renderView()}
+        {showNav && <BottomNav currentView={currentView} setView={setView} />}
+        <footer style={{ textAlign: 'center', margin: '2rem 0', fontSize: '0.95em' }}>
+          <Link to="/privacy">Proof of Consent & Privacy Policy</Link>
+        </footer>
+        <Routes>
+          <Route path="/privacy" element={<PrivacyPolicyView />} />
+        </Routes>
+      </div>
+    </BrowserRouter>
   );
 }
