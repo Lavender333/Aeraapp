@@ -1,9 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ViewState } from '../types';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { StorageService } from '../services/storage';
+import { supabase } from '../services/supabase';
 import { t } from '../services/translations';
 import { LogIn, AlertOctagon, Mail, KeyRound, HelpCircle } from 'lucide-react';
 
@@ -29,6 +30,19 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
   const [info, setInfo] = useState('');
   const [resetEmail, setResetEmail] = useState('');
   const [showReset, setShowReset] = useState(false);
+  const [isRecovery, setIsRecovery] = useState(false);
+  const [recoveryPassword, setRecoveryPassword] = useState('');
+
+  useEffect(() => {
+    const hash = window.location.hash || '';
+    const search = window.location.search || '';
+    const isRecoveryFlow = hash.includes('type=recovery') || search.includes('type=recovery');
+    if (isRecoveryFlow) {
+      setIsRecovery(true);
+      setShowReset(true);
+      setInfo('Enter a new password to finish resetting your account.');
+    }
+  }, []);
 
   const handleLogin = async () => {
     setError('');
@@ -161,27 +175,63 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
         </button>
         {showReset && (
           <div className="space-y-3 border border-slate-200 rounded-lg p-3 bg-slate-50">
-            <Input 
-              label="Email for reset"
-              placeholder="you@example.com"
-              value={resetEmail}
-              onChange={(e) => setResetEmail(e.target.value)}
-            />
-            <Button 
-              size="sm"
-              onClick={async () => {
-                setError('');
-                setInfo('');
-                try {
-                  await StorageService.requestPasswordReset(resetEmail);
-                  setInfo('Check your email to reset your password.');
-                } catch (e: any) {
-                  setError(e?.message || 'Reset request failed');
-                }
-              }}
-            >
-              Send reset email
-            </Button>
+            {isRecovery ? (
+              <>
+                <Input
+                  label="New Password"
+                  type="password"
+                  placeholder="New password"
+                  value={recoveryPassword}
+                  onChange={(e) => setRecoveryPassword(e.target.value)}
+                />
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    setError('');
+                    setInfo('');
+                    try {
+                      const { error: updateError } = await supabase.auth.updateUser({ password: recoveryPassword });
+                      if (updateError) throw updateError;
+                      setInfo('Password updated. You can log in now.');
+                      setIsRecovery(false);
+                      setShowReset(false);
+                      setRecoveryPassword('');
+                      window.history.replaceState({}, document.title, window.location.pathname);
+                    } catch (e: any) {
+                      setError(e?.message || 'Password reset failed');
+                    }
+                  }}
+                  disabled={!recoveryPassword}
+                >
+                  Set new password
+                </Button>
+              </>
+            ) : (
+              <>
+                <Input 
+                  label="Email for reset"
+                  placeholder="you@example.com"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                />
+                <Button 
+                  size="sm"
+                  onClick={async () => {
+                    setError('');
+                    setInfo('');
+                    try {
+                      await StorageService.requestPasswordReset(resetEmail);
+                      setInfo('Check your email to reset your password.');
+                    } catch (e: any) {
+                      setError(e?.message || 'Reset request failed');
+                    }
+                  }}
+                  disabled={!resetEmail}
+                >
+                  Send reset email
+                </Button>
+              </>
+            )}
           </div>
         )}
       </div>
