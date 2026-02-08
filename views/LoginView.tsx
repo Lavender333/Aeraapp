@@ -65,7 +65,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
         onboardComplete: profile.onboardComplete 
       });
       console.log('Redirecting to DASHBOARD');
-      setView('DASHBOARD');
+      setView('SPLASH');
     } catch (e: any) {
       console.error('Login error:', e);
       setError(e?.message || 'Login failed.');
@@ -100,18 +100,8 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
     });
     const needsSetup = !profile.onboardComplete;
     
-    if (needsSetup) {
-      console.log('User needs setup, redirecting to ACCOUNT_SETUP');
-      setView('ACCOUNT_SETUP');
-    }
-    else if (profile.role === 'INSTITUTION_ADMIN') {
-      console.log('Institution admin, redirecting to ORG_DASHBOARD');
-      setView('ORG_DASHBOARD');
-    }
-    else {
-      console.log('Regular user, redirecting to DASHBOARD');
-      setView('DASHBOARD');
-    }
+    // Always show splash after login, then let app bootstrap route
+    setView('SPLASH');
   };
 
   return (

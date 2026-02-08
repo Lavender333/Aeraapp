@@ -21,6 +21,7 @@ import { BottomNav } from './components/BottomNav';
 import { ViewState } from './types';
 import { StorageService } from './services/storage';
 import { hasSupabaseConfig, supabaseConfigMessage, supabase } from './services/supabase';
+import PrivacyPolicyView from './views/PrivacyPolicyView';
 
 export default function App() {
   const [currentView, setView] = useState<ViewState>('SPLASH');
@@ -148,6 +149,12 @@ export default function App() {
       )}
       {renderView()}
       {showNav && <BottomNav currentView={currentView} setView={setView} />}
+      <footer style={{ textAlign: 'center', margin: '2rem 0', fontSize: '0.95em' }}>
+        <Link to="/privacy">Proof of Consent & Privacy Policy</Link>
+      </footer>
+      <Routes>
+        <Route path="/privacy" element={<PrivacyPolicyView />} />
+      </Routes>
     </div>
   );
 }

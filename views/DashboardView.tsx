@@ -599,11 +599,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         title="Tap to read full message"
       >
         <Activity size={16} className="text-brand-400 animate-pulse shrink-0" />
-        <div className="flex-1 overflow-hidden whitespace-nowrap relative">
-          <span className="inline-block animate-[slideLeft_20s_linear_infinite]">
-            {tickerMessage}
-          </span>
-        </div>
+        {hasCommunity && (
+          <div className="flex-1 overflow-hidden whitespace-nowrap relative">
+            <span className="inline-block animate-[slideLeft_20s_linear_infinite]">
+              {tickerMessage}
+            </span>
+          </div>
+        )}
         <ChevronRight size={16} className="text-slate-500 group-hover:text-white shrink-0" />
       </div>
 
@@ -638,7 +640,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
       )}
 
       {/* Critical Action: Get Help or Status */}
-      {activeRequest && (
+      {hasCommunity && activeRequest && (
         <Card 
           className="bg-blue-50 border-blue-100 hover:border-blue-200"
           onClick={() => setView('HELP_WIZARD')}
@@ -724,8 +726,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
       )}
 
       {/* Modular Card Layout - DYNAMIC BASED ON ROLE */}
-      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-2">Recovery & Resources</h3>
-      <div className="grid grid-cols-2 gap-4">
+      {hasCommunity && (
+        <>
+          <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-2">Recovery & Resources</h3>
+          <div className="grid grid-cols-2 gap-4">
         
         {/* G.A.P. Financial Aid - For Users in need of aid */}
         {(isGeneralUser || isOrgAdmin) && (
@@ -762,6 +766,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
             </div>
           </Card>
         )}
+          </div>
+        </>
+      )}
         
         {(isResponder || isOrgAdmin || isContractor) && (
           <Card 

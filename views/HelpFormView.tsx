@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { Input, Textarea } from '../components/Input';
 import { ProgressBar } from '../components/ProgressBar';
 import { StorageService } from '../services/storage';
+import { notifyEmergencyContact } from '../services/api';
 import { t } from '../services/translations';
 import { ArrowLeft, CheckCircle, AlertOctagon, Ambulance, Flame, Droplets, Zap, Shield, Camera, StopCircle, RefreshCw, MessageSquare, Navigation, MapPin, X, Wifi, Settings, HelpCircle, Globe, AlertTriangle, WifiOff, Clock } from 'lucide-react';
 
@@ -254,6 +255,17 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
     try {
       const record = await StorageService.submitRequest({ ...data, location: locationToUse });
       setSubmittedId(record.id);
+      if (data.emergencyContactPhone) {
+        notifyEmergencyContact({
+          contactName: data.emergencyContactName,
+          contactPhone: data.emergencyContactPhone,
+          userName: data.fullName,
+          emergencyType: data.emergencyType,
+          description: data.situationDescription,
+          location: locationToUse,
+          requestId: record.id,
+        }).catch((err) => console.warn('Emergency contact notify failed', err));
+      }
       setIsSuccess(true);
     } catch (e) {
       console.error(e);
