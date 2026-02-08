@@ -78,6 +78,42 @@ CREATE TABLE organizations (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Auto-generate org_code if not provided
+CREATE OR REPLACE FUNCTION generate_org_code()
+RETURNS TRIGGER AS $$
+DECLARE
+  prefix TEXT;
+  candidate TEXT;
+  exists_count INTEGER;
+BEGIN
+  IF NEW.org_code IS NOT NULL AND length(trim(NEW.org_code)) > 0 THEN
+    RETURN NEW;
+  END IF;
+
+  prefix := CASE
+    WHEN NEW.type ILIKE 'CHURCH' THEN 'CH'
+    WHEN NEW.type ILIKE 'NGO' THEN 'NGO'
+    WHEN NEW.type ILIKE 'COMMUNITY_CENTER' THEN 'CC'
+    WHEN NEW.type ILIKE 'LOCAL_GOV' THEN 'LG'
+    ELSE 'ORG'
+  END;
+
+  LOOP
+    candidate := prefix || '-' || lpad(floor(random() * 10000)::text, 4, '0');
+    SELECT COUNT(1) INTO exists_count FROM organizations WHERE org_code = candidate;
+    EXIT WHEN exists_count = 0;
+  END LOOP;
+
+  NEW.org_code := candidate;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER set_organizations_org_code
+  BEFORE INSERT ON organizations
+  FOR EACH ROW
+  EXECUTE FUNCTION generate_org_code();
+
 -- Create index on org_code for fast lookups
 CREATE INDEX idx_organizations_org_code ON organizations(org_code);
 CREATE INDEX idx_organizations_active ON organizations(is_active) WHERE is_active = true;

@@ -17,6 +17,7 @@
 - **🚀 [Quick Start Guide](QUICK_START.md)** - Get running in 5 minutes
 - **🔒 [Security Implementation](IMPLEMENTATION_PLAN.md)** - Phase 1 security fixes
 - **🗄️ [Supabase Migration Guide](supabase/FRONTEND_INTEGRATION_GUIDE.md)** - Full migration to Supabase
+- **🍎 [App Store Submission Guide](APP_STORE_SUBMISSION.md)** - iOS wrapper + TestFlight checklist
 - **✅ [Test Plan](TEST_PLAN.md)** - 19 security test cases
 - **📋 [Jira Backlog](JIRA_SPRINT_BACKLOG.md)** - 37 user stories, 6 sprints
 - **⚠️ [Gotchas & Fixes](GOTCHAS_AND_FIXES.md)** - Production readiness checklist

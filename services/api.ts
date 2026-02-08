@@ -1,281 +1,489 @@
 import type { OrgInventory } from '../types';
+import { supabase, getOrgByCode, getOrgIdByCode } from './supabase';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-const AUTH_TOKEN_KEY = 'aera_auth_token';
-const REFRESH_TOKEN_KEY = 'aera_refresh_token';
-const REFRESH_THRESHOLD_SECONDS = 300; // 5 minutes
+const mapInventory = (row: any): OrgInventory => ({
+  water: Number(row?.water || 0),
+  food: Number(row?.food || 0),
+  blankets: Number(row?.blankets || 0),
+  medicalKits: Number(row?.medical_kits || 0),
+});
 
-const canUseStorage = typeof window !== 'undefined' && typeof localStorage !== 'undefined';
-
-const getStoredToken = () => (canUseStorage ? localStorage.getItem(AUTH_TOKEN_KEY) : null);
-const getStoredRefreshToken = () => (canUseStorage ? localStorage.getItem(REFRESH_TOKEN_KEY) : null);
-const setStoredTokens = (accessToken?: string, refreshToken?: string) => {
-  if (!canUseStorage) return;
-  if (accessToken) localStorage.setItem(AUTH_TOKEN_KEY, accessToken);
-  if (refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+const normalizeRequestStatus = (status?: string | null) => {
+  if (!status) return 'PENDING';
+  if (status === 'APPROVED') return 'PENDING';
+  return status;
 };
 
-const decodeJwt = (token: string): { exp?: number } | null => {
-  try {
-    const payload = token.split('.')[1];
-    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
+const getOrgCodeById = async (orgId: string): Promise<string | null> => {
+  const { data, error } = await supabase
+    .from('organizations')
+    .select('org_code')
+    .eq('id', orgId)
+    .single();
+  if (error || !data) return null;
+  return data.org_code;
 };
 
-const needsRefresh = (token: string) => {
-  const decoded = decodeJwt(token);
-  if (!decoded?.exp) return false;
-  const now = Math.floor(Date.now() / 1000);
-  return decoded.exp - now < REFRESH_THRESHOLD_SECONDS;
+const getProfileById = async (userId: string) => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, org_id, full_name, role, email, phone')
+    .eq('id', userId)
+    .single();
+  if (error || !data) return null;
+  return data;
 };
 
-const refreshAccessToken = async (): Promise<string | null> => {
-  const refreshToken = getStoredRefreshToken();
-  if (!refreshToken) return null;
+// Inventory
+export async function getInventory(orgCode: string): Promise<OrgInventory> {
+  const org = await getOrgByCode(orgCode);
+  if (!org) throw new Error('Organization not found');
 
-  const res = await fetch(`${API_BASE}/api/auth/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken }),
-  });
+  const { data, error } = await supabase
+    .from('inventory')
+    .select('water, food, blankets, medical_kits')
+    .eq('org_id', org.orgId)
+    .maybeSingle();
 
-  if (!res.ok) return null;
-  const data = await res.json();
-  const accessToken = data.accessToken || data.token;
-  if (accessToken) {
-    setStoredTokens(accessToken, data.refreshToken);
-  }
-  return accessToken || null;
-};
-
-const authFetch = async (url: string, options: RequestInit = {}) => {
-  const headers = { ...(options.headers || {}) } as Record<string, string>;
-  let token = getStoredToken();
-
-  if (token && needsRefresh(token)) {
-    const refreshed = await refreshAccessToken();
-    if (refreshed) token = refreshed;
-  }
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const res = await fetch(url, { ...options, headers });
-  if (res.status === 401) {
-    const refreshed = await refreshAccessToken();
-    if (refreshed) {
-      headers.Authorization = `Bearer ${refreshed}`;
-      return fetch(url, { ...options, headers });
-    }
-  }
-  return res;
-};
-
-// Log API base URL for debugging
-if (typeof window !== 'undefined') {
-  console.log('🔗 API Base URL:', API_BASE);
+  if (error) throw new Error('Failed to load inventory');
+  if (!data) return { water: 0, food: 0, blankets: 0, medicalKits: 0 };
+  return mapInventory(data);
 }
 
-export async function getInventory(orgId: string): Promise<OrgInventory> {
-  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/inventory`);
-  if (!res.ok) throw new Error('Failed to load inventory');
-  return res.json();
+export async function saveInventory(orgCode: string, inventory: OrgInventory): Promise<void> {
+  const orgId = await getOrgIdByCode(orgCode);
+  if (!orgId) throw new Error('Organization not found');
+
+  const { data: authData } = await supabase.auth.getUser();
+  const userId = authData?.user?.id || null;
+
+  const { error } = await supabase
+    .from('inventory')
+    .upsert({
+      org_id: orgId,
+      water: inventory.water,
+      food: inventory.food,
+      blankets: inventory.blankets,
+      medical_kits: inventory.medicalKits,
+      last_updated_by: userId,
+    }, { onConflict: 'org_id' });
+
+  if (error) throw new Error('Failed to save inventory');
 }
 
-export async function saveInventory(orgId: string, inventory: OrgInventory): Promise<void> {
-  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/inventory`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(inventory),
-  });
-  if (!res.ok) throw new Error('Failed to save inventory');
+// Replenishment Requests
+export async function listRequests(orgCode: string) {
+  const org = await getOrgByCode(orgCode);
+  if (!org) throw new Error('Organization not found');
+
+  const { data, error } = await supabase
+    .from('replenishment_requests')
+    .select('id, org_id, org_name, item, quantity, status, provider, created_at, delivered_quantity')
+    .eq('org_id', org.orgId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error('Failed to load requests');
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    orgId: org.orgCode,
+    orgName: row.org_name || org.orgName || '',
+    item: row.item,
+    quantity: row.quantity,
+    status: normalizeRequestStatus(row.status),
+    timestamp: row.created_at,
+    provider: row.provider || '',
+    deliveredQuantity: row.delivered_quantity || 0,
+    synced: true,
+  }));
 }
 
-export async function listRequests(orgId: string) {
-  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/requests`);
-  if (!res.ok) throw new Error('Failed to load requests');
-  return res.json();
-}
+export async function createRequest(orgCode: string, payload: { item: string; quantity: number; provider?: string; orgName?: string }) {
+  const org = await getOrgByCode(orgCode);
+  if (!org) throw new Error('Organization not found');
 
-export async function createRequest(orgId: string, payload: { item: string; quantity: number; provider?: string; orgName?: string }) {
-  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/requests`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error('Failed to create request');
-  return res.json();
+  const { data, error } = await supabase
+    .from('replenishment_requests')
+    .insert({
+      org_id: org.orgId,
+      org_name: payload.orgName || org.orgName || '',
+      item: payload.item,
+      quantity: payload.quantity,
+      status: 'PENDING',
+      provider: payload.provider || null,
+    })
+    .select('id, org_id, org_name, item, quantity, status, provider, created_at, delivered_quantity')
+    .single();
+
+  if (error || !data) throw new Error('Failed to create request');
+  return {
+    id: data.id,
+    orgId: org.orgCode,
+    orgName: data.org_name || org.orgName || '',
+    item: data.item,
+    quantity: data.quantity,
+    status: normalizeRequestStatus(data.status),
+    timestamp: data.created_at,
+    provider: data.provider || '',
+    deliveredQuantity: data.delivered_quantity || 0,
+    synced: true,
+  };
 }
 
 export async function updateRequestStatus(id: string, payload: { status: string; deliveredQuantity?: number }) {
-  const res = await authFetch(`${API_BASE}/api/requests/${id}/status`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error('Failed to update request');
-  return res.json();
+  const normalized = normalizeRequestStatus(payload.status);
+  const { data, error } = await supabase
+    .from('replenishment_requests')
+    .update({
+      status: normalized,
+      delivered_quantity: payload.deliveredQuantity ?? undefined,
+    })
+    .eq('id', id)
+    .select('id, org_id, org_name, item, quantity, status, provider, created_at, delivered_quantity')
+    .single();
+
+  if (error || !data) throw new Error('Failed to update request');
+
+  const orgCode = data.org_id ? await getOrgCodeById(data.org_id) : null;
+  return {
+    id: data.id,
+    orgId: orgCode || '',
+    orgName: data.org_name || '',
+    item: data.item,
+    quantity: data.quantity,
+    status: normalizeRequestStatus(data.status),
+    timestamp: data.created_at,
+    provider: data.provider || '',
+    deliveredQuantity: data.delivered_quantity || 0,
+    synced: true,
+  };
 }
 
-export async function getMemberStatus(orgId: string) {
-  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/status`);
-  if (!res.ok) throw new Error('Failed to load member status');
-  return res.json(); // { counts, members }
+// Member Status
+export async function getMemberStatus(orgCode: string) {
+  const orgId = await getOrgIdByCode(orgCode);
+  if (!orgId) throw new Error('Organization not found');
+
+  const { data, error } = await supabase
+    .from('member_statuses')
+    .select('member_id, name, status, last_check_in')
+    .eq('org_id', orgId);
+
+  if (error) throw new Error('Failed to load member status');
+
+  const members = (data || []).map((row: any) => ({
+    id: row.member_id,
+    name: row.name,
+    status: row.status || 'UNKNOWN',
+    lastUpdate: row.last_check_in || '',
+  }));
+
+  const counts = members.reduce(
+    (acc: { safe: number; danger: number; unknown: number }, m: any) => {
+      if (m.status === 'SAFE') acc.safe += 1;
+      else if (m.status === 'DANGER') acc.danger += 1;
+      else acc.unknown += 1;
+      return acc;
+    },
+    { safe: 0, danger: 0, unknown: 0 }
+  );
+
+  return { counts, members };
 }
 
-export async function setMemberStatus(orgId: string, payload: { memberId: string; name?: string; status: 'SAFE' | 'DANGER' | 'UNKNOWN' }) {
-  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/status`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error('Failed to save member status');
-  return res.json();
+export async function setMemberStatus(orgCode: string, payload: { memberId: string; name?: string; status: 'SAFE' | 'DANGER' | 'UNKNOWN' }) {
+  const orgId = await getOrgIdByCode(orgCode);
+  if (!orgId) throw new Error('Organization not found');
+
+  const { error } = await supabase
+    .from('member_statuses')
+    .upsert({
+      org_id: orgId,
+      member_id: payload.memberId,
+      name: payload.name || 'Unknown',
+      status: payload.status,
+      last_check_in: new Date().toISOString(),
+    }, { onConflict: 'org_id,member_id' });
+
+  if (error) throw new Error('Failed to save member status');
+  return { ok: true };
 }
 
-export async function getBroadcast(orgId: string) {
-  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/broadcast`);
-  if (!res.ok) throw new Error('Failed to load broadcast');
-  return res.json();
+// Broadcasts
+export async function getBroadcast(orgCode: string) {
+  const orgId = await getOrgIdByCode(orgCode);
+  if (!orgId) throw new Error('Organization not found');
+
+  const { data, error } = await supabase
+    .from('broadcasts')
+    .select('message')
+    .eq('org_id', orgId)
+    .maybeSingle();
+
+  if (error) throw new Error('Failed to load broadcast');
+  return data || { message: '' };
 }
 
-export async function setBroadcast(orgId: string, message: string) {
-  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/broadcast`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message }),
-  });
-  if (!res.ok) throw new Error('Failed to save broadcast');
-  return res.json();
+export async function setBroadcast(orgCode: string, message: string) {
+  const orgId = await getOrgIdByCode(orgCode);
+  if (!orgId) throw new Error('Organization not found');
+
+  const { data: authData } = await supabase.auth.getUser();
+  const userId = authData?.user?.id || null;
+
+  const { error } = await supabase
+    .from('broadcasts')
+    .upsert({
+      org_id: orgId,
+      message,
+      posted_by: userId,
+    }, { onConflict: 'org_id' });
+
+  if (error) throw new Error('Failed to save broadcast');
+  return { message };
 }
 
 // Auth
 export async function registerAuth(payload: { email?: string; phone?: string; password: string; fullName?: string; role?: string; orgId?: string }) {
-  const res = await fetch(`${API_BASE}/api/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+  const { email, phone, password, fullName, role, orgId } = payload;
+  const { data, error } = await supabase.auth.signUp({
+    email: email || undefined,
+    phone: phone || undefined,
+    password,
+    options: {
+      data: {
+        full_name: fullName || '',
+        role: role || 'GENERAL_USER',
+        org_code: orgId || '',
+      },
+    },
   });
-  if (!res.ok) throw new Error('Failed to register');
-  return res.json(); // { token, user }
+
+  if (error) throw error;
+
+  const userId = data.user?.id;
+  let resolvedOrgId: string | null = null;
+  if (orgId) resolvedOrgId = await getOrgIdByCode(orgId);
+
+  if (userId) {
+    await supabase.from('profiles').upsert({
+      id: userId,
+      email: data.user?.email || email || null,
+      phone: phone || null,
+      full_name: fullName || null,
+      role: role || 'GENERAL_USER',
+      org_id: resolvedOrgId,
+    });
+  }
+
+  return {
+    token: data.session?.access_token || null,
+    refreshToken: data.session?.refresh_token || null,
+    user: {
+      id: userId,
+      email: data.user?.email || email || '',
+      phone: phone || '',
+      fullName: fullName || '',
+      role: role || 'GENERAL_USER',
+      orgId: orgId || '',
+    },
+  };
 }
 
 export async function loginAuth(payload: { email?: string; phone?: string; password: string }) {
-  try {
-    const url = `${API_BASE}/api/auth/login`;
-    console.log('📡 Attempting login to:', url);
-    console.log('📝 Payload:', payload);
-    
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    
-    console.log('📊 Response status:', res.status, res.statusText);
-    
-    if (!res.ok) {
-      try {
-        const errorData = await res.json();
-        console.error('❌ Server error:', errorData);
-        throw new Error(errorData.error || `Failed to login: ${res.statusText}`);
-      } catch (parseErr) {
-        console.error('❌ Could not parse error response:', parseErr);
-        throw new Error(`Login failed with status ${res.status}`);
-      }
-    }
-    
-    const data = await res.json();
-    console.log('✅ Login successful, got token:', data.token ? 'YES' : 'NO');
-    return data;
-  } catch (err: any) {
-    console.error('❌ Login API error:', err.message || err);
-    throw err;
-  }
+  if (!payload.email && !payload.phone) throw new Error('Email or phone required');
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: payload.email || undefined,
+    password: payload.password,
+  });
+
+  if (error) throw error;
+
+  const userId = data.user?.id || '';
+  const profile = userId ? await getProfileById(userId) : null;
+  const orgCode = profile?.org_id ? await getOrgCodeById(profile.org_id) : null;
+
+  return {
+    token: data.session?.access_token || null,
+    refreshToken: data.session?.refresh_token || null,
+    user: {
+      id: userId,
+      email: data.user?.email || payload.email || '',
+      phone: profile?.phone || '',
+      fullName: profile?.full_name || '',
+      role: profile?.role || 'GENERAL_USER',
+      orgId: orgCode || '',
+    },
+  };
 }
 
 export async function forgotPassword(payload: { email: string }) {
-  const res = await fetch(`${API_BASE}/api/auth/forgot`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+  const redirectTo = typeof window !== 'undefined'
+    ? `${window.location.origin}/reset-password`
+    : undefined;
+
+  const { error } = await supabase.auth.resetPasswordForEmail(payload.email, {
+    redirectTo,
   });
-  if (!res.ok) throw new Error('Failed to request reset');
-  return res.json(); // { ok, resetToken? }
+  if (error) throw error;
+  return { ok: true };
 }
 
 export async function resetPassword(payload: { email: string; token: string; newPassword: string }) {
-  const res = await fetch(`${API_BASE}/api/auth/reset`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+  if (payload.token) {
+    const { error: verifyError } = await supabase.auth.verifyOtp({
+      type: 'recovery',
+      token: payload.token,
+      email: payload.email,
+    });
+    if (verifyError) throw verifyError;
+  }
+
+  const { error } = await supabase.auth.updateUser({
+    password: payload.newPassword,
   });
-  if (!res.ok) throw new Error('Failed to reset password');
-  return res.json(); // { ok }
+  if (error) throw error;
+  return { ok: true };
 }
 
 // Help Requests
 export async function createHelpRequest(userId: string, payload: any) {
-  const res = await authFetch(`${API_BASE}/api/users/${userId}/help`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error('Failed to create help request');
-  return res.json();
+  const orgId = payload?.orgId ? await getOrgIdByCode(payload.orgId) : null;
+
+  const { data, error } = await supabase
+    .from('help_requests')
+    .insert({
+      user_id: userId,
+      org_id: orgId,
+      status: payload.status || 'RECEIVED',
+      priority: payload.priority || 'LOW',
+      data: payload.data || {},
+      location: payload.location || null,
+    })
+    .select('id, user_id, status, priority, data, location, created_at')
+    .single();
+
+  if (error || !data) throw new Error('Failed to create help request');
+  return {
+    id: data.id,
+    userId: data.user_id,
+    status: data.status,
+    priority: data.priority,
+    data: data.data,
+    location: data.location,
+    timestamp: data.created_at,
+  };
 }
 
 export async function getActiveHelpRequest(userId: string) {
-  const res = await authFetch(`${API_BASE}/api/users/${userId}/help/active`);
-  if (!res.ok) throw new Error('Failed to load help request');
-  return res.json();
+  const { data, error } = await supabase
+    .from('help_requests')
+    .select('id, user_id, status, priority, data, location, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error('Failed to load help request');
+  if (!data) return null;
+  return {
+    id: data.id,
+    userId: data.user_id,
+    status: data.status,
+    priority: data.priority,
+    data: data.data,
+    location: data.location,
+    timestamp: data.created_at,
+  };
 }
 
 export async function updateHelpRequestLocation(id: string, location: string) {
-  const res = await authFetch(`${API_BASE}/api/help/${id}/location`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ location }),
-  });
-  if (!res.ok) throw new Error('Failed to update help request location');
-  return res.json();
+  const { error } = await supabase
+    .from('help_requests')
+    .update({ location })
+    .eq('id', id);
+  if (error) throw new Error('Failed to update help request location');
+  return { ok: true };
 }
 
 // Member CRUD
-export async function listMembers(orgId: string) {
-  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/members`);
-  if (!res.ok) throw new Error('Failed to load members');
-  return res.json();
+export async function listMembers(orgCode: string) {
+  const orgId = await getOrgIdByCode(orgCode);
+  if (!orgId) throw new Error('Organization not found');
+
+  const { data, error } = await supabase
+    .from('members')
+    .select('id, name, status, location, last_update, needs, phone, address, emergency_contact_name, emergency_contact_phone, emergency_contact_relation')
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error('Failed to load members');
+  return data || [];
 }
 
-export async function addMember(orgId: string, payload: any) {
-  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/members`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error('Failed to add member');
-  return res.json();
+export async function addMember(orgCode: string, payload: any) {
+  const orgId = await getOrgIdByCode(orgCode);
+  if (!orgId) throw new Error('Organization not found');
+
+  const { data, error } = await supabase
+    .from('members')
+    .insert({
+      org_id: orgId,
+      name: payload.name,
+      status: payload.status || 'UNKNOWN',
+      location: payload.location || null,
+      last_update: payload.lastUpdate || null,
+      needs: payload.needs || [],
+      phone: payload.phone || null,
+      address: payload.address || null,
+      emergency_contact_name: payload.emergencyContactName || null,
+      emergency_contact_phone: payload.emergencyContactPhone || null,
+      emergency_contact_relation: payload.emergencyContactRelation || null,
+    })
+    .select('id, name, status, location, last_update, needs, phone, address, emergency_contact_name, emergency_contact_phone, emergency_contact_relation')
+    .single();
+
+  if (error || !data) throw new Error('Failed to add member');
+  return data;
 }
 
-export async function updateMember(orgId: string, memberId: string, payload: any) {
-  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/members/${memberId}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error('Failed to update member');
-  return res.json();
+export async function updateMember(orgCode: string, memberId: string, payload: any) {
+  const orgId = await getOrgIdByCode(orgCode);
+  if (!orgId) throw new Error('Organization not found');
+
+  const { data, error } = await supabase
+    .from('members')
+    .update({
+      name: payload.name,
+      status: payload.status,
+      location: payload.location,
+      last_update: payload.lastUpdate,
+      needs: payload.needs,
+      phone: payload.phone,
+      address: payload.address,
+      emergency_contact_name: payload.emergencyContactName,
+      emergency_contact_phone: payload.emergencyContactPhone,
+      emergency_contact_relation: payload.emergencyContactRelation,
+    })
+    .eq('id', memberId)
+    .eq('org_id', orgId)
+    .select('id, name, status, location, last_update, needs, phone, address, emergency_contact_name, emergency_contact_phone, emergency_contact_relation')
+    .single();
+
+  if (error || !data) throw new Error('Failed to update member');
+  return data;
 }
 
-export async function removeMember(orgId: string, memberId: string) {
-  const res = await authFetch(`${API_BASE}/api/orgs/${orgId}/members/${memberId}`, {
-    method: 'DELETE',
-  });
-  if (!res.ok) throw new Error('Failed to remove member');
-  return res.json();
+export async function removeMember(orgCode: string, memberId: string) {
+  const orgId = await getOrgIdByCode(orgCode);
+  if (!orgId) throw new Error('Organization not found');
+
+  const { error } = await supabase
+    .from('members')
+    .delete()
+    .eq('id', memberId)
+    .eq('org_id', orgId);
+
+  if (error) throw new Error('Failed to remove member');
+  return { ok: true };
 }
