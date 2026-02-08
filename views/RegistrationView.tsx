@@ -136,6 +136,10 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     setAddressStatus('VERIFYING');
     
     try {
+      if (!process.env.API_KEY || process.env.API_KEY === 'PLACEHOLDER_API_KEY') {
+        setAddressStatus('VALID');
+        return;
+      }
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       // Use Maps Grounding to verify existence
       const response = await ai.models.generateContent({

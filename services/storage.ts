@@ -419,8 +419,9 @@ export const StorageService = {
         this.saveProfile(profile);
       }
       return resp;
-    } catch (err) {
-      throw new Error('Login failed. User not found in local database or backend unavailable.');
+    } catch (err: any) {
+      const message = err?.message || 'Login failed. Please check your credentials.';
+      throw new Error(message);
     }
   },
 

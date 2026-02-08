@@ -66,6 +66,11 @@ CREATE POLICY "Users can view their organization"
   ON organizations FOR SELECT
   USING (id = public.user_org_id());
 
+-- Authenticated users can view organizations for signup/search
+CREATE POLICY "Authenticated can view organizations"
+  ON organizations FOR SELECT
+  USING (auth.role() = 'authenticated');
+
 -- Admin can create organizations
 CREATE POLICY "Admins can create organizations"
   ON organizations FOR INSERT
