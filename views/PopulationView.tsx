@@ -45,7 +45,7 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
         {viewMode === 'MAP' ? (
           <div className="absolute inset-0 bg-slate-200">
             {/* Mock Map */}
-            <div className="w-full h-full opacity-60 bg-[url('https://picsum.photos/800/1200')] bg-cover bg-center grayscale" />
+            <div className="w-full h-full opacity-60 bg-gradient-to-br from-slate-200 via-slate-300 to-slate-400" />
             
             {/* Heatmap Overlays */}
             <div className="absolute top-1/4 left-1/4 w-32 h-32 bg-red-500/30 rounded-full blur-xl" />

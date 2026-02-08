@@ -193,7 +193,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
                   setInfo('');
                   try {
                     const resp = await StorageService.requestPasswordReset(resetEmail);
-                    setInfo(resp?.resetToken ? `Reset token (demo): ${resp.resetToken}` : 'Check your email for reset token');
+                    setInfo('Check your email for reset token');
                   } catch (e: any) {
                     setError(e?.message || 'Reset request failed');
                   }

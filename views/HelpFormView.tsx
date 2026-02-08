@@ -109,36 +109,10 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
     }
   }, []);
 
-  // IP Location Fallback
+  // IP Location Fallback (disabled for privacy)
   const fetchIpLocation = async () => {
-    if (!navigator.onLine) {
-      setLocationError("Offline. Cannot fetch Network Location. Please enter manually.");
-      return;
-    }
-    
-    try {
-      setIsIpFallback(true);
-      const response = await fetch('https://ipapi.co/json/');
-      const ipData = await response.json();
-      
-      if (ipData.latitude && ipData.longitude) {
-        const locString = `${ipData.city}, ${ipData.region_code} (${ipData.latitude}, ${ipData.longitude})`;
-        setData(prev => ({
-          ...prev,
-          location: locString
-        }));
-        setLastLocUpdate("Just now (via Network)");
-        setLocationError(null);
-        setPermissionDenied(false); // Clear error since we have *some* data
-        
-        if (submittedId) {
-          StorageService.updateRequestLocation(submittedId, locString);
-        }
-      }
-    } catch (e) {
-      console.error("IP Location failed", e);
-      setLocationError("Location services unavailable. Please enter address manually.");
-    }
+    setIsIpFallback(false);
+    setLocationError("Location services unavailable. Please enter address manually.");
   };
 
   // Live Location Logic
@@ -177,14 +151,14 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
 
           switch(error.code) {
             case 1: // PERMISSION_DENIED
-              errorMessage = "GPS Denied - Switching to IP Location";
+              errorMessage = "GPS denied. Please enter address manually.";
               setPermissionDenied(true);
-              fetchIpLocation(); // TRIGGER FALLBACK
+              fetchIpLocation();
               stopTracking = true;
               break;
             case 2: // POSITION_UNAVAILABLE
-              errorMessage = "Signal weak. Switching to IP Location";
-              fetchIpLocation(); // TRIGGER FALLBACK
+              errorMessage = "Signal weak. Please enter address manually.";
+              fetchIpLocation();
               stopTracking = true;
               break;
             case 3: // TIMEOUT

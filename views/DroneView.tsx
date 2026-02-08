@@ -35,7 +35,7 @@ export const DroneView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
       <div className="flex-1 flex flex-col">
         {/* Live Feed / Map Placeholder */}
         <div className="h-64 bg-black relative border-b border-slate-700">
-          <div className="absolute inset-0 opacity-40 bg-[url('https://picsum.photos/800/600')] bg-cover bg-center"></div>
+          <div className="absolute inset-0 opacity-40 bg-gradient-to-br from-slate-800 via-slate-900 to-black"></div>
           
           {/* Overlay HUD */}
           <div className="absolute inset-0 p-4 flex flex-col justify-between">
