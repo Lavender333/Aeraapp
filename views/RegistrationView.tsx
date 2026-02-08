@@ -72,6 +72,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
   // Permission States
   const [locPermission, setLocPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt');
   const [camPermission, setCamPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt');
+  const [locError, setLocError] = useState<string | null>(null);
 
   // Initialize language from storage if available
   useEffect(() => {
@@ -165,9 +166,31 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
   };
 
   const requestLocation = () => {
+    setLocError(null);
+    if (!window.isSecureContext) {
+      setLocPermission('denied');
+      setLocError('Location requires HTTPS. Please use the secure site URL.');
+      return;
+    }
+    if (!navigator.geolocation) {
+      setLocPermission('denied');
+      setLocError('Location is not supported by this browser.');
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
-      () => setLocPermission('granted'),
-      () => setLocPermission('denied')
+      () => {
+        setLocPermission('granted');
+        setLocError(null);
+      },
+      (err) => {
+        setLocPermission('denied');
+        if (err?.code === 1) {
+          setLocError('Location permission denied. Enable it in your browser settings.');
+        } else {
+          setLocError(err?.message || 'Unable to access location.');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
     );
   };
 
@@ -647,6 +670,11 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
                     <Button size="sm" onClick={requestLocation} className="bg-slate-900 text-xs h-8">Enable</Button>
                   )}
                </div>
+               {locError && (
+                 <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                   {locError}
+                 </div>
+               )}
 
                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
                   <div className="flex items-center gap-3">
