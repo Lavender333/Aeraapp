@@ -31,15 +31,7 @@ export default function App() {
   }, []);
 
   const handleSplashComplete = () => {
-    // Check if user has a profile saved
-    if (StorageService.hasProfile()) {
-      const profile = StorageService.getProfile();
-      // Smart Routing
-      if (profile.onboardComplete) setView('DASHBOARD');
-      else setView('ACCOUNT_SETUP');
-    } else {
-      setView('REGISTRATION');
-    }
+    setView('LOGIN');
   };
 
   const handleFinanceFromSplash = () => {
