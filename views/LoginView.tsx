@@ -32,6 +32,8 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
   const [showReset, setShowReset] = useState(false);
   const [isRecovery, setIsRecovery] = useState(false);
   const [recoveryPassword, setRecoveryPassword] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   useEffect(() => {
     const hash = window.location.hash || '';
@@ -48,6 +50,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
     setError('');
     setInfo('');
     try {
+      setIsLoggingIn(true);
       if (!email || !password) {
         setError('Email and password are required.');
         return;
@@ -77,6 +80,8 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
     } catch (e: any) {
       console.error('Login error:', e);
       setError(e?.message || 'Login failed.');
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -166,9 +171,9 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
           size="lg" 
           onClick={handleLogin}
           className="font-bold shadow-md"
-          disabled={!email || !password}
+          disabled={!email || !password || isLoggingIn}
         >
-          {t('login.btn')}
+          {isLoggingIn ? 'Signing in…' : t('login.btn')}
         </Button>
         <button className="text-sm text-brand-600 font-semibold underline" onClick={() => setShowReset(!showReset)}>
           Forgot password?
@@ -190,6 +195,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
                     setError('');
                     setInfo('');
                     try {
+                      setIsResetting(true);
                       const { error: updateError } = await supabase.auth.updateUser({ password: recoveryPassword });
                       if (updateError) throw updateError;
                       setInfo('Password updated. You can log in now.');
@@ -199,11 +205,13 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
                       window.history.replaceState({}, document.title, window.location.pathname);
                     } catch (e: any) {
                       setError(e?.message || 'Password reset failed');
+                    } finally {
+                      setIsResetting(false);
                     }
                   }}
                   disabled={!recoveryPassword}
                 >
-                  Set new password
+                  {isResetting ? 'Saving…' : 'Set new password'}
                 </Button>
               </>
             ) : (
@@ -220,15 +228,18 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
                     setError('');
                     setInfo('');
                     try {
+                      setIsResetting(true);
                       await StorageService.requestPasswordReset(resetEmail);
                       setInfo('Check your email to reset your password.');
                     } catch (e: any) {
                       setError(e?.message || 'Reset request failed');
+                    } finally {
+                      setIsResetting(false);
                     }
                   }}
-                  disabled={!resetEmail}
+                  disabled={!resetEmail || isResetting}
                 >
-                  Send reset email
+                  {isResetting ? 'Sending…' : 'Send reset email'}
                 </Button>
               </>
             )}

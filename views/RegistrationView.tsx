@@ -64,6 +64,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
   const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
   
   // Org Search
   const [showOrgSearch, setShowOrgSearch] = useState(false);
@@ -232,6 +233,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       return;
     }
     try {
+      setIsRegistering(true);
       const resp: any = await StorageService.registerWithCredentials(email, password, formData.fullName);
       if (resp?.needsEmailConfirm) {
         setNeedsEmailConfirm(true);
@@ -242,6 +244,8 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       setView('ACCOUNT_SETUP');
     } catch (e: any) {
       setAuthError(e?.message || 'Registration failed.');
+    } finally {
+      setIsRegistering(false);
     }
   };
 
@@ -320,8 +324,8 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
               onChange={(e) => setConfirmPassword(e.target.value)}
             />
           </div>
-          <Button size="lg" onClick={handleAuthRegister} className="font-bold">
-            Create Account & Continue
+          <Button size="lg" onClick={handleAuthRegister} className="font-bold" disabled={isRegistering}>
+            {isRegistering ? 'Creating…' : 'Create Account & Continue'}
           </Button>
           {authError && <p className="text-sm text-red-600">{authError}</p>}
           {authSuccess && <p className="text-sm text-emerald-600">{authSuccess}</p>}
