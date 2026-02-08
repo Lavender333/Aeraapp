@@ -20,9 +20,22 @@ import { PresentationView } from './views/PresentationView';
 import { BottomNav } from './components/BottomNav';
 import { ViewState } from './types';
 import { StorageService } from './services/storage';
+import { hasSupabaseConfig, supabaseConfigMessage } from './services/supabase';
 
 export default function App() {
   const [currentView, setView] = useState<ViewState>('SPLASH');
+
+  if (!hasSupabaseConfig) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-6 shadow-sm text-center space-y-3">
+          <h1 className="text-xl font-bold text-slate-900">Setup Required</h1>
+          <p className="text-sm text-slate-600">{supabaseConfigMessage}</p>
+          <p className="text-xs text-slate-500">Set these as GitHub Actions secrets or in your local .env file, then rebuild.</p>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     StorageService.startOfflineSyncListener();
