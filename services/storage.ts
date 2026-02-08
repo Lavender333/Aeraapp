@@ -1,5 +1,5 @@
 
-import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest } from '../types';
+import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, UserRole } from '../types';
 import { REQUEST_ITEM_MAP } from './validation';
 import { getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword } from './api';
 import { getMemberStatus, setMemberStatus } from './api';
@@ -13,6 +13,15 @@ const STORAGE_STATE_KEY = 'aera_storage_state_v1';
 const MAX_CACHED_REQUESTS = 200;
 const MAX_CACHED_REPLENISHMENTS = 200;
 const IS_PRODUCTION = import.meta.env.PROD;
+
+type ReplenishmentAggregate = {
+  item: string;
+  pending: number;
+  approved: number;
+  fulfilled: number;
+  totalRequested: number;
+  pendingQuantity: number;
+};
 
 type OfflineOperation = {
   id: string;

@@ -876,6 +876,5 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         </Card>
       )}
     </div>
-  </div>
 );
 };
