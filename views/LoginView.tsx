@@ -221,51 +221,6 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
         )}
       </div>
 
-      {!IS_PRODUCTION && (
-        <div className="mt-6 space-y-3">
-          <p className="text-xs font-bold text-slate-400 uppercase text-center mb-2">{t('login.demo_title')}</p>
-          
-          <button onClick={() => handleDemoLogin('555-0000')} className="w-full p-3 bg-white border border-slate-200 rounded-lg flex items-center gap-3 hover:border-slate-900 hover:shadow-md transition-all group">
-            <div className="bg-slate-900 p-2 rounded text-white group-hover:bg-black"><Lock size={16}/></div>
-            <div className="text-left">
-              <p className="text-sm font-bold text-slate-900">System Admin</p>
-              <p className="text-xs text-slate-500">Full Access & Settings</p>
-            </div>
-          </button>
-
-          <button onClick={() => handleDemoLogin('555-1001')} className="w-full p-3 bg-white border border-slate-200 rounded-lg flex items-center gap-3 hover:border-brand-400 transition-colors">
-            <div className="bg-blue-100 p-2 rounded text-blue-600"><User size={16}/></div>
-            <div className="text-left">
-              <p className="text-sm font-bold text-slate-900">Alice (General User)</p>
-              <p className="text-xs text-slate-500">Standard user flow</p>
-            </div>
-          </button>
-
-          <button onClick={() => handleDemoLogin('555-1002')} className="w-full p-3 bg-white border border-slate-200 rounded-lg flex items-center gap-3 hover:border-red-400 transition-colors">
-            <div className="bg-red-100 p-2 rounded text-red-600"><HeartPulse size={16}/></div>
-            <div className="text-left">
-              <p className="text-sm font-bold text-slate-900">David (High Risk)</p>
-              <p className="text-xs text-slate-500">Medical needs intake</p>
-            </div>
-          </button>
-
-          <button onClick={() => handleDemoLogin('555-0101')} className="w-full p-3 bg-white border border-slate-200 rounded-lg flex items-center gap-3 hover:border-purple-400 transition-colors">
-            <div className="bg-purple-100 p-2 rounded text-purple-600"><ShieldCheck size={16}/></div>
-            <div className="text-left">
-              <p className="text-sm font-bold text-slate-900">Pastor John (Org Admin)</p>
-              <p className="text-xs text-slate-500">Hub Dashboard access</p>
-            </div>
-          </button>
-
-          <button onClick={() => handleDemoLogin('555-9111')} className="w-full p-3 bg-white border border-slate-200 rounded-lg flex items-center gap-3 hover:border-slate-800 transition-colors">
-            <div className="bg-slate-800 p-2 rounded text-brand-400"><Navigation size={16}/></div>
-            <div className="text-left">
-              <p className="text-sm font-bold text-slate-900">Sarah (First Responder)</p>
-              <p className="text-xs text-slate-500">Drone & Map access</p>
-            </div>
-          </button>
-        </div>
-      )}
 
       <div className="mt-8 text-center">
         <p className="text-slate-600">{t('login.no_account')}</p>

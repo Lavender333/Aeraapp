@@ -69,7 +69,7 @@ curl http://localhost:5000/api/inventory
 # Should work (after login)
 TOKEN=$(curl -X POST http://localhost:5000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@example.com","password":"password123"}' \
+  -d '{"email":"you@example.com","password":"<your-password>"}' \
   | jq -r '.token')
 
 curl http://localhost:5000/api/inventory \
@@ -155,7 +155,7 @@ curl http://localhost:5000/api/inventory
 # Should succeed
 curl -X POST http://localhost:5000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@example.com","password":"password123"}'
+  -d '{"email":"you@example.com","password":"<your-password>"}'
 ```
 
 ### Test 3: Rate Limiting
@@ -164,7 +164,7 @@ curl -X POST http://localhost:5000/api/auth/login \
 for i in {1..6}; do
   curl -X POST http://localhost:5000/api/auth/login \
     -H "Content-Type: application/json" \
-    -d '{"email":"test","password":"test"}'
+    -d '{"email":"you@example.com","password":"<your-password>"}'
   echo ""
 done
 ```
