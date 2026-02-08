@@ -75,6 +75,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [financeUsersInput, setFinanceUsersInput] = useState<number>(3000);
   const [inventoryFallback, setInventoryFallback] = useState(false);
   const [showOpDef, setShowOpDef] = useState(false);
+  const hasCommunity = !!connectedOrg;
   
   // Status Ping State
   const [pendingPing, setPendingPing] = useState<{ requesterName: string, timestamp: string } | undefined>(undefined);
@@ -668,41 +669,59 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         </Card>
       )}
 
-      {/* Resource Alert System (Visible to Everyone) */}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-3 shadow-sm cursor-pointer hover:bg-amber-100 transition-colors" onClick={() => setView('LOGISTICS')}>
-         <div className="p-2 bg-amber-200 rounded-full text-amber-800">
-           {connectedOrg ? <Building2 size={18} /> : <MapPin size={18} />}
-         </div>
-         <div className="flex-1">
-           <h3 className="font-bold text-amber-900 text-sm">{t('dash.resource_depot')}</h3>
-           <p className="text-xs text-amber-800">
-             {connectedOrg ? (
-               <>{connectedOrg} (My Community) has reported <span className="font-bold">Water & Food</span> availability.</>
-             ) : (
-               <>Grace Community Church (0.8 mi) has reported <span className="font-bold">Water & Food</span> availability.</>
-             )}
-           </p>
-         </div>
-         <ChevronRight size={16} className="text-amber-500 mt-2" />
-      </div>
+      {!hasCommunity && (
+        <Card
+          title="Connect your community"
+          icon={<Building2 size={20} />}
+          onClick={() => setView('ACCOUNT_SETUP')}
+          className="border-l-4 border-l-brand-500"
+        >
+          <p className="text-sm text-slate-600">
+            Link to a community to see local alerts, resource depots, and inventory updates.
+          </p>
+          <div className="mt-3">
+            <Button size="sm" onClick={() => setView('ACCOUNT_SETUP')}>
+              Connect Community
+            </Button>
+          </div>
+        </Card>
+      )}
 
-      {/* Push Notification Console / Alerts */}
-      <Card 
-        title={t('dash.alerts')}
-        icon={<Bell size={20} />} 
-        onClick={() => setView('ALERTS')}
-        className="border-l-4 border-l-orange-500"
-      >
-        <div className="flex justify-between items-center">
-           <div>
-             <div className="font-semibold text-slate-800">Flash Flood Warning</div>
-             <div className="text-xs text-slate-500">Effective until 6:00 PM EST</div>
-           </div>
-           <div className="px-2 py-1 bg-orange-100 text-orange-700 text-xs font-bold rounded uppercase">
-             Critical
-           </div>
-        </div>
-      </Card>
+      {hasCommunity && (
+        <>
+          {/* Resource Alert System (Community Only) */}
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-3 shadow-sm cursor-pointer hover:bg-amber-100 transition-colors" onClick={() => setView('LOGISTICS')}>
+             <div className="p-2 bg-amber-200 rounded-full text-amber-800">
+               <Building2 size={18} />
+             </div>
+             <div className="flex-1">
+               <h3 className="font-bold text-amber-900 text-sm">{t('dash.resource_depot')}</h3>
+               <p className="text-xs text-amber-800">
+                 {connectedOrg} (My Community) has reported <span className="font-bold">Water & Food</span> availability.
+               </p>
+             </div>
+             <ChevronRight size={16} className="text-amber-500 mt-2" />
+          </div>
+
+          {/* Push Notification Console / Alerts */}
+          <Card 
+            title={t('dash.alerts')}
+            icon={<Bell size={20} />} 
+            onClick={() => setView('ALERTS')}
+            className="border-l-4 border-l-orange-500"
+          >
+            <div className="flex justify-between items-center">
+               <div>
+                 <div className="font-semibold text-slate-800">Flash Flood Warning</div>
+                 <div className="text-xs text-slate-500">Effective until 6:00 PM EST</div>
+               </div>
+               <div className="px-2 py-1 bg-orange-100 text-orange-700 text-xs font-bold rounded uppercase">
+                 Critical
+               </div>
+            </div>
+          </Card>
+        </>
+      )}
 
       {/* Modular Card Layout - DYNAMIC BASED ON ROLE */}
       <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-2">Recovery & Resources</h3>
