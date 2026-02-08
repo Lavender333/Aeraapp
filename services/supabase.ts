@@ -33,7 +33,11 @@ export type OrgLookup = {
 };
 
 export async function getOrgByCode(orgCode: string): Promise<OrgLookup | null> {
-  const normalized = orgCode?.trim().toUpperCase();
+  const normalized = orgCode
+    ?.trim()
+    .replace(/[–—−]/g, '-')
+    .replace(/\s+/g, '')
+    .toUpperCase();
   if (!normalized) return null;
   const { data, error } = await supabase
     .from('organizations')
