@@ -24,18 +24,7 @@ import { hasSupabaseConfig, supabaseConfigMessage } from './services/supabase';
 
 export default function App() {
   const [currentView, setView] = useState<ViewState>('SPLASH');
-
-  if (!hasSupabaseConfig) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-6 shadow-sm text-center space-y-3">
-          <h1 className="text-xl font-bold text-slate-900">Setup Required</h1>
-          <p className="text-sm text-slate-600">{supabaseConfigMessage}</p>
-          <p className="text-xs text-slate-500">Set these as GitHub Actions secrets or in your local .env file, then rebuild.</p>
-        </div>
-      </div>
-    );
-  }
+  const showSetupNotice = !hasSupabaseConfig;
 
   useEffect(() => {
     StorageService.startOfflineSyncListener();
@@ -119,6 +108,13 @@ export default function App() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50 shadow-2xl relative overflow-hidden md:border-x md:border-slate-200 print:max-w-none print:w-full print:h-auto print:overflow-visible print:shadow-none print:border-0">
+      {showSetupNotice && (
+        <div className="absolute top-0 inset-x-0 z-50">
+          <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2 text-xs text-center">
+            {supabaseConfigMessage} — set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY, then rebuild.
+          </div>
+        </div>
+      )}
       {renderView()}
       {showNav && <BottomNav currentView={currentView} setView={setView} />}
     </div>
