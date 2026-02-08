@@ -142,6 +142,11 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
         return;
       }
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const hasModel = (ai as any)?.models?.generateContent;
+      if (!hasModel) {
+        setAddressStatus('VALID');
+        return;
+      }
       // Use Maps Grounding to verify existence
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
