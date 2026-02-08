@@ -8,7 +8,7 @@ import { StorageService } from '../services/storage';
 import { getOrganizationByCode, searchOrganizations, updateProfile } from '../services/api';
 import { t } from '../services/translations';
 import { GoogleGenAI } from "../services/mockGenAI";
-import { User, Shield, ShieldCheck, Building2, Check, ArrowRight, Link as LinkIcon, Loader2, Lock, HeartPulse, XCircle, Search, MapPin, CheckCircle, AlertTriangle, Globe, Map, Camera } from 'lucide-react';
+import { User, Shield, Building2, Check, ArrowRight, Link as LinkIcon, Loader2, Lock, HeartPulse, XCircle, Search, MapPin, CheckCircle, AlertTriangle, Globe, Map } from 'lucide-react';
 
 // Phone Formatter Utility
 const formatPhoneNumber = (value: string) => {
@@ -375,7 +375,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
           </div>
         </div>
         <div className="flex gap-2">
-          {[1, 2, 3, 4].map(i => (
+          {[1, 2, 3].map(i => (
             <div 
               key={i} 
               className={`h-2 w-8 rounded-full transition-colors ${i <= step ? 'bg-brand-600' : 'bg-slate-300'}`} 
@@ -643,73 +643,9 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
 
             <div className="flex gap-3 mt-6">
                <Button variant="ghost" onClick={() => setStep(2)}>{t('btn.back')}</Button>
-               <Button fullWidth onClick={handleNext} className="font-bold shadow-md">{t('btn.next')}</Button>
-            </div>
-          </div>
-        )}
-
-        {step === 4 && (
-          <div className="space-y-6 animate-slide-up">
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 text-green-600 border border-green-200">
-                <ShieldCheck size={32} />
-              </div>
-              <h2 className="text-2xl font-bold text-slate-900">{t('reg.safety')}</h2>
-              <p className="text-slate-600 font-medium">Prepare your device for emergencies.</p>
-            </div>
-
-            <div className="space-y-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-               <h3 className="font-bold text-slate-900 text-sm uppercase tracking-wider mb-2">Required Permissions</h3>
-               
-               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                  <div className="flex items-center gap-3">
-                    <MapPin className={locPermission === 'granted' ? 'text-green-600' : 'text-slate-400'} size={20} />
-                    <div>
-                      <p className="font-bold text-slate-900">Location Services</p>
-                      <p className="text-xs text-slate-500">For GPS tracking during rescue.</p>
-                    </div>
-                  </div>
-                  {locPermission === 'granted' ? (
-                    <span className="text-xs font-bold text-green-600 flex items-center gap-1"><Check size={12}/> Granted</span>
-                  ) : (
-                    <Button size="sm" onClick={requestLocation} className="bg-slate-900 text-xs h-8">Enable</Button>
-                  )}
-               </div>
-               {locError && (
-                 <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                   {locError}
-                 </div>
-               )}
-
-               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                  <div className="flex items-center gap-3">
-                    <Camera className={camPermission === 'granted' ? 'text-green-600' : 'text-slate-400'} size={20} />
-                    <div>
-                      <p className="font-bold text-slate-900">Camera Access</p>
-                      <p className="text-xs text-slate-500">To document damage.</p>
-                    </div>
-                  </div>
-                  {camPermission === 'granted' ? (
-                    <span className="text-xs font-bold text-green-600 flex items-center gap-1"><Check size={12}/> Granted</span>
-                  ) : (
-                    <Button size="sm" onClick={requestCamera} className="bg-slate-900 text-xs h-8">Enable</Button>
-                  )}
-               </div>
-            </div>
-
-            <div>
-              <p className="text-slate-600 text-center mb-6 text-sm">{t('help.consent')}</p>
-
-              <Button 
-                fullWidth 
-                size="xl" 
-                onClick={handleComplete}
-                className="bg-brand-600 hover:bg-brand-700 font-bold shadow-lg shadow-brand-200"
-              >
-                {t('reg.complete')} <ArrowRight className="ml-2" />
-              </Button>
-              
-              <Button variant="ghost" fullWidth onClick={() => setStep(3)} className="mt-2">{t('btn.back')}</Button>
+               <Button fullWidth onClick={handleComplete} className="font-bold shadow-md">
+                 {t('reg.complete')}
+               </Button>
             </div>
           </div>
         )}
