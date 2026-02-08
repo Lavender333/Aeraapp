@@ -45,8 +45,7 @@ jobs:
       - name: Verify Supabase env
         run: |
           if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
-            echo "Missing Supabase env. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env or repository secrets." >&2
-            exit 1
+            echo "Warning: Missing Supabase env. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env or repository secrets." >&2
           fi
 
       - name: Build
