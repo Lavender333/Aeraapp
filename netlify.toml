@@ -1,5 +1,5 @@
 [build]
-  command = "npm install && VITE_API_URL=$API_URL npm run build"
+  command = "npm install && npm run build"
   publish = "dist"
 
 [build.environment]

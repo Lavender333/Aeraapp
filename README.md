@@ -133,6 +133,21 @@ EOF
 
 ---
 
+## ✅ What’s Required (Supabase)
+
+- Supabase project with schema + RLS applied: [supabase/schema.sql](supabase/schema.sql), [supabase/rls-policies.sql](supabase/rls-policies.sql)
+- Env vars in .env: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+- Seeded organizations (or your own orgs with `org_code`): [scripts/seed-orgs.js](scripts/seed-orgs.js)
+- Frontend app (Vite + React) in this repo
+- Supabase Auth enabled for user login
+
+### App Store (iOS)
+
+- iOS wrapper: [ios](ios)
+- Capacitor config: [capacitor.config.ts](capacitor.config.ts)
+
+---
+
 ## 🏗️ Architecture
 
 ### Current (Phase 1)
