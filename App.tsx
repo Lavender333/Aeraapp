@@ -20,14 +20,44 @@ import { PresentationView } from './views/PresentationView';
 import { BottomNav } from './components/BottomNav';
 import { ViewState } from './types';
 import { StorageService } from './services/storage';
-import { hasSupabaseConfig, supabaseConfigMessage } from './services/supabase';
+import { hasSupabaseConfig, supabaseConfigMessage, supabase } from './services/supabase';
 
 export default function App() {
   const [currentView, setView] = useState<ViewState>('SPLASH');
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
   const showSetupNotice = !hasSupabaseConfig;
 
   useEffect(() => {
     StorageService.startOfflineSyncListener();
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const bootstrapSession = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!active) return;
+        const sessionUser = data.session?.user || null;
+        if (sessionUser) {
+          const profile = StorageService.getProfile();
+          if (profile?.id === sessionUser.id && profile.onboardComplete) {
+            setView('DASHBOARD');
+          } else {
+            setView('ACCOUNT_SETUP');
+          }
+        } else {
+          setView('SPLASH');
+        }
+      } catch {
+        if (active) setView('SPLASH');
+      } finally {
+        if (active) setIsBootstrapping(false);
+      }
+    };
+    bootstrapSession();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleSplashComplete = () => {
@@ -41,6 +71,15 @@ export default function App() {
   };
 
   const renderView = () => {
+    if (isBootstrapping) {
+      return (
+        <SplashView
+          onEnter={handleSplashComplete}
+          onPresentation={() => setView('PRESENTATION')}
+          onFinance={handleFinanceFromSplash}
+        />
+      );
+    }
     switch (currentView) {
       case 'SPLASH':
         return (
