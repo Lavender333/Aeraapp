@@ -6,6 +6,7 @@ import { Input, Textarea } from '../components/Input';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { StorageService } from '../services/storage';
 import { getOrganizationByCode, searchOrganizations, updateProfile } from '../services/api';
+import { supabase } from '../services/supabase';
 import { t } from '../services/translations';
 import { User, Shield, Building2, Check, ArrowRight, Link as LinkIcon, Loader2, Lock, HeartPulse, XCircle, Search, MapPin, AlertTriangle, Globe, Map } from 'lucide-react';
 
@@ -62,6 +63,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
   const [confirmPassword, setConfirmPassword] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
+  const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
   
   // Org Search
   const [showOrgSearch, setShowOrgSearch] = useState(false);
@@ -230,7 +232,12 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       return;
     }
     try {
-      await StorageService.registerWithCredentials(email, password, formData.fullName);
+      const resp: any = await StorageService.registerWithCredentials(email, password, formData.fullName);
+      if (resp?.needsEmailConfirm) {
+        setNeedsEmailConfirm(true);
+        setAuthSuccess('Check your email to confirm your account before continuing.');
+        return;
+      }
       setAuthSuccess('Account created. Continue with required setup.');
       setView('ACCOUNT_SETUP');
     } catch (e: any) {
@@ -252,7 +259,9 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     const payload = { ...formData, onboardComplete: true };
     try {
       const currentProfile = StorageService.getProfile();
-      const profileId = payload.id && payload.id !== 'guest' ? payload.id : currentProfile.id;
+      const { data: authData } = await supabase.auth.getUser();
+      const authId = authData?.user?.id || null;
+      const profileId = authId || (payload.id && payload.id !== 'guest' ? payload.id : currentProfile.id);
       await updateProfile({
         id: profileId,
         email: payload.email,
@@ -265,7 +274,9 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       setView('DASHBOARD');
     } catch (e: any) {
       const currentProfile = StorageService.getProfile();
-      const profileId = payload.id && payload.id !== 'guest' ? payload.id : currentProfile.id;
+      const { data: authData } = await supabase.auth.getUser();
+      const authId = authData?.user?.id || null;
+      const profileId = authId || (payload.id && payload.id !== 'guest' ? payload.id : currentProfile.id);
       StorageService.saveProfile({ ...payload, id: profileId });
       setAuthError('Profile saved locally. Sync will resume when available.');
       setView('DASHBOARD');
@@ -314,6 +325,11 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
           </Button>
           {authError && <p className="text-sm text-red-600">{authError}</p>}
           {authSuccess && <p className="text-sm text-emerald-600">{authSuccess}</p>}
+          {needsEmailConfirm && (
+            <Button variant="ghost" onClick={() => setView('LOGIN')} className="font-semibold text-brand-600">
+              Go to Log In
+            </Button>
+          )}
           <p className="text-xs text-slate-500">You’ll complete required account setup next.</p>
         </div>
       </div>

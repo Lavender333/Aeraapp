@@ -327,7 +327,7 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
   let resolvedOrgId: string | null = null;
   if (orgId) resolvedOrgId = await getOrgIdByCode(orgId);
 
-  if (userId) {
+  if (userId && data.session?.access_token) {
     await supabase.from('profiles').upsert({
       id: userId,
       email: data.user?.email || email || null,
@@ -341,6 +341,7 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
   return {
     token: data.session?.access_token || null,
     refreshToken: data.session?.refresh_token || null,
+    needsEmailConfirm: !data.session?.access_token,
     user: {
       id: userId,
       email: data.user?.email || email || '',
