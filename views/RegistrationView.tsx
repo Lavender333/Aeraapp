@@ -7,8 +7,7 @@ import { HouseholdManager } from '../components/HouseholdManager';
 import { StorageService } from '../services/storage';
 import { getOrganizationByCode, searchOrganizations, updateProfile } from '../services/api';
 import { t } from '../services/translations';
-import { GoogleGenAI } from "../services/mockGenAI";
-import { User, Shield, Building2, Check, ArrowRight, Link as LinkIcon, Loader2, Lock, HeartPulse, XCircle, Search, MapPin, CheckCircle, AlertTriangle, Globe, Map } from 'lucide-react';
+import { User, Shield, Building2, Check, ArrowRight, Link as LinkIcon, Loader2, Lock, HeartPulse, XCircle, Search, MapPin, AlertTriangle, Globe, Map } from 'lucide-react';
 
 // Phone Formatter Utility
 const formatPhoneNumber = (value: string) => {
@@ -112,8 +111,14 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     // Reset specific validation states on change
     if (key === 'phone') setPhoneError(null);
     if (key === 'address') {
-      setAddressStatus('IDLE');
-      setAddressFeedback('');
+      const trimmed = String(value || '').trim();
+      if (!trimmed) {
+        setAddressStatus('IDLE');
+        setAddressFeedback('');
+      } else {
+        setAddressStatus('VALID');
+        setAddressFeedback('');
+      }
     }
   };
 
@@ -127,48 +132,6 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     return true;
   };
 
-  const verifyAddressWithAI = async () => {
-    if (!formData.address || formData.address.length < 5) {
-      setAddressStatus('INVALID');
-      setAddressFeedback("Address is too short.");
-      return;
-    }
-
-    setAddressStatus('VERIFYING');
-    
-    try {
-      if (!process.env.API_KEY || process.env.API_KEY === 'PLACEHOLDER_API_KEY') {
-        setAddressStatus('VALID');
-        return;
-      }
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const hasModel = (ai as any)?.models?.generateContent;
-      if (!hasModel) {
-        setAddressStatus('VALID');
-        return;
-      }
-      // Use Maps Grounding to verify existence
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `Locate this address and verify if it is a valid physical location: "${formData.address}".`,
-        config: { tools: [{ googleMaps: {} }] }
-      });
-      
-      const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-      const hasMapResult = chunks.some((c: any) => c.maps);
-
-      if (hasMapResult) {
-        setAddressStatus('VALID');
-      } else {
-        setAddressStatus('INVALID');
-        setAddressFeedback("Address not found via Google Maps. Please verify formatting.");
-      }
-    } catch (e) {
-      console.error("AI Validation failed", e);
-      // Fallback if offline/error: allow proceed but warn
-      setAddressStatus('VALID'); 
-    }
-  };
 
   const requestLocation = () => {
     setLocError(null);
@@ -214,10 +177,10 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     if (step === 1) {
       const isPhoneValid = validatePhone(formData.phone);
       if (!isPhoneValid) return;
-      
-      if (addressStatus !== 'VALID') {
+
+      if (!formData.address?.trim()) {
         setAddressStatus('INVALID');
-        setAddressFeedback("Please click Verify to confirm your address.");
+        setAddressFeedback("Address is required.");
         return;
       }
     }
@@ -420,28 +383,17 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Home Address</label>
-                <div className="flex gap-2">
-                  <input 
-                    placeholder="123 Main St, City, State, Zip"
-                    value={formData.address}
-                    onChange={(e) => updateForm('address', e.target.value)}
-                    className={`w-full px-4 py-3 rounded-lg border focus:ring-2 outline-none transition-all font-medium ${
-                      addressStatus === 'VALID' ? 'border-green-500 bg-green-50 focus:ring-green-500' :
-                      addressStatus === 'INVALID' ? 'border-red-500 bg-red-50 focus:ring-red-500' :
-                      'border-slate-300 focus:ring-brand-500 focus:border-brand-500'
-                    }`}
-                  />
-                  <Button 
-                    onClick={verifyAddressWithAI}
-                    disabled={addressStatus === 'VERIFYING' || !formData.address}
-                    className={`min-w-[80px] ${addressStatus === 'VALID' ? 'bg-green-600' : 'bg-slate-800'}`}
-                  >
-                    {addressStatus === 'VERIFYING' ? <Loader2 className="animate-spin" /> : 
-                     addressStatus === 'VALID' ? <CheckCircle /> : "Verify"}
-                  </Button>
-                </div>
-                {addressStatus === 'VALID' && <p className="text-xs text-green-600 font-bold mt-1">Address Verified with Maps</p>}
-                {addressStatus === 'INVALID' && <p className="text-xs text-red-600 font-bold mt-1">{addressFeedback || "Invalid address format"}</p>}
+                <input 
+                  placeholder="123 Main St, City, State, Zip"
+                  value={formData.address}
+                  onChange={(e) => updateForm('address', e.target.value)}
+                  className={`w-full px-4 py-3 rounded-lg border focus:ring-2 outline-none transition-all font-medium ${
+                    addressStatus === 'VALID' ? 'border-green-500 bg-green-50 focus:ring-green-500' :
+                    addressStatus === 'INVALID' ? 'border-red-500 bg-red-50 focus:ring-red-500' :
+                    'border-slate-300 focus:ring-brand-500 focus:border-brand-500'
+                  }`}
+                />
+                {addressStatus === 'INVALID' && <p className="text-xs text-red-600 font-bold mt-1">{addressFeedback || "Address is required"}</p>}
               </div>
 
               <div className="border-t border-slate-200 pt-4">
@@ -483,7 +435,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
               fullWidth 
               size="lg" 
               onClick={handleNext}
-              disabled={!formData.fullName || !formData.phone || addressStatus !== 'VALID'}
+              disabled={!formData.fullName || !formData.phone || !formData.address?.trim()}
               className="mt-6 font-bold shadow-md"
             >
               Next Step
