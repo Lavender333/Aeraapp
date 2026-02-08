@@ -64,19 +64,8 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
         role: profile.role, 
         onboardComplete: profile.onboardComplete 
       });
-      const needsSetup = !profile.onboardComplete;
-      if (needsSetup) {
-        console.log('User needs setup, redirecting to ACCOUNT_SETUP');
-        setView('ACCOUNT_SETUP');
-      }
-      else if (profile.role === 'INSTITUTION_ADMIN') {
-        console.log('Institution admin, redirecting to ORG_DASHBOARD');
-        setView('ORG_DASHBOARD');
-      }
-      else {
-        console.log('Regular user, redirecting to DASHBOARD');
-        setView('DASHBOARD');
-      }
+      console.log('Redirecting to DASHBOARD');
+      setView('DASHBOARD');
     } catch (e: any) {
       console.error('Login error:', e);
       setError(e?.message || 'Login failed.');
