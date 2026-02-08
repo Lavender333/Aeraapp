@@ -1,5 +1,5 @@
 
-import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, UserRole } from '../types';
+import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest } from '../types';
 import { REQUEST_ITEM_MAP } from './validation';
 import { getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword } from './api';
 import { getMemberStatus, setMemberStatus } from './api';
@@ -13,15 +13,6 @@ const STORAGE_STATE_KEY = 'aera_storage_state_v1';
 const MAX_CACHED_REQUESTS = 200;
 const MAX_CACHED_REPLENISHMENTS = 200;
 const IS_PRODUCTION = import.meta.env.PROD;
-
-type ReplenishmentAggregate = {
-  item: string;
-  pending: number;
-  approved: number;
-  fulfilled: number;
-  totalRequested: number;
-  pendingQuantity: number;
-};
 
 type OfflineOperation = {
   id: string;
@@ -364,7 +355,7 @@ export const StorageService = {
         emergencyContactPhone: '',
         emergencyContactRelation: '',
         communityId: resp.user.orgId || '',
-        role: resp.user.role as UserRole || 'GENERAL_USER',
+        role: resp.user.role || 'GENERAL_USER',
         language: 'en',
         active: true,
         onboardComplete: false,
@@ -1090,9 +1081,9 @@ export const StorageService = {
       if (remote) {
         const normalized: HelpRequestRecord = {
           ...remote.data,
-          id: remote.id || (remote as any)._id,
+          id: remote.id || remote._id,
           userId: remote.userId,
-          timestamp: remote.timestamp || (remote as any).createdAt,
+          timestamp: remote.timestamp || remote.createdAt,
           status: remote.status || 'RECEIVED',
           priority: remote.priority || 'LOW',
           synced: true,

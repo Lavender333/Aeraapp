@@ -1,10 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-declare const Deno: {
-  serve: (handler: (req: Request) => Response | Promise<Response>) => void;
-  env: { get: (key: string) => string | undefined };
-};
-
 Deno.serve(async (req) => {
   try {
     const { contactName, contactPhone, userName, emergencyType, description, location, requestId } = await req.json();

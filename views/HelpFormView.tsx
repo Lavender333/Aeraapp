@@ -859,6 +859,16 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
                 />
                 <span className="text-sm font-bold text-slate-800">{t('help.consent')}</span>
               </label>
+              <button
+                type="button"
+                onClick={() => {
+                  sessionStorage.setItem('privacyReturnView', 'HELP_WIZARD');
+                  setView('PRIVACY_POLICY');
+                }}
+                className="text-sm text-brand-700 font-semibold underline text-left"
+              >
+                View Proof of Consent & Privacy Policy
+              </button>
             </div>
           </div>
         )}

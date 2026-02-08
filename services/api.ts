@@ -410,7 +410,21 @@ export async function resetPassword(payload: { email: string; token: string; new
   return { ok: true };
 }
 
-// Duplicate removed
+export async function notifyEmergencyContact(payload: {
+  contactName?: string;
+  contactPhone?: string;
+  userName?: string;
+  emergencyType?: string;
+  description?: string;
+  location?: string;
+  requestId?: string;
+}) {
+  const { data, error } = await supabase.functions.invoke('notify-emergency-contact', {
+    body: payload,
+  });
+  if (error) throw error;
+  return data;
+}
 
 export async function notifyEmergencyContact(payload: {
   contactName?: string;

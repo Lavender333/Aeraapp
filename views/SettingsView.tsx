@@ -1403,6 +1403,30 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         </div>
       </section>
 
+      {/* Legal & Consent */}
+      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-emerald-50 rounded-full text-emerald-700">
+            <ShieldCheck size={24} />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-800">Legal & Consent</h2>
+            <p className="text-xs text-slate-500">Privacy policy and proof of consent</p>
+          </div>
+        </div>
+        <Button
+          onClick={() => {
+            sessionStorage.setItem('privacyReturnView', 'SETTINGS');
+            setView('PRIVACY_POLICY');
+          }}
+          variant="outline"
+          className="w-full justify-between"
+        >
+          <span>View Proof of Consent & Privacy Policy</span>
+          <FileText size={18} />
+        </Button>
+      </section>
+
       {/* Admin / Org Admin Entry Point */}
       <section className="bg-slate-900 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
         <div className="absolute top-0 right-0 p-6 opacity-10">

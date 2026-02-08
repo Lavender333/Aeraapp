@@ -17,12 +17,11 @@ import { OrgDashboardView } from './views/OrgDashboardView';
 import { OrgRegistrationView } from './views/OrgRegistrationView';
 import { LoginView } from './views/LoginView';
 import { PresentationView } from './views/PresentationView';
+import { PrivacyPolicyView } from './views/PrivacyPolicyView';
 import { BottomNav } from './components/BottomNav';
 import { ViewState } from './types';
 import { StorageService } from './services/storage';
 import { hasSupabaseConfig, supabaseConfigMessage, supabase } from './services/supabase';
-import PrivacyPolicyView from './views/PrivacyPolicyView';
-import { BrowserRouter, Link, Routes, Route } from 'react-router-dom';
 
 export default function App() {
   const [currentView, setView] = useState<ViewState>('SPLASH');
@@ -125,6 +124,8 @@ export default function App() {
         return <LogisticsView setView={setView} />;
       case 'ORG_DASHBOARD':
         return <OrgDashboardView setView={setView} />;
+      case 'PRIVACY_POLICY':
+        return <PrivacyPolicyView setView={setView} />;
       default:
         return <DashboardView setView={setView} />;
     }
@@ -137,27 +138,20 @@ export default function App() {
                   currentView !== 'ACCOUNT_SETUP' &&
                   currentView !== 'LOGIN' && 
                   currentView !== 'ORG_REGISTRATION' &&
-                  currentView !== 'ORG_DASHBOARD';
+                  currentView !== 'ORG_DASHBOARD' &&
+                  currentView !== 'PRIVACY_POLICY';
 
   return (
-    <BrowserRouter>
-      <div className="max-w-md mx-auto min-h-screen bg-slate-50 shadow-2xl relative overflow-hidden md:border-x md:border-slate-200 print:max-w-none print:w-full print:h-auto print:overflow-visible print:shadow-none print:border-0">
-        {showSetupNotice && (
-          <div className="absolute top-0 inset-x-0 z-50">
-            <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2 text-xs text-center">
-              {supabaseConfigMessage} — set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY, then rebuild.
-            </div>
+    <div className="max-w-md mx-auto min-h-screen bg-slate-50 shadow-2xl relative overflow-hidden md:border-x md:border-slate-200 print:max-w-none print:w-full print:h-auto print:overflow-visible print:shadow-none print:border-0">
+      {showSetupNotice && (
+        <div className="absolute top-0 inset-x-0 z-50">
+          <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2 text-xs text-center">
+            {supabaseConfigMessage} — set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY, then rebuild.
           </div>
-        )}
-        {renderView()}
-        {showNav && <BottomNav currentView={currentView} setView={setView} />}
-        <footer style={{ textAlign: 'center', margin: '2rem 0', fontSize: '0.95em' }}>
-          <Link to="/privacy">Proof of Consent & Privacy Policy</Link>
-        </footer>
-        <Routes>
-          <Route path="/privacy" element={<PrivacyPolicyView />} />
-        </Routes>
-      </div>
-    </BrowserRouter>
+        </div>
+      )}
+      {renderView()}
+      {showNav && <BottomNav currentView={currentView} setView={setView} />}
+    </div>
   );
 }
