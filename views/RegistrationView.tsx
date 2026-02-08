@@ -264,7 +264,11 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       StorageService.saveProfile({ ...payload, id: profileId });
       setView('DASHBOARD');
     } catch (e: any) {
-      setAuthError(e?.message || 'Failed to save profile.');
+      const currentProfile = StorageService.getProfile();
+      const profileId = payload.id && payload.id !== 'guest' ? payload.id : currentProfile.id;
+      StorageService.saveProfile({ ...payload, id: profileId });
+      setAuthError('Profile saved locally. Sync will resume when available.');
+      setView('DASHBOARD');
     }
   };
 
