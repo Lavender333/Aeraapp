@@ -71,6 +71,11 @@ CREATE POLICY "Authenticated can view organizations"
   ON organizations FOR SELECT
   USING (auth.role() = 'authenticated');
 
+-- Anonymous users can view organizations for signup/search
+CREATE POLICY "Anon can view organizations"
+  ON organizations FOR SELECT
+  USING (auth.role() = 'anon');
+
 -- Admin can create organizations
 CREATE POLICY "Admins can create organizations"
   ON organizations FOR INSERT
