@@ -238,10 +238,13 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     }
   };
 
-  const selectOrg = (orgCode: string) => {
-    updateForm('communityId', orgCode);
+  const selectOrg = (org: { org_code?: string; orgCode?: string; id?: string; name?: string }) => {
+    const code = org?.org_code || org?.orgCode || org?.id || '';
+    if (!code) return;
+    updateForm('communityId', code);
+    setConnectedOrg(org?.name || code);
+    setVerifyError(null);
     setShowOrgSearch(false);
-    verifyCommunityId(orgCode);
   };
 
   const handleComplete = async () => {
@@ -562,7 +565,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
                      {foundOrgs.map((org, idx) => (
                        <button 
                          key={idx}
-                         onClick={() => selectOrg(org.org_code)}
+                         onClick={() => selectOrg(org)}
                          className="w-full text-left p-3 hover:bg-purple-50 rounded border border-transparent hover:border-purple-100 transition-colors"
                        >
                          <div className="font-bold text-slate-800">{org.name}</div>
