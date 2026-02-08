@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { Input, Textarea } from '../components/Input';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { StorageService } from '../services/storage';
+import { getOrganizationByCode, searchOrganizations, updateProfile } from '../services/api';
 import { t } from '../services/translations';
 import { GoogleGenAI } from "../services/mockGenAI";
 import { User, Shield, ShieldCheck, Building2, Check, ArrowRight, Link as LinkIcon, Loader2, Lock, HeartPulse, XCircle, Search, MapPin, CheckCircle, AlertTriangle, Globe, Map, Camera } from 'lucide-react';
@@ -79,7 +80,15 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       setFormData(prev => ({ ...prev, language: profile.language }));
     }
     if (mode === 'SETUP' && profile.email) {
-       setFormData(prev => ({ ...prev, email: profile.email || prev.email }));
+       setFormData(prev => ({
+         ...prev,
+         id: profile.id || prev.id,
+         fullName: profile.fullName || prev.fullName,
+         email: profile.email || prev.email,
+         phone: profile.phone || prev.phone,
+         communityId: profile.communityId || prev.communityId,
+         role: profile.role || prev.role,
+       }));
     }
     
     // Check permissions status
@@ -183,35 +192,35 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     setStep(prev => prev + 1);
   };
 
-  const verifyCommunityId = (idToVerify?: string) => {
+  const verifyCommunityId = async (idToVerify?: string) => {
     const id = idToVerify || formData.communityId;
     if (!id) return;
     
     setIsVerifying(true);
     setVerifyError(null);
     setConnectedOrg(null);
-    
-    // Simulate API delay for UX
-    setTimeout(() => {
-      const org = StorageService.getOrganization(id);
+    try {
+      const org = await getOrganizationByCode(id);
       setIsVerifying(false);
-      
       if (org) {
-        setConnectedOrg(org.name);
+        setConnectedOrg(org.orgName || org.orgCode);
         if (idToVerify) updateForm('communityId', idToVerify);
       } else {
         setVerifyError("Invalid Community ID. Please check with your institution.");
       }
-    }, 800);
+    } catch (e) {
+      setIsVerifying(false);
+      setVerifyError("Unable to verify Community ID. Please try again.");
+    }
   };
   
-  const handleSearchOrgs = () => {
-    const allOrgs = StorageService.getAllOrganizations();
-    const matches = allOrgs.filter(o => 
-      o.name.toLowerCase().includes(orgSearchTerm.toLowerCase()) || 
-      o.id.toLowerCase().includes(orgSearchTerm.toLowerCase())
-    );
-    setFoundOrgs(matches);
+  const handleSearchOrgs = async () => {
+    try {
+      const results = await searchOrganizations(orgSearchTerm);
+      setFoundOrgs(results as any[]);
+    } catch (e) {
+      setFoundOrgs([]);
+    }
   };
 
   const handleAuthRegister = async () => {
@@ -240,11 +249,25 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     verifyCommunityId(orgId);
   };
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     // Save to our Backend
     const payload = { ...formData, onboardComplete: true };
-    StorageService.saveProfile(payload);
-    setView('DASHBOARD');
+    try {
+      const currentProfile = StorageService.getProfile();
+      const profileId = payload.id && payload.id !== 'guest' ? payload.id : currentProfile.id;
+      await updateProfile({
+        id: profileId,
+        email: payload.email,
+        phone: payload.phone,
+        fullName: payload.fullName,
+        role: payload.role,
+        communityId: payload.communityId,
+      });
+      StorageService.saveProfile({ ...payload, id: profileId });
+      setView('DASHBOARD');
+    } catch (e: any) {
+      setAuthError(e?.message || 'Failed to save profile.');
+    }
   };
 
   // If in REGISTRATION mode, show only credential page, then force SETUP
@@ -555,12 +578,12 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
                      {foundOrgs.map((org, idx) => (
                        <button 
                          key={idx}
-                         onClick={() => selectOrg(org.id)}
+                         onClick={() => selectOrg(org.org_code)}
                          className="w-full text-left p-3 hover:bg-purple-50 rounded border border-transparent hover:border-purple-100 transition-colors"
                        >
                          <div className="font-bold text-slate-800">{org.name}</div>
                          <div className="text-xs text-slate-500 flex items-center gap-1">
-                           <MapPin size={10} /> {org.address}
+                           <MapPin size={10} /> {org.address || org.org_code}
                          </div>
                        </button>
                      ))}

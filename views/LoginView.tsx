@@ -36,9 +36,12 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
     setError('');
     setInfo('');
     try {
-      // Login without password - just use email
+      if (!email || !password) {
+        setError('Email and password are required.');
+        return;
+      }
       console.log('Attempting login with email:', email);
-      await StorageService.loginWithCredentials(email, '');
+      await StorageService.loginWithCredentials(email, password);
       const profile = StorageService.getProfile();
       console.log('Login successful! Profile:', { 
         id: profile.id, 
@@ -125,6 +128,15 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
           className="border-slate-300"
           leftIcon={<Mail size={16} />}
         />
+        <Input
+          label="Password"
+          type="password"
+          placeholder="Your password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="border-slate-300"
+          leftIcon={<KeyRound size={16} />}
+        />
         {error && (
           <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 p-3 rounded-lg">
             <AlertOctagon size={16} className="mt-0.5 shrink-0" />
@@ -142,7 +154,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
           size="lg" 
           onClick={handleLogin}
           className="font-bold shadow-md"
-          disabled={!email}
+          disabled={!email || !password}
         >
           {t('login.btn')}
         </Button>

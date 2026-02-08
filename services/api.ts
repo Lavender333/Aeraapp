@@ -1,4 +1,4 @@
-import type { OrgInventory } from '../types';
+import type { OrgInventory, UserProfile } from '../types';
 import { supabase, getOrgByCode, getOrgIdByCode } from './supabase';
 
 const mapInventory = (row: any): OrgInventory => ({
@@ -33,6 +33,42 @@ const getProfileById = async (userId: string) => {
   if (error || !data) return null;
   return data;
 };
+
+export async function getOrganizationByCode(orgCode: string) {
+  return getOrgByCode(orgCode);
+}
+
+export async function searchOrganizations(searchTerm: string) {
+  if (!searchTerm?.trim()) return [];
+  const term = `%${searchTerm.trim()}%`;
+  const { data, error } = await supabase
+    .from('organizations')
+    .select('id, org_code, name, address')
+    .or(`name.ilike.${term},org_code.ilike.${term}`)
+    .order('name', { ascending: true })
+    .limit(10);
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function updateProfile(profile: Partial<UserProfile> & { id: string }) {
+  const orgId = profile.communityId ? await getOrgIdByCode(profile.communityId) : null;
+
+  const { error } = await supabase
+    .from('profiles')
+    .upsert({
+      id: profile.id,
+      email: profile.email || null,
+      phone: profile.phone || null,
+      full_name: profile.fullName || null,
+      role: profile.role || 'GENERAL_USER',
+      org_id: orgId,
+    });
+
+  if (error) throw error;
+  return { ok: true };
+}
 
 // Inventory
 export async function getInventory(orgCode: string): Promise<OrgInventory> {

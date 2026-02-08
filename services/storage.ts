@@ -12,6 +12,7 @@ const SYNC_ID_MAP_KEY = 'aera_sync_id_map_v1';
 const STORAGE_STATE_KEY = 'aera_storage_state_v1';
 const MAX_CACHED_REQUESTS = 200;
 const MAX_CACHED_REPLENISHMENTS = 200;
+const IS_PRODUCTION = import.meta.env.PROD;
 
 type OfflineOperation = {
   id: string;
@@ -366,29 +367,30 @@ export const StorageService = {
   },
 
   async loginWithCredentials(email: string, password: string) {
-    // Try local database first (for demo/offline mode)
     const db = this.getDB();
-    const user = db.users.find(u => u.email === email);
-    
-    if (user) {
-      if (user.active === false) {
-        throw new Error('Account deactivated. Contact Admin.');
+    if (!IS_PRODUCTION) {
+      // Try local database first (for demo/offline mode)
+      const user = db.users.find(u => u.email === email);
+      if (user) {
+        if (user.active === false) {
+          throw new Error('Account deactivated. Contact Admin.');
+        }
+        db.currentUser = user.id;
+        this.saveDB(db);
+        return { 
+          token: 'local-demo-token', 
+          user: { 
+            id: user.id, 
+            email: user.email, 
+            fullName: user.fullName, 
+            role: user.role,
+            onboardComplete: user.onboardComplete 
+          } 
+        };
       }
-      db.currentUser = user.id;
-      this.saveDB(db);
-      return { 
-        token: 'local-demo-token', 
-        user: { 
-          id: user.id, 
-          email: user.email, 
-          fullName: user.fullName, 
-          role: user.role,
-          onboardComplete: user.onboardComplete 
-        } 
-      };
     }
-    
-    // Fall back to API if user not in local DB
+
+    // Supabase auth
     try {
       const resp = await loginAuth({ email, password });
       if (resp?.token) this.setAuthToken(resp.token);
