@@ -52,6 +52,33 @@ export async function searchOrganizations(searchTerm: string) {
   return data || [];
 }
 
+export async function createOrganization(payload: {
+  name: string;
+  type?: string | null;
+  address?: string | null;
+  adminContact?: string | null;
+  adminPhone?: string | null;
+  replenishmentEmail?: string | null;
+  replenishmentPhone?: string | null;
+}) {
+  const { data, error } = await supabase
+    .from('organizations')
+    .insert({
+      name: payload.name,
+      type: payload.type || null,
+      address: payload.address || null,
+      contact_person: payload.adminContact || null,
+      contact_phone: payload.adminPhone || null,
+      email: payload.replenishmentEmail || null,
+      phone: payload.replenishmentPhone || null,
+    })
+    .select('id, org_code, name')
+    .single();
+
+  if (error || !data) throw new Error('Unable to register organization');
+  return data;
+}
+
 export async function updateProfile(profile: Partial<UserProfile> & { id: string }) {
   const orgId = profile.communityId ? await getOrgIdByCode(profile.communityId) : null;
 

@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { ViewState, OrganizationProfile } from '../types';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
-import { StorageService } from '../services/storage';
+import { createOrganization } from '../services/api';
 import { Building2, ArrowLeft, CheckCircle, ShieldCheck, ArrowRight, Truck, Mail, Phone } from 'lucide-react';
 
 // Phone Formatter Utility
@@ -31,30 +31,33 @@ export const OrgRegistrationView: React.FC<{ setView: (v: ViewState) => void }> 
     replenishmentPhone: ''
   });
   const [generatedId, setGeneratedId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const updateForm = (key: keyof OrganizationProfile, value: string) => {
     setOrgData(prev => ({ ...prev, [key]: value }));
   };
 
-  const handleRegister = () => {
-    const newId = StorageService.generateOrgId(orgData.type || 'ORG');
-    const finalOrg: OrganizationProfile = {
-      id: newId,
-      name: orgData.name!,
-      type: orgData.type as any,
-      address: orgData.address!,
-      adminContact: orgData.adminContact!,
-      adminPhone: orgData.adminPhone!,
-      replenishmentProvider: orgData.replenishmentProvider || 'General Aid Pool',
-      replenishmentEmail: orgData.replenishmentEmail || '',
-      replenishmentPhone: orgData.replenishmentPhone || '',
-      verified: true,
-      active: true
-    };
-    
-    StorageService.saveOrganization(finalOrg);
-    setGeneratedId(newId);
-    setStep(3);
+  const handleRegister = async () => {
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      const created = await createOrganization({
+        name: orgData.name || '',
+        type: orgData.type || 'CHURCH',
+        address: orgData.address || '',
+        adminContact: orgData.adminContact || '',
+        adminPhone: orgData.adminPhone || '',
+        replenishmentEmail: orgData.replenishmentEmail || '',
+        replenishmentPhone: orgData.replenishmentPhone || '',
+      });
+      setGeneratedId(created.org_code);
+      setStep(3);
+    } catch (e: any) {
+      setError(e?.message || 'Organization registration failed.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -195,8 +198,13 @@ export const OrgRegistrationView: React.FC<{ setView: (v: ViewState) => void }> 
               disabled={!orgData.adminContact || !orgData.adminPhone || !orgData.replenishmentProvider || !orgData.replenishmentEmail}
               className="mt-6 bg-purple-600 hover:bg-purple-700 font-bold"
             >
-              Generate Community ID
+              {isSubmitting ? 'Submitting...' : 'Generate Community ID'}
             </Button>
+            {error && (
+              <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">
+                {error}
+              </div>
+            )}
           </div>
         )}
 
