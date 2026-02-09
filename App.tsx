@@ -26,6 +26,7 @@ import { hasSupabaseConfig, supabaseConfigMessage, supabase } from './services/s
 export default function App() {
   const [currentView, setView] = useState<ViewState>('SPLASH');
   const [isBootstrapping, setIsBootstrapping] = useState(true);
+  const [postSplashView, setPostSplashView] = useState<ViewState>('LOGIN');
   const showSetupNotice = !hasSupabaseConfig;
 
   useEffect(() => {
@@ -39,16 +40,14 @@ export default function App() {
         const { data } = await supabase.auth.getSession();
         if (!active) return;
         const sessionUser = data.session?.user || null;
+        let targetView: ViewState = 'LOGIN';
         if (sessionUser) {
           const profile = StorageService.getProfile();
-          if (profile?.id === sessionUser.id && profile.onboardComplete) {
-            setView('DASHBOARD');
-          } else {
-            setView('ACCOUNT_SETUP');
-          }
-        } else {
-          setView('SPLASH');
+          targetView = profile?.id === sessionUser.id && profile.onboardComplete ? 'DASHBOARD' : 'ACCOUNT_SETUP';
         }
+        setPostSplashView(targetView);
+        const splashSeen = sessionStorage.getItem('splashSeen') === '1';
+        setView(splashSeen ? targetView : 'SPLASH');
       } catch {
         if (active) setView('SPLASH');
       } finally {
@@ -62,7 +61,8 @@ export default function App() {
   }, []);
 
   const handleSplashComplete = () => {
-    setView('LOGIN');
+    sessionStorage.setItem('splashSeen', '1');
+    setView(postSplashView);
   };
 
   const handleFinanceFromSplash = () => {
