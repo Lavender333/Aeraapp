@@ -769,23 +769,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
              <ChevronRight size={16} className="text-amber-500 mt-2" />
           </div>
 
-          {/* Push Notification Console / Alerts */}
-          <Card 
-            title={t('dash.alerts')}
-            icon={<Bell size={20} />} 
-            onClick={() => setView('ALERTS')}
-            className="border-l-4 border-l-orange-500"
-          >
-            <div className="flex justify-between items-center">
-               <div>
-                 <div className="font-semibold text-slate-800">Flash Flood Warning</div>
-                 <div className="text-xs text-slate-500">Effective until 6:00 PM EST</div>
-               </div>
-               <div className="px-2 py-1 bg-orange-100 text-orange-700 text-xs font-bold rounded uppercase">
-                 Critical
-               </div>
-            </div>
-          </Card>
         </>
       )}
 

@@ -5,7 +5,6 @@ import { DashboardView } from './views/DashboardView';
 import { HelpFormView } from './views/HelpFormView';
 import { SettingsView } from './views/SettingsView';
 import { MapView } from './views/MapView';
-import { AlertsView } from './views/AlertsView';
 import { GapView } from './views/GapView';
 import { AssessmentView } from './views/AssessmentView';
 import { PopulationView } from './views/PopulationView';
@@ -109,7 +108,7 @@ export default function App() {
       case 'MAP':
         return <MapView setView={setView} />;
       case 'ALERTS':
-        return <AlertsView setView={setView} />;
+        return <DashboardView setView={setView} />;
       case 'GAP':
         return <GapView setView={setView} />;
       case 'ASSESSMENT':

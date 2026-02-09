@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Home, AlertCircle, Settings, Phone } from 'lucide-react';
+import { Home, AlertCircle, Settings } from 'lucide-react';
 import { ViewState } from '../types';
 
 interface BottomNavProps {
@@ -12,7 +12,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentView, setView }) =>
   const navItems = [
     { id: 'DASHBOARD' as ViewState, icon: <Home size={24} />, label: 'Home' },
     { id: 'HELP_WIZARD' as ViewState, icon: <AlertCircle size={24} />, label: 'Get Help' },
-    { id: 'ALERTS' as ViewState, icon: <Phone size={24} />, label: 'Alerts' },
     { id: 'SETTINGS' as ViewState, icon: <Settings size={24} />, label: 'Settings' },
   ];
 
