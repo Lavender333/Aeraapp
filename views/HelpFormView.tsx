@@ -7,7 +7,7 @@ import { ProgressBar } from '../components/ProgressBar';
 import { StorageService } from '../services/storage';
 import { notifyEmergencyContact } from '../services/api';
 import { t } from '../services/translations';
-import { ArrowLeft, CheckCircle, AlertOctagon, Ambulance, Flame, Droplets, Zap, Shield, Camera, StopCircle, RefreshCw, MessageSquare, Navigation, MapPin, X, Wifi, Settings, HelpCircle, Globe, AlertTriangle, WifiOff, Clock } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Ambulance, Flame, Droplets, Zap, Shield, Camera, StopCircle, RefreshCw, MessageSquare, Navigation, MapPin, X, Wifi, Settings, HelpCircle, Globe, AlertTriangle, WifiOff, Clock } from 'lucide-react';
 
 interface HelpFormViewProps {
   setView: (view: ViewState) => void;
@@ -700,10 +700,6 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
           <div className="space-y-6">
             <h3 className="text-2xl font-bold text-slate-900">{t('help.review')}</h3>
             
-            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 flex gap-3 text-yellow-900 text-sm font-medium">
-               <AlertOctagon className="shrink-0 text-yellow-700" size={20} />
-               <p>By submitting this form, you are sharing your location and sensitive data with verified emergency responders.</p>
-            </div>
 
             <div className="bg-white rounded-xl border border-slate-300 p-4 space-y-4 shadow-sm">
                <div className="flex justify-between border-b border-slate-100 pb-2">
