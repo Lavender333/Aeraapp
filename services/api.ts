@@ -101,10 +101,6 @@ export async function updateProfileForUser(payload: {
   fullName: string;
   phone: string;
   email?: string;
-  address?: string;
-  emergencyContactName?: string;
-  emergencyContactPhone?: string;
-  emergencyContactRelation?: string;
   communityId?: string;
   role?: string;
 }) {
@@ -121,10 +117,6 @@ export async function updateProfileForUser(payload: {
       email: payload.email || null,
       role: payload.role || undefined,
       org_id: orgId,
-      address: payload.address || null,
-      emergency_contact_name: payload.emergencyContactName || null,
-      emergency_contact_phone: payload.emergencyContactPhone || null,
-      emergency_contact_relation: payload.emergencyContactRelation || null,
     })
     .eq('id', authData.user.id);
 
@@ -161,7 +153,7 @@ export async function fetchProfileForUser(): Promise<Partial<UserProfile> | null
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('full_name, phone, email, role, org_id, address, emergency_contact_name, emergency_contact_phone, emergency_contact_relation')
+    .select('full_name, phone, email, role, org_id')
     .eq('id', authData.user.id)
     .single();
 
@@ -175,10 +167,6 @@ export async function fetchProfileForUser(): Promise<Partial<UserProfile> | null
     email: data.email || '',
     role: (data.role as UserProfile['role']) || 'GENERAL_USER',
     communityId: orgCode || '',
-    address: data.address || '',
-    emergencyContactName: data.emergency_contact_name || '',
-    emergencyContactPhone: data.emergency_contact_phone || '',
-    emergencyContactRelation: data.emergency_contact_relation || '',
   };
 }
 
