@@ -692,42 +692,6 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
                className="border-slate-300"
              />
 
-             <div className="space-y-3">
-              <label className="text-lg font-bold text-slate-900">{t('help.upload')}</label>
-              
-              <div className="border-2 border-slate-300 rounded-xl overflow-hidden bg-black aspect-video relative shadow-sm">
-                <video 
-                  ref={videoRef} 
-                  autoPlay 
-                  playsInline 
-                  muted 
-                  className={`w-full h-full object-cover ${!isCameraOn ? 'hidden' : ''}`}
-                />
-                {!isCameraOn && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 bg-slate-900">
-                    <Camera size={48} className="mb-2 opacity-50" />
-                    <span className="text-sm font-medium">Camera is off</span>
-                  </div>
-                )}
-              </div>
-
-              <Button 
-                type="button" 
-                variant={isCameraOn ? "danger" : "secondary"} 
-                onClick={toggleCamera}
-                className="w-full font-bold border-slate-300"
-              >
-                {isCameraOn ? (
-                  <>
-                    <StopCircle className="mr-2" size={20} /> Stop Camera
-                  </>
-                ) : (
-                  <>
-                    <Camera className="mr-2" size={20} /> Use Camera
-                  </>
-                )}
-              </Button>
-             </div>
           </div>
         )}
 
