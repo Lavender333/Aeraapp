@@ -126,7 +126,7 @@ export async function updateProfileForUser(payload: {
       emergency_contact_phone: payload.emergencyContactPhone || null,
       emergency_contact_relation: payload.emergencyContactRelation || null,
     })
-    .eq('user_id', authData.user.id);
+    .eq('id', authData.user.id);
 
   if (error) throw error;
   return { ok: true };
@@ -142,14 +142,14 @@ export async function updateVitalsForUser(payload: {
   if (authError || !authData?.user) throw new Error('Not authenticated');
 
   const { error } = await supabase
-    .from('vitals')
+    .from('profiles')
     .update({
       household: payload.household || [],
       household_members: payload.householdMembers || 0,
       pet_details: payload.petDetails || null,
       medical_needs: payload.medicalNeeds || null,
     })
-    .eq('user_id', authData.user.id);
+    .eq('id', authData.user.id);
 
   if (error) throw error;
   return { ok: true };
@@ -162,7 +162,7 @@ export async function fetchProfileForUser(): Promise<Partial<UserProfile> | null
   const { data, error } = await supabase
     .from('profiles')
     .select('full_name, phone, email, role, org_id, address, emergency_contact_name, emergency_contact_phone, emergency_contact_relation')
-    .eq('user_id', authData.user.id)
+    .eq('id', authData.user.id)
     .single();
 
   if (error || !data) return null;
@@ -187,9 +187,9 @@ export async function fetchVitalsForUser(): Promise<Partial<UserProfile> | null>
   if (authError || !authData?.user) throw new Error('Not authenticated');
 
   const { data, error } = await supabase
-    .from('vitals')
+    .from('profiles')
     .select('household, household_members, pet_details, medical_needs')
-    .eq('user_id', authData.user.id)
+    .eq('id', authData.user.id)
     .single();
 
   if (error || !data) return null;
