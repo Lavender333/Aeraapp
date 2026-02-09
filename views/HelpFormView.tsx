@@ -473,74 +473,7 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
                 error={!isTracking && !isIpFallback && !data.location && locationError && !permissionDenied ? locationError : undefined}
               />
               
-              <div className="absolute right-1 top-[2.1rem]">
-                <button
-                  onClick={() => {
-                    if (permissionDenied) {
-                      // If previously denied, try IP fallback first, then try enabling GPS
-                      if (!isIpFallback) fetchIpLocation();
-                      else setIsTracking(true); 
-                    } else {
-                      setIsTracking(!isTracking);
-                      if (!isTracking) setLocationError(null);
-                    }
-                  }}
-                  className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                    isTracking 
-                      ? 'bg-red-100 text-red-700 hover:bg-red-200' 
-                      : 'bg-brand-100 text-brand-700 hover:bg-brand-200'
-                  }`}
-                >
-                  {isTracking ? (
-                    <>
-                      <StopCircle size={14} className="animate-pulse" /> {t('help.stop_share')}
-                    </>
-                  ) : (
-                    <>
-                      <Navigation size={14} /> {t('help.use_gps')}
-                    </>
-                  )}
-                </button>
-              </div>
             </div>
-
-            {/* Permission Denied Instruction Card - Only show if NO location data */}
-            {permissionDenied && !data.location && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-4 animate-slide-up">
-                <div className="flex items-start gap-3">
-                  <div className="p-2 bg-red-100 rounded-full text-red-600">
-                    <Settings size={20} />
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-bold text-red-900 text-sm mb-1">GPS Permission Denied</h4>
-                    <p className="text-xs text-red-700 mb-3">
-                      Your browser has blocked location access.
-                    </p>
-                    <ul className="text-xs text-slate-700 space-y-2 bg-white p-3 rounded border border-red-100">
-                      <li className="flex items-start gap-2">
-                        <span className="font-bold">iOS (Safari):</span> 
-                        <span>Tap <span className="font-bold text-blue-600">aA</span> or <span className="font-bold text-blue-600">Lock</span> icon in URL bar &rarr; Website Settings &rarr; Location &rarr; Allow.</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="font-bold">Android (Chrome):</span> 
-                        <span>Tap <span className="font-bold text-blue-600">Lock Icon</span> in URL bar &rarr; Permissions &rarr; Location &rarr; Allow.</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="font-bold">System:</span>
-                        <span>Check device Settings &rarr; Privacy &rarr; Location Services &rarr; Enable for Browser.</span>
-                      </li>
-                    </ul>
-                    <Button 
-                      size="sm" 
-                      onClick={() => setIsTracking(true)} 
-                      className="mt-3 w-full bg-red-600 hover:bg-red-700 text-white font-bold"
-                    >
-                      <RefreshCw size={14} className="mr-2"/> Try Again
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* GPS Visualizer */}
             {isTracking && gpsAccuracy !== null && (
