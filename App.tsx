@@ -39,14 +39,8 @@ export default function App() {
         const { data } = await supabase.auth.getSession();
         if (!active) return;
         const sessionUser = data.session?.user || null;
-        let targetView: ViewState = 'LOGIN';
-        if (sessionUser) {
-          const profile = StorageService.getProfile();
-          targetView = profile?.id === sessionUser.id && profile.onboardComplete ? 'DASHBOARD' : 'ACCOUNT_SETUP';
-        }
-        setPostSplashView(targetView);
-        const splashSeen = sessionStorage.getItem('splashSeen') === '1';
-        setView(splashSeen ? targetView : 'SPLASH');
+        setPostSplashView('LOGIN');
+        setView('SPLASH');
       } catch {
         if (active) setView('SPLASH');
       } finally {
