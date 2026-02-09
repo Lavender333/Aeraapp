@@ -426,10 +426,12 @@ const DICTIONARY: Record<LanguageCode, Record<string, string>> = {
 export const t = (key: string): string => {
   const profile = StorageService.getProfile();
   const lang = profile.language || 'en';
-  return DICTIONARY[lang][key] || DICTIONARY['en'][key] || key;
+  const dict = DICTIONARY[lang as LanguageCode] || DICTIONARY.en;
+  return dict[key] || DICTIONARY.en[key] || key;
 };
 
 // Helper to get current language code directly
 export const getCurrentLanguage = (): LanguageCode => {
-  return StorageService.getProfile().language || 'en';
+  const lang = StorageService.getProfile().language || 'en';
+  return (lang in DICTIONARY ? (lang as LanguageCode) : 'en');
 }
