@@ -17,6 +17,10 @@ ALTER TABLE broadcasts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE help_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE activity_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vitals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE household_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE trusted_community_connections ENABLE ROW LEVEL SECURITY;
 
 -- =====================================================
 -- HELPER FUNCTIONS FOR RLS
@@ -234,6 +238,86 @@ CREATE POLICY "Users can insert org member statuses"
 CREATE POLICY "Admins can insert any member status"
   ON member_statuses FOR INSERT
   WITH CHECK (public.is_admin());
+
+-- =====================================================
+-- VITALS TABLE RLS
+-- =====================================================
+
+CREATE POLICY "Users can view own vitals"
+  ON vitals FOR SELECT
+  USING (profile_id = auth.uid());
+
+CREATE POLICY "Users can update own vitals"
+  ON vitals FOR UPDATE
+  USING (profile_id = auth.uid())
+  WITH CHECK (profile_id = auth.uid());
+
+CREATE POLICY "Users can insert own vitals"
+  ON vitals FOR INSERT
+  WITH CHECK (profile_id = auth.uid());
+
+-- =====================================================
+-- HOUSEHOLD_MEMBERS TABLE RLS
+-- =====================================================
+
+CREATE POLICY "Users can view own household members"
+  ON household_members FOR SELECT
+  USING (profile_id = auth.uid());
+
+CREATE POLICY "Users can insert own household members"
+  ON household_members FOR INSERT
+  WITH CHECK (profile_id = auth.uid());
+
+CREATE POLICY "Users can update own household members"
+  ON household_members FOR UPDATE
+  USING (profile_id = auth.uid())
+  WITH CHECK (profile_id = auth.uid());
+
+CREATE POLICY "Users can delete own household members"
+  ON household_members FOR DELETE
+  USING (profile_id = auth.uid());
+
+-- =====================================================
+-- PETS TABLE RLS
+-- =====================================================
+
+CREATE POLICY "Users can view own pets"
+  ON pets FOR SELECT
+  USING (profile_id = auth.uid());
+
+CREATE POLICY "Users can insert own pets"
+  ON pets FOR INSERT
+  WITH CHECK (profile_id = auth.uid());
+
+CREATE POLICY "Users can update own pets"
+  ON pets FOR UPDATE
+  USING (profile_id = auth.uid())
+  WITH CHECK (profile_id = auth.uid());
+
+CREATE POLICY "Users can delete own pets"
+  ON pets FOR DELETE
+  USING (profile_id = auth.uid());
+
+-- =====================================================
+-- TRUSTED_COMMUNITY_CONNECTIONS TABLE RLS
+-- =====================================================
+
+CREATE POLICY "Users can view own community connections"
+  ON trusted_community_connections FOR SELECT
+  USING (profile_id = auth.uid());
+
+CREATE POLICY "Users can insert own community connections"
+  ON trusted_community_connections FOR INSERT
+  WITH CHECK (profile_id = auth.uid());
+
+CREATE POLICY "Users can update own community connections"
+  ON trusted_community_connections FOR UPDATE
+  USING (profile_id = auth.uid())
+  WITH CHECK (profile_id = auth.uid());
+
+CREATE POLICY "Users can delete own community connections"
+  ON trusted_community_connections FOR DELETE
+  USING (profile_id = auth.uid());
 
 -- =====================================================
 -- BROADCASTS TABLE RLS

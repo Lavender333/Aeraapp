@@ -101,6 +101,10 @@ export async function updateProfileForUser(payload: {
   fullName: string;
   phone: string;
   email?: string;
+  address?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelation?: string;
   communityId?: string;
   role?: string;
 }) {
@@ -109,14 +113,23 @@ export async function updateProfileForUser(payload: {
 
   const orgId = payload.communityId ? await getOrgIdByCode(payload.communityId) : null;
 
+  const emergencyContact = {
+    name: payload.emergencyContactName || null,
+    phone: payload.emergencyContactPhone || null,
+    relation: payload.emergencyContactRelation || null,
+  };
+
   const { error } = await supabase
     .from('profiles')
     .update({
       full_name: payload.fullName || null,
       phone: payload.phone || null,
+      mobile_phone: payload.phone || null,
       email: payload.email || null,
       role: payload.role || undefined,
       org_id: orgId,
+      home_address: payload.address || null,
+      emergency_contact: emergencyContact,
     })
     .eq('id', authData.user.id);
 
@@ -134,14 +147,13 @@ export async function updateVitalsForUser(payload: {
   if (authError || !authData?.user) throw new Error('Not authenticated');
 
   const { error } = await supabase
-    .from('profiles')
-    .update({
-      household: payload.household || [],
-      household_members: payload.householdMembers || 0,
-      pet_details: payload.petDetails || null,
+    .from('vitals')
+    .upsert({
+      profile_id: authData.user.id,
       medical_needs: payload.medicalNeeds || null,
-    })
-    .eq('id', authData.user.id);
+      household: payload.household || [],
+      pet_details: payload.petDetails || null,
+    }, { onConflict: 'profile_id' });
 
   if (error) throw error;
   return { ok: true };
@@ -153,7 +165,7 @@ export async function fetchProfileForUser(): Promise<Partial<UserProfile> | null
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('full_name, phone, email, role, org_id')
+    .select('full_name, phone, mobile_phone, email, role, org_id, home_address, emergency_contact')
     .eq('id', authData.user.id)
     .single();
 
@@ -163,10 +175,14 @@ export async function fetchProfileForUser(): Promise<Partial<UserProfile> | null
 
   return {
     fullName: data.full_name || '',
-    phone: data.phone || '',
+    phone: data.mobile_phone || data.phone || '',
     email: data.email || '',
     role: (data.role as UserProfile['role']) || 'GENERAL_USER',
     communityId: orgCode || '',
+    address: data.home_address || '',
+    emergencyContactName: data.emergency_contact?.name || '',
+    emergencyContactPhone: data.emergency_contact?.phone || '',
+    emergencyContactRelation: data.emergency_contact?.relation || '',
   };
 }
 
@@ -175,16 +191,16 @@ export async function fetchVitalsForUser(): Promise<Partial<UserProfile> | null>
   if (authError || !authData?.user) throw new Error('Not authenticated');
 
   const { data, error } = await supabase
-    .from('profiles')
-    .select('household, household_members, pet_details, medical_needs')
-    .eq('id', authData.user.id)
+    .from('vitals')
+    .select('household, pet_details, medical_needs')
+    .eq('profile_id', authData.user.id)
     .single();
 
   if (error || !data) return null;
 
   return {
     household: (data.household || []) as UserProfile['household'],
-    householdMembers: Number(data.household_members || 0),
+    householdMembers: (data.household || []).length,
     petDetails: data.pet_details || '',
     medicalNeeds: data.medical_needs || '',
   };

@@ -133,11 +133,69 @@ CREATE TABLE profiles (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE profiles
+  ADD COLUMN IF NOT EXISTS mobile_phone VARCHAR(50),
+  ADD COLUMN IF NOT EXISTS home_address TEXT,
+  ADD COLUMN IF NOT EXISTS emergency_contact JSONB;
+
 -- Create indexes for fast lookups
 CREATE INDEX idx_profiles_org_id ON profiles(org_id);
 CREATE INDEX idx_profiles_role ON profiles(role);
 CREATE INDEX idx_profiles_email ON profiles(email);
 CREATE INDEX idx_profiles_phone ON profiles(phone);
+CREATE INDEX idx_profiles_mobile_phone ON profiles(mobile_phone);
+
+-- Vitals (Vital Intake Info)
+CREATE TABLE IF NOT EXISTS vitals (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  medical_needs TEXT,
+  allergies TEXT,
+  household JSONB,
+  pet_details TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_vitals_profile_id ON vitals(profile_id);
+
+-- Household Members
+CREATE TABLE IF NOT EXISTS household_members (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  name VARCHAR(255) NOT NULL,
+  relationship VARCHAR(255),
+  age INTEGER,
+  special_needs TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_household_members_profile_id ON household_members(profile_id);
+
+-- Pets
+CREATE TABLE IF NOT EXISTS pets (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  name VARCHAR(255),
+  type VARCHAR(100),
+  medical_needs TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pets_profile_id ON pets(profile_id);
+
+-- Trusted Community Connections
+CREATE TABLE IF NOT EXISTS trusted_community_connections (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  community_id VARCHAR(255) NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_trusted_connections_profile_id ON trusted_community_connections(profile_id);
 
 -- Inventory (one per organization)
 CREATE TABLE inventory (
