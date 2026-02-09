@@ -716,13 +716,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               >
                 {isConnectingCommunity ? 'Connecting...' : 'Connect Community'}
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setView('ACCOUNT_SETUP')}
-              >
-                Open Setup
-              </Button>
             </div>
           </div>
         </Card>
