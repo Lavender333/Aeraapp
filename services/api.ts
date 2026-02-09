@@ -97,6 +97,111 @@ export async function updateProfile(profile: Partial<UserProfile> & { id: string
   return { ok: true };
 }
 
+export async function updateProfileForUser(payload: {
+  fullName: string;
+  phone: string;
+  email?: string;
+  address?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelation?: string;
+  communityId?: string;
+  role?: string;
+}) {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const orgId = payload.communityId ? await getOrgIdByCode(payload.communityId) : null;
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      full_name: payload.fullName || null,
+      phone: payload.phone || null,
+      email: payload.email || null,
+      role: payload.role || undefined,
+      org_id: orgId,
+      address: payload.address || null,
+      emergency_contact_name: payload.emergencyContactName || null,
+      emergency_contact_phone: payload.emergencyContactPhone || null,
+      emergency_contact_relation: payload.emergencyContactRelation || null,
+    })
+    .eq('user_id', authData.user.id);
+
+  if (error) throw error;
+  return { ok: true };
+}
+
+export async function updateVitalsForUser(payload: {
+  household: UserProfile['household'];
+  householdMembers: number;
+  petDetails: string;
+  medicalNeeds: string;
+}) {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const { error } = await supabase
+    .from('vitals')
+    .update({
+      household: payload.household || [],
+      household_members: payload.householdMembers || 0,
+      pet_details: payload.petDetails || null,
+      medical_needs: payload.medicalNeeds || null,
+    })
+    .eq('user_id', authData.user.id);
+
+  if (error) throw error;
+  return { ok: true };
+}
+
+export async function fetchProfileForUser(): Promise<Partial<UserProfile> | null> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('full_name, phone, email, role, org_id, address, emergency_contact_name, emergency_contact_phone, emergency_contact_relation')
+    .eq('user_id', authData.user.id)
+    .single();
+
+  if (error || !data) return null;
+
+  const orgCode = data.org_id ? await getOrgCodeById(data.org_id) : null;
+
+  return {
+    fullName: data.full_name || '',
+    phone: data.phone || '',
+    email: data.email || '',
+    role: (data.role as UserProfile['role']) || 'GENERAL_USER',
+    communityId: orgCode || '',
+    address: data.address || '',
+    emergencyContactName: data.emergency_contact_name || '',
+    emergencyContactPhone: data.emergency_contact_phone || '',
+    emergencyContactRelation: data.emergency_contact_relation || '',
+  };
+}
+
+export async function fetchVitalsForUser(): Promise<Partial<UserProfile> | null> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('vitals')
+    .select('household, household_members, pet_details, medical_needs')
+    .eq('user_id', authData.user.id)
+    .single();
+
+  if (error || !data) return null;
+
+  return {
+    household: (data.household || []) as UserProfile['household'],
+    householdMembers: Number(data.household_members || 0),
+    petDetails: data.pet_details || '',
+    medicalNeeds: data.medical_needs || '',
+  };
+}
+
 // Inventory
 export async function getInventory(orgCode: string): Promise<OrgInventory> {
   const org = await getOrgByCode(orgCode);

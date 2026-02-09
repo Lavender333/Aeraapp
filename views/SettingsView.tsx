@@ -6,9 +6,10 @@ import { Button } from '../components/Button';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
+import { fetchProfileForUser, fetchVitalsForUser, updateProfileForUser, updateVitalsForUser } from '../services/api';
 import { t } from '../services/translations';
 import { GoogleGenAI } from "../services/mockGenAI";
-import { User, Bell, Lock, LogOut, Check, Save, Building2, ArrowLeft, ArrowRight, Link as LinkIcon, Loader2, HeartPulse, ShieldCheck, Users, ToggleLeft, ToggleRight, MoreVertical, Copy, CheckCircle, Trash2, Database, X, XCircle, Globe, Search, Truck, Phone, Mail, MapPin, Power, Ban, Activity, Radio, AlertTriangle, HelpCircle, FileText, Printer, CheckSquare, Download, RefreshCcw, Clipboard, PenTool } from 'lucide-react';
+import { User, Bell, Lock, LogOut, Check, Save, Building2, ArrowLeft, ArrowRight, Link as LinkIcon, Loader2, HeartPulse, ShieldCheck, Users, ToggleLeft, ToggleRight, MoreVertical, Copy, CheckCircle, Database, X, XCircle, Globe, Search, Truck, Phone, Mail, MapPin, Power, Ban, Activity, Radio, AlertTriangle, HelpCircle, FileText, Printer, CheckSquare, Download, RefreshCcw, Clipboard, PenTool } from 'lucide-react';
 
 // Phone Formatter Utility
 const formatPhoneNumber = (value: string) => {
@@ -98,7 +99,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [activeTab, setActiveTab] = useState<'ROLES' | 'USERS'>('USERS');
   const [roles, setRoles] = useState<RoleDefinition[]>(INITIAL_ROLES);
   const [users, setUsers] = useState<UserProfile[]>([]);
-  const [userSearch, setUserSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
 
   // DB Viewer State
@@ -115,6 +115,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [inventoryRequests, setInventoryRequests] = useState<ReplenishmentRequest[]>([]);
   const [printingRequest, setPrintingRequest] = useState<ReplenishmentRequest | null>(null);
   const [workOrderForm, setWorkOrderForm] = useState<Record<string, string>>({});
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isSavingVitals, setIsSavingVitals] = useState(false);
+  const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
+  const [vitalsSaveError, setVitalsSaveError] = useState<string | null>(null);
 
   // Broadcast Control State
   const [systemTicker, setSystemTicker] = useState('');
@@ -136,6 +140,44 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       if (org) setConnectedOrg(org.name);
     }
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const hydrateFromSupabase = async () => {
+      try {
+        const [remoteProfile, remoteVitals] = await Promise.all([
+          fetchProfileForUser(),
+          fetchVitalsForUser(),
+        ]);
+
+        if (!active) return;
+
+        if (remoteProfile || remoteVitals) {
+          const current = StorageService.getProfile();
+          const merged = {
+            ...current,
+            ...(remoteProfile || {}),
+            ...(remoteVitals || {}),
+          } as UserProfile;
+          StorageService.saveProfile(merged);
+          setProfile(merged);
+        }
+      } catch {
+        // Ignore remote hydration errors; local profile remains available.
+      }
+    };
+
+    hydrateFromSupabase();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (profile.role !== 'ADMIN' && currentSection !== 'MAIN') {
+      setCurrentSection('MAIN');
+    }
+  }, [profile.role, currentSection]);
 
   // Fetch members when an org is selected in directory
   useEffect(() => {
@@ -187,7 +229,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     }
   };
 
-  const handleSave = () => {
+  const handleProfileSave = async () => {
     if (!validatePhone(profile.phone)) {
       alert("Please fix phone number errors before saving.");
       return;
@@ -196,10 +238,48 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       alert("Please verify your address.");
       return;
     }
+    setIsSavingProfile(true);
+    setProfileSaveError(null);
+    try {
+      await updateProfileForUser({
+        fullName: profile.fullName,
+        phone: profile.phone,
+        email: profile.email,
+        address: profile.address,
+        emergencyContactName: profile.emergencyContactName,
+        emergencyContactPhone: profile.emergencyContactPhone,
+        emergencyContactRelation: profile.emergencyContactRelation,
+        communityId: profile.communityId,
+        role: profile.role,
+      });
+      StorageService.saveProfile(profile);
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    } catch (err: any) {
+      setProfileSaveError(err?.message || 'Unable to update profile.');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
-    StorageService.saveProfile(profile);
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 2000);
+  const handleVitalsSave = async () => {
+    setIsSavingVitals(true);
+    setVitalsSaveError(null);
+    try {
+      await updateVitalsForUser({
+        household: profile.household,
+        householdMembers: profile.householdMembers,
+        petDetails: profile.petDetails,
+        medicalNeeds: profile.medicalNeeds,
+      });
+      StorageService.saveProfile(profile);
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    } catch (err: any) {
+      setVitalsSaveError(err?.message || 'Unable to update vitals.');
+    } finally {
+      setIsSavingVitals(false);
+    }
   };
 
   const updateProfile = (key: keyof UserProfile, value: any) => {
@@ -246,24 +326,20 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     alert('Copied to clipboard');
   };
 
-  const handleReset = () => {
-    if (confirm("This will clear all data and reset the demo. Are you sure?")) {
-      StorageService.resetDB();
-    }
-  };
-
   const handleLogout = () => {
     StorageService.logoutUser();
     setView('LOGIN');
   };
 
   const openDbViewer = () => {
+    if (profile.role !== 'ADMIN') return;
     const db = StorageService.getDB();
     setDbContent(db);
     setCurrentSection('DB_VIEWER');
   };
 
   const openOrgDirectory = () => {
+    if (profile.role !== 'ADMIN') return;
     const db = StorageService.getDB();
     setOrgList(db.organizations);
     setCurrentSection('ORG_DIRECTORY');
@@ -271,6 +347,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const openAccessControl = () => {
+    if (profile.role !== 'ADMIN') return;
     const db = StorageService.getDB();
     setUsers(db.users);
     setCurrentSection('ACCESS_CONTROL');
@@ -278,6 +355,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const openBroadcastControl = () => {
+    if (profile.role !== 'ADMIN') return;
     const db = StorageService.getDB();
     setOrgList(db.organizations);
     setSystemTicker(db.tickerMessage);
@@ -285,6 +363,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const openMasterInventory = () => {
+    if (profile.role !== 'ADMIN') return;
     const reqs = StorageService.getAllReplenishmentRequests();
     setInventoryRequests(reqs);
     setCurrentSection('MASTER_INVENTORY');
@@ -304,6 +383,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const updateUserRole = (userId: string, newRole: UserRole) => {
+    if (profile.role !== 'ADMIN') return;
     // Update local state and backend
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
     
@@ -316,6 +396,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const toggleUserStatus = (userId: string, currentStatus: boolean) => {
+    if (profile.role !== 'ADMIN') return;
     const newStatus = !currentStatus;
     StorageService.updateUserStatus(userId, newStatus);
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, active: newStatus } : u));
@@ -1427,69 +1508,57 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         </Button>
       </section>
 
-      {/* Admin / Org Admin Entry Point */}
-      <section className="bg-slate-900 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-6 opacity-10">
-          <ShieldCheck size={80} />
-        </div>
-        <div className="relative z-10">
-          <div className="flex items-center gap-2 mb-2 text-brand-400 font-bold text-xs uppercase tracking-wider">
-            <Lock size={12} /> Administrator Area
+      {profile.role === 'ADMIN' && (
+        <section className="bg-slate-900 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-6 opacity-10">
+            <ShieldCheck size={80} />
           </div>
-          <h2 className="text-xl font-bold mb-4">Roles & Dashboards</h2>
-          <div className="space-y-3">
-            {profile.role === 'ADMIN' && (
-              <>
-                <Button 
-                  onClick={openAccessControl} 
-                  className="bg-brand-600 hover:bg-brand-500 text-white border-0 w-full justify-between"
-                >
-                  <span>User Directory & Access Control</span>
-                  <Users size={18} />
-                </Button>
-                <Button 
-                  onClick={openOrgDirectory} 
-                  className="bg-purple-600 hover:bg-purple-500 text-white border-0 w-full justify-between"
-                >
-                  <span>Organization Directory</span>
-                  <Building2 size={18} />
-                </Button>
-                <Button 
-                  onClick={openMasterInventory} 
-                  className="bg-orange-600 hover:bg-orange-500 text-white border-0 w-full justify-between"
-                >
-                  <span>Master Inventory Database</span>
-                  <FileText size={18} />
-                </Button>
-                <Button 
-                  onClick={openBroadcastControl} 
-                  className="bg-red-600 hover:bg-red-500 text-white border-0 w-full justify-between"
-                >
-                  <span>Manage Broadcasts</span>
-                  <Radio size={18} />
-                </Button>
-              </>
-            )}
-            {profile.role === 'INSTITUTION_ADMIN' && (
-               <Button 
-                onClick={() => setView('ORG_DASHBOARD')}
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-2 text-brand-400 font-bold text-xs uppercase tracking-wider">
+              <Lock size={12} /> Administrator Area
+            </div>
+            <h2 className="text-xl font-bold mb-4">Roles & Dashboards</h2>
+            <div className="space-y-3">
+              <Button 
+                onClick={openAccessControl} 
+                className="bg-brand-600 hover:bg-brand-500 text-white border-0 w-full justify-between"
+              >
+                <span>User Directory & Access Control</span>
+                <Users size={18} />
+              </Button>
+              <Button 
+                onClick={openOrgDirectory} 
                 className="bg-purple-600 hover:bg-purple-500 text-white border-0 w-full justify-between"
               >
-                <span>Open Org Dashboard</span>
+                <span>Organization Directory</span>
                 <Building2 size={18} />
               </Button>
-            )}
-            <Button 
-              onClick={openDbViewer}
-              variant="outline"
-              className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 w-full justify-between"
-            >
-               <span>View Raw Database</span>
-               <Database size={18} />
-            </Button>
+              <Button 
+                onClick={openMasterInventory} 
+                className="bg-orange-600 hover:bg-orange-500 text-white border-0 w-full justify-between"
+              >
+                <span>Master Inventory Database</span>
+                <FileText size={18} />
+              </Button>
+              <Button 
+                onClick={openBroadcastControl} 
+                className="bg-red-600 hover:bg-red-500 text-white border-0 w-full justify-between"
+              >
+                <span>Manage Broadcasts</span>
+                <Radio size={18} />
+              </Button>
+              <Button 
+                onClick={openDbViewer}
+                variant="outline"
+                className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 w-full justify-between"
+              >
+                 <span>View Raw Database</span>
+                 <Database size={18} />
+              </Button>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Registration Info */}
       <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4">
@@ -1569,13 +1638,17 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         </div>
         
         <Button 
-          onClick={handleSave} 
+          onClick={handleProfileSave} 
           fullWidth 
           className="shadow-md mt-4 bg-slate-800 hover:bg-slate-700" 
           size="lg"
+          disabled={isSavingProfile}
         >
-          <Save size={20} className="mr-2" /> Update Profile
+          <Save size={20} className="mr-2" /> {isSavingProfile ? 'Saving...' : 'Update Profile'}
         </Button>
+        {profileSaveError && (
+          <p className="text-xs text-red-600 font-semibold mt-2">{profileSaveError}</p>
+        )}
       </section>
 
       {/* Vital Intake Info */}
@@ -1607,9 +1680,17 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           onChange={(e) => updateProfile('medicalNeeds', e.target.value)}
         />
         
-        <Button onClick={handleSave} fullWidth className="bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 shadow-sm">
-           Update Vitals
+        <Button
+          onClick={handleVitalsSave}
+          fullWidth
+          className="bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 shadow-sm"
+          disabled={isSavingVitals}
+        >
+           {isSavingVitals ? 'Saving...' : 'Update Vitals'}
         </Button>
+        {vitalsSaveError && (
+          <p className="text-xs text-red-600 font-semibold mt-2">{vitalsSaveError}</p>
+        )}
       </section>
 
       {/* Community Onboarding */}
@@ -1700,11 +1781,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       <div className="space-y-4 pt-4 border-t border-slate-200">
-        <Button onClick={handleReset} variant="outline" fullWidth className="text-slate-600 hover:text-red-600 border-slate-300">
-          <Trash2 className="mr-2" size={18} />
-          Reset Demo Data
-        </Button>
-
         <Button onClick={handleLogout} variant="ghost" fullWidth className="text-red-600 hover:bg-red-50 hover:text-red-700">
           <LogOut className="mr-2" size={18} />
           Log Out
