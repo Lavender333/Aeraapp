@@ -592,20 +592,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         })()
       )}
 
-      {/* Real-time Data Feed / Status Ticker - Clickable */}
-      <div 
-        onClick={() => setShowTickerModal(true)}
-        className="bg-slate-900 text-white p-3 rounded-lg flex items-center gap-3 text-sm shadow-md overflow-hidden cursor-pointer group hover:bg-slate-800 transition-colors"
-        title="Tap to read full message"
-      >
-        <Activity size={16} className="text-brand-400 animate-pulse shrink-0" />
-        <div className="flex-1 overflow-hidden whitespace-nowrap relative">
-          <span className="inline-block animate-[slideLeft_20s_linear_infinite]">
-            {tickerMessage}
-          </span>
+      {hasCommunity && (
+        /* Real-time Data Feed / Status Ticker - Clickable */
+        <div 
+          onClick={() => setShowTickerModal(true)}
+          className="bg-slate-900 text-white p-3 rounded-lg flex items-center gap-3 text-sm shadow-md overflow-hidden cursor-pointer group hover:bg-slate-800 transition-colors"
+          title="Tap to read full message"
+        >
+          <Activity size={16} className="text-brand-400 animate-pulse shrink-0" />
+          <div className="flex-1 overflow-hidden whitespace-nowrap relative">
+            <span className="inline-block animate-[slideLeft_20s_linear_infinite]">
+              {tickerMessage}
+            </span>
+          </div>
+          <ChevronRight size={16} className="text-slate-500 group-hover:text-white shrink-0" />
         </div>
-        <ChevronRight size={16} className="text-slate-500 group-hover:text-white shrink-0" />
-      </div>
+      )}
 
       {/* PENDING PING ACTION - Top Priority */}
       {pendingPing && (
@@ -638,7 +640,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
       )}
 
       {/* Critical Action: Get Help or Status */}
-      {activeRequest && (
+      {hasCommunity && activeRequest && (
         <Card 
           className="bg-blue-50 border-blue-100 hover:border-blue-200"
           onClick={() => setView('HELP_WIZARD')}
@@ -665,24 +667,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               </div>
             </div>
             <ChevronRight className="text-blue-400" />
-          </div>
-        </Card>
-      )}
-
-      {!hasCommunity && (
-        <Card
-          title="Connect your community"
-          icon={<Building2 size={20} />}
-          onClick={() => setView('ACCOUNT_SETUP')}
-          className="border-l-4 border-l-brand-500"
-        >
-          <p className="text-sm text-slate-600">
-            Link to a community to see local alerts, resource depots, and inventory updates.
-          </p>
-          <div className="mt-3">
-            <Button size="sm" onClick={() => setView('ACCOUNT_SETUP')}>
-              Connect Community
-            </Button>
           </div>
         </Card>
       )}
@@ -723,9 +707,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         </>
       )}
 
-      {/* Modular Card Layout - DYNAMIC BASED ON ROLE */}
-      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-2">Recovery & Resources</h3>
-      <div className="grid grid-cols-2 gap-4">
+      {hasCommunity && (
+        /* Modular Card Layout - DYNAMIC BASED ON ROLE */
+        <>
+          <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-2">Recovery & Resources</h3>
+          <div className="grid grid-cols-2 gap-4">
         
         {/* G.A.P. Financial Aid - For Users in need of aid */}
         {(isGeneralUser || isOrgAdmin) && (
@@ -843,7 +829,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
             </Card>
           </>
         )}
-      </div>
+          </div>
+        </>
+      )}
 
       {/* Analytics / Stats Preview - Only for Pros */}
       {isProStatusViewer && (
