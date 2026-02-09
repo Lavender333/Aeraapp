@@ -4,6 +4,7 @@ import { ViewState, HelpRequestRecord, UserRole, OrgInventory } from '../types';
 import { StorageService } from '../services/storage';
 import { getInventoryStatuses } from '../services/inventoryStatus';
 import { getBroadcast } from '../services/api';
+import { getOrgByCode } from '../services/supabase';
 import { t } from '../services/translations';
 import { 
   AlertTriangle, 
@@ -51,6 +52,7 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { Button } from '../components/Button';
+import { Input } from '../components/Input';
 
 interface DashboardViewProps {
   setView: (view: ViewState) => void;
@@ -75,6 +77,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [financeUsersInput, setFinanceUsersInput] = useState<number>(3000);
   const [inventoryFallback, setInventoryFallback] = useState(false);
   const [showOpDef, setShowOpDef] = useState(false);
+  const [communityIdInput, setCommunityIdInput] = useState('');
+  const [communityConnectError, setCommunityConnectError] = useState<string | null>(null);
+  const [isConnectingCommunity, setIsConnectingCommunity] = useState(false);
   const hasCommunity = !!connectedOrg;
   
   // Status Ping State
@@ -89,6 +94,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     setUserRole(profile.role);
     setUserName(profile.fullName);
     setPendingPing(profile.pendingStatusRequest);
+    setCommunityIdInput(profile.communityId || '');
     
     if (profile.communityId) {
        const org = StorageService.getOrganization(profile.communityId);
@@ -181,6 +187,51 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
       window.removeEventListener('finance-open', openFinanceIfFlagged);
     };
   }, []);
+
+  const handleConnectCommunity = async () => {
+    const normalized = communityIdInput
+      .trim()
+      .replace(/[–—−]/g, '-')
+      .replace(/\s+/g, '')
+      .toUpperCase();
+
+    if (!normalized) {
+      setCommunityConnectError('Enter a Community ID.');
+      return;
+    }
+
+    setIsConnectingCommunity(true);
+    setCommunityConnectError(null);
+
+    try {
+      const localOrg = StorageService.getOrganization(normalized);
+      const remoteOrg = localOrg ? { orgCode: normalized, orgName: localOrg.name } : await getOrgByCode(normalized);
+
+      if (!remoteOrg) {
+        setCommunityConnectError('Community not found. Check the ID and try again.');
+        return;
+      }
+
+      const profile = StorageService.getProfile();
+      StorageService.saveProfile({ ...profile, communityId: normalized });
+
+      setConnectedOrg(remoteOrg.orgName || normalized);
+      setOrgPopulation(localOrg?.registeredPopulation || 0);
+
+      const [{ members }, { inventory, fromCache }] = await Promise.all([
+        StorageService.fetchOrgMembersRemote(normalized),
+        StorageService.fetchOrgInventoryRemote(normalized),
+      ]);
+
+      setOrgMemberCount(members.length);
+      setOrgInventory(inventory);
+      setInventoryFallback(fromCache);
+    } catch (err) {
+      setCommunityConnectError('Unable to connect right now. Please try again.');
+    } finally {
+      setIsConnectingCommunity(false);
+    }
+  };
 
   const respondToPing = (isSafe: boolean) => {
     StorageService.respondToPing(isSafe);
@@ -637,6 +688,44 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               </Button>
            </div>
         </div>
+      )}
+
+      {!hasCommunity && (
+        <Card
+          title="Trusted Community Connection"
+          icon={<Building2 size={20} />}
+          className="border-l-4 border-l-brand-500"
+        >
+          <p className="text-sm text-slate-600">
+            Enter your Community ID to unlock local alerts, depots, and inventory updates.
+          </p>
+          <div className="mt-4 space-y-2">
+            <Input
+              placeholder="Community ID (e.g., CH-1234)"
+              value={communityIdInput}
+              onChange={(e) => setCommunityIdInput(e.target.value)}
+            />
+            {communityConnectError && (
+              <p className="text-xs text-red-600 font-semibold">{communityConnectError}</p>
+            )}
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={handleConnectCommunity}
+                disabled={isConnectingCommunity}
+              >
+                {isConnectingCommunity ? 'Connecting...' : 'Connect Community'}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setView('ACCOUNT_SETUP')}
+              >
+                Open Setup
+              </Button>
+            </div>
+          </div>
+        </Card>
       )}
 
       {/* Critical Action: Get Help or Status */}
