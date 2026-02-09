@@ -1588,7 +1588,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Home Address</label>
-          <div className="flex gap-2">
+          <div>
             <input 
               placeholder="123 Main St..."
               value={profile.address}
@@ -1599,14 +1599,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 'border-slate-300 focus:ring-brand-500 focus:border-brand-500'
               }`}
             />
-            <Button 
-              onClick={verifyAddressWithAI}
-              disabled={addressStatus === 'VERIFYING' || !profile.address}
-              className={`min-w-[50px] ${addressStatus === 'VALID' ? 'bg-green-600' : 'bg-slate-800'}`}
-            >
-              {addressStatus === 'VERIFYING' ? <Loader2 className="animate-spin" /> : 
-               addressStatus === 'VALID' ? <CheckCircle size={20}/> : "Verify"}
-            </Button>
           </div>
           {addressStatus === 'VALID' && <p className="text-xs text-green-600 font-bold mt-1">Verified with Google Maps</p>}
           {addressStatus === 'INVALID' && <p className="text-xs text-red-600 font-bold mt-1">Address not found on Maps</p>}
