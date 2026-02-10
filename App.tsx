@@ -179,19 +179,19 @@ export default function App() {
         </div>
       )}
       {renderView()}
-      <div
-        className={`fixed inset-x-0 ${showNav ? 'bottom-16' : 'bottom-4'} z-40 flex justify-center print:hidden`}
-      >
-        <button
-          onClick={() => {
-            sessionStorage.setItem('privacyReturnView', currentView);
-            setView('PRIVACY_POLICY');
-          }}
-          className="text-[11px] text-slate-500 hover:text-slate-700 underline bg-white/80 px-3 py-1 rounded-full shadow-sm"
-        >
-          View Proof of Consent &amp; Privacy Policy
-        </button>
-      </div>
+      {!showNav && (
+        <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center print:hidden">
+          <button
+            onClick={() => {
+              sessionStorage.setItem('privacyReturnView', currentView);
+              setView('PRIVACY_POLICY');
+            }}
+            className="text-[11px] text-slate-500 hover:text-slate-700 underline bg-white/80 px-3 py-1 rounded-full shadow-sm"
+          >
+            View Proof of Consent &amp; Privacy Policy
+          </button>
+        </div>
+      )}
       {showNav && <BottomNav currentView={currentView} setView={setView} />}
     </div>
   );
