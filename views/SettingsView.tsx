@@ -102,6 +102,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [activeTab, setActiveTab] = useState<'ROLES' | 'USERS'>('USERS');
   const [roles, setRoles] = useState<RoleDefinition[]>(INITIAL_ROLES);
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [userSearch, setUserSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
 
   // DB Viewer State
