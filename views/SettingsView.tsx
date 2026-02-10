@@ -83,6 +83,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     active: true,
     notifications: { push: true, sms: true, email: true }
   });
+
+  const normalizedRole = String(profile.role || '').toUpperCase();
+  const isAdmin = normalizedRole === 'ADMIN';
   
   // UI States
   const [currentSection, setCurrentSection] = useState<'MAIN' | 'ACCESS_CONTROL' | 'DB_VIEWER' | 'ORG_DIRECTORY' | 'BROADCAST_CONTROL' | 'MASTER_INVENTORY'>('MAIN');
@@ -174,10 +177,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   }, []);
 
   useEffect(() => {
-    if (profile.role !== 'ADMIN' && currentSection !== 'MAIN') {
+    if (!isAdmin && currentSection !== 'MAIN') {
       setCurrentSection('MAIN');
     }
-  }, [profile.role, currentSection]);
+  }, [isAdmin, currentSection]);
 
   // Fetch members when an org is selected in directory
   useEffect(() => {
@@ -332,14 +335,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const openDbViewer = () => {
-    if (profile.role !== 'ADMIN') return;
+    if (!isAdmin) return;
     const db = StorageService.getDB();
     setDbContent(db);
     setCurrentSection('DB_VIEWER');
   };
 
   const openOrgDirectory = () => {
-    if (profile.role !== 'ADMIN') return;
+    if (!isAdmin) return;
     const db = StorageService.getDB();
     setOrgList(db.organizations);
     setCurrentSection('ORG_DIRECTORY');
@@ -347,7 +350,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const openAccessControl = () => {
-    if (profile.role !== 'ADMIN') return;
+    if (!isAdmin) return;
     const db = StorageService.getDB();
     setUsers(db.users);
     setCurrentSection('ACCESS_CONTROL');
@@ -355,7 +358,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const openBroadcastControl = () => {
-    if (profile.role !== 'ADMIN') return;
+    if (!isAdmin) return;
     const db = StorageService.getDB();
     setOrgList(db.organizations);
     setSystemTicker(db.tickerMessage);
@@ -363,7 +366,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const openMasterInventory = () => {
-    if (profile.role !== 'ADMIN') return;
+    if (!isAdmin) return;
     const reqs = StorageService.getAllReplenishmentRequests();
     setInventoryRequests(reqs);
     setCurrentSection('MASTER_INVENTORY');
@@ -383,7 +386,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const updateUserRole = (userId: string, newRole: UserRole) => {
-    if (profile.role !== 'ADMIN') return;
+    if (!isAdmin) return;
     // Update local state and backend
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
     
@@ -396,7 +399,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const toggleUserStatus = (userId: string, currentStatus: boolean) => {
-    if (profile.role !== 'ADMIN') return;
+    if (!isAdmin) return;
     const newStatus = !currentStatus;
     StorageService.updateUserStatus(userId, newStatus);
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, active: newStatus } : u));
@@ -1508,7 +1511,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         </Button>
       </section>
 
-      {profile.role === 'ADMIN' && (
+      {isAdmin && (
         <section className="bg-slate-900 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
           <div className="absolute top-0 right-0 p-6 opacity-10">
             <ShieldCheck size={80} />
