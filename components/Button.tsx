@@ -18,6 +18,7 @@ export const Button: React.FC<ButtonProps> = ({
   variant = 'primary', 
   size = 'md', 
   fullWidth = false,
+  type = 'button',
   children, 
   ...props 
 }) => {
@@ -42,6 +43,7 @@ export const Button: React.FC<ButtonProps> = ({
 
   return (
     <button
+      type={type}
       className={cn(
         baseStyles,
         variants[variant],

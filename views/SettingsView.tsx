@@ -352,8 +352,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const openAccessControl = () => {
-    if (!isAdmin) return;
+    console.info('[AccessControl] openAccessControl clicked', { isAdmin });
+    if (!isAdmin) {
+      console.warn('[AccessControl] blocked: not admin');
+      return;
+    }
     const db = StorageService.getDB();
+    console.info('[AccessControl] loading users', { count: Array.isArray(db.users) ? db.users.length : 0 });
     setUsers(Array.isArray(db.users) ? db.users : []);
     setActiveTab('ALL_USERS');
     setCurrentSection('ACCESS_CONTROL');
