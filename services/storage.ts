@@ -117,6 +117,20 @@ const SEED_ORGS: OrganizationProfile[] = [
     verified: true,
     active: true,
     registeredPopulation: 1200
+  },
+  {
+    id: 'CH-2026',
+    name: 'Hope Community Hub',
+    type: 'COMMUNITY_CENTER',
+    address: '1200 Hope Way',
+    adminContact: 'Jordan Lee',
+    adminPhone: '555-2200',
+    replenishmentProvider: 'State Relief Warehouse',
+    replenishmentEmail: 'hub-supply@state.example.gov',
+    replenishmentPhone: '555-8200',
+    verified: true,
+    active: true,
+    registeredPopulation: 450
   }
 ];
 
@@ -162,12 +176,29 @@ const SEED_USERS: UserProfile[] = [
     householdMembers: 1, household: [], petDetails: '', medicalNeeds: '', 
     emergencyContactName: 'Dispatcher', emergencyContactPhone: '555-9000', emergencyContactRelation: 'Work',
     communityId: '', role: 'FIRST_RESPONDER', language: 'en', active: true, onboardComplete: true, notifications: { push: true, sms: true, email: true }
+  },
+  {
+    id: 'u5', fullName: 'Test Admin', email: 'admin@test.com', createdAt: seedCreatedAt, phone: '555-2201', address: 'Admin Office',
+    householdMembers: 1, household: [], petDetails: '', medicalNeeds: '',
+    emergencyContactName: 'Ops Desk', emergencyContactPhone: '555-2202', emergencyContactRelation: 'Work',
+    communityId: '', role: 'ADMIN', language: 'en', active: true, onboardComplete: true, notifications: { push: true, sms: true, email: true }
+  },
+  {
+    id: 'u6', fullName: 'Test General User', email: 'user@test.com', createdAt: seedCreatedAt, phone: '555-2203', address: '1200 Hope Way',
+    householdMembers: 2,
+    household: [
+      { id: 'h6', name: 'Alex Lee', age: '29', needs: '' }
+    ],
+    petDetails: '1 Dog', medicalNeeds: '',
+    emergencyContactName: 'Jamie Lee', emergencyContactPhone: '555-2204', emergencyContactRelation: 'Spouse',
+    communityId: 'CH-2026', role: 'GENERAL_USER', language: 'en', active: true, onboardComplete: true, notifications: { push: true, sms: true, email: true }
   }
 ];
 
 const SEED_INVENTORY: Record<string, OrgInventory> = {
   'CH-9921': { water: 120, food: 45, blankets: 300, medicalKits: 15 },
-  'NGO-5500': { water: 5000, food: 2000, blankets: 1000, medicalKits: 500 }
+  'NGO-5500': { water: 5000, food: 2000, blankets: 1000, medicalKits: 500 },
+  'CH-2026': { water: 180, food: 95, blankets: 220, medicalKits: 35 }
 };
 
 const SEED_REPLENISHMENT_REQUESTS: ReplenishmentRequest[] = [
