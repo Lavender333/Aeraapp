@@ -13,52 +13,77 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- =====================================================
 
 -- User roles
-CREATE TYPE user_role AS ENUM (
-  'ADMIN',
-  'CONTRACTOR',
-  'LOCAL_AUTHORITY',
-  'FIRST_RESPONDER',
-  'GENERAL_USER',
-  'INSTITUTION_ADMIN'
-);
+DO $$
+BEGIN
+  CREATE TYPE user_role AS ENUM (
+    'ADMIN',
+    'CONTRACTOR',
+    'LOCAL_AUTHORITY',
+    'FIRST_RESPONDER',
+    'GENERAL_USER',
+    'INSTITUTION_ADMIN'
+  );
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Member status
-CREATE TYPE member_status AS ENUM (
-  'SAFE',
-  'DANGER',
-  'UNKNOWN'
-);
+DO $$
+BEGIN
+  CREATE TYPE member_status AS ENUM (
+    'SAFE',
+    'DANGER',
+    'UNKNOWN'
+  );
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Request status (replenishment)
-CREATE TYPE request_status AS ENUM (
-  'PENDING',
-  'APPROVED',
-  'FULFILLED',
-  'STOCKED'
-);
+DO $$
+BEGIN
+  CREATE TYPE request_status AS ENUM (
+    'PENDING',
+    'APPROVED',
+    'FULFILLED',
+    'STOCKED'
+  );
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Help request status
-CREATE TYPE help_status AS ENUM (
-  'PENDING',
-  'RECEIVED',
-  'DISPATCHED',
-  'RESOLVED'
-);
+DO $$
+BEGIN
+  CREATE TYPE help_status AS ENUM (
+    'PENDING',
+    'RECEIVED',
+    'DISPATCHED',
+    'RESOLVED'
+  );
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Help request priority
-CREATE TYPE help_priority AS ENUM (
-  'LOW',
-  'MEDIUM',
-  'HIGH',
-  'CRITICAL'
-);
+DO $$
+BEGIN
+  CREATE TYPE help_priority AS ENUM (
+    'LOW',
+    'MEDIUM',
+    'HIGH',
+    'CRITICAL'
+  );
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- =====================================================
 -- CORE TABLES
 -- =====================================================
 
 -- Organizations (Churches, NGOs, Community Centers)
-CREATE TABLE organizations (
+CREATE TABLE IF NOT EXISTS organizations (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   org_code VARCHAR(50) UNIQUE NOT NULL, -- e.g., 'CH-9921'
   name VARCHAR(255) NOT NULL,
@@ -107,19 +132,21 @@ BEGIN
   NEW.org_code := candidate;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = public;
 
+DROP TRIGGER IF EXISTS set_organizations_org_code ON organizations;
 CREATE TRIGGER set_organizations_org_code
   BEFORE INSERT ON organizations
   FOR EACH ROW
   EXECUTE FUNCTION generate_org_code();
 
 -- Create index on org_code for fast lookups
-CREATE INDEX idx_organizations_org_code ON organizations(org_code);
-CREATE INDEX idx_organizations_active ON organizations(is_active) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_organizations_org_code ON organizations(org_code);
+CREATE INDEX IF NOT EXISTS idx_organizations_active ON organizations(is_active) WHERE is_active = true;
 
 -- Users (extends Supabase auth.users)
-CREATE TABLE profiles (
+CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   org_id UUID REFERENCES organizations(id) ON DELETE SET NULL,
   email VARCHAR(255) UNIQUE,
@@ -139,11 +166,11 @@ ALTER TABLE profiles
   ADD COLUMN IF NOT EXISTS emergency_contact JSONB;
 
 -- Create indexes for fast lookups
-CREATE INDEX idx_profiles_org_id ON profiles(org_id);
-CREATE INDEX idx_profiles_role ON profiles(role);
-CREATE INDEX idx_profiles_email ON profiles(email);
-CREATE INDEX idx_profiles_phone ON profiles(phone);
-CREATE INDEX idx_profiles_mobile_phone ON profiles(mobile_phone);
+CREATE INDEX IF NOT EXISTS idx_profiles_org_id ON profiles(org_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_role ON profiles(role);
+CREATE INDEX IF NOT EXISTS idx_profiles_email ON profiles(email);
+CREATE INDEX IF NOT EXISTS idx_profiles_phone ON profiles(phone);
+CREATE INDEX IF NOT EXISTS idx_profiles_mobile_phone ON profiles(mobile_phone);
 
 -- Vitals (Vital Intake Info)
 CREATE TABLE IF NOT EXISTS vitals (
@@ -198,7 +225,7 @@ CREATE TABLE IF NOT EXISTS trusted_community_connections (
 CREATE INDEX IF NOT EXISTS idx_trusted_connections_profile_id ON trusted_community_connections(profile_id);
 
 -- Inventory (one per organization)
-CREATE TABLE inventory (
+CREATE TABLE IF NOT EXISTS inventory (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   org_id UUID UNIQUE NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   water INTEGER DEFAULT 0 CHECK (water >= 0),
@@ -210,10 +237,10 @@ CREATE TABLE inventory (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_inventory_org_id ON inventory(org_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_org_id ON inventory(org_id);
 
 -- Replenishment Requests
-CREATE TABLE replenishment_requests (
+CREATE TABLE IF NOT EXISTS replenishment_requests (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   org_name VARCHAR(255), -- Denormalized for convenience
@@ -227,7 +254,7 @@ CREATE TABLE replenishment_requests (
   fulfilled_at TIMESTAMPTZ,
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
   signature TEXT,
   signed_at TIMESTAMPTZ,
   received_signature TEXT,
@@ -239,12 +266,12 @@ CREATE TABLE replenishment_requests (
   org_confirmed_at TIMESTAMPTZ
 );
 
-CREATE INDEX idx_replenishment_org_id ON replenishment_requests(org_id);
-CREATE INDEX idx_replenishment_status ON replenishment_requests(status);
-CREATE INDEX idx_replenishment_created ON replenishment_requests(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_replenishment_org_id ON replenishment_requests(org_id);
+CREATE INDEX IF NOT EXISTS idx_replenishment_status ON replenishment_requests(status);
+CREATE INDEX IF NOT EXISTS idx_replenishment_created ON replenishment_requests(created_at DESC);
 
 -- Member Status (safety check-ins)
-CREATE TABLE member_statuses (
+CREATE TABLE IF NOT EXISTS member_statuses (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   member_id VARCHAR(100) NOT NULL, -- External member identifier
@@ -257,12 +284,12 @@ CREATE TABLE member_statuses (
   UNIQUE(org_id, member_id)
 );
 
-CREATE INDEX idx_member_status_org_id ON member_statuses(org_id);
-CREATE INDEX idx_member_status_status ON member_statuses(status);
-CREATE INDEX idx_member_status_unique ON member_statuses(org_id, member_id);
+CREATE INDEX IF NOT EXISTS idx_member_status_org_id ON member_statuses(org_id);
+CREATE INDEX IF NOT EXISTS idx_member_status_status ON member_statuses(status);
+CREATE INDEX IF NOT EXISTS idx_member_status_unique ON member_statuses(org_id, member_id);
 
 -- Broadcasts (organization-wide announcements)
-CREATE TABLE broadcasts (
+CREATE TABLE IF NOT EXISTS broadcasts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   org_id UUID UNIQUE NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   message TEXT DEFAULT '',
@@ -272,10 +299,10 @@ CREATE TABLE broadcasts (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_broadcasts_org_id ON broadcasts(org_id);
+CREATE INDEX IF NOT EXISTS idx_broadcasts_org_id ON broadcasts(org_id);
 
 -- Help Requests (SOS/Emergency calls)
-CREATE TABLE help_requests (
+CREATE TABLE IF NOT EXISTS help_requests (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   org_id UUID REFERENCES organizations(id) ON DELETE SET NULL,
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -292,14 +319,14 @@ CREATE TABLE help_requests (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_help_requests_org_id ON help_requests(org_id);
-CREATE INDEX idx_help_requests_user_id ON help_requests(user_id);
-CREATE INDEX idx_help_requests_status ON help_requests(status);
-CREATE INDEX idx_help_requests_priority ON help_requests(priority);
-CREATE INDEX idx_help_requests_created ON help_requests(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_help_requests_org_id ON help_requests(org_id);
+CREATE INDEX IF NOT EXISTS idx_help_requests_user_id ON help_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_help_requests_status ON help_requests(status);
+CREATE INDEX IF NOT EXISTS idx_help_requests_priority ON help_requests(priority);
+CREATE INDEX IF NOT EXISTS idx_help_requests_created ON help_requests(created_at DESC);
 
 -- Members (organization member directory)
-CREATE TABLE members (
+CREATE TABLE IF NOT EXISTS members (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
@@ -317,16 +344,16 @@ CREATE TABLE members (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_members_org_id ON members(org_id);
-CREATE INDEX idx_members_status ON members(status);
-CREATE INDEX idx_members_created ON members(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_members_org_id ON members(org_id);
+CREATE INDEX IF NOT EXISTS idx_members_status ON members(status);
+CREATE INDEX IF NOT EXISTS idx_members_created ON members(created_at DESC);
 
 -- =====================================================
 -- AUDIT & ACTIVITY LOGGING
 -- =====================================================
 
 -- Activity log for audit trail
-CREATE TABLE activity_log (
+CREATE TABLE IF NOT EXISTS activity_log (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   org_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
   user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
@@ -339,10 +366,10 @@ CREATE TABLE activity_log (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_activity_log_org_id ON activity_log(org_id);
-CREATE INDEX idx_activity_log_user_id ON activity_log(user_id);
-CREATE INDEX idx_activity_log_created ON activity_log(created_at DESC);
-CREATE INDEX idx_activity_log_action ON activity_log(action);
+CREATE INDEX IF NOT EXISTS idx_activity_log_org_id ON activity_log(org_id);
+CREATE INDEX IF NOT EXISTS idx_activity_log_user_id ON activity_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_activity_log_created ON activity_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_activity_log_action ON activity_log(action);
 
 -- =====================================================
 -- FUNCTIONS & TRIGGERS
@@ -355,30 +382,39 @@ BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = public;
 
 -- Apply updated_at trigger to all tables
+DROP TRIGGER IF EXISTS update_organizations_updated_at ON organizations;
 CREATE TRIGGER update_organizations_updated_at BEFORE UPDATE ON organizations
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_profiles_updated_at ON profiles;
 CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON profiles
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_inventory_updated_at ON inventory;
 CREATE TRIGGER update_inventory_updated_at BEFORE UPDATE ON inventory
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_replenishment_requests_updated_at ON replenishment_requests;
 CREATE TRIGGER update_replenishment_requests_updated_at BEFORE UPDATE ON replenishment_requests
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_member_statuses_updated_at ON member_statuses;
 CREATE TRIGGER update_member_statuses_updated_at BEFORE UPDATE ON member_statuses
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_broadcasts_updated_at ON broadcasts;
 CREATE TRIGGER update_broadcasts_updated_at BEFORE UPDATE ON broadcasts
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_help_requests_updated_at ON help_requests;
 CREATE TRIGGER update_help_requests_updated_at BEFORE UPDATE ON help_requests
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_members_updated_at ON members;
 CREATE TRIGGER update_members_updated_at BEFORE UPDATE ON members
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -390,8 +426,10 @@ BEGIN
   VALUES (NEW.id, 0, 0, 0, 0);
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = public;
 
+DROP TRIGGER IF EXISTS create_org_inventory ON organizations;
 CREATE TRIGGER create_org_inventory AFTER INSERT ON organizations
   FOR EACH ROW EXECUTE FUNCTION create_default_inventory();
 
@@ -403,8 +441,10 @@ BEGIN
   VALUES (NEW.id, '');
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = public;
 
+DROP TRIGGER IF EXISTS create_org_broadcast ON organizations;
 CREATE TRIGGER create_org_broadcast AFTER INSERT ON organizations
   FOR EACH ROW EXECUTE FUNCTION create_default_broadcast();
 
@@ -413,7 +453,9 @@ CREATE TRIGGER create_org_broadcast AFTER INSERT ON organizations
 -- =====================================================
 
 -- Organization summary view
-CREATE VIEW organization_summary AS
+CREATE OR REPLACE VIEW organization_summary
+  WITH (security_invoker = true)
+AS
 SELECT 
   o.id,
   o.org_code,
@@ -435,7 +477,9 @@ WHERE o.is_active = true
 GROUP BY o.id, o.org_code, o.name, o.type, i.water, i.food, i.blankets, i.medical_kits;
 
 -- Member safety summary view
-CREATE VIEW member_safety_summary AS
+CREATE OR REPLACE VIEW member_safety_summary
+  WITH (security_invoker = true)
+AS
 SELECT 
   org_id,
   COUNT(*) as total_members,
@@ -453,7 +497,8 @@ GROUP BY org_id;
 INSERT INTO organizations (org_code, name, type, address, city, state, phone, email, contact_person)
 VALUES 
   ('CH-9921', 'Grace Community Church', 'CHURCH', '123 Main St', 'Springfield', 'IL', '555-0100', 'info@gracechurch.org', 'Pastor John'),
-  ('NG-1001', 'Red Cross Local Chapter', 'NGO', '456 Oak Ave', 'Springfield', 'IL', '555-0200', 'contact@redcross.local', 'Sarah Connor');
+  ('NG-1001', 'Red Cross Local Chapter', 'NGO', '456 Oak Ave', 'Springfield', 'IL', '555-0200', 'contact@redcross.local', 'Sarah Connor')
+ON CONFLICT (org_code) DO NOTHING;
 
 -- =====================================================
 -- COMMENTS FOR DOCUMENTATION

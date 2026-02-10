@@ -17,6 +17,7 @@ import { OrgRegistrationView } from './views/OrgRegistrationView';
 import { LoginView } from './views/LoginView';
 import { PresentationView } from './views/PresentationView';
 import { PrivacyPolicyView } from './views/PrivacyPolicyView';
+import { ResetPasswordView } from './views/ResetPasswordView';
 import { BottomNav } from './components/BottomNav';
 import { ViewState } from './types';
 import { StorageService } from './services/storage';
@@ -38,8 +39,13 @@ export default function App() {
       try {
         const { data } = await supabase.auth.getSession();
         if (!active) return;
-        const sessionUser = data.session?.user || null;
-        setPostSplashView('LOGIN');
+        const isRecoveryPath = window.location.pathname.includes('reset-password');
+        const isRecoveryHash = (window.location.hash || '').includes('type=recovery') || (window.location.search || '').includes('type=recovery');
+        if (isRecoveryPath || isRecoveryHash) {
+          setPostSplashView('RESET_PASSWORD');
+        } else {
+          setPostSplashView('LOGIN');
+        }
         setView('SPLASH');
       } catch {
         if (active) setView('SPLASH');
@@ -50,6 +56,18 @@ export default function App() {
     bootstrapSession();
     return () => {
       active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const { data: subscription } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setPostSplashView('RESET_PASSWORD');
+        setView('RESET_PASSWORD');
+      }
+    });
+    return () => {
+      subscription?.subscription?.unsubscribe();
     };
   }, []);
 
@@ -91,6 +109,8 @@ export default function App() {
         return <RegistrationView setView={setView} mode="SETUP" />;
       case 'LOGIN':
         return <LoginView setView={setView} />;
+      case 'RESET_PASSWORD':
+        return <ResetPasswordView setView={setView} />;
       case 'ORG_REGISTRATION':
         return <OrgRegistrationView setView={setView} />;
       case 'DASHBOARD':
@@ -130,6 +150,7 @@ export default function App() {
                   currentView !== 'REGISTRATION' && 
                   currentView !== 'ACCOUNT_SETUP' &&
                   currentView !== 'LOGIN' && 
+                  currentView !== 'RESET_PASSWORD' &&
                   currentView !== 'ORG_REGISTRATION' &&
                   currentView !== 'ORG_DASHBOARD' &&
                   currentView !== 'PRIVACY_POLICY';

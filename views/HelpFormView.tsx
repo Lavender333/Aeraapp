@@ -34,7 +34,7 @@ const INITIAL_DATA: HelpRequestData = {
   vulnerableGroups: [],
   medicalConditions: '',
   damageType: '',
-  consentToShare: false,
+  consentToShare: true,
 };
 
 export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
@@ -42,6 +42,7 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
   const [data, setData] = useState<HelpRequestData>(INITIAL_DATA);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [smsStatus, setSmsStatus] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState<string>('');
   const [submittedId, setSubmittedId] = useState<string | null>(null);
   
@@ -65,6 +66,7 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
     setData(INITIAL_DATA);
     setIsSubmitting(false);
     setIsSuccess(false);
+    setSmsStatus('idle');
     setSubmittedId(null);
     setLocationError(null);
     setPermissionDenied(false);
@@ -244,7 +246,6 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
   const prevStep = () => setStep(prev => Math.max(prev - 1, 1) as StepId);
 
   const handleSubmit = async () => {
-    if (!data.consentToShare) return;
     setIsSubmitting(true);
     
     const lastKnown = StorageService.getLastKnownLocation();
@@ -256,6 +257,7 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
       const record = await StorageService.submitRequest({ ...data, location: locationToUse });
       setSubmittedId(record.id);
       if (data.emergencyContactPhone) {
+        setSmsStatus('sending');
         notifyEmergencyContact({
           contactName: data.emergencyContactName,
           contactPhone: data.emergencyContactPhone,
@@ -264,7 +266,12 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
           description: data.situationDescription,
           location: locationToUse,
           requestId: record.id,
-        }).catch((err) => console.warn('Emergency contact notify failed', err));
+        })
+          .then(() => setSmsStatus('sent'))
+          .catch((err) => {
+            console.warn('Emergency contact notify failed', err);
+            setSmsStatus('failed');
+          });
       }
       setIsSuccess(true);
     } catch (e) {
@@ -353,6 +360,21 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
             : t('help.success_desc')
           }
         </p>
+
+        {emergencyContactPhone && !isOfflineMode && (
+          <div className={`text-sm font-bold px-4 py-3 rounded-xl border max-w-xs mx-auto ${
+            smsStatus === 'sent'
+              ? 'bg-green-50 text-green-800 border-green-200'
+              : smsStatus === 'failed'
+                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                : 'bg-slate-50 text-slate-700 border-slate-200'
+          }`}>
+            {smsStatus === 'sent' && 'Emergency contact notified via SMS.'}
+            {smsStatus === 'failed' && 'Unable to notify emergency contact. You can continue.'}
+            {smsStatus === 'sending' && 'Notifying emergency contact...'}
+            {smsStatus === 'idle' && 'Emergency contact notification queued.'}
+          </div>
+        )}
         
         <div className="w-full space-y-4">
           {emergencyContactPhone && (
@@ -742,27 +764,6 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
                </div>
             </div>
 
-            <div className="space-y-4">
-              <label className="flex items-start gap-3 p-4 border border-slate-300 rounded-xl bg-white cursor-pointer hover:bg-slate-50 transition-colors">
-                <input 
-                  type="checkbox" 
-                  className="mt-1 w-5 h-5 text-brand-600 rounded focus:ring-brand-500 border-slate-400"
-                  checked={data.consentToShare}
-                  onChange={(e) => updateData({ consentToShare: e.target.checked })}
-                />
-                <span className="text-sm font-bold text-slate-800">{t('help.consent')}</span>
-              </label>
-              <button
-                type="button"
-                onClick={() => {
-                  sessionStorage.setItem('privacyReturnView', 'HELP_WIZARD');
-                  setView('PRIVACY_POLICY');
-                }}
-                className="text-sm text-brand-700 font-semibold underline text-left"
-              >
-                View Proof of Consent & Privacy Policy
-              </button>
-            </div>
           </div>
         )}
       </div>
@@ -776,7 +777,7 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
              <Button 
                fullWidth 
                size="lg" 
-               disabled={!data.consentToShare || isSubmitting}
+               disabled={isSubmitting}
                onClick={handleSubmit}
                className="bg-red-600 hover:bg-red-700 font-bold text-lg shadow-lg shadow-red-200"
              >

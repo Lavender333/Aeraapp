@@ -28,33 +28,57 @@ ALTER TABLE trusted_community_connections ENABLE ROW LEVEL SECURITY;
 
 -- Get current user's org_id
 CREATE OR REPLACE FUNCTION public.user_org_id()
-RETURNS UUID AS $$
+RETURNS UUID
+LANGUAGE SQL
+STABLE
+SECURITY DEFINER
+SET search_path = public
+SET row_security = off
+AS $$
   SELECT org_id FROM profiles WHERE id = auth.uid();
-$$ LANGUAGE SQL STABLE;
+$$;
 
 -- Get current user's role
 CREATE OR REPLACE FUNCTION public.user_role()
-RETURNS user_role AS $$
+RETURNS user_role
+LANGUAGE SQL
+STABLE
+SECURITY DEFINER
+SET search_path = public
+SET row_security = off
+AS $$
   SELECT role FROM profiles WHERE id = auth.uid();
-$$ LANGUAGE SQL STABLE;
+$$;
 
 -- Check if current user is admin
 CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS BOOLEAN AS $$
+RETURNS BOOLEAN
+LANGUAGE SQL
+STABLE
+SECURITY DEFINER
+SET search_path = public
+SET row_security = off
+AS $$
   SELECT EXISTS (
     SELECT 1 FROM profiles 
     WHERE id = auth.uid() AND role = 'ADMIN'
   );
-$$ LANGUAGE SQL STABLE;
+$$;
 
 -- Check if current user is institution admin for their org
 CREATE OR REPLACE FUNCTION public.is_institution_admin()
-RETURNS BOOLEAN AS $$
+RETURNS BOOLEAN
+LANGUAGE SQL
+STABLE
+SECURITY DEFINER
+SET search_path = public
+SET row_security = off
+AS $$
   SELECT EXISTS (
     SELECT 1 FROM profiles 
     WHERE id = auth.uid() AND role IN ('ADMIN', 'INSTITUTION_ADMIN')
   );
-$$ LANGUAGE SQL STABLE;
+$$;
 
 -- =====================================================
 -- ORGANIZATIONS TABLE RLS
@@ -81,6 +105,12 @@ CREATE POLICY "Anon can view organizations"
   USING (auth.role() = 'anon');
 
 -- Admin can create organizations
+DROP POLICY IF EXISTS "orgs_insert_auth" ON organizations;
+
+CREATE POLICY "orgs_insert_auth"
+  ON organizations FOR INSERT
+  WITH CHECK (public.is_admin());
+
 CREATE POLICY "Admins can create organizations"
   ON organizations FOR INSERT
   WITH CHECK (public.is_admin());
@@ -531,7 +561,8 @@ BEGIN
   GROUP BY schemaname, tablename, relrowsecurity
   ORDER BY table_name;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = public;
 
 -- Run: SELECT * FROM test_rls_policies();
 

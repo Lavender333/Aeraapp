@@ -22,6 +22,7 @@ Deno.serve(async (req) => {
       description ? `Details: ${description}` : null,
       location ? `Location: ${location}` : null,
       requestId ? `Request ID: ${requestId}` : null,
+      'Please call or text back if you can.',
     ].filter(Boolean).join('\n');
 
     const body = new URLSearchParams({
