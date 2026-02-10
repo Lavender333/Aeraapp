@@ -60,6 +60,7 @@ export interface UserProfile {
   id: string; // Unique ID (UUID)
   fullName: string;
   email?: string;
+  createdAt?: string; // ISO timestamp of account creation
   phone: string;
   address: string; // Home Address for dispatch
   householdMembers: number; // Legacy count (kept for backward compat, derived from household array)

@@ -120,15 +120,16 @@ const SEED_ORGS: OrganizationProfile[] = [
   }
 ];
 
+const seedCreatedAt = new Date().toISOString();
 const SEED_USERS: UserProfile[] = [
   { 
-    id: 'u0', fullName: 'System Admin', email: 'admin@example.com', phone: '555-0000', address: 'HQ', 
+    id: 'u0', fullName: 'System Admin', email: 'admin@example.com', createdAt: seedCreatedAt, phone: '555-0000', address: 'HQ', 
     householdMembers: 1, household: [], petDetails: '', medicalNeeds: '', 
     emergencyContactName: 'Ops Center', emergencyContactPhone: '555-9999', emergencyContactRelation: 'Supervisor',
     communityId: '', role: 'ADMIN', language: 'en', active: true, onboardComplete: true, notifications: { push: true, sms: true, email: true }
   },
   { 
-    id: 'u1', fullName: 'Alice Johnson', email: 'alice@example.com', phone: '555-1001', address: '101 Pine St', 
+    id: 'u1', fullName: 'Alice Johnson', email: 'alice@example.com', createdAt: seedCreatedAt, phone: '555-1001', address: '101 Pine St', 
     householdMembers: 3, 
     household: [
       { id: 'h1', name: 'Bob Johnson', age: '35', needs: '' },
@@ -139,13 +140,13 @@ const SEED_USERS: UserProfile[] = [
     communityId: 'CH-9921', role: 'GENERAL_USER', language: 'en', active: true, onboardComplete: true, notifications: { push: true, sms: true, email: true }
   },
   { 
-    id: 'u2', fullName: 'David Brown', email: 'david@example.com', phone: '555-1002', address: '202 Oak Ave', 
+    id: 'u2', fullName: 'David Brown', email: 'david@example.com', createdAt: seedCreatedAt, phone: '555-1002', address: '202 Oak Ave', 
     householdMembers: 1, household: [], petDetails: '', medicalNeeds: 'Insulin Dependent', 
     emergencyContactName: 'Martha Brown', emergencyContactPhone: '555-2002', emergencyContactRelation: 'Mother',
     communityId: 'CH-9921', role: 'GENERAL_USER', language: 'en', active: true, onboardComplete: true, notifications: { push: true, sms: true, email: true }
   },
   { 
-    id: 'u3', fullName: 'Pastor John', email: 'pastor@example.com', phone: '555-0101', address: '4500 Main St', 
+    id: 'u3', fullName: 'Pastor John', email: 'pastor@example.com', createdAt: seedCreatedAt, phone: '555-0101', address: '4500 Main St', 
     householdMembers: 4, 
     household: [
       { id: 'h3', name: 'Mary Smith', age: '45', needs: '' },
@@ -157,7 +158,7 @@ const SEED_USERS: UserProfile[] = [
     communityId: 'CH-9921', role: 'INSTITUTION_ADMIN', language: 'en', active: true, onboardComplete: true, notifications: { push: true, sms: true, email: true }
   },
   { 
-    id: 'u4', fullName: 'Sarah Connor', email: 'sarah@example.com', phone: '555-9111', address: 'Fire Station 1', 
+    id: 'u4', fullName: 'Sarah Connor', email: 'sarah@example.com', createdAt: seedCreatedAt, phone: '555-9111', address: 'Fire Station 1', 
     householdMembers: 1, household: [], petDetails: '', medicalNeeds: '', 
     emergencyContactName: 'Dispatcher', emergencyContactPhone: '555-9000', emergencyContactRelation: 'Work',
     communityId: '', role: 'FIRST_RESPONDER', language: 'en', active: true, onboardComplete: true, notifications: { push: true, sms: true, email: true }
@@ -496,6 +497,15 @@ export const StorageService = {
       profile.id = 'u_' + Date.now();
     }
     
+    const existing = db.users.find(u => u.id === profile.id);
+
+    if (!profile.createdAt && existing?.createdAt) {
+      profile.createdAt = existing.createdAt;
+    }
+    if (!profile.createdAt && !existing) {
+      profile.createdAt = new Date().toISOString();
+    }
+
     // Sync legacy count
     profile.householdMembers = (profile.household?.length || 0) + 1; // +1 for self
     

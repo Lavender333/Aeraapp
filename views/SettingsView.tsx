@@ -1401,7 +1401,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                   onChange={(e) => setUserSearch(e.target.value)}
                 />
              </div>
-             {filteredUsers.map(user => (
+             {filteredUsers.map(user => {
+               const createdLabel = user.createdAt
+                 ? new Date(user.createdAt).toLocaleDateString()
+                 : 'Unknown';
+               return (
                <div 
                  key={user.id} 
                  onClick={() => setSelectedUser(user)}
@@ -1415,6 +1419,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                       <div>
                         <h3 className={`font-bold group-hover:text-brand-700 transition-colors ${user.active ? 'text-slate-900' : 'text-slate-500 line-through'}`}>{user.fullName || 'Unnamed User'}</h3>
                         <p className="text-xs text-slate-500">{user.phone || 'No phone'} {user.role === 'ADMIN' && <span className="text-brand-600 font-bold ml-1">(Admin)</span>}</p>
+                        <p className="text-[11px] text-slate-400">Created: {createdLabel}</p>
                       </div>
                    </div>
                    <ArrowRight size={18} className="text-slate-300 group-hover:text-brand-500" />
@@ -1429,7 +1434,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                     </span>
                  </div>
                </div>
-             ))}
+               );
+             })}
              {filteredUsers.length === 0 && <p className="text-center text-slate-400 py-4">No users found.</p>}
           </div>
         )}
