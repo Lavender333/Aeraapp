@@ -33,6 +33,7 @@
     "helmet": "^7.1.0",
     "ioredis": "^5.4.2",
     "jsonwebtoken": "^9.0.3",
+    "jspdf": "^4.1.0",
     "lucide-react": "^0.556.0",
     "mongodb": "^7.0.0",
     "mongoose": "^9.0.1",

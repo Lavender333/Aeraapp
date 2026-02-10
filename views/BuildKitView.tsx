@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Check, ChevronDown, FileText, HeartPulse, Save, Share2, Sparkles, Droplets, Flashlight } from 'lucide-react';
+import { jsPDF } from 'jspdf';
 import { Button } from '../components/Button';
 import { ViewState } from '../types';
 import { fetchReadyKit, saveReadyKit } from '../services/api';
@@ -165,12 +166,53 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setShowSaved(true);
   };
 
-  const exportPDF = () => {
-    alert('This will create a printable list you can save or print. Great for keeping a paper copy with your supplies!');
+  const buildSummaryText = () => {
+    const lines: string[] = [];
+    lines.push('AERA Ready Kit');
+    lines.push(`Progress: ${checkedCount} of ${totalItems} items`);
+    lines.push('');
+    CATEGORIES.forEach((category) => {
+      lines.push(category.title);
+      category.items.forEach((item) => {
+        const checked = checkedItems[item.id];
+        lines.push(`${checked ? '✓' : '•'} ${item.title} (${item.quantity}) - ${item.description}`);
+      });
+      lines.push('');
+    });
+    return lines;
   };
 
-  const shareKit = () => {
-    alert('Share this list with your family or friends so everyone knows what to gather.');
+  const exportPDF = () => {
+    const doc = new jsPDF();
+    const lines = buildSummaryText();
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('AERA Ready Kit', 14, 18);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    doc.text(`Progress: ${checkedCount} of ${totalItems} items`, 14, 26);
+    const body = lines.slice(3).join('\n');
+    doc.setFontSize(10);
+    doc.text(body, 14, 34, { maxWidth: 180 });
+    doc.save('AERA-Ready-Kit.pdf');
+  };
+
+  const shareKit = async () => {
+    const text = buildSummaryText().join('\n');
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'AERA Ready Kit', text });
+        return;
+      } catch {
+        // fall through to clipboard
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      alert('Ready kit copied to clipboard.');
+    } catch {
+      alert('Unable to share right now.');
+    }
   };
 
   return (
