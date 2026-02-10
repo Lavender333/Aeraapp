@@ -101,7 +101,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   // Access Control State
   type AccessTab = 'ALL_USERS' | 'ROLE_DEFINITIONS';
   const [activeTab, setActiveTab] = useState<AccessTab>('ALL_USERS');
-  const [roles, setRoles] = useState<RoleDefinition[]>(INITIAL_ROLES);
+  const [roles, setRoles] = useState<RoleDefinition[]>(() => StorageService.getRoles() || INITIAL_ROLES);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [userSearch, setUserSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
@@ -377,28 +377,31 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   // --- Access Control Handlers ---
   const togglePermission = (roleId: UserRole, perm: keyof RoleDefinition['permissions']) => {
-    setRoles(prev => prev.map(r => {
-      if (r.id === roleId) {
-        return {
-          ...r,
-          permissions: { ...r.permissions, [perm]: !r.permissions[perm] }
-        };
-      }
-      return r;
-    }));
+    setRoles(prev => {
+      const updated = prev.map(r => {
+        if (r.id === roleId) {
+          return {
+            ...r,
+            permissions: { ...r.permissions, [perm]: !r.permissions[perm] }
+          };
+        }
+        return r;
+      });
+      StorageService.saveRoles(updated);
+      return updated;
+    });
   };
 
   const updateUserRole = (userId: string, newRole: UserRole) => {
     if (!isAdmin) return;
-    // Update local state and backend
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
-    
-    // In a real app we would call an API, here we just update state, 
-    // but we need to persist it.
-    const user = users.find(u => u.id === userId);
-    if (user) {
-      StorageService.saveProfile({ ...user, role: newRole });
-    }
+    setUsers(prev => {
+      const updated = prev.map(u => u.id === userId ? { ...u, role: newRole } : u);
+      const changed = updated.find(u => u.id === userId);
+      if (changed) {
+        StorageService.saveProfile(changed);
+      }
+      return updated;
+    });
   };
 
   const toggleUserStatus = (userId: string, currentStatus: boolean) => {
@@ -406,9 +409,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     const newStatus = !currentStatus;
     StorageService.updateUserStatus(userId, newStatus);
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, active: newStatus } : u));
-    if (selectedUser && selectedUser.id === userId) {
-      setSelectedUser(prev => prev ? { ...prev, active: newStatus } : null);
-    }
+    setSelectedUser(prev => prev && prev.id === userId ? { ...prev, active: newStatus } : prev);
   };
 
   const handleExportUsers = () => {
@@ -1208,12 +1209,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
              <div className="bg-slate-800 p-6 text-white flex justify-between items-start">
                <div className="flex items-center gap-4">
                  <div className="w-16 h-16 rounded-full bg-slate-600 flex items-center justify-center text-2xl font-bold border-2 border-slate-500">
-                   {selectedUser.fullName.charAt(0)}
+                   {(selectedUser.fullName || '?').charAt(0)}
                  </div>
                  <div>
-                   <h2 className="text-2xl font-bold">{selectedUser.fullName}</h2>
+                   <h2 className="text-2xl font-bold">{selectedUser.fullName || 'Unnamed User'}</h2>
                    <div className="flex gap-2 mt-1">
-                     <span className="px-2 py-0.5 bg-white/20 rounded text-xs font-bold uppercase">{selectedUser.role.replace('_', ' ')}</span>
+                     <span className="px-2 py-0.5 bg-white/20 rounded text-xs font-bold uppercase">{(selectedUser.role || 'UNKNOWN').replace('_', ' ')}</span>
                      <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${selectedUser.active ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
                        {selectedUser.active ? 'Active' : 'Suspended'}
                      </span>
@@ -1262,7 +1263,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                       <div>
                         <p className="text-xs text-slate-500 font-bold uppercase">Household</p>
                         <p className="text-slate-900 font-bold text-lg">{selectedUser.householdMembers} Member(s)</p>
-                        {selectedUser.household.length > 0 && (
+                        {Array.isArray(selectedUser.household) && selectedUser.household.length > 0 && (
                           <div className="mt-2 space-y-1">
                             {selectedUser.household.map(mem => (
                               <div key={mem.id} className="text-xs bg-slate-100 p-2 rounded flex justify-between">
@@ -1290,7 +1291,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                       <select 
                         value={selectedUser.role}
                         onChange={(e) => updateUserRole(selectedUser.id, e.target.value as UserRole)}
-                        className="text-sm p-2 rounded border border-slate-300 bg-white font-medium disabled:opacity-50"
+                        className={`text-sm p-2 rounded border bg-white font-medium ${!selectedUser.active ? 'opacity-50 cursor-not-allowed' : 'border-slate-300'}`}
                         disabled={!selectedUser.active}
                       >
                         {roles.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}

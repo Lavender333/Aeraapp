@@ -1,5 +1,5 @@
 
-import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest } from '../types';
+import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, RoleDefinition } from '../types';
 import { REQUEST_ITEM_MAP } from './validation';
 import { getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword } from './api';
 import { getMemberStatus, setMemberStatus } from './api';
@@ -10,6 +10,7 @@ const AUTH_REFRESH_TOKEN_KEY = 'aera_refresh_token';
 const OFFLINE_QUEUE_KEY = 'aera_offline_queue_v1';
 const SYNC_ID_MAP_KEY = 'aera_sync_id_map_v1';
 const STORAGE_STATE_KEY = 'aera_storage_state_v1';
+const ROLE_DEFINITIONS_KEY = 'aera_role_definitions_v1';
 const MAX_CACHED_REQUESTS = 200;
 const MAX_CACHED_REPLENISHMENTS = 200;
 const IS_PRODUCTION = import.meta.env.PROD;
@@ -263,6 +264,23 @@ export const StorageService = {
     safeRemoveItem(AUTH_TOKEN_KEY);
     safeRemoveItem(AUTH_REFRESH_TOKEN_KEY);
     window.location.reload();
+  },
+
+  // --- Role Definitions ---
+  getRoles(): RoleDefinition[] | null {
+    const raw = safeGetItem(ROLE_DEFINITIONS_KEY);
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as RoleDefinition[]) : null;
+    } catch (e) {
+      console.warn('Failed to parse role definitions', e);
+      return null;
+    }
+  },
+
+  saveRoles(roles: RoleDefinition[]) {
+    safeSetItem(ROLE_DEFINITIONS_KEY, JSON.stringify(roles));
   },
 
   // --- Profile / Auth ---
