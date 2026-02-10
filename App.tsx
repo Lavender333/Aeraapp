@@ -37,14 +37,15 @@ export default function App() {
   useEffect(() => {
     let active = true;
     const bootstrapSession = async () => {
+      const hash = window.location.hash || '';
+      const search = window.location.search || '';
+      const isRecoveryPath = window.location.pathname.includes('reset-password');
+      const isRecoveryHash = hash.includes('type=recovery') || search.includes('type=recovery') || hash.includes('reset-password');
+      const isRecoveryUrl = isRecoveryPath || isRecoveryHash;
       try {
         const { data } = await supabase.auth.getSession();
         if (!active) return;
-        const hash = window.location.hash || '';
-        const search = window.location.search || '';
-        const isRecoveryPath = window.location.pathname.includes('reset-password');
-        const isRecoveryHash = hash.includes('type=recovery') || search.includes('type=recovery') || hash.includes('reset-password');
-        if (isRecoveryPath || isRecoveryHash) {
+        if (isRecoveryUrl) {
           setPostSplashView('RESET_PASSWORD');
           setView('RESET_PASSWORD');
         } else {
@@ -52,7 +53,13 @@ export default function App() {
           setView('SPLASH');
         }
       } catch {
-        if (active) setView('SPLASH');
+        if (!active) return;
+        if (isRecoveryUrl) {
+          setPostSplashView('RESET_PASSWORD');
+          setView('RESET_PASSWORD');
+        } else {
+          setView('SPLASH');
+        }
       } finally {
         if (active) setIsBootstrapping(false);
       }
