@@ -12,19 +12,26 @@ export const ResetPasswordView: React.FC<{ setView: (v: ViewState) => void }> = 
   const [info, setInfo] = useState('');
   const [isReady, setIsReady] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [hasSession, setHasSession] = useState(false);
 
   useEffect(() => {
     let active = true;
-  const [hasSession, setHasSession] = useState(false);
     const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
+      const { data, error: sessionError } = await supabase.auth.getSession();
       if (!active) return;
-      if (!data.session) {
+      if (sessionError) {
+        setError('Unable to validate reset link. Please request a new one.');
+        setIsReady(true);
+        setHasSession(false);
+        return;
+      }
+      const session = data?.session;
+      setHasSession(!!session);
+      setIsReady(true);
+      if (!session) {
         setError('Reset link is invalid or expired. Please request a new one.');
       }
-      setIsReady(true);
-      setHasSession(!!data.session);
-      if (!data.session) {
+    };
     checkSession();
     return () => {
       active = false;
@@ -67,6 +74,7 @@ export const ResetPasswordView: React.FC<{ setView: (v: ViewState) => void }> = 
       </div>
 
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+        <Input
           disabled={!isReady || !hasSession || isSaving}
           label="New Password"
           type="password"
