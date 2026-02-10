@@ -2,6 +2,7 @@
 import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, RoleDefinition, UserRole, ReplenishmentAggregate } from '../types';
 import { REQUEST_ITEM_MAP } from './validation';
 import { getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, upsertTrustedCommunityConnection, listRequests, createRequest, updateRequestStatus } from './api';
+import { hasSupabaseConfig } from './supabase';
 import { getMemberStatus, setMemberStatus } from './api';
 
 const DB_KEY = 'aera_backend_db_v4'; // Force fresh database
@@ -387,68 +388,15 @@ export const StorageService = {
   },
 
   async registerWithCredentials(email: string, password: string, fullName?: string) {
-    const resp = await registerAuth({ email, password, fullName });
-    if (resp?.token) this.setAuthToken(resp.token);
-    if (resp?.refreshToken) this.setRefreshToken(resp.refreshToken);
-    if (resp?.user) {
-      const profile: UserProfile = {
-        id: resp.user.id,
-        fullName: resp.user.fullName || fullName || '',
-        email: resp.user.email || '',
-        phone: resp.user.phone || '',
-        address: '',
-        householdMembers: 1,
-        household: [],
-        petDetails: '',
-        medicalNeeds: '',
-        emergencyContactName: '',
-        emergencyContactPhone: '',
-        emergencyContactRelation: '',
-        communityId: resp.user.orgId || '',
-        role: (resp.user.role as UserRole) || 'GENERAL_USER',
-        language: 'en',
-        active: true,
-        onboardComplete: false,
-        notifications: { push: true, sms: true, email: true }
-      };
-      this.saveProfile(profile);
-    }
-    return resp;
-  },
-
-  async loginWithCredentials(email: string, password: string) {
-    const db = this.getDB();
-    if (!IS_PRODUCTION) {
-      // Try local database first (for demo/offline mode)
-      const user = db.users.find(u => u.email === email);
-      if (user) {
-        if (user.active === false) {
-          throw new Error('Account deactivated. Contact Admin.');
-        }
-        db.currentUser = user.id;
-        this.saveDB(db);
-        return { 
-          token: 'local-demo-token', 
-          user: { 
-            id: user.id, 
-            email: user.email, 
-            fullName: user.fullName, 
-            role: user.role,
-            onboardComplete: user.onboardComplete 
-          } 
-        };
-      }
-    }
-
-    // Supabase auth
-    try {
-      const resp = await loginAuth({ email, password });
+    const canUseSupabase = navigator.onLine && hasSupabaseConfig;
+    if (canUseSupabase) {
+      const resp = await registerAuth({ email, password, fullName });
       if (resp?.token) this.setAuthToken(resp.token);
       if (resp?.refreshToken) this.setRefreshToken(resp.refreshToken);
       if (resp?.user) {
         const profile: UserProfile = {
           id: resp.user.id,
-          fullName: resp.user.fullName || '',
+          fullName: resp.user.fullName || fullName || '',
           email: resp.user.email || '',
           phone: resp.user.phone || '',
           address: '',
@@ -469,10 +417,124 @@ export const StorageService = {
         this.saveProfile(profile);
       }
       return resp;
-    } catch (err: any) {
-      const message = err?.message || 'Login failed. Please check your credentials.';
-      throw new Error(message);
     }
+
+    const fallbackProfile: UserProfile = {
+      id: 'u_' + Date.now(),
+      fullName: fullName || '',
+      email,
+      phone: '',
+      address: '',
+      householdMembers: 1,
+      household: [],
+      petDetails: '',
+      medicalNeeds: '',
+      emergencyContactName: '',
+      emergencyContactPhone: '',
+      emergencyContactRelation: '',
+      communityId: '',
+      role: 'GENERAL_USER',
+      language: 'en',
+      active: true,
+      onboardComplete: false,
+      notifications: { push: true, sms: true, email: true }
+    };
+    this.saveProfile(fallbackProfile);
+    return {
+      token: 'local-demo-token',
+      refreshToken: null,
+      needsEmailConfirm: false,
+      user: {
+        id: fallbackProfile.id,
+        email: fallbackProfile.email || '',
+        phone: '',
+        fullName: fallbackProfile.fullName,
+        role: fallbackProfile.role,
+        orgId: ''
+      }
+    };
+  },
+
+  async loginWithCredentials(email: string, password: string) {
+    const db = this.getDB();
+    const canUseSupabase = navigator.onLine && hasSupabaseConfig;
+
+    if (canUseSupabase) {
+      try {
+        const resp = await loginAuth({ email, password });
+        if (resp?.token) this.setAuthToken(resp.token);
+        if (resp?.refreshToken) this.setRefreshToken(resp.refreshToken);
+        if (resp?.user) {
+          const profile: UserProfile = {
+            id: resp.user.id,
+            fullName: resp.user.fullName || '',
+            email: resp.user.email || '',
+            phone: resp.user.phone || '',
+            address: '',
+            householdMembers: 1,
+            household: [],
+            petDetails: '',
+            medicalNeeds: '',
+            emergencyContactName: '',
+            emergencyContactPhone: '',
+            emergencyContactRelation: '',
+            communityId: resp.user.orgId || '',
+            role: (resp.user.role as UserRole) || 'GENERAL_USER',
+            language: 'en',
+            active: true,
+            onboardComplete: false,
+            notifications: { push: true, sms: true, email: true }
+          };
+          this.saveProfile(profile);
+        }
+        return resp;
+      } catch (err: any) {
+        const localUser = db.users.find(u => u.email === email);
+        if (localUser) {
+          if (localUser.active === false) {
+            throw new Error('Account deactivated. Contact Admin.');
+          }
+          db.currentUser = localUser.id;
+          this.saveDB(db);
+          return {
+            token: 'local-demo-token',
+            user: {
+              id: localUser.id,
+              email: localUser.email,
+              fullName: localUser.fullName,
+              role: localUser.role,
+              onboardComplete: localUser.onboardComplete
+            }
+          };
+        }
+        const message = err?.message || 'Login failed. Please check your credentials.';
+        throw new Error(message);
+      }
+    }
+
+    const user = db.users.find(u => u.email === email);
+    if (user) {
+      if (user.active === false) {
+        throw new Error('Account deactivated. Contact Admin.');
+      }
+      db.currentUser = user.id;
+      this.saveDB(db);
+      return { 
+        token: 'local-demo-token', 
+        user: { 
+          id: user.id, 
+          email: user.email, 
+          fullName: user.fullName, 
+          role: user.role,
+          onboardComplete: user.onboardComplete 
+        } 
+      };
+    }
+
+    if (!canUseSupabase && !IS_PRODUCTION) {
+      throw new Error('Offline login failed. Please connect to the internet.');
+    }
+    throw new Error('Login failed. Please check your credentials.');
   },
 
   async requestPasswordReset(email: string) {
