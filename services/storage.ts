@@ -1,7 +1,7 @@
 
 import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, RoleDefinition } from '../types';
 import { REQUEST_ITEM_MAP } from './validation';
-import { getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword } from './api';
+import { getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser } from './api';
 import { getMemberStatus, setMemberStatus } from './api';
 
 const DB_KEY = 'aera_backend_db_v4'; // Force fresh database
@@ -527,6 +527,43 @@ export const StorageService = {
     // Set as current session
     db.currentUser = profile.id;
     this.saveDB(db);
+
+    if (profile.id && profile.id !== 'guest') {
+      (async () => {
+        try {
+          await updateProfileForUser({
+            fullName: profile.fullName,
+            phone: profile.phone,
+            email: profile.email,
+            address: profile.address,
+            emergencyContactName: profile.emergencyContactName,
+            emergencyContactPhone: profile.emergencyContactPhone,
+            emergencyContactRelation: profile.emergencyContactRelation,
+            communityId: profile.communityId,
+            role: profile.role,
+          });
+          await updateVitalsForUser({
+            household: profile.household || [],
+            householdMembers: profile.householdMembers,
+            petDetails: profile.petDetails || '',
+            medicalNeeds: profile.medicalNeeds || '',
+          });
+          await syncHouseholdMembersForUser(profile.household || []);
+          await syncPetsForUser(profile.petDetails || '');
+          await syncMemberDirectoryForUser({
+            communityId: profile.communityId,
+            fullName: profile.fullName,
+            phone: profile.phone,
+            address: profile.address,
+            emergencyContactName: profile.emergencyContactName,
+            emergencyContactPhone: profile.emergencyContactPhone,
+            emergencyContactRelation: profile.emergencyContactRelation,
+          });
+        } catch (err) {
+          console.warn('Supabase profile sync failed', err);
+        }
+      })();
+    }
     return true;
   },
 
@@ -1015,6 +1052,10 @@ export const StorageService = {
         localRequestId: record.id,
         payload: { userId: currentUser, requestPayload },
       });
+      if (profile?.communityId && profile?.fullName && data.isSafe !== null) {
+        const status = data.isSafe ? 'SAFE' : 'DANGER';
+        this.saveMemberStatus(profile.communityId, profile.id, profile.fullName, status as any);
+      }
       return record;
     }
 
@@ -1034,6 +1075,10 @@ export const StorageService = {
       db.requests[0].clientId = clientId;
       db.requests[0].synced = true;
       this.saveDB(db);
+      if (profile?.communityId && profile?.fullName && data.isSafe !== null) {
+        const status = data.isSafe ? 'SAFE' : 'DANGER';
+        this.saveMemberStatus(profile.communityId, profile.id, profile.fullName, status as any);
+      }
       return {
         ...data,
         id: serverId || record.id,
@@ -1054,6 +1099,10 @@ export const StorageService = {
       });
     }
 
+    if (profile?.communityId && profile?.fullName && data.isSafe !== null) {
+      const status = data.isSafe ? 'SAFE' : 'DANGER';
+      this.saveMemberStatus(profile.communityId, profile.id, profile.fullName, status as any);
+    }
     return record;
   },
 

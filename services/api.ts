@@ -1,4 +1,4 @@
-import type { OrgInventory, UserProfile } from '../types';
+import type { HouseholdMember, OrgInventory, UserProfile } from '../types';
 import { supabase, getOrgByCode, getOrgIdByCode } from './supabase';
 
 const mapInventory = (row: any): OrgInventory => ({
@@ -22,6 +22,32 @@ const getOrgCodeById = async (orgId: string): Promise<string | null> => {
     .single();
   if (error || !data) return null;
   return data.org_code;
+};
+
+const safeLogActivity = async (entry: {
+  action: string;
+  entityType?: string;
+  entityId?: string | null;
+  orgCode?: string | null;
+  details?: Record<string, any>;
+}) => {
+  try {
+    const { data: authData } = await supabase.auth.getUser();
+    const userId = authData?.user?.id || null;
+    const orgId = entry.orgCode ? await getOrgIdByCode(entry.orgCode) : null;
+    await supabase
+      .from('activity_log')
+      .insert({
+        org_id: orgId,
+        user_id: userId,
+        action: entry.action,
+        entity_type: entry.entityType || null,
+        entity_id: entry.entityId || null,
+        details: entry.details || {},
+      });
+  } catch (err) {
+    console.warn('Activity log write failed', err);
+  }
 };
 
 const getProfileById = async (userId: string) => {
@@ -134,6 +160,12 @@ export async function updateProfileForUser(payload: {
     .eq('id', authData.user.id);
 
   if (error) throw error;
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'profile',
+    entityId: authData.user.id,
+    orgCode: payload.communityId || null,
+  });
   return { ok: true };
 }
 
@@ -156,6 +188,136 @@ export async function updateVitalsForUser(payload: {
     }, { onConflict: 'profile_id' });
 
   if (error) throw error;
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'vitals',
+    entityId: authData.user.id,
+  });
+  return { ok: true };
+}
+
+export async function syncHouseholdMembersForUser(household: HouseholdMember[]) {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const profileId = authData.user.id;
+
+  const { error: deleteError } = await supabase
+    .from('household_members')
+    .delete()
+    .eq('profile_id', profileId);
+
+  if (deleteError) throw deleteError;
+
+  const rows = (household || []).map((member) => ({
+    profile_id: profileId,
+    name: member.name,
+    relationship: null,
+    age: Number.isFinite(Number(member.age)) ? Number(member.age) : null,
+    special_needs: member.needs || null,
+  }));
+
+  if (rows.length > 0) {
+    const { error: insertError } = await supabase
+      .from('household_members')
+      .insert(rows);
+    if (insertError) throw insertError;
+  }
+
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'household_members',
+    entityId: profileId,
+    details: { count: rows.length },
+  });
+
+  return { ok: true };
+}
+
+export async function syncPetsForUser(petDetails: string) {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const profileId = authData.user.id;
+
+  const { error: deleteError } = await supabase
+    .from('pets')
+    .delete()
+    .eq('profile_id', profileId);
+
+  if (deleteError) throw deleteError;
+
+  const raw = (petDetails || '').trim();
+  const parts = raw
+    ? raw.split(/[,;]+/).map((item) => item.trim()).filter(Boolean)
+    : [];
+
+  const rows = parts.map((entry) => ({
+    profile_id: profileId,
+    name: entry.slice(0, 255),
+    type: null,
+    medical_needs: null,
+  }));
+
+  if (rows.length > 0) {
+    const { error: insertError } = await supabase
+      .from('pets')
+      .insert(rows);
+    if (insertError) throw insertError;
+  }
+
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'pets',
+    entityId: profileId,
+    details: { count: rows.length },
+  });
+
+  return { ok: true };
+}
+
+export async function syncMemberDirectoryForUser(payload: {
+  communityId?: string;
+  fullName: string;
+  phone?: string;
+  address?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelation?: string;
+}) {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+  if (!payload.communityId) return { ok: true };
+
+  const orgId = await getOrgIdByCode(payload.communityId);
+  if (!orgId) throw new Error('Organization not found');
+
+  const memberId = authData.user.id;
+
+  const { error } = await supabase
+    .from('members')
+    .upsert({
+      id: memberId,
+      org_id: orgId,
+      name: payload.fullName,
+      status: 'UNKNOWN',
+      needs: [],
+      phone: payload.phone || null,
+      address: payload.address || null,
+      emergency_contact_name: payload.emergencyContactName || null,
+      emergency_contact_phone: payload.emergencyContactPhone || null,
+      emergency_contact_relation: payload.emergencyContactRelation || null,
+    }, { onConflict: 'id' });
+
+  if (error) throw error;
+
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'member',
+    entityId: memberId,
+    orgCode: payload.communityId,
+  });
+
   return { ok: true };
 }
 
@@ -241,6 +403,12 @@ export async function saveInventory(orgCode: string, inventory: OrgInventory): P
     }, { onConflict: 'org_id' });
 
   if (error) throw new Error('Failed to save inventory');
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'inventory',
+    orgCode,
+    details: inventory,
+  });
 }
 
 // Replenishment Requests
@@ -287,6 +455,13 @@ export async function createRequest(orgCode: string, payload: { item: string; qu
     .single();
 
   if (error || !data) throw new Error('Failed to create request');
+  await safeLogActivity({
+    action: 'CREATE',
+    entityType: 'replenishment_request',
+    entityId: data.id,
+    orgCode,
+    details: { item: payload.item, quantity: payload.quantity },
+  });
   return {
     id: data.id,
     orgId: org.orgCode,
@@ -316,6 +491,13 @@ export async function updateRequestStatus(id: string, payload: { status: string;
   if (error || !data) throw new Error('Failed to update request');
 
   const orgCode = data.org_id ? await getOrgCodeById(data.org_id) : null;
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'replenishment_request',
+    entityId: data.id,
+    orgCode: orgCode || null,
+    details: { status: normalized, deliveredQuantity: payload.deliveredQuantity ?? null },
+  });
   return {
     id: data.id,
     orgId: orgCode || '',
@@ -377,6 +559,13 @@ export async function setMemberStatus(orgCode: string, payload: { memberId: stri
     }, { onConflict: 'org_id,member_id' });
 
   if (error) throw new Error('Failed to save member status');
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'member_status',
+    entityId: payload.memberId,
+    orgCode,
+    details: { status: payload.status },
+  });
   return { ok: true };
 }
 
@@ -411,6 +600,11 @@ export async function setBroadcast(orgCode: string, message: string) {
     }, { onConflict: 'org_id' });
 
   if (error) throw new Error('Failed to save broadcast');
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'broadcast',
+    orgCode,
+  });
   return { message };
 }
 
@@ -553,6 +747,12 @@ export async function createHelpRequest(userId: string, payload: any) {
     .single();
 
   if (error || !data) throw new Error('Failed to create help request');
+  await safeLogActivity({
+    action: 'CREATE',
+    entityType: 'help_request',
+    entityId: data.id,
+    orgCode: payload?.orgId || null,
+  });
   return {
     id: data.id,
     userId: data.user_id,
@@ -592,6 +792,12 @@ export async function updateHelpRequestLocation(id: string, location: string) {
     .update({ location })
     .eq('id', id);
   if (error) throw new Error('Failed to update help request location');
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'help_request',
+    entityId: id,
+    details: { location },
+  });
   return { ok: true };
 }
 
@@ -633,6 +839,12 @@ export async function addMember(orgCode: string, payload: any) {
     .single();
 
   if (error || !data) throw new Error('Failed to add member');
+  await safeLogActivity({
+    action: 'CREATE',
+    entityType: 'member',
+    entityId: data.id,
+    orgCode,
+  });
   return data;
 }
 
@@ -660,6 +872,12 @@ export async function updateMember(orgCode: string, memberId: string, payload: a
     .single();
 
   if (error || !data) throw new Error('Failed to update member');
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'member',
+    entityId: data.id,
+    orgCode,
+  });
   return data;
 }
 
@@ -674,5 +892,11 @@ export async function removeMember(orgCode: string, memberId: string) {
     .eq('org_id', orgId);
 
   if (error) throw new Error('Failed to remove member');
+  await safeLogActivity({
+    action: 'DELETE',
+    entityType: 'member',
+    entityId: memberId,
+    orgCode,
+  });
   return { ok: true };
 }
