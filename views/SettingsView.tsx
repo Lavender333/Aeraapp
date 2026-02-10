@@ -86,6 +86,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   const normalizedRole = String(profile.role || '').toUpperCase();
   const isAdmin = normalizedRole === 'ADMIN';
+  const isInstitutionAdmin = normalizedRole === 'INSTITUTION_ADMIN';
   
   // UI States
   const [currentSection, setCurrentSection] = useState<'MAIN' | 'ACCESS_CONTROL' | 'DB_VIEWER' | 'ORG_DIRECTORY' | 'BROADCAST_CONTROL' | 'MASTER_INVENTORY'>('MAIN');
@@ -179,10 +180,21 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   }, []);
 
   useEffect(() => {
-    if (!isAdmin && currentSection !== 'MAIN') {
+    if (!isAdmin && currentSection !== 'MAIN' && !isInstitutionAdmin) {
       setCurrentSection('MAIN');
     }
-  }, [isAdmin, currentSection]);
+  }, [isAdmin, isInstitutionAdmin, currentSection]);
+
+  useEffect(() => {
+    if (sessionStorage.getItem('openHubSettings')) {
+      setCurrentSection('ORG_DIRECTORY');
+      sessionStorage.removeItem('openHubSettings');
+      return;
+    }
+    if (isInstitutionAdmin && currentSection === 'MAIN') {
+      setCurrentSection('ORG_DIRECTORY');
+    }
+  }, [isInstitutionAdmin, currentSection]);
 
   // Fetch members when an org is selected in directory
   useEffect(() => {
@@ -995,6 +1007,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             </div>
           </div>
         </div>
+
+        {isInstitutionAdmin && (
+          <div className="bg-white border border-slate-200 rounded-xl p-3 flex flex-wrap gap-2 shadow-sm">
+            <Button size="sm" onClick={() => setCurrentSection('ORG_DIRECTORY')}>Hub Settings</Button>
+            <Button size="sm" variant="outline" onClick={() => setCurrentSection('ACCESS_CONTROL')}>Member Roles</Button>
+            <Button size="sm" variant="outline" onClick={() => setCurrentSection('MASTER_INVENTORY')}>Inventory Rules</Button>
+          </div>
+        )}
 
         {selectedOrgDetails ? (
           <div className="animate-slide-up space-y-6">
