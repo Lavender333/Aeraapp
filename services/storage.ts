@@ -1,7 +1,7 @@
 
-import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, RoleDefinition } from '../types';
+import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, RoleDefinition, UserRole, ReplenishmentAggregate } from '../types';
 import { REQUEST_ITEM_MAP } from './validation';
-import { getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser } from './api';
+import { getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, upsertTrustedCommunityConnection, listRequests, createRequest, updateRequestStatus } from './api';
 import { getMemberStatus, setMemberStatus } from './api';
 
 const DB_KEY = 'aera_backend_db_v4'; // Force fresh database
@@ -374,7 +374,7 @@ export const StorageService = {
         emergencyContactPhone: '',
         emergencyContactRelation: '',
         communityId: resp.user.orgId || '',
-        role: resp.user.role || 'GENERAL_USER',
+        role: (resp.user.role as UserRole) || 'GENERAL_USER',
         language: 'en',
         active: true,
         onboardComplete: false,
@@ -429,7 +429,7 @@ export const StorageService = {
           emergencyContactPhone: '',
           emergencyContactRelation: '',
           communityId: resp.user.orgId || '',
-          role: resp.user.role || 'GENERAL_USER',
+          role: (resp.user.role as UserRole) || 'GENERAL_USER',
           language: 'en',
           active: true,
           onboardComplete: false,
@@ -559,6 +559,9 @@ export const StorageService = {
             emergencyContactPhone: profile.emergencyContactPhone,
             emergencyContactRelation: profile.emergencyContactRelation,
           });
+          if (profile.communityId) {
+            await upsertTrustedCommunityConnection(profile.communityId);
+          }
         } catch (err) {
           console.warn('Supabase profile sync failed', err);
         }
@@ -750,6 +753,18 @@ export const StorageService = {
     if (!db.replenishmentRequests) db.replenishmentRequests = [];
     db.replenishmentRequests.unshift(request);
     this.saveDB(db);
+    if (isOnline) {
+      createRequest(orgId, { item, quantity, provider: request.provider, orgName: request.orgName })
+        .then((remote) => {
+          const idx = db.replenishmentRequests.findIndex(r => r.id === request.id);
+          if (idx >= 0) {
+            db.replenishmentRequests[idx].id = remote.id;
+            db.replenishmentRequests[idx].synced = true;
+            this.saveDB(db);
+          }
+        })
+        .catch((e) => console.warn('Supabase replenishment create failed', e));
+    }
     return true;
   },
 
@@ -775,6 +790,18 @@ export const StorageService = {
     if (!db.replenishmentRequests) db.replenishmentRequests = [];
     db.replenishmentRequests.unshift(request);
     this.saveDB(db);
+    if (isOnline) {
+      createRequest(orgId, payload)
+        .then((remote) => {
+          const idx = db.replenishmentRequests.findIndex(r => r.id === request.id);
+          if (idx >= 0) {
+            db.replenishmentRequests[idx].id = remote.id;
+            db.replenishmentRequests[idx].synced = true;
+            this.saveDB(db);
+          }
+        })
+        .catch((e) => console.warn('Supabase replenishment create failed', e));
+    }
     return true;
   },
 
@@ -817,6 +844,18 @@ export const StorageService = {
 
   getOrgReplenishmentRequests(orgId: string): ReplenishmentRequest[] {
     const db = this.getDB();
+    if (navigator.onLine) {
+      listRequests(orgId)
+        .then((remote) => {
+          const merged = [...remote, ...(db.replenishmentRequests || [])].reduce((acc: ReplenishmentRequest[], req) => {
+            if (!acc.find(r => r.id === req.id)) acc.push(req);
+            return acc;
+          }, []);
+          db.replenishmentRequests = merged;
+          this.saveDB(db);
+        })
+        .catch((e) => console.warn('Supabase replenishment fetch failed', e));
+    }
     const requests = db.replenishmentRequests || [];
     return requests
       .filter(r => r.orgId === orgId)
@@ -849,6 +888,10 @@ export const StorageService = {
       this.updateOrgInventory(request.orgId, updatedInventory);
     }
     this.saveDB(db);
+    if (navigator.onLine) {
+      updateRequestStatus(requestId, { status })
+        .catch((e) => console.warn('Supabase replenishment update failed', e));
+    }
     return true;
   },
 
@@ -876,6 +919,10 @@ export const StorageService = {
     db.replenishmentRequests[reqIdx].status = 'STOCKED';
     this.updateOrgInventory(request.orgId, updatedInventory);
     this.saveDB(db);
+    if (navigator.onLine) {
+      updateRequestStatus(requestId, { status: 'STOCKED', deliveredQuantity: db.replenishmentRequests[reqIdx].stockedQuantity })
+        .catch((e) => console.warn('Supabase replenishment stock update failed', e));
+    }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('inventory-update'));
     }
@@ -893,6 +940,10 @@ export const StorageService = {
     if (idx >= 0) {
       db.replenishmentRequests[idx].status = status;
       this.saveDB(db);
+    }
+    if (navigator.onLine) {
+      updateRequestStatus(id, { status })
+        .catch((e) => console.warn('Supabase replenishment status update failed', e));
     }
   },
 
@@ -1158,9 +1209,9 @@ export const StorageService = {
       if (remote) {
         const normalized: HelpRequestRecord = {
           ...remote.data,
-          id: remote.id || remote._id,
+          id: remote.id,
           userId: remote.userId,
-          timestamp: remote.timestamp || remote.createdAt,
+          timestamp: remote.timestamp,
           status: remote.status || 'RECEIVED',
           priority: remote.priority || 'LOW',
           synced: true,

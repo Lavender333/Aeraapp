@@ -169,6 +169,36 @@ export async function updateProfileForUser(payload: {
   return { ok: true };
 }
 
+export async function upsertTrustedCommunityConnection(communityId: string) {
+  if (!communityId) return { ok: true };
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  await supabase
+    .from('trusted_community_connections')
+    .delete()
+    .eq('profile_id', authData.user.id)
+    .eq('community_id', communityId);
+
+  const { error } = await supabase
+    .from('trusted_community_connections')
+    .insert({
+      profile_id: authData.user.id,
+      community_id: communityId,
+    });
+
+  if (error) throw error;
+
+  await safeLogActivity({
+    action: 'CREATE',
+    entityType: 'trusted_community_connection',
+    entityId: authData.user.id,
+    orgCode: communityId,
+  });
+
+  return { ok: true };
+}
+
 export async function updateVitalsForUser(payload: {
   household: UserProfile['household'];
   householdMembers: number;
