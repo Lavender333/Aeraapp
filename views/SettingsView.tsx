@@ -1181,11 +1181,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   // --- Render: Access Control Section ---
   if (currentSection === 'ACCESS_CONTROL') {
-    const filteredUsers = users.filter(u => 
-      u.fullName.toLowerCase().includes(userSearch.toLowerCase()) ||
-      u.phone.includes(userSearch) ||
-      u.role.toLowerCase().includes(userSearch.toLowerCase())
-    );
+    const filteredUsers = users.filter(u => {
+      const name = (u.fullName || '').toLowerCase();
+      const phone = (u.phone || '').toLowerCase();
+      const role = (u.role || '').toLowerCase();
+      const query = userSearch.toLowerCase();
+      return name.includes(query) || phone.includes(query) || role.includes(query);
+    });
 
     // If a user is selected, show their detail view
     if (selectedUser) {
@@ -1401,8 +1403,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                          <User size={18} />
                       </div>
                       <div>
-                        <h3 className={`font-bold group-hover:text-brand-700 transition-colors ${user.active ? 'text-slate-900' : 'text-slate-500 line-through'}`}>{user.fullName}</h3>
-                        <p className="text-xs text-slate-500">{user.phone} {user.role === 'ADMIN' && <span className="text-brand-600 font-bold ml-1">(Admin)</span>}</p>
+                        <h3 className={`font-bold group-hover:text-brand-700 transition-colors ${user.active ? 'text-slate-900' : 'text-slate-500 line-through'}`}>{user.fullName || 'Unnamed User'}</h3>
+                        <p className="text-xs text-slate-500">{user.phone || 'No phone'} {user.role === 'ADMIN' && <span className="text-brand-600 font-bold ml-1">(Admin)</span>}</p>
                       </div>
                    </div>
                    <ArrowRight size={18} className="text-slate-300 group-hover:text-brand-500" />
@@ -1413,7 +1415,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                       Status: {user.active ? 'Active' : 'Deactivated'}
                     </span>
                     <span className="text-xs px-2 py-1 bg-slate-100 rounded text-slate-600 font-medium">
-                      {user.role.replace('_', ' ')}
+                      {(user.role || 'UNKNOWN').replace('_', ' ')}
                     </span>
                  </div>
                </div>
