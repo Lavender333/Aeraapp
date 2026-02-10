@@ -354,7 +354,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const openAccessControl = () => {
     if (!isAdmin) return;
     const db = StorageService.getDB();
-    setUsers(db.users);
+    setUsers(Array.isArray(db.users) ? db.users : []);
     setActiveTab('ALL_USERS');
     setCurrentSection('ACCESS_CONTROL');
     setSelectedUser(null);
@@ -1184,7 +1184,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   // --- Render: Access Control Section ---
   if (currentSection === 'ACCESS_CONTROL') {
-    const filteredUsers = users.filter(u => {
+    const safeUsers = Array.isArray(users) ? users : [];
+    const filteredUsers = safeUsers.filter(u => {
       const name = (u.fullName || '').toLowerCase();
       const phone = (u.phone || '').toLowerCase();
       const role = (u.role || '').toLowerCase();
@@ -1343,7 +1344,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               activeTab === 'ALL_USERS' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
-            All Users ({users.length})
+            All Users ({safeUsers.length})
           </button>
           <button 
             onClick={() => setActiveTab('ROLE_DEFINITIONS')}
