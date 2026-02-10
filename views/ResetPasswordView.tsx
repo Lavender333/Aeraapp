@@ -53,11 +53,9 @@ export const ResetPasswordView: React.FC<{ setView: (v: ViewState) => void }> = 
       setIsSaving(true);
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) throw updateError;
-      await supabase.auth.signOut();
-      setInfo('Password updated. Please log in with your new password.');
+      setInfo('Password updated. You can log in now.');
       setPassword('');
       setConfirm('');
-      setTimeout(() => setView('LOGIN'), 800);
     } catch (e: any) {
       setError(e?.message || 'Password reset failed.');
     } finally {

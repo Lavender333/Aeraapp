@@ -1,8 +1,7 @@
 
-import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, RoleDefinition, UserRole, ReplenishmentAggregate } from '../types';
+import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, RoleDefinition } from '../types';
 import { REQUEST_ITEM_MAP } from './validation';
-import { getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, upsertTrustedCommunityConnection, listRequests, createRequest, updateRequestStatus } from './api';
-import { hasSupabaseConfig } from './supabase';
+import { getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser } from './api';
 import { getMemberStatus, setMemberStatus } from './api';
 
 const DB_KEY = 'aera_backend_db_v4'; // Force fresh database
@@ -118,20 +117,6 @@ const SEED_ORGS: OrganizationProfile[] = [
     verified: true,
     active: true,
     registeredPopulation: 1200
-  },
-  {
-    id: 'CH-2026',
-    name: 'Hope Community Hub',
-    type: 'COMMUNITY_CENTER',
-    address: '1200 Hope Way',
-    adminContact: 'Jordan Lee',
-    adminPhone: '555-2200',
-    replenishmentProvider: 'State Relief Warehouse',
-    replenishmentEmail: 'hub-supply@state.example.gov',
-    replenishmentPhone: '555-8200',
-    verified: true,
-    active: true,
-    registeredPopulation: 450
   }
 ];
 
@@ -177,29 +162,12 @@ const SEED_USERS: UserProfile[] = [
     householdMembers: 1, household: [], petDetails: '', medicalNeeds: '', 
     emergencyContactName: 'Dispatcher', emergencyContactPhone: '555-9000', emergencyContactRelation: 'Work',
     communityId: '', role: 'FIRST_RESPONDER', language: 'en', active: true, onboardComplete: true, notifications: { push: true, sms: true, email: true }
-  },
-  {
-    id: 'u5', fullName: 'Test Admin', email: 'admin@test.com', createdAt: seedCreatedAt, phone: '555-2201', address: 'Admin Office',
-    householdMembers: 1, household: [], petDetails: '', medicalNeeds: '',
-    emergencyContactName: 'Ops Desk', emergencyContactPhone: '555-2202', emergencyContactRelation: 'Work',
-    communityId: '', role: 'ADMIN', language: 'en', active: true, onboardComplete: true, notifications: { push: true, sms: true, email: true }
-  },
-  {
-    id: 'u6', fullName: 'Test General User', email: 'user@test.com', createdAt: seedCreatedAt, phone: '555-2203', address: '1200 Hope Way',
-    householdMembers: 2,
-    household: [
-      { id: 'h6', name: 'Alex Lee', age: '29', needs: '' }
-    ],
-    petDetails: '1 Dog', medicalNeeds: '',
-    emergencyContactName: 'Jamie Lee', emergencyContactPhone: '555-2204', emergencyContactRelation: 'Spouse',
-    communityId: 'CH-2026', role: 'GENERAL_USER', language: 'en', active: true, onboardComplete: true, notifications: { push: true, sms: true, email: true }
   }
 ];
 
 const SEED_INVENTORY: Record<string, OrgInventory> = {
   'CH-9921': { water: 120, food: 45, blankets: 300, medicalKits: 15 },
-  'NGO-5500': { water: 5000, food: 2000, blankets: 1000, medicalKits: 500 },
-  'CH-2026': { water: 180, food: 95, blankets: 220, medicalKits: 35 }
+  'NGO-5500': { water: 5000, food: 2000, blankets: 1000, medicalKits: 500 }
 };
 
 const SEED_REPLENISHMENT_REQUESTS: ReplenishmentRequest[] = [
@@ -388,15 +356,68 @@ export const StorageService = {
   },
 
   async registerWithCredentials(email: string, password: string, fullName?: string) {
-    const canUseSupabase = navigator.onLine && hasSupabaseConfig;
-    if (canUseSupabase) {
-      const resp = await registerAuth({ email, password, fullName });
+    const resp = await registerAuth({ email, password, fullName });
+    if (resp?.token) this.setAuthToken(resp.token);
+    if (resp?.refreshToken) this.setRefreshToken(resp.refreshToken);
+    if (resp?.user) {
+      const profile: UserProfile = {
+        id: resp.user.id,
+        fullName: resp.user.fullName || fullName || '',
+        email: resp.user.email || '',
+        phone: resp.user.phone || '',
+        address: '',
+        householdMembers: 1,
+        household: [],
+        petDetails: '',
+        medicalNeeds: '',
+        emergencyContactName: '',
+        emergencyContactPhone: '',
+        emergencyContactRelation: '',
+        communityId: resp.user.orgId || '',
+        role: resp.user.role || 'GENERAL_USER',
+        language: 'en',
+        active: true,
+        onboardComplete: false,
+        notifications: { push: true, sms: true, email: true }
+      };
+      this.saveProfile(profile);
+    }
+    return resp;
+  },
+
+  async loginWithCredentials(email: string, password: string) {
+    const db = this.getDB();
+    if (!IS_PRODUCTION) {
+      // Try local database first (for demo/offline mode)
+      const user = db.users.find(u => u.email === email);
+      if (user) {
+        if (user.active === false) {
+          throw new Error('Account deactivated. Contact Admin.');
+        }
+        db.currentUser = user.id;
+        this.saveDB(db);
+        return { 
+          token: 'local-demo-token', 
+          user: { 
+            id: user.id, 
+            email: user.email, 
+            fullName: user.fullName, 
+            role: user.role,
+            onboardComplete: user.onboardComplete 
+          } 
+        };
+      }
+    }
+
+    // Supabase auth
+    try {
+      const resp = await loginAuth({ email, password });
       if (resp?.token) this.setAuthToken(resp.token);
       if (resp?.refreshToken) this.setRefreshToken(resp.refreshToken);
       if (resp?.user) {
         const profile: UserProfile = {
           id: resp.user.id,
-          fullName: resp.user.fullName || fullName || '',
+          fullName: resp.user.fullName || '',
           email: resp.user.email || '',
           phone: resp.user.phone || '',
           address: '',
@@ -408,7 +429,7 @@ export const StorageService = {
           emergencyContactPhone: '',
           emergencyContactRelation: '',
           communityId: resp.user.orgId || '',
-          role: (resp.user.role as UserRole) || 'GENERAL_USER',
+          role: resp.user.role || 'GENERAL_USER',
           language: 'en',
           active: true,
           onboardComplete: false,
@@ -417,124 +438,10 @@ export const StorageService = {
         this.saveProfile(profile);
       }
       return resp;
+    } catch (err: any) {
+      const message = err?.message || 'Login failed. Please check your credentials.';
+      throw new Error(message);
     }
-
-    const fallbackProfile: UserProfile = {
-      id: 'u_' + Date.now(),
-      fullName: fullName || '',
-      email,
-      phone: '',
-      address: '',
-      householdMembers: 1,
-      household: [],
-      petDetails: '',
-      medicalNeeds: '',
-      emergencyContactName: '',
-      emergencyContactPhone: '',
-      emergencyContactRelation: '',
-      communityId: '',
-      role: 'GENERAL_USER',
-      language: 'en',
-      active: true,
-      onboardComplete: false,
-      notifications: { push: true, sms: true, email: true }
-    };
-    this.saveProfile(fallbackProfile);
-    return {
-      token: 'local-demo-token',
-      refreshToken: null,
-      needsEmailConfirm: false,
-      user: {
-        id: fallbackProfile.id,
-        email: fallbackProfile.email || '',
-        phone: '',
-        fullName: fallbackProfile.fullName,
-        role: fallbackProfile.role,
-        orgId: ''
-      }
-    };
-  },
-
-  async loginWithCredentials(email: string, password: string) {
-    const db = this.getDB();
-    const canUseSupabase = navigator.onLine && hasSupabaseConfig;
-
-    if (canUseSupabase) {
-      try {
-        const resp = await loginAuth({ email, password });
-        if (resp?.token) this.setAuthToken(resp.token);
-        if (resp?.refreshToken) this.setRefreshToken(resp.refreshToken);
-        if (resp?.user) {
-          const profile: UserProfile = {
-            id: resp.user.id,
-            fullName: resp.user.fullName || '',
-            email: resp.user.email || '',
-            phone: resp.user.phone || '',
-            address: '',
-            householdMembers: 1,
-            household: [],
-            petDetails: '',
-            medicalNeeds: '',
-            emergencyContactName: '',
-            emergencyContactPhone: '',
-            emergencyContactRelation: '',
-            communityId: resp.user.orgId || '',
-            role: (resp.user.role as UserRole) || 'GENERAL_USER',
-            language: 'en',
-            active: true,
-            onboardComplete: false,
-            notifications: { push: true, sms: true, email: true }
-          };
-          this.saveProfile(profile);
-        }
-        return resp;
-      } catch (err: any) {
-        const localUser = db.users.find(u => u.email === email);
-        if (localUser) {
-          if (localUser.active === false) {
-            throw new Error('Account deactivated. Contact Admin.');
-          }
-          db.currentUser = localUser.id;
-          this.saveDB(db);
-          return {
-            token: 'local-demo-token',
-            user: {
-              id: localUser.id,
-              email: localUser.email,
-              fullName: localUser.fullName,
-              role: localUser.role,
-              onboardComplete: localUser.onboardComplete
-            }
-          };
-        }
-        const message = err?.message || 'Login failed. Please check your credentials.';
-        throw new Error(message);
-      }
-    }
-
-    const user = db.users.find(u => u.email === email);
-    if (user) {
-      if (user.active === false) {
-        throw new Error('Account deactivated. Contact Admin.');
-      }
-      db.currentUser = user.id;
-      this.saveDB(db);
-      return { 
-        token: 'local-demo-token', 
-        user: { 
-          id: user.id, 
-          email: user.email, 
-          fullName: user.fullName, 
-          role: user.role,
-          onboardComplete: user.onboardComplete 
-        } 
-      };
-    }
-
-    if (!canUseSupabase && !IS_PRODUCTION) {
-      throw new Error('Offline login failed. Please connect to the internet.');
-    }
-    throw new Error('Login failed. Please check your credentials.');
   },
 
   async requestPasswordReset(email: string) {
@@ -652,9 +559,6 @@ export const StorageService = {
             emergencyContactPhone: profile.emergencyContactPhone,
             emergencyContactRelation: profile.emergencyContactRelation,
           });
-          if (profile.communityId) {
-            await upsertTrustedCommunityConnection(profile.communityId);
-          }
         } catch (err) {
           console.warn('Supabase profile sync failed', err);
         }
@@ -846,18 +750,6 @@ export const StorageService = {
     if (!db.replenishmentRequests) db.replenishmentRequests = [];
     db.replenishmentRequests.unshift(request);
     this.saveDB(db);
-    if (isOnline) {
-      createRequest(orgId, { item, quantity, provider: request.provider, orgName: request.orgName })
-        .then((remote) => {
-          const idx = db.replenishmentRequests.findIndex(r => r.id === request.id);
-          if (idx >= 0) {
-            db.replenishmentRequests[idx].id = remote.id;
-            db.replenishmentRequests[idx].synced = true;
-            this.saveDB(db);
-          }
-        })
-        .catch((e) => console.warn('Supabase replenishment create failed', e));
-    }
     return true;
   },
 
@@ -883,18 +775,6 @@ export const StorageService = {
     if (!db.replenishmentRequests) db.replenishmentRequests = [];
     db.replenishmentRequests.unshift(request);
     this.saveDB(db);
-    if (isOnline) {
-      createRequest(orgId, payload)
-        .then((remote) => {
-          const idx = db.replenishmentRequests.findIndex(r => r.id === request.id);
-          if (idx >= 0) {
-            db.replenishmentRequests[idx].id = remote.id;
-            db.replenishmentRequests[idx].synced = true;
-            this.saveDB(db);
-          }
-        })
-        .catch((e) => console.warn('Supabase replenishment create failed', e));
-    }
     return true;
   },
 
@@ -937,18 +817,6 @@ export const StorageService = {
 
   getOrgReplenishmentRequests(orgId: string): ReplenishmentRequest[] {
     const db = this.getDB();
-    if (navigator.onLine) {
-      listRequests(orgId)
-        .then((remote) => {
-          const merged = [...remote, ...(db.replenishmentRequests || [])].reduce((acc: ReplenishmentRequest[], req) => {
-            if (!acc.find(r => r.id === req.id)) acc.push(req);
-            return acc;
-          }, []);
-          db.replenishmentRequests = merged;
-          this.saveDB(db);
-        })
-        .catch((e) => console.warn('Supabase replenishment fetch failed', e));
-    }
     const requests = db.replenishmentRequests || [];
     return requests
       .filter(r => r.orgId === orgId)
@@ -981,10 +849,6 @@ export const StorageService = {
       this.updateOrgInventory(request.orgId, updatedInventory);
     }
     this.saveDB(db);
-    if (navigator.onLine) {
-      updateRequestStatus(requestId, { status })
-        .catch((e) => console.warn('Supabase replenishment update failed', e));
-    }
     return true;
   },
 
@@ -1012,10 +876,6 @@ export const StorageService = {
     db.replenishmentRequests[reqIdx].status = 'STOCKED';
     this.updateOrgInventory(request.orgId, updatedInventory);
     this.saveDB(db);
-    if (navigator.onLine) {
-      updateRequestStatus(requestId, { status: 'STOCKED', deliveredQuantity: db.replenishmentRequests[reqIdx].stockedQuantity })
-        .catch((e) => console.warn('Supabase replenishment stock update failed', e));
-    }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('inventory-update'));
     }
@@ -1033,10 +893,6 @@ export const StorageService = {
     if (idx >= 0) {
       db.replenishmentRequests[idx].status = status;
       this.saveDB(db);
-    }
-    if (navigator.onLine) {
-      updateRequestStatus(id, { status })
-        .catch((e) => console.warn('Supabase replenishment status update failed', e));
     }
   },
 
@@ -1302,9 +1158,9 @@ export const StorageService = {
       if (remote) {
         const normalized: HelpRequestRecord = {
           ...remote.data,
-          id: remote.id,
+          id: remote.id || remote._id,
           userId: remote.userId,
-          timestamp: remote.timestamp,
+          timestamp: remote.timestamp || remote.createdAt,
           status: remote.status || 'RECEIVED',
           priority: remote.priority || 'LOW',
           synced: true,

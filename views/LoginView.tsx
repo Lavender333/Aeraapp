@@ -187,8 +187,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
                       setIsResetting(true);
                       const { error: updateError } = await supabase.auth.updateUser({ password: recoveryPassword });
                       if (updateError) throw updateError;
-                      await supabase.auth.signOut();
-                      setInfo('Password updated. Please log in with your new password.');
+                      setInfo('Password updated. You can log in now.');
                       setIsRecovery(false);
                       setShowReset(false);
                       setRecoveryPassword('');
@@ -224,7 +223,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
                     } catch (e: any) {
                       const message = String(e?.message || '').toLowerCase();
                       if (message.includes('rate') && message.includes('limit')) {
-                        setError('Email reset: Too many reset requests. Please wait a few minutes and try again.');
+                        setError('Too many reset requests. Please wait a few minutes and try again.');
                       } else {
                         setError(e?.message || 'Reset request failed');
                       }
