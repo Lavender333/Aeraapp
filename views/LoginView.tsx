@@ -223,7 +223,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
                     } catch (e: any) {
                       const message = String(e?.message || '').toLowerCase();
                       if (message.includes('rate') && message.includes('limit')) {
-                        setError('Too many reset requests. Please wait a few minutes and try again.');
+                        setError('Email reset: Too many reset requests. Please wait a few minutes and try again.');
                       } else {
                         setError(e?.message || 'Reset request failed');
                       }
