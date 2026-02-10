@@ -183,17 +183,175 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const exportPDF = () => {
-    const doc = new jsPDF();
-    const lines = buildSummaryText();
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.text('AERA Ready Kit', 14, 18);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(11);
-    doc.text(`Progress: ${checkedCount} of ${totalItems} items`, 14, 26);
-    const body = lines.slice(3).join('\n');
-    doc.setFontSize(10);
-    doc.text(body, 14, 34, { maxWidth: 180 });
+    const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 54;
+    const contentWidth = pageWidth - margin * 2;
+
+    const colors = {
+      primaryBlue: '#5B9BD5',
+      lightBlue: '#DAE8F5',
+      accentGreen: '#70AD47',
+      textDark: '#2C3E50',
+      textMedium: '#5A6C7D',
+      borderLight: '#BDD7EE',
+      headerBg: '#4472C4',
+      categoryBg: '#E7F3FF',
+      white: '#FFFFFF',
+    };
+
+    const setFill = (hex: string) => doc.setFillColor(hex);
+    const setText = (hex: string) => doc.setTextColor(hex);
+    const setDraw = (hex: string) => doc.setDrawColor(hex);
+
+    let y = margin;
+
+    const addTitle = () => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(24);
+      setText(colors.headerBg);
+      doc.text('Your Ready Kit Checklist', pageWidth / 2, y, { align: 'center' });
+      y += 22;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(12);
+      setText(colors.textMedium);
+      doc.text('Gather these helpful items to have on hand when you need them', pageWidth / 2, y, { align: 'center' });
+      y += 28;
+    };
+
+    const addProgressBox = () => {
+      const boxHeight = 120;
+      setFill(colors.lightBlue);
+      setDraw(colors.primaryBlue);
+      doc.rect(margin, y, contentWidth, boxHeight, 'FD');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      setText(colors.white);
+      setFill(colors.primaryBlue);
+      doc.rect(margin, y, contentWidth, 26, 'F');
+      doc.text('My Progress Tracker', margin + 12, y + 18);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(11);
+      setText(colors.textDark);
+      const progressLines = [
+        `☐ Food & Water (${CATEGORIES[0].items.length} items)`,
+        `☐ Health Items (${CATEGORIES[1].items.length} items)`,
+        `☐ Light & Power (${CATEGORIES[2].items.length} items)`,
+        `☐ Papers & Money (${CATEGORIES[3].items.length} items)`,
+      ];
+      progressLines.forEach((line, index) => {
+        doc.text(line, margin + 16, y + 46 + index * 18);
+      });
+      y += boxHeight + 28;
+    };
+
+    const addCategoryHeader = (title: string, description: string) => {
+      const headerHeight = 32;
+      setFill(colors.categoryBg);
+      setDraw(colors.primaryBlue);
+      doc.rect(margin, y, contentWidth, headerHeight, 'FD');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(15);
+      setText(colors.headerBg);
+      doc.text(title, margin + 12, y + 20);
+      y += headerHeight + 8;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      setText(colors.textMedium);
+      doc.text(description, margin + 12, y + 2);
+      y += 12;
+    };
+
+    const addItemsTable = (items: KitCategory['items']) => {
+      const rowHeight = 30;
+      const checkboxWidth = 24;
+      const qtyWidth = 90;
+      const textWidth = contentWidth - checkboxWidth - qtyWidth;
+
+      items.forEach((item, index) => {
+        if (y + rowHeight + 40 > pageHeight) {
+          doc.addPage();
+          y = margin;
+        }
+        const isAlt = index % 2 === 1;
+        setFill(isAlt ? colors.lightBlue : colors.white);
+        setDraw(colors.borderLight);
+        doc.rect(margin, y, contentWidth, rowHeight, 'FD');
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        setText(colors.accentGreen);
+        doc.text('☐', margin + 8, y + 20);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        setText(colors.textDark);
+        doc.text(item.title, margin + checkboxWidth, y + 14, { maxWidth: textWidth - 10 });
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        setText(colors.textMedium);
+        doc.text(item.description, margin + checkboxWidth, y + 26, { maxWidth: textWidth - 10 });
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        setText(colors.textMedium);
+        doc.text(item.quantity, margin + checkboxWidth + textWidth + qtyWidth - 8, y + 18, { align: 'right' });
+
+        y += rowHeight;
+      });
+      y += 16;
+    };
+
+    const addTips = () => {
+      if (y + 120 > pageHeight) {
+        doc.addPage();
+        y = margin;
+      }
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      setText(colors.headerBg);
+      doc.text('Helpful Tips', margin, y + 14);
+      y += 22;
+      const tips = [
+        'Store your kit in an easy-to-reach spot that everyone in your home knows about',
+        'Check expiration dates every 6 months and replace items as needed',
+        'Keep this list with your kit so you can re-check it later',
+        'Share this checklist with family members so everyone can help gather items',
+      ];
+      const boxHeight = 86;
+      setFill(colors.lightBlue);
+      setDraw(colors.primaryBlue);
+      doc.rect(margin, y, contentWidth, boxHeight, 'FD');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      setText(colors.accentGreen);
+      tips.forEach((tip, index) => {
+        doc.text('✓', margin + 12, y + 22 + index * 18);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        setText(colors.textDark);
+        doc.text(tip, margin + 28, y + 22 + index * 18, { maxWidth: contentWidth - 40 });
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        setText(colors.accentGreen);
+      });
+      y += boxHeight + 10;
+    };
+
+    addTitle();
+    addProgressBox();
+
+    CATEGORIES.forEach((category) => {
+      if (y + 140 > pageHeight) {
+        doc.addPage();
+        y = margin;
+      }
+      addCategoryHeader(`${category.title}`, category.subtitle);
+      addItemsTable(category.items);
+    });
+
+    addTips();
     doc.save('AERA-Ready-Kit.pdf');
   };
 
