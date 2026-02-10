@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card } from '../components/Card';
-import { ViewState, HelpRequestRecord, UserRole, OrgInventory } from '../types';
+import { ViewState, HelpRequestRecord, UserRole, OrgInventory, OrgMember, OrganizationProfile } from '../types';
 import { StorageService } from '../services/storage';
 import { getInventoryStatuses } from '../services/inventoryStatus';
 import { getBroadcast } from '../services/api';
@@ -66,9 +66,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [userRole, setUserRole] = useState<UserRole>('GENERAL_USER');
   const [userName, setUserName] = useState('');
   const [connectedOrg, setConnectedOrg] = useState<string | null>(null);
+  const [orgProfile, setOrgProfile] = useState<OrganizationProfile | null>(null);
   const [orgPopulation, setOrgPopulation] = useState<number>(0);
   const [orgInventory, setOrgInventory] = useState<OrgInventory | null>(null);
   const [orgMemberCount, setOrgMemberCount] = useState<number>(0);
+  const [orgMembers, setOrgMembers] = useState<OrgMember[]>([]);
   const [tickerMessage, setTickerMessage] = useState('');
   const [showFinanceModal, setShowFinanceModal] = useState(false);
   const [financeTierKey, setFinanceTierKey] = useState<'tier1' | 'tier2' | 'tier3'>('tier2');
@@ -98,15 +100,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     
     if (profile.communityId) {
        const org = StorageService.getOrganization(profile.communityId);
-       if (org) {
-         setConnectedOrg(org.name);
-         setOrgPopulation(org.registeredPopulation || 0);
-         StorageService.fetchOrgMembersRemote(org.id).then(({ members }) => setOrgMemberCount(members.length));
-         StorageService.fetchOrgInventoryRemote(org.id).then(({ inventory, fromCache }) => {
-           setOrgInventory(inventory);
-           setInventoryFallback(fromCache);
-         });
-       }
+       setConnectedOrg(org?.name || profile.communityId);
+       setOrgProfile(org || null);
+       setOrgPopulation(org?.registeredPopulation || 0);
+       StorageService.fetchOrgMembersRemote(profile.communityId).then(({ members }) => {
+         setOrgMemberCount(members.length);
+         setOrgMembers(members);
+       });
+       StorageService.fetchOrgInventoryRemote(profile.communityId).then(({ inventory, fromCache }) => {
+         setOrgInventory(inventory);
+         setInventoryFallback(fromCache);
+       });
     }
     
     // Load Active Request
@@ -137,14 +141,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
        StorageService.getActiveRequest().then(setActiveRequest);
        if (updatedProfile.communityId) {
          const org = StorageService.getOrganization(updatedProfile.communityId);
-         if (org) {
-           setOrgPopulation(org.registeredPopulation || 0);
-           StorageService.fetchOrgMembersRemote(updatedProfile.communityId).then(({ members }) => setOrgMemberCount(members.length));
-           StorageService.fetchOrgInventoryRemote(org.id).then(({ inventory, fromCache }) => {
-             setOrgInventory(inventory);
-             setInventoryFallback(fromCache);
-           });
-         }
+         setConnectedOrg(org?.name || updatedProfile.communityId);
+         setOrgProfile(org || null);
+         setOrgPopulation(org?.registeredPopulation || 0);
+         StorageService.fetchOrgMembersRemote(updatedProfile.communityId).then(({ members }) => {
+           setOrgMemberCount(members.length);
+           setOrgMembers(members);
+         });
+         StorageService.fetchOrgInventoryRemote(updatedProfile.communityId).then(({ inventory, fromCache }) => {
+           setOrgInventory(inventory);
+           setInventoryFallback(fromCache);
+         });
+       } else {
+         setConnectedOrg(null);
+         setOrgProfile(null);
+         setOrgPopulation(0);
+         setOrgInventory(null);
+         setOrgMemberCount(0);
+         setOrgMembers([]);
        }
     };
     
@@ -216,6 +230,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
       StorageService.saveProfile({ ...profile, communityId: normalized });
 
       setConnectedOrg(remoteOrg.orgName || normalized);
+      setOrgProfile(localOrg || null);
       setOrgPopulation(localOrg?.registeredPopulation || 0);
 
       const [{ members }, { inventory, fromCache }] = await Promise.all([
@@ -224,6 +239,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
       ]);
 
       setOrgMemberCount(members.length);
+      setOrgMembers(members);
       setOrgInventory(inventory);
       setInventoryFallback(fromCache);
     } catch (err) {
@@ -231,6 +247,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     } finally {
       setIsConnectingCommunity(false);
     }
+  };
+
+  const handleDisconnectCommunity = () => {
+    const profile = StorageService.getProfile();
+    StorageService.saveProfile({ ...profile, communityId: '' });
+    setConnectedOrg(null);
+    setOrgProfile(null);
+    setOrgPopulation(0);
+    setOrgInventory(null);
+    setOrgMemberCount(0);
+    setOrgMembers([]);
+    setCommunityIdInput('');
+    setCommunityConnectError(null);
+    setIsConnectingCommunity(false);
   };
 
   const respondToPing = (isSafe: boolean) => {
@@ -246,6 +276,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const isContractor = userRole === 'CONTRACTOR';
   const isGeneralUser = userRole === 'GENERAL_USER';
   const isProStatusViewer = userRole === 'ADMIN' || userRole === 'FIRST_RESPONDER';
+
+  const safeCount = orgMembers.filter((member) => member.status === 'SAFE').length;
+  const dangerCount = orgMembers.filter((member) => member.status === 'DANGER').length;
+  const accountedCount = safeCount + dangerCount;
+  const totalMembers = orgMembers.length || orgMemberCount || orgPopulation;
+  const evacuatedPercent = totalMembers ? Math.round((accountedCount / totalMembers) * 100) : null;
+  const rescuedDisplay = totalMembers ? safeCount : null;
+  const sheltersOpen = orgProfile?.currentBroadcast
+    ? orgProfile.currentBroadcast.toLowerCase().includes('shelter') ? 1 : 0
+    : null;
 
   /**
    * Financial model defaults aligned with AERA business plan:
@@ -690,6 +730,44 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         </div>
       )}
 
+      {hasCommunity && (
+        <Card
+          title="Community Connection"
+          icon={<Building2 size={20} />}
+          className="border-l-4 border-l-brand-500"
+        >
+          <p className="text-sm text-slate-600">
+            Connected to <span className="font-semibold text-slate-900">{connectedOrg}</span>. Update the Community ID to reconnect.
+          </p>
+          <div className="mt-4 space-y-2">
+            <Input
+              placeholder="Community ID (e.g., CH-1234)"
+              value={communityIdInput}
+              onChange={(e) => setCommunityIdInput(e.target.value)}
+            />
+            {communityConnectError && (
+              <p className="text-xs text-red-600 font-semibold">{communityConnectError}</p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                onClick={handleConnectCommunity}
+                disabled={isConnectingCommunity}
+              >
+                {isConnectingCommunity ? 'Updating...' : 'Update Community'}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleDisconnectCommunity}
+              >
+                Disconnect
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {!hasCommunity && (
         <Card
           title="Trusted Community Connection"
@@ -907,15 +985,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         >
            <div className="grid grid-cols-3 gap-2 text-center divide-x divide-slate-700">
               <div>
-                 <div className="text-xl font-bold text-brand-400">85%</div>
+                 <div className="text-xl font-bold text-brand-400">
+                   {evacuatedPercent === null ? 'N/A' : `${evacuatedPercent}%`}
+                 </div>
                  <div className="text-[10px] text-slate-400">Evacuated</div>
               </div>
               <div>
-                 <div className="text-xl font-bold text-blue-400">324</div>
+                 <div className="text-xl font-bold text-blue-400">
+                   {rescuedDisplay === null ? 'N/A' : rescuedDisplay}
+                 </div>
                  <div className="text-[10px] text-slate-400">Rescued</div>
               </div>
               <div>
-                 <div className="text-xl font-bold text-green-400">12</div>
+                 <div className="text-xl font-bold text-green-400">
+                   {sheltersOpen === null ? 'N/A' : sheltersOpen}
+                 </div>
                  <div className="text-[10px] text-slate-400">Shelters Open</div>
              </div>
            </div>
