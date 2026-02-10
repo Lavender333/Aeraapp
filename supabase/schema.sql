@@ -348,6 +348,19 @@ CREATE INDEX IF NOT EXISTS idx_members_org_id ON members(org_id);
 CREATE INDEX IF NOT EXISTS idx_members_status ON members(status);
 CREATE INDEX IF NOT EXISTS idx_members_created ON members(created_at DESC);
 
+-- Ready Kit (user preparedness checklist)
+CREATE TABLE IF NOT EXISTS ready_kits (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  profile_id UUID UNIQUE NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  checked_ids JSONB DEFAULT '[]',
+  total_items INTEGER DEFAULT 0,
+  checked_items INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ready_kits_profile_id ON ready_kits(profile_id);
+
 -- =====================================================
 -- AUDIT & ACTIVITY LOGGING
 -- =====================================================

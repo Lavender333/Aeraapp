@@ -276,6 +276,50 @@ export async function syncPetsForUser(petDetails: string) {
   return { ok: true };
 }
 
+export async function saveReadyKit(payload: {
+  checkedIds: string[];
+  totalItems: number;
+  checkedItems: number;
+}) {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const { error } = await supabase
+    .from('ready_kits')
+    .upsert({
+      profile_id: authData.user.id,
+      checked_ids: payload.checkedIds || [],
+      total_items: payload.totalItems || 0,
+      checked_items: payload.checkedItems || 0,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'profile_id' });
+
+  if (error) throw error;
+
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'ready_kit',
+    entityId: authData.user.id,
+    details: { checkedItems: payload.checkedItems, totalItems: payload.totalItems },
+  });
+
+  return { ok: true };
+}
+
+export async function fetchReadyKit() {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('ready_kits')
+    .select('checked_ids, total_items, checked_items, updated_at')
+    .eq('profile_id', authData.user.id)
+    .single();
+
+  if (error) return null;
+  return data;
+}
+
 export async function syncMemberDirectoryForUser(payload: {
   communityId?: string;
   fullName: string;

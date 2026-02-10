@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Check, ChevronDown, FileText, HeartPulse, Save, Share2, Sparkles, Droplets, Flashlight } from 'lucide-react';
 import { Button } from '../components/Button';
 import { ViewState } from '../types';
+import { fetchReadyKit, saveReadyKit } from '../services/api';
 
 const READY_KIT_STORAGE_KEY = 'aeraReadyKit';
 
@@ -94,19 +95,43 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   useEffect(() => {
     const saved = localStorage.getItem(READY_KIT_STORAGE_KEY);
-    if (!saved) return;
-    try {
-      const parsed = JSON.parse(saved);
-      if (parsed?.checkedIds && Array.isArray(parsed.checkedIds)) {
-        const restored: Record<string, boolean> = {};
-        parsed.checkedIds.forEach((id: string) => {
-          restored[id] = true;
-        });
-        setCheckedItems(restored);
+    let localUpdatedAt = 0;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed?.checkedIds && Array.isArray(parsed.checkedIds)) {
+          const restored: Record<string, boolean> = {};
+          parsed.checkedIds.forEach((id: string) => {
+            restored[id] = true;
+          });
+          setCheckedItems(restored);
+        }
+        if (parsed?.lastUpdated) {
+          localUpdatedAt = Date.parse(parsed.lastUpdated) || 0;
+        }
+      } catch {
+        // ignore parse errors
       }
-    } catch {
-      // ignore parse errors
     }
+
+    const loadRemote = async () => {
+      try {
+        const remote = await fetchReadyKit();
+        if (!remote?.checked_ids || !Array.isArray(remote.checked_ids)) return;
+        const remoteUpdatedAt = remote.updated_at ? Date.parse(remote.updated_at) : 0;
+        if (remoteUpdatedAt >= localUpdatedAt) {
+          const restored: Record<string, boolean> = {};
+          remote.checked_ids.forEach((id: string) => {
+            restored[id] = true;
+          });
+          setCheckedItems(restored);
+        }
+      } catch {
+        // ignore remote load errors
+      }
+    };
+
+    loadRemote();
   }, []);
 
   const toggleCategory = (id: string) => {
@@ -117,7 +142,7 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setCheckedItems((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const saveKit = () => {
+  const saveKit = async () => {
     const checkedIds = Object.keys(checkedItems).filter((id) => checkedItems[id]);
     localStorage.setItem(
       READY_KIT_STORAGE_KEY,
@@ -128,6 +153,15 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         lastUpdated: new Date().toISOString(),
       })
     );
+    try {
+      await saveReadyKit({
+        checkedIds,
+        totalItems,
+        checkedItems: checkedIds.length,
+      });
+    } catch {
+      // keep local save even if remote sync fails
+    }
     setShowSaved(true);
   };
 
