@@ -187,7 +187,8 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
                       setIsResetting(true);
                       const { error: updateError } = await supabase.auth.updateUser({ password: recoveryPassword });
                       if (updateError) throw updateError;
-                      setInfo('Password updated. You can log in now.');
+                      await supabase.auth.signOut();
+                      setInfo('Password updated. Please log in with your new password.');
                       setIsRecovery(false);
                       setShowReset(false);
                       setRecoveryPassword('');
