@@ -36,7 +36,13 @@ import {
   Calculator,
   BarChart3,
   Shield,
-  TrendingUp
+  TrendingUp,
+  BookOpen,
+  ExternalLink,
+  ClipboardCheck,
+  Phone,
+  Home,
+  User
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -792,6 +798,111 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
             </div>
           </div>
         </Card>
+      )}
+
+      {isGeneralUser && (
+        <>
+          <div className="mt-4">
+            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">National Preparedness</h3>
+            <p className="text-xs text-slate-500 mt-1">Official resources to help you stay ready</p>
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <a
+                href="https://www.ready.gov/"
+                target="_blank"
+                rel="noreferrer"
+                className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:border-slate-300 hover:shadow-md transition-all"
+              >
+                <div className="w-10 h-10 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center mb-3">
+                  <BookOpen size={18} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <h4 className="font-semibold text-slate-900 text-sm">FEMA Safety Guides</h4>
+                  <ExternalLink size={12} className="text-slate-400" />
+                </div>
+                <p className="text-[11px] text-slate-500 mt-2">Official how-to guides for floods, fires, and outages.</p>
+                <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 mt-3">
+                  Explore Guides
+                </div>
+              </a>
+              <button
+                type="button"
+                onClick={() => setView('BUILD_KIT')}
+                className="text-left bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:border-slate-300 hover:shadow-md transition-all"
+              >
+                <div className="w-10 h-10 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center mb-3">
+                  <ClipboardCheck size={18} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <h4 className="font-semibold text-slate-900 text-sm">Emergency Checklists</h4>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-2">Printable lists to build a 72-hour safety kit.</p>
+                <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 mt-3">
+                  Build a Kit
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Your Personal Toolkit</h3>
+            <p className="text-xs text-slate-500 mt-1">Manage your safety info and household details</p>
+            <div className="space-y-3 mt-3">
+              <Card
+                className="hover:border-brand-300"
+                onClick={() => setView('SETTINGS')}
+              >
+                <div className="flex items-start gap-4">
+                  <div className="w-11 h-11 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center">
+                    <Phone size={18} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold text-slate-900">Emergency Contact</h4>
+                      <span className="text-[10px] font-bold uppercase bg-slate-100 text-slate-500 px-2 py-1 rounded">Available Now</span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">Designate a trusted person to receive your safety status updates and alerts.</p>
+                  </div>
+                </div>
+              </Card>
+
+              <Card
+                className="hover:border-brand-300"
+                onClick={() => setView('SETTINGS')}
+              >
+                <div className="flex items-start gap-4">
+                  <div className="w-11 h-11 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                    <Home size={18} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold text-slate-900">Household Details</h4>
+                      <span className="text-[10px] font-bold uppercase bg-slate-100 text-slate-500 px-2 py-1 rounded">Available Now</span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">Add family members, track their safety status, and keep household info organized.</p>
+                  </div>
+                </div>
+              </Card>
+
+              <Card
+                className="hover:border-brand-300"
+                onClick={() => setView('SETTINGS')}
+              >
+                <div className="flex items-start gap-4">
+                  <div className="w-11 h-11 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center">
+                    <User size={18} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold text-slate-900">My Profile</h4>
+                      <span className="text-[10px] font-bold uppercase bg-slate-100 text-slate-500 px-2 py-1 rounded">Available Now</span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">Update your contact info, location settings, and notification preferences.</p>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          </div>
+        </>
       )}
 
       {hasCommunity && (

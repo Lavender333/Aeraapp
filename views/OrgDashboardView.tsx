@@ -370,7 +370,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
       <div className="bg-white border-b border-slate-200 p-4 sticky top-0 z-20 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <button onClick={() => setView('SETTINGS')} className="p-2 -ml-2 text-slate-500 hover:text-slate-800">
+            <button onClick={() => setView('DASHBOARD')} className="p-2 -ml-2 text-slate-500 hover:text-slate-800">
               <ArrowLeft size={24} />
             </button>
             <div>

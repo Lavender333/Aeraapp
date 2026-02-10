@@ -18,6 +18,7 @@ import { LoginView } from './views/LoginView';
 import { PresentationView } from './views/PresentationView';
 import { PrivacyPolicyView } from './views/PrivacyPolicyView';
 import { ResetPasswordView } from './views/ResetPasswordView';
+import { BuildKitView } from './views/BuildKitView';
 import { BottomNav } from './components/BottomNav';
 import { ViewState } from './types';
 import { StorageService } from './services/storage';
@@ -39,14 +40,17 @@ export default function App() {
       try {
         const { data } = await supabase.auth.getSession();
         if (!active) return;
+        const hash = window.location.hash || '';
+        const search = window.location.search || '';
         const isRecoveryPath = window.location.pathname.includes('reset-password');
-        const isRecoveryHash = (window.location.hash || '').includes('type=recovery') || (window.location.search || '').includes('type=recovery');
+        const isRecoveryHash = hash.includes('type=recovery') || search.includes('type=recovery') || hash.includes('reset-password');
         if (isRecoveryPath || isRecoveryHash) {
           setPostSplashView('RESET_PASSWORD');
+          setView('RESET_PASSWORD');
         } else {
           setPostSplashView('LOGIN');
+          setView('SPLASH');
         }
-        setView('SPLASH');
       } catch {
         if (active) setView('SPLASH');
       } finally {
@@ -111,6 +115,8 @@ export default function App() {
         return <LoginView setView={setView} />;
       case 'RESET_PASSWORD':
         return <ResetPasswordView setView={setView} />;
+      case 'BUILD_KIT':
+        return <BuildKitView setView={setView} />;
       case 'ORG_REGISTRATION':
         return <OrgRegistrationView setView={setView} />;
       case 'DASHBOARD':
@@ -151,6 +157,7 @@ export default function App() {
                   currentView !== 'ACCOUNT_SETUP' &&
                   currentView !== 'LOGIN' && 
                   currentView !== 'RESET_PASSWORD' &&
+                  currentView !== 'BUILD_KIT' &&
                   currentView !== 'ORG_REGISTRATION' &&
                   currentView !== 'ORG_DASHBOARD' &&
                   currentView !== 'PRIVACY_POLICY';
