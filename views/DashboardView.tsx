@@ -794,38 +794,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         </Card>
       )}
 
-      {/* Critical Action: Get Help or Status */}
-      {hasCommunity && activeRequest && (
-        <Card 
-          className="bg-blue-50 border-blue-100 hover:border-blue-200"
-          onClick={() => setView('HELP_WIZARD')}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-blue-100 rounded-full text-blue-600 relative">
-                <Radio size={32} className="animate-pulse" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-blue-900">{t('dash.request_active')}</h2>
-                <div className="flex flex-col">
-                  {activeRequest.synced === false ? (
-                    <span className="text-amber-600 text-sm font-bold flex items-center gap-1">
-                      <WifiOff size={12} /> Pending Sync
-                    </span>
-                  ) : (
-                    <span className="text-blue-700 text-sm">{t('dash.tracking')}</span>
-                  )}
-                  {activeRequest.priority === 'CRITICAL' && (
-                     <span className="text-xs font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded w-fit mt-1">TRIAGE: CRITICAL</span>
-                  )}
-                </div>
-              </div>
-            </div>
-            <ChevronRight className="text-blue-400" />
-          </div>
-        </Card>
-      )}
-
       {hasCommunity && (
         <>
           {/* Resource Alert System (Community Only) */}
@@ -836,7 +804,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
              <div className="flex-1">
                <h3 className="font-bold text-amber-900 text-sm">{t('dash.resource_depot')}</h3>
                <p className="text-xs text-amber-800">
-                 {connectedOrg} (My Community) has reported <span className="font-bold">Water & Food</span> availability.
+                 {orgInventory
+                   ? `${connectedOrg} hub inventory — Water ${orgInventory.water}, Food ${orgInventory.food}, Blankets ${orgInventory.blankets}, Med Kits ${orgInventory.medicalKits}.`
+                   : `${connectedOrg} hub inventory is not available yet.`}
                </p>
              </div>
              <ChevronRight size={16} className="text-amber-500 mt-2" />

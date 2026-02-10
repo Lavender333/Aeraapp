@@ -20,6 +20,13 @@ export const LogisticsView: React.FC<{ setView: (v: ViewState) => void }> = ({ s
     setInventory(StorageService.getOrgInventory(orgId));
     setMemberCount(StorageService.getOrgMembers(orgId).length);
 
+    StorageService.fetchOrgInventoryRemote(orgId).then(({ inventory }) => {
+      setInventory(inventory);
+    });
+    StorageService.fetchOrgMembersRemote(orgId).then(({ members }) => {
+      setMemberCount(members.length);
+    });
+
     const handleInventoryUpdate = () => {
       setInventory(StorageService.getOrgInventory(orgId));
       setMemberCount(StorageService.getOrgMembers(orgId).length);
