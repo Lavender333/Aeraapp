@@ -53,6 +53,14 @@
         }
       }
     </script>
+    <script>
+      (function (l) {
+        if (l.search && l.search.startsWith('?/')) {
+          var path = l.search.slice(2).replace(/~and~/g, '&');
+          window.history.replaceState(null, '', '/' + path);
+        }
+      })(window.location);
+    </script>
 <link rel="stylesheet" href="./index.css">
 </head>
   <body>
