@@ -221,7 +221,12 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
                       await StorageService.requestPasswordReset(resetEmail);
                       setInfo('Check your email to reset your password.');
                     } catch (e: any) {
-                      setError(e?.message || 'Reset request failed');
+                      const message = String(e?.message || '').toLowerCase();
+                      if (message.includes('rate') && message.includes('limit')) {
+                        setError('Too many reset requests. Please wait a few minutes and try again.');
+                      } else {
+                        setError(e?.message || 'Reset request failed');
+                      }
                     } finally {
                       setIsResetting(false);
                     }

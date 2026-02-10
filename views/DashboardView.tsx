@@ -617,11 +617,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
           <p className="text-lg text-slate-500">{userName.split(' ')[0]}</p>
         </div>
         <div className="flex items-center gap-2">
-          {isResponder && (
-            <div className="hidden md:flex items-center gap-1.5 px-2 py-1 bg-slate-200 rounded text-[10px] font-bold text-slate-600">
-               <Database size={10} /> FEMA SYNC: {isOnline ? 'ACTIVE' : 'QUEUED'}
-            </div>
-          )}
           <div 
             onClick={() => setView('SETTINGS')}
             className="w-14 h-14 rounded-full bg-gradient-to-br from-teal-400 to-cyan-500 flex items-center justify-center text-white text-xl font-semibold shadow-md cursor-pointer"
