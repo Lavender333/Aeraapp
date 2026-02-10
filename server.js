@@ -57,6 +57,7 @@ import {
 
 // Validate MongoDB URI
 const isTest = process.env.NODE_ENV === 'test';
+const isProd = process.env.NODE_ENV === 'production';
 const mongoUri = process.env.MONGODB_URI;
 if (!mongoUri && !isTest) {
   logger.error('Missing MONGODB_URI in environment');
@@ -124,8 +125,8 @@ app.use(helmet({
 // CORS configuration
 const allowedOrigins = [
   process.env.FRONTEND_ORIGIN,
-  'http://localhost:3000',
-  'http://localhost:3001',
+  !isProd ? 'http://localhost:3000' : null,
+  !isProd ? 'http://localhost:3001' : null,
 ].filter(Boolean);
 if (!allowedOrigins.length && !isTest) {
   logger.error('No allowed CORS origins configured');
