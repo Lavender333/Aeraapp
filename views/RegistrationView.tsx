@@ -243,7 +243,12 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       setAuthSuccess('Account created. Continue with required setup.');
       setView('ACCOUNT_SETUP');
     } catch (e: any) {
-      setAuthError(e?.message || 'Registration failed.');
+      const message = String(e?.message || '').toLowerCase();
+      if (message.includes('already') && (message.includes('registered') || message.includes('exists') || message.includes('in use'))) {
+        setAuthError('Email already in use. Please log in.');
+      } else {
+        setAuthError(e?.message || 'Registration failed.');
+      }
     } finally {
       setIsRegistering(false);
     }
