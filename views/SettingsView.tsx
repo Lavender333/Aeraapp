@@ -99,7 +99,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [addressStatus, setAddressStatus] = useState<'IDLE' | 'VERIFYING' | 'VALID' | 'INVALID'>('IDLE');
 
   // Access Control State
-  const [activeTab, setActiveTab] = useState<'ROLES' | 'USERS'>('USERS');
+  type AccessTab = 'ALL_USERS' | 'ROLE_DEFINITIONS';
+  const [activeTab, setActiveTab] = useState<AccessTab>('ALL_USERS');
   const [roles, setRoles] = useState<RoleDefinition[]>(INITIAL_ROLES);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [userSearch, setUserSearch] = useState('');
@@ -354,6 +355,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     if (!isAdmin) return;
     const db = StorageService.getDB();
     setUsers(db.users);
+    setActiveTab('ALL_USERS');
     setCurrentSection('ACCESS_CONTROL');
     setSelectedUser(null);
   };
@@ -1336,24 +1338,24 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         {/* Toggle Tabs */}
         <div className="flex bg-white rounded-lg p-1 border border-slate-200">
           <button 
-            onClick={() => setActiveTab('USERS')}
+            onClick={() => setActiveTab('ALL_USERS')}
             className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${
-              activeTab === 'USERS' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:text-slate-900'
+              activeTab === 'ALL_USERS' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
             All Users ({users.length})
           </button>
           <button 
-            onClick={() => setActiveTab('ROLES')}
+            onClick={() => setActiveTab('ROLE_DEFINITIONS')}
             className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${
-              activeTab === 'ROLES' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:text-slate-900'
+              activeTab === 'ROLE_DEFINITIONS' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
             Role Definitions
           </button>
         </div>
 
-        {activeTab === 'ROLES' && (
+        {activeTab === 'ROLE_DEFINITIONS' && (
           <div className="space-y-4">
              {roles.map(role => (
                <div key={role.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
@@ -1381,7 +1383,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           </div>
         )}
 
-        {activeTab === 'USERS' && (
+          {activeTab === 'ALL_USERS' && (
           <div className="space-y-4">
              <div className="relative">
                 <Search className="absolute left-3 top-3.5 text-slate-400" size={18} />
