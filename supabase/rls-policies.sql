@@ -36,7 +36,7 @@ SECURITY DEFINER
 SET search_path = public
 SET row_security = off
 AS $$
-  SELECT org_id FROM profiles WHERE id = auth.uid();
+  SELECT org_id FROM profiles WHERE id = (select auth.uid());
 $$;
 
 -- Get current user's role
@@ -48,7 +48,7 @@ SECURITY DEFINER
 SET search_path = public
 SET row_security = off
 AS $$
-  SELECT role FROM profiles WHERE id = auth.uid();
+  SELECT role FROM profiles WHERE id = (select auth.uid());
 $$;
 
 -- Check if current user is admin
@@ -62,7 +62,7 @@ SET row_security = off
 AS $$
   SELECT EXISTS (
     SELECT 1 FROM profiles 
-    WHERE id = auth.uid() AND role = 'ADMIN'
+    WHERE id = (select auth.uid()) AND role = 'ADMIN'
   );
 $$;
 
@@ -77,9 +77,88 @@ SET row_security = off
 AS $$
   SELECT EXISTS (
     SELECT 1 FROM profiles 
-    WHERE id = auth.uid() AND role IN ('ADMIN', 'INSTITUTION_ADMIN')
+    WHERE id = (select auth.uid()) AND role IN ('ADMIN', 'INSTITUTION_ADMIN')
   );
 $$;
+
+-- =====================================================
+-- DROP LEGACY POLICIES (cleanup for lint)
+-- =====================================================
+
+-- organizations
+DROP POLICY IF EXISTS "Admins can view all organizations" ON organizations;
+DROP POLICY IF EXISTS "Users can view their organization" ON organizations;
+DROP POLICY IF EXISTS "Authenticated can view organizations" ON organizations;
+DROP POLICY IF EXISTS "Anon can view organizations" ON organizations;
+DROP POLICY IF EXISTS "orgs_insert_auth" ON organizations;
+DROP POLICY IF EXISTS "Admins can create organizations" ON organizations;
+DROP POLICY IF EXISTS "Admins can update organizations" ON organizations;
+DROP POLICY IF EXISTS "Institution admins can update their organization" ON organizations;
+
+-- profiles
+DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can view org profiles" ON profiles;
+DROP POLICY IF EXISTS "Admins can view all profiles" ON profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
+DROP POLICY IF EXISTS "Institution admins can update org profiles" ON profiles;
+DROP POLICY IF EXISTS "Admins can update any profile" ON profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
+DROP POLICY IF EXISTS "Admins can create profiles" ON profiles;
+
+-- inventory
+DROP POLICY IF EXISTS "Users can view org inventory" ON inventory;
+DROP POLICY IF EXISTS "Admins can view all inventory" ON inventory;
+DROP POLICY IF EXISTS "Institution admins can update org inventory" ON inventory;
+DROP POLICY IF EXISTS "Admins can update any inventory" ON inventory;
+
+-- replenishment_requests
+DROP POLICY IF EXISTS "Users can view org requests" ON replenishment_requests;
+DROP POLICY IF EXISTS "Admins can view all requests" ON replenishment_requests;
+DROP POLICY IF EXISTS "Contractors can view all requests" ON replenishment_requests;
+DROP POLICY IF EXISTS "Users can create org requests" ON replenishment_requests;
+DROP POLICY IF EXISTS "Admins can create any request" ON replenishment_requests;
+DROP POLICY IF EXISTS "Users can update org requests" ON replenishment_requests;
+DROP POLICY IF EXISTS "Contractors can update requests" ON replenishment_requests;
+
+-- member_statuses
+DROP POLICY IF EXISTS "Users can view org member statuses" ON member_statuses;
+DROP POLICY IF EXISTS "Admins and responders can view all statuses" ON member_statuses;
+DROP POLICY IF EXISTS "Users can update org member statuses" ON member_statuses;
+DROP POLICY IF EXISTS "Users can insert org member statuses" ON member_statuses;
+DROP POLICY IF EXISTS "Admins can insert any member status" ON member_statuses;
+
+-- broadcasts
+DROP POLICY IF EXISTS "Users can view org broadcasts" ON broadcasts;
+DROP POLICY IF EXISTS "Admins can view all broadcasts" ON broadcasts;
+DROP POLICY IF EXISTS "Institution admins can update org broadcasts" ON broadcasts;
+DROP POLICY IF EXISTS "Admins can update any broadcast" ON broadcasts;
+DROP POLICY IF EXISTS "Admins can insert broadcasts" ON broadcasts;
+
+-- help_requests
+DROP POLICY IF EXISTS "Users can view own help requests" ON help_requests;
+DROP POLICY IF EXISTS "Users can view org help requests" ON help_requests;
+DROP POLICY IF EXISTS "Responders can view all help requests" ON help_requests;
+DROP POLICY IF EXISTS "Users can create own help requests" ON help_requests;
+DROP POLICY IF EXISTS "Admins can create any help request" ON help_requests;
+DROP POLICY IF EXISTS "Users can update own help requests" ON help_requests;
+DROP POLICY IF EXISTS "Responders can update help requests" ON help_requests;
+DROP POLICY IF EXISTS "Institution admins can update org help requests" ON help_requests;
+
+-- members
+DROP POLICY IF EXISTS "Users can view org members" ON members;
+DROP POLICY IF EXISTS "Admins can view all members" ON members;
+DROP POLICY IF EXISTS "Institution admins can insert org members" ON members;
+DROP POLICY IF EXISTS "Institution admins can update org members" ON members;
+DROP POLICY IF EXISTS "Institution admins can delete org members" ON members;
+DROP POLICY IF EXISTS "Admins can insert members" ON members;
+DROP POLICY IF EXISTS "Admins can update members" ON members;
+DROP POLICY IF EXISTS "Admins can delete members" ON members;
+
+-- activity_log
+DROP POLICY IF EXISTS "Users can view own activity" ON activity_log;
+DROP POLICY IF EXISTS "Institution admins can view org activity" ON activity_log;
+DROP POLICY IF EXISTS "Admins can view all activity" ON activity_log;
+DROP POLICY IF EXISTS "Users can insert activity logs" ON activity_log;
 
 -- =====================================================
 -- ORGANIZATIONS TABLE RLS
