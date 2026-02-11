@@ -1,7 +1,7 @@
 
 import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, RoleDefinition } from '../types';
 import { REQUEST_ITEM_MAP } from './validation';
-import { getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser } from './api';
+import { getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, fetchProfileForUser, fetchVitalsForUser } from './api';
 import { getMemberStatus, setMemberStatus } from './api';
 
 const DB_KEY = 'aera_backend_db_v4'; // Force fresh database
@@ -415,20 +415,25 @@ export const StorageService = {
       if (resp?.token) this.setAuthToken(resp.token);
       if (resp?.refreshToken) this.setRefreshToken(resp.refreshToken);
       if (resp?.user) {
+        const [remoteProfile, remoteVitals] = await Promise.all([
+          fetchProfileForUser(),
+          fetchVitalsForUser(),
+        ]);
+
         const profile: UserProfile = {
           id: resp.user.id,
-          fullName: resp.user.fullName || '',
-          email: resp.user.email || '',
-          phone: resp.user.phone || '',
-          address: '',
-          householdMembers: 1,
-          household: [],
-          petDetails: '',
-          medicalNeeds: '',
-          emergencyContactName: '',
-          emergencyContactPhone: '',
-          emergencyContactRelation: '',
-          communityId: resp.user.orgId || '',
+          fullName: remoteProfile?.fullName || resp.user.fullName || '',
+          email: remoteProfile?.email || resp.user.email || '',
+          phone: remoteProfile?.phone || resp.user.phone || '',
+          address: remoteProfile?.address || '',
+          householdMembers: remoteVitals?.householdMembers || 1,
+          household: remoteVitals?.household || [],
+          petDetails: remoteVitals?.petDetails || '',
+          medicalNeeds: remoteVitals?.medicalNeeds || '',
+          emergencyContactName: remoteProfile?.emergencyContactName || '',
+          emergencyContactPhone: remoteProfile?.emergencyContactPhone || '',
+          emergencyContactRelation: remoteProfile?.emergencyContactRelation || '',
+          communityId: remoteProfile?.communityId || resp.user.orgId || '',
           role: resp.user.role || 'GENERAL_USER',
           language: 'en',
           active: true,
