@@ -815,7 +815,6 @@ export async function submitDamageAssessment(payload: {
   const orgId = profile?.org_id || null;
 
   let photoPath: string | null = null;
-  let photoUrl: string | null = null;
 
   if (payload.imageDataUrl) {
     const blob = await dataUrlToBlob(payload.imageDataUrl);
@@ -827,8 +826,6 @@ export async function submitDamageAssessment(payload: {
 
     if (uploadError) throw uploadError;
     photoPath = path;
-    const { data } = supabase.storage.from('assessment_photos').getPublicUrl(path);
-    photoUrl = data?.publicUrl || null;
   }
 
   const { data, error } = await supabase
@@ -839,7 +836,6 @@ export async function submitDamageAssessment(payload: {
       damage_type: payload.damageType,
       severity: payload.severity,
       description: payload.description || null,
-      photo_url: photoUrl,
       photo_path: photoPath,
     })
     .select('id')
@@ -853,6 +849,16 @@ export async function submitDamageAssessment(payload: {
     details: { damageType: payload.damageType, severity: payload.severity },
   });
   return data;
+}
+
+export async function getAssessmentPhotoSignedUrl(path: string, expiresInSeconds = 3600) {
+  const { data, error } = await supabase
+    .storage
+    .from('assessment_photos')
+    .createSignedUrl(path, expiresInSeconds);
+
+  if (error || !data?.signedUrl) throw new Error('Failed to create signed URL');
+  return data.signedUrl;
 }
 
 // Help Requests
