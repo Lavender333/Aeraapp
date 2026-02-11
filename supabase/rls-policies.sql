@@ -125,6 +125,7 @@ CREATE POLICY "Profiles can view"
     id = (select auth.uid())
     OR org_id = public.user_org_id()
     OR public.is_admin()
+    OR (select auth.role()) = 'dashboard_user'
   );
 
 CREATE POLICY "Profiles can update"
@@ -416,7 +417,11 @@ DROP POLICY IF EXISTS "Admins can delete members" ON members;
 
 CREATE POLICY "Members can view"
   ON members FOR SELECT
-  USING (org_id = public.user_org_id() OR public.is_admin());
+  USING (
+    org_id = public.user_org_id()
+    OR public.is_admin()
+    OR (select auth.role()) = 'dashboard_user'
+  );
 
 CREATE POLICY "Members can insert"
   ON members FOR INSERT
