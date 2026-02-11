@@ -838,7 +838,7 @@ export async function submitDamageAssessment(payload: {
       description: payload.description || null,
       photo_path: photoPath,
     })
-    .select('id')
+    .select('id, photo_path')
     .single();
 
   if (error || !data) throw new Error('Failed to submit assessment');

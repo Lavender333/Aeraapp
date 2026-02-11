@@ -6,7 +6,7 @@ import { Input, Textarea } from '../components/Input';
 import { ArrowLeft, Camera, Home, Zap, Droplets, Triangle, CheckCircle, AlertTriangle, Loader2, Sparkles, X, MapPin, RefreshCw, Aperture, Keyboard } from 'lucide-react';
 import { t } from '../services/translations';
 import { GoogleGenAI } from "../services/mockGenAI";
-import { submitDamageAssessment } from '../services/api';
+import { submitDamageAssessment, getAssessmentPhotoSignedUrl } from '../services/api';
 
 // Mock AI Analysis for demo purposes (since we can't upload real files in this env)
 const MOCK_AI_RESPONSE = "Analysis: Detected significant shingle loss on approximately 40% of the visible roof surface. Potential water intrusion points identified near the chimney. Estimated Severity: High.";
@@ -29,6 +29,7 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submittedPhotoUrl, setSubmittedPhotoUrl] = useState<string | null>(null);
 
   // Damage Categories
   const categories = [
@@ -147,12 +148,22 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      await submitDamageAssessment({
+      const result = await submitDamageAssessment({
         damageType,
         severity,
         description,
         imageDataUrl: capturedImage || null,
       });
+      if (result?.photo_path) {
+        try {
+          const signedUrl = await getAssessmentPhotoSignedUrl(result.photo_path);
+          setSubmittedPhotoUrl(signedUrl);
+        } catch (err) {
+          setSubmittedPhotoUrl(null);
+        }
+      } else {
+        setSubmittedPhotoUrl(null);
+      }
       setStep(3);
     } catch (err: any) {
       setSubmitError(err?.message || 'Unable to submit assessment.');
@@ -379,6 +390,19 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                  <span className="text-xs font-bold text-slate-500 uppercase">Case ID</span>
                  <span className="text-xs font-mono font-bold text-slate-900">DMG-{Math.floor(Math.random()*10000)}</span>
                </div>
+               {(submittedPhotoUrl || capturedImage) && (
+                 <div className="mb-4">
+                   <p className="text-xs font-bold text-slate-500 uppercase mb-2">Photo Preview</p>
+                   <img
+                     src={submittedPhotoUrl || capturedImage || ''}
+                     alt="Submitted damage"
+                     className="w-full max-h-56 object-cover rounded-lg border border-slate-200"
+                   />
+                   {submittedPhotoUrl && (
+                     <p className="text-[10px] text-slate-500 mt-1">Private link expires in 1 hour.</p>
+                   )}
+                 </div>
+               )}
                <div className="flex justify-between mb-3 border-b border-slate-100 pb-2">
                  <span className="text-xs font-bold text-slate-500 uppercase">Type</span>
                  <span className="text-sm font-bold text-slate-900">{damageType}</span>
