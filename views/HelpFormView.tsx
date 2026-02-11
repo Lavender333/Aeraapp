@@ -55,6 +55,8 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
   const [isIpFallback, setIsIpFallback] = useState(false);
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
   const hasPrefilledLocation = useRef(false);
+  const bestAccuracyRef = useRef<number | null>(null);
+  const lastUpdateAtRef = useRef<number>(0);
   
   // Camera State
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -75,6 +77,8 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
     setLastLocUpdate('');
     setIsIpFallback(false);
     hasPrefilledLocation.current = false;
+    bestAccuracyRef.current = null;
+    lastUpdateAtRef.current = 0;
   }, []);
 
   // Load profile for contact info
@@ -130,21 +134,31 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
       
       const successHandler = (position: GeolocationPosition) => {
           const { latitude, longitude, accuracy } = position.coords;
-          const locString = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-          
-          setData(prev => ({
-            ...prev,
-            location: locString
-          }));
-          setGpsAccuracy(Math.round(accuracy));
-          setLastLocUpdate(new Date().toLocaleTimeString());
-          setLocationError(null); 
-          setPermissionDenied(false);
-          setIsIpFallback(false);
+          const now = Date.now();
+          const roundedAccuracy = Number.isFinite(accuracy) ? Math.round(accuracy) : null;
+          const currentBest = bestAccuracyRef.current;
+          const isBetter = roundedAccuracy !== null && (currentBest === null || roundedAccuracy <= currentBest + 5);
+          const isStale = now - lastUpdateAtRef.current > 30000;
 
-          // Track backend if submitted
-          if (submittedId) {
-            StorageService.updateRequestLocation(submittedId, locString);
+          if (isBetter || isStale) {
+            bestAccuracyRef.current = roundedAccuracy ?? currentBest;
+            lastUpdateAtRef.current = now;
+
+            const locString = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+            setData(prev => ({
+              ...prev,
+              location: locString
+            }));
+            setGpsAccuracy(roundedAccuracy);
+            setLastLocUpdate(new Date().toLocaleTimeString());
+            setLocationError(null);
+            setPermissionDenied(false);
+            setIsIpFallback(false);
+
+            // Track backend if submitted
+            if (submittedId) {
+              StorageService.updateRequestLocation(submittedId, locString);
+            }
           }
       };
 
@@ -184,7 +198,7 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
       const geoOptions = { 
         enableHighAccuracy: true, 
         maximumAge: 0, // FORCE FRESH READINGS (No cache)
-        timeout: 30000 // Give GPS hardware more time to lock
+        timeout: 20000 // Give GPS hardware more time to lock
       };
 
       watchId = navigator.geolocation.watchPosition(successHandler, errorHandler, geoOptions);
