@@ -191,6 +191,16 @@ export async function updateVitalsForUser(payload: {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData?.user) throw new Error('Not authenticated');
 
+  // Ensure profile exists before vitals upsert (FK constraint)
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .upsert({
+      id: authData.user.id,
+      email: authData.user.email || null,
+    }, { onConflict: 'id' });
+
+  if (profileError) throw profileError;
+
   const { error } = await supabase
     .from('vitals')
     .upsert({
