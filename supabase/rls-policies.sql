@@ -18,6 +18,7 @@ ALTER TABLE help_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE activity_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vitals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ready_kits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE household_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE trusted_community_connections ENABLE ROW LEVEL SECURITY;
@@ -284,6 +285,44 @@ CREATE POLICY "Users can update own vitals"
 
 CREATE POLICY "Users can insert own vitals"
   ON vitals FOR INSERT
+  WITH CHECK (profile_id = auth.uid());
+
+-- =====================================================
+-- READY_KITS TABLE RLS
+-- =====================================================
+
+CREATE POLICY "Users can view own ready kits"
+  ON ready_kits FOR SELECT
+  USING (profile_id = auth.uid());
+
+CREATE POLICY "Users can insert own ready kits"
+  ON ready_kits FOR INSERT
+  WITH CHECK (profile_id = auth.uid());
+
+CREATE POLICY "Users can update own ready kits"
+  ON ready_kits FOR UPDATE
+  USING (profile_id = auth.uid())
+  WITH CHECK (profile_id = auth.uid());
+
+CREATE POLICY "Users can delete own ready kits"
+  ON ready_kits FOR DELETE
+  USING (profile_id = auth.uid());
+
+-- =====================================================
+-- READY_KITS TABLE RLS
+-- =====================================================
+
+CREATE POLICY "Users can view own ready kits"
+  ON ready_kits FOR SELECT
+  USING (profile_id = auth.uid());
+
+CREATE POLICY "Users can insert own ready kits"
+  ON ready_kits FOR INSERT
+  WITH CHECK (profile_id = auth.uid());
+
+CREATE POLICY "Users can update own ready kits"
+  ON ready_kits FOR UPDATE
+  USING (profile_id = auth.uid())
   WITH CHECK (profile_id = auth.uid());
 
 -- =====================================================

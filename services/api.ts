@@ -102,6 +102,13 @@ export async function createOrganization(payload: {
     .single();
 
   if (error || !data) throw new Error('Unable to register organization');
+  await safeLogActivity({
+    action: 'CREATE',
+    entityType: 'organizations',
+    entityId: data.id,
+    orgCode: data.org_code || null,
+    details: { name: data.name },
+  });
   return data;
 }
 
@@ -120,6 +127,12 @@ export async function updateProfile(profile: Partial<UserProfile> & { id: string
     });
 
   if (error) throw error;
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'profiles',
+    entityId: profile.id,
+    orgCode: profile.communityId || null,
+  });
   return { ok: true };
 }
 
@@ -162,7 +175,7 @@ export async function updateProfileForUser(payload: {
   if (error) throw error;
   await safeLogActivity({
     action: 'UPDATE',
-    entityType: 'profile',
+    entityType: 'profiles',
     entityId: authData.user.id,
     orgCode: payload.communityId || null,
   });
@@ -298,7 +311,7 @@ export async function saveReadyKit(payload: {
 
   await safeLogActivity({
     action: 'UPDATE',
-    entityType: 'ready_kit',
+    entityType: 'ready_kits',
     entityId: authData.user.id,
     details: { checkedItems: payload.checkedItems, totalItems: payload.totalItems },
   });
@@ -357,7 +370,7 @@ export async function syncMemberDirectoryForUser(payload: {
 
   await safeLogActivity({
     action: 'UPDATE',
-    entityType: 'member',
+    entityType: 'members',
     entityId: memberId,
     orgCode: payload.communityId,
   });
@@ -501,7 +514,7 @@ export async function createRequest(orgCode: string, payload: { item: string; qu
   if (error || !data) throw new Error('Failed to create request');
   await safeLogActivity({
     action: 'CREATE',
-    entityType: 'replenishment_request',
+    entityType: 'replenishment_requests',
     entityId: data.id,
     orgCode,
     details: { item: payload.item, quantity: payload.quantity },
@@ -537,7 +550,7 @@ export async function updateRequestStatus(id: string, payload: { status: string;
   const orgCode = data.org_id ? await getOrgCodeById(data.org_id) : null;
   await safeLogActivity({
     action: 'UPDATE',
-    entityType: 'replenishment_request',
+    entityType: 'replenishment_requests',
     entityId: data.id,
     orgCode: orgCode || null,
     details: { status: normalized, deliveredQuantity: payload.deliveredQuantity ?? null },
@@ -605,7 +618,7 @@ export async function setMemberStatus(orgCode: string, payload: { memberId: stri
   if (error) throw new Error('Failed to save member status');
   await safeLogActivity({
     action: 'UPDATE',
-    entityType: 'member_status',
+    entityType: 'member_statuses',
     entityId: payload.memberId,
     orgCode,
     details: { status: payload.status },
@@ -646,7 +659,7 @@ export async function setBroadcast(orgCode: string, message: string) {
   if (error) throw new Error('Failed to save broadcast');
   await safeLogActivity({
     action: 'UPDATE',
-    entityType: 'broadcast',
+    entityType: 'broadcasts',
     orgCode,
   });
   return { message };
@@ -793,7 +806,7 @@ export async function createHelpRequest(userId: string, payload: any) {
   if (error || !data) throw new Error('Failed to create help request');
   await safeLogActivity({
     action: 'CREATE',
-    entityType: 'help_request',
+    entityType: 'help_requests',
     entityId: data.id,
     orgCode: payload?.orgId || null,
   });
@@ -838,7 +851,7 @@ export async function updateHelpRequestLocation(id: string, location: string) {
   if (error) throw new Error('Failed to update help request location');
   await safeLogActivity({
     action: 'UPDATE',
-    entityType: 'help_request',
+    entityType: 'help_requests',
     entityId: id,
     details: { location },
   });
@@ -885,7 +898,7 @@ export async function addMember(orgCode: string, payload: any) {
   if (error || !data) throw new Error('Failed to add member');
   await safeLogActivity({
     action: 'CREATE',
-    entityType: 'member',
+    entityType: 'members',
     entityId: data.id,
     orgCode,
   });
@@ -918,7 +931,7 @@ export async function updateMember(orgCode: string, memberId: string, payload: a
   if (error || !data) throw new Error('Failed to update member');
   await safeLogActivity({
     action: 'UPDATE',
-    entityType: 'member',
+    entityType: 'members',
     entityId: data.id,
     orgCode,
   });
@@ -938,7 +951,7 @@ export async function removeMember(orgCode: string, memberId: string) {
   if (error) throw new Error('Failed to remove member');
   await safeLogActivity({
     action: 'DELETE',
-    entityType: 'member',
+    entityType: 'members',
     entityId: memberId,
     orgCode,
   });

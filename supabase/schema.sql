@@ -398,6 +398,40 @@ END;
 $$ LANGUAGE plpgsql
 SET search_path = public;
 
+-- Function to write activity logs for table changes
+CREATE OR REPLACE FUNCTION log_activity()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_org_id UUID;
+  v_entity_id UUID;
+  v_user_id UUID;
+BEGIN
+  v_user_id := auth.uid();
+
+  IF TG_OP = 'DELETE' THEN
+    v_entity_id := OLD.id;
+    v_org_id := COALESCE(OLD.org_id, NULL);
+  ELSE
+    v_entity_id := NEW.id;
+    v_org_id := COALESCE(NEW.org_id, NULL);
+  END IF;
+
+  INSERT INTO activity_log (org_id, user_id, action, entity_type, entity_id, details)
+  VALUES (
+    v_org_id,
+    v_user_id,
+    TG_OP,
+    TG_TABLE_NAME,
+    v_entity_id,
+    jsonb_build_object('table', TG_TABLE_NAME)
+  );
+
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public;
+
 -- Apply updated_at trigger to all tables
 DROP TRIGGER IF EXISTS update_organizations_updated_at ON organizations;
 CREATE TRIGGER update_organizations_updated_at BEFORE UPDATE ON organizations
@@ -430,6 +464,75 @@ CREATE TRIGGER update_help_requests_updated_at BEFORE UPDATE ON help_requests
 DROP TRIGGER IF EXISTS update_members_updated_at ON members;
 CREATE TRIGGER update_members_updated_at BEFORE UPDATE ON members
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- =====================================================
+-- ACTIVITY LOG TRIGGERS
+-- =====================================================
+
+DROP TRIGGER IF EXISTS log_activity_organizations ON organizations;
+CREATE TRIGGER log_activity_organizations
+  AFTER INSERT OR UPDATE OR DELETE ON organizations
+  FOR EACH ROW EXECUTE FUNCTION log_activity();
+
+DROP TRIGGER IF EXISTS log_activity_profiles ON profiles;
+CREATE TRIGGER log_activity_profiles
+  AFTER INSERT OR UPDATE OR DELETE ON profiles
+  FOR EACH ROW EXECUTE FUNCTION log_activity();
+
+DROP TRIGGER IF EXISTS log_activity_inventory ON inventory;
+CREATE TRIGGER log_activity_inventory
+  AFTER INSERT OR UPDATE OR DELETE ON inventory
+  FOR EACH ROW EXECUTE FUNCTION log_activity();
+
+DROP TRIGGER IF EXISTS log_activity_replenishment_requests ON replenishment_requests;
+CREATE TRIGGER log_activity_replenishment_requests
+  AFTER INSERT OR UPDATE OR DELETE ON replenishment_requests
+  FOR EACH ROW EXECUTE FUNCTION log_activity();
+
+DROP TRIGGER IF EXISTS log_activity_member_statuses ON member_statuses;
+CREATE TRIGGER log_activity_member_statuses
+  AFTER INSERT OR UPDATE OR DELETE ON member_statuses
+  FOR EACH ROW EXECUTE FUNCTION log_activity();
+
+DROP TRIGGER IF EXISTS log_activity_broadcasts ON broadcasts;
+CREATE TRIGGER log_activity_broadcasts
+  AFTER INSERT OR UPDATE OR DELETE ON broadcasts
+  FOR EACH ROW EXECUTE FUNCTION log_activity();
+
+DROP TRIGGER IF EXISTS log_activity_help_requests ON help_requests;
+CREATE TRIGGER log_activity_help_requests
+  AFTER INSERT OR UPDATE OR DELETE ON help_requests
+  FOR EACH ROW EXECUTE FUNCTION log_activity();
+
+DROP TRIGGER IF EXISTS log_activity_members ON members;
+CREATE TRIGGER log_activity_members
+  AFTER INSERT OR UPDATE OR DELETE ON members
+  FOR EACH ROW EXECUTE FUNCTION log_activity();
+
+DROP TRIGGER IF EXISTS log_activity_ready_kits ON ready_kits;
+CREATE TRIGGER log_activity_ready_kits
+  AFTER INSERT OR UPDATE OR DELETE ON ready_kits
+  FOR EACH ROW EXECUTE FUNCTION log_activity();
+
+DROP TRIGGER IF EXISTS log_activity_vitals ON vitals;
+CREATE TRIGGER log_activity_vitals
+  AFTER INSERT OR UPDATE OR DELETE ON vitals
+  FOR EACH ROW EXECUTE FUNCTION log_activity();
+
+DROP TRIGGER IF EXISTS log_activity_household_members ON household_members;
+CREATE TRIGGER log_activity_household_members
+  AFTER INSERT OR UPDATE OR DELETE ON household_members
+  FOR EACH ROW EXECUTE FUNCTION log_activity();
+
+DROP TRIGGER IF EXISTS log_activity_pets ON pets;
+CREATE TRIGGER log_activity_pets
+  AFTER INSERT OR UPDATE OR DELETE ON pets
+  FOR EACH ROW EXECUTE FUNCTION log_activity();
+
+DROP TRIGGER IF EXISTS log_activity_trusted_community_connections ON trusted_community_connections;
+CREATE TRIGGER log_activity_trusted_community_connections
+  AFTER INSERT OR UPDATE OR DELETE ON trusted_community_connections
+  FOR EACH ROW EXECUTE FUNCTION log_activity();
 
 -- Function to auto-create inventory for new organizations
 CREATE OR REPLACE FUNCTION create_default_inventory()
