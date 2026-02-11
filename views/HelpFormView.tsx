@@ -1,5 +1,10 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import { ViewState, HelpRequestData, StepId } from '../types';
 import { Button } from '../components/Button';
 import { Input, Textarea } from '../components/Input';
@@ -7,11 +12,32 @@ import { ProgressBar } from '../components/ProgressBar';
 import { StorageService } from '../services/storage';
 import { notifyEmergencyContact } from '../services/api';
 import { t } from '../services/translations';
-import { ArrowLeft, CheckCircle, Ambulance, Flame, Droplets, Zap, Shield, Camera, StopCircle, RefreshCw, MessageSquare, Navigation, MapPin, X, Wifi, Settings, HelpCircle, Globe, AlertTriangle, WifiOff, Clock } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Ambulance, Flame, Droplets, Zap, Shield, Camera, StopCircle, RefreshCw, MessageSquare, Navigation, MapPin, X, Wifi, Settings, HelpCircle, Globe, AlertTriangle, WifiOff, Clock, LocateFixed } from 'lucide-react';
+
+delete (L.Icon.Default as any).prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: markerIcon2x,
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
+});
 
 interface HelpFormViewProps {
   setView: (view: ViewState) => void;
 }
+
+const LocationPin: React.FC<{
+  marker: { lat: number; lng: number } | null;
+  onPick: (latlng: { lat: number; lng: number }) => void;
+}> = ({ marker, onPick }) => {
+  useMapEvents({
+    click: (event) => {
+      onPick({ lat: event.latlng.lat, lng: event.latlng.lng });
+    },
+  });
+
+  if (!marker) return null;
+  return <Marker position={[marker.lat, marker.lng]} />;
+};
 
 const INITIAL_DATA: HelpRequestData = {
   isSafe: null,
@@ -57,6 +83,8 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
   const hasPrefilledLocation = useRef(false);
   const bestAccuracyRef = useRef<number | null>(null);
   const lastUpdateAtRef = useRef<number>(0);
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [pinLocation, setPinLocation] = useState<{ lat: number; lng: number } | null>(null);
   
   // Camera State
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -115,6 +143,30 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
       setIsIpFallback(false);
     }
   }, []);
+
+  const parseLatLngString = (value: string) => {
+    const match = value.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+    if (!match) return null;
+    const lat = Number(match[1]);
+    const lng = Number(match[2]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+    return { lat, lng };
+  };
+
+  const mapCenter = useMemo(() => {
+    const parsed = parseLatLngString(data.location || '');
+    if (parsed) return parsed;
+    const lastKnown = StorageService.getLastKnownLocation();
+    const fallback = lastKnown?.location ? parseLatLngString(lastKnown.location) : null;
+    return fallback || { lat: 37.7749, lng: -122.4194 };
+  }, [data.location]);
+
+  useEffect(() => {
+    if (!showMapPicker) return;
+    const parsed = parseLatLngString(data.location || '');
+    if (parsed) setPinLocation(parsed);
+  }, [data.location, showMapPicker]);
 
   // IP Location Fallback (disabled for privacy)
   const fetchIpLocation = async () => {
@@ -499,6 +551,7 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
                 onChange={(e) => {
                   setIsTracking(false);
                   setIsIpFallback(false);
+                  setPinLocation(null);
                   updateData({ location: e.target.value });
                 }}
                 className={`bg-white font-mono text-sm border-slate-300 text-slate-900 font-semibold pr-24 ${
@@ -508,8 +561,64 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
                 }`}
                 error={!isTracking && !isIpFallback && !data.location && locationError && !permissionDenied ? locationError : undefined}
               />
-              
+              <div className="flex items-center gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMapPicker((prev) => !prev);
+                    setIsTracking(false);
+                    setIsIpFallback(false);
+                  }}
+                  className="inline-flex items-center gap-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-full"
+                >
+                  <MapPin size={12} /> {showMapPicker ? 'Hide Map' : 'Drop a Pin'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsTracking(true);
+                    setShowMapPicker(false);
+                  }}
+                  className="inline-flex items-center gap-2 text-xs font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-full"
+                >
+                  <LocateFixed size={12} /> Use GPS
+                </button>
+              </div>
             </div>
+
+            {showMapPicker && (
+              <div className="mt-3 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+                <div className="bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600 flex items-center gap-2">
+                  <MapPin size={12} /> Tap the map to set your exact location
+                </div>
+                <div className="h-64 w-full">
+                  <MapContainer
+                    center={[mapCenter.lat, mapCenter.lng]}
+                    zoom={14}
+                    scrollWheelZoom
+                    className="h-full w-full"
+                  >
+                    <TileLayer
+                      attribution='&copy; OpenStreetMap contributors'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    <LocationPin
+                      marker={pinLocation}
+                      onPick={(latlng) => {
+                        setIsTracking(false);
+                        setIsIpFallback(false);
+                        setPinLocation(latlng);
+                        const locString = `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
+                        updateData({ location: locString });
+                        setGpsAccuracy(null);
+                        setLastLocUpdate(new Date().toLocaleTimeString());
+                        setLocationError(null);
+                      }}
+                    />
+                  </MapContainer>
+                </div>
+              </div>
+            )}
 
             {/* GPS Visualizer */}
             {isTracking && gpsAccuracy !== null && (
