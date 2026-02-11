@@ -60,6 +60,11 @@ const getProfileById = async (userId: string) => {
   return data;
 };
 
+const dataUrlToBlob = async (dataUrl: string): Promise<Blob> => {
+  const response = await fetch(dataUrl);
+  return response.blob();
+};
+
 export async function getOrganizationByCode(orgCode: string) {
   return getOrgByCode(orgCode);
 }
@@ -793,6 +798,60 @@ export async function notifyEmergencyContact(payload: {
     body: payload,
   });
   if (error) throw error;
+  return data;
+}
+
+// Damage Assessments
+export async function submitDamageAssessment(payload: {
+  damageType: string;
+  severity: number;
+  description: string;
+  imageDataUrl?: string | null;
+}) {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const profile = await getProfileById(authData.user.id);
+  const orgId = profile?.org_id || null;
+
+  let photoPath: string | null = null;
+  let photoUrl: string | null = null;
+
+  if (payload.imageDataUrl) {
+    const blob = await dataUrlToBlob(payload.imageDataUrl);
+    const path = `${authData.user.id}/${Date.now()}.jpg`;
+    const { error: uploadError } = await supabase
+      .storage
+      .from('assessment_photos')
+      .upload(path, blob, { contentType: 'image/jpeg' });
+
+    if (uploadError) throw uploadError;
+    photoPath = path;
+    const { data } = supabase.storage.from('assessment_photos').getPublicUrl(path);
+    photoUrl = data?.publicUrl || null;
+  }
+
+  const { data, error } = await supabase
+    .from('damage_assessments')
+    .insert({
+      profile_id: authData.user.id,
+      org_id: orgId,
+      damage_type: payload.damageType,
+      severity: payload.severity,
+      description: payload.description || null,
+      photo_url: photoUrl,
+      photo_path: photoPath,
+    })
+    .select('id')
+    .single();
+
+  if (error || !data) throw new Error('Failed to submit assessment');
+  await safeLogActivity({
+    action: 'CREATE',
+    entityType: 'damage_assessments',
+    entityId: data.id,
+    details: { damageType: payload.damageType, severity: payload.severity },
+  });
   return data;
 }
 

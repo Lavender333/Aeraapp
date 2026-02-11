@@ -6,6 +6,7 @@ import { Input, Textarea } from '../components/Input';
 import { ArrowLeft, Camera, Home, Zap, Droplets, Triangle, CheckCircle, AlertTriangle, Loader2, Sparkles, X, MapPin, RefreshCw, Aperture, Keyboard } from 'lucide-react';
 import { t } from '../services/translations';
 import { GoogleGenAI } from "../services/mockGenAI";
+import { submitDamageAssessment } from '../services/api';
 
 // Mock AI Analysis for demo purposes (since we can't upload real files in this env)
 const MOCK_AI_RESPONSE = "Analysis: Detected significant shingle loss on approximately 40% of the visible roof surface. Potential water intrusion points identified near the chimney. Estimated Severity: High.";
@@ -26,6 +27,8 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
   // Analysis State
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Damage Categories
   const categories = [
@@ -137,6 +140,25 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     setCapturedImage(null);
     setAiAnalysis(null);
     startCamera();
+  };
+
+  const handleSubmitAssessment = async () => {
+    if (!damageType) return;
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      await submitDamageAssessment({
+        damageType,
+        severity,
+        description,
+        imageDataUrl: capturedImage || null,
+      });
+      setStep(3);
+    } catch (err: any) {
+      setSubmitError(err?.message || 'Unable to submit assessment.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -327,9 +349,18 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                />
             </div>
 
-            <Button fullWidth size="lg" className="shadow-lg mt-4 bg-brand-600 hover:bg-brand-700 font-bold" onClick={() => setStep(3)}>
-              Submit Assessment
+            <Button
+              fullWidth
+              size="lg"
+              className="shadow-lg mt-4 bg-brand-600 hover:bg-brand-700 font-bold"
+              onClick={handleSubmitAssessment}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Submitting...' : 'Submit Assessment'}
             </Button>
+            {submitError && (
+              <p className="text-xs text-red-600 font-semibold mt-2">{submitError}</p>
+            )}
           </div>
         )}
 

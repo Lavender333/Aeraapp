@@ -22,6 +22,7 @@ ALTER TABLE ready_kits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE household_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE trusted_community_connections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE damage_assessments ENABLE ROW LEVEL SECURITY;
 
 -- =====================================================
 -- HELPER FUNCTIONS FOR RLS
@@ -110,6 +111,7 @@ DROP POLICY IF EXISTS "Users can view org inventory" ON inventory;
 DROP POLICY IF EXISTS "Admins can view all inventory" ON inventory;
 DROP POLICY IF EXISTS "Institution admins can update org inventory" ON inventory;
 DROP POLICY IF EXISTS "Admins can update any inventory" ON inventory;
+DROP POLICY IF EXISTS "Admins can insert inventory" ON inventory;
 
 -- replenishment_requests
 DROP POLICY IF EXISTS "Users can view org requests" ON replenishment_requests;
@@ -159,6 +161,48 @@ DROP POLICY IF EXISTS "Users can view own activity" ON activity_log;
 DROP POLICY IF EXISTS "Institution admins can view org activity" ON activity_log;
 DROP POLICY IF EXISTS "Admins can view all activity" ON activity_log;
 DROP POLICY IF EXISTS "Users can insert activity logs" ON activity_log;
+
+-- vitals
+DROP POLICY IF EXISTS "Users can view own vitals" ON vitals;
+DROP POLICY IF EXISTS "Users can update own vitals" ON vitals;
+DROP POLICY IF EXISTS "Users can insert own vitals" ON vitals;
+
+-- ready_kits
+DROP POLICY IF EXISTS "Users can view own ready kits" ON ready_kits;
+DROP POLICY IF EXISTS "Users can insert own ready kits" ON ready_kits;
+DROP POLICY IF EXISTS "Users can update own ready kits" ON ready_kits;
+DROP POLICY IF EXISTS "Users can delete own ready kits" ON ready_kits;
+
+-- household_members
+DROP POLICY IF EXISTS "Users can view own household members" ON household_members;
+DROP POLICY IF EXISTS "Users can insert own household members" ON household_members;
+DROP POLICY IF EXISTS "Users can update own household members" ON household_members;
+DROP POLICY IF EXISTS "Users can delete own household members" ON household_members;
+
+-- pets
+DROP POLICY IF EXISTS "Users can view own pets" ON pets;
+DROP POLICY IF EXISTS "Users can insert own pets" ON pets;
+DROP POLICY IF EXISTS "Users can update own pets" ON pets;
+DROP POLICY IF EXISTS "Users can delete own pets" ON pets;
+
+-- trusted_community_connections
+DROP POLICY IF EXISTS "Users can view own community connections" ON trusted_community_connections;
+DROP POLICY IF EXISTS "Users can insert own community connections" ON trusted_community_connections;
+DROP POLICY IF EXISTS "Users can update own community connections" ON trusted_community_connections;
+DROP POLICY IF EXISTS "Users can delete own community connections" ON trusted_community_connections;
+
+-- storage.objects (avatars)
+DROP POLICY IF EXISTS "Users can upload own avatar" ON storage.objects;
+DROP POLICY IF EXISTS "Users can update own avatar" ON storage.objects;
+DROP POLICY IF EXISTS "Anyone can view avatars" ON storage.objects;
+DROP POLICY IF EXISTS "Users can upload own assessment photos" ON storage.objects;
+DROP POLICY IF EXISTS "Users can view own assessment photos" ON storage.objects;
+
+-- damage_assessments
+DROP POLICY IF EXISTS "Users can view own damage assessments" ON damage_assessments;
+DROP POLICY IF EXISTS "Users can insert own damage assessments" ON damage_assessments;
+DROP POLICY IF EXISTS "Institution admins can view org damage assessments" ON damage_assessments;
+DROP POLICY IF EXISTS "Admins can view all damage assessments" ON damage_assessments;
 
 -- =====================================================
 -- ORGANIZATIONS TABLE RLS
@@ -528,6 +572,26 @@ CREATE POLICY "Members can delete"
   );
 
 -- =====================================================
+-- DAMAGE_ASSESSMENTS TABLE RLS
+-- =====================================================
+
+CREATE POLICY "Users can view own damage assessments"
+  ON damage_assessments FOR SELECT
+  USING (profile_id = (select auth.uid()));
+
+CREATE POLICY "Institution admins can view org damage assessments"
+  ON damage_assessments FOR SELECT
+  USING (org_id = public.user_org_id() AND public.is_institution_admin());
+
+CREATE POLICY "Admins can view all damage assessments"
+  ON damage_assessments FOR SELECT
+  USING (public.is_admin());
+
+CREATE POLICY "Users can insert own damage assessments"
+  ON damage_assessments FOR INSERT
+  WITH CHECK (profile_id = (select auth.uid()));
+
+-- =====================================================
 -- ACTIVITY_LOG TABLE RLS
 -- =====================================================
 
@@ -557,6 +621,11 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('avatars', 'avatars', true)
 ON CONFLICT (id) DO NOTHING;
 
+-- Create storage bucket for damage assessment photos
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('assessment_photos', 'assessment_photos', false)
+ON CONFLICT (id) DO NOTHING;
+
 -- Users can upload their own avatar
 CREATE POLICY "Users can upload own avatar"
   ON storage.objects FOR INSERT
@@ -577,6 +646,22 @@ CREATE POLICY "Users can update own avatar"
 CREATE POLICY "Anyone can view avatars"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'avatars');
+
+-- Users can upload their own assessment photos
+CREATE POLICY "Users can upload own assessment photos"
+  ON storage.objects FOR INSERT
+  WITH CHECK (
+    bucket_id = 'assessment_photos' AND 
+    (select auth.uid())::text = (storage.foldername(name))[1]
+  );
+
+-- Users can view their own assessment photos
+CREATE POLICY "Users can view own assessment photos"
+  ON storage.objects FOR SELECT
+  USING (
+    bucket_id = 'assessment_photos' AND 
+    (select auth.uid())::text = (storage.foldername(name))[1]
+  );
 
 -- =====================================================
 -- REALTIME PUBLICATION

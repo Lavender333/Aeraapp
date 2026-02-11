@@ -325,6 +325,25 @@ CREATE INDEX IF NOT EXISTS idx_help_requests_status ON help_requests(status);
 CREATE INDEX IF NOT EXISTS idx_help_requests_priority ON help_requests(priority);
 CREATE INDEX IF NOT EXISTS idx_help_requests_created ON help_requests(created_at DESC);
 
+-- Damage Assessments (property/infrastructure damage reports)
+CREATE TABLE IF NOT EXISTS damage_assessments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  org_id UUID REFERENCES organizations(id) ON DELETE SET NULL,
+  damage_type VARCHAR(100) NOT NULL,
+  severity INTEGER DEFAULT 1 CHECK (severity >= 1 AND severity <= 3),
+  description TEXT,
+  ai_analysis TEXT,
+  photo_url TEXT,
+  photo_path TEXT,
+  location TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_damage_assessments_profile_id ON damage_assessments(profile_id);
+CREATE INDEX IF NOT EXISTS idx_damage_assessments_org_id ON damage_assessments(org_id);
+CREATE INDEX IF NOT EXISTS idx_damage_assessments_created ON damage_assessments(created_at DESC);
+
 -- Members (organization member directory)
 CREATE TABLE IF NOT EXISTS members (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -628,6 +647,7 @@ COMMENT ON TABLE member_statuses IS 'Safety status check-ins for organization me
 COMMENT ON TABLE broadcasts IS 'Organization-wide announcements and alerts';
 COMMENT ON TABLE help_requests IS 'Emergency SOS and help requests from users';
 COMMENT ON TABLE members IS 'Organization member directory with contact information';
+COMMENT ON TABLE damage_assessments IS 'Damage assessment reports with optional photo evidence';
 COMMENT ON TABLE activity_log IS 'Audit trail for all significant actions in the system';
 
 -- =====================================================
