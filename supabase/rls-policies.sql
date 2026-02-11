@@ -85,116 +85,89 @@ $$;
 -- ORGANIZATIONS TABLE RLS
 -- =====================================================
 
--- Admin can see all organizations
-CREATE POLICY "Admins can view all organizations"
-  ON organizations FOR SELECT
-  USING (public.is_admin());
-
--- Users can view their own organization
-CREATE POLICY "Users can view their organization"
-  ON organizations FOR SELECT
-  USING (id = public.user_org_id());
-
--- Authenticated users can view organizations for signup/search
-CREATE POLICY "Authenticated can view organizations"
-  ON organizations FOR SELECT
-  USING (auth.role() = 'authenticated');
-
--- Anonymous users can view organizations for signup/search
-CREATE POLICY "Anon can view organizations"
-  ON organizations FOR SELECT
-  USING (auth.role() = 'anon');
-
--- Admin can create organizations
+DROP POLICY IF EXISTS "Admins can view all organizations" ON organizations;
+DROP POLICY IF EXISTS "Users can view their organization" ON organizations;
+DROP POLICY IF EXISTS "Authenticated can view organizations" ON organizations;
+DROP POLICY IF EXISTS "Anon can view organizations" ON organizations;
 DROP POLICY IF EXISTS "orgs_insert_auth" ON organizations;
+DROP POLICY IF EXISTS "Admins can create organizations" ON organizations;
+DROP POLICY IF EXISTS "Admins can update organizations" ON organizations;
+DROP POLICY IF EXISTS "Institution admins can update their organization" ON organizations;
 
-CREATE POLICY "orgs_insert_auth"
+CREATE POLICY "Organizations can view"
+  ON organizations FOR SELECT
+  USING ((select auth.role()) IN ('authenticated', 'anon') OR public.is_admin());
+
+CREATE POLICY "Organizations can create"
   ON organizations FOR INSERT
   WITH CHECK (public.is_admin());
 
-CREATE POLICY "Admins can create organizations"
-  ON organizations FOR INSERT
-  WITH CHECK (public.is_admin());
-
--- Admin can update all organizations
-CREATE POLICY "Admins can update organizations"
+CREATE POLICY "Organizations can update"
   ON organizations FOR UPDATE
-  USING (public.is_admin());
-
--- Institution admins can update their own organization
-CREATE POLICY "Institution admins can update their organization"
-  ON organizations FOR UPDATE
-  USING (id = public.user_org_id() AND public.is_institution_admin());
+  USING (public.is_admin() OR (id = public.user_org_id() AND public.is_institution_admin()));
 
 -- =====================================================
 -- PROFILES TABLE RLS
 -- =====================================================
 
--- Users can view their own profile
-CREATE POLICY "Users can view own profile"
+DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can view org profiles" ON profiles;
+DROP POLICY IF EXISTS "Admins can view all profiles" ON profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
+DROP POLICY IF EXISTS "Institution admins can update org profiles" ON profiles;
+DROP POLICY IF EXISTS "Admins can update any profile" ON profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
+DROP POLICY IF EXISTS "Admins can create profiles" ON profiles;
+
+CREATE POLICY "Profiles can view"
   ON profiles FOR SELECT
-  USING (id = auth.uid());
+  USING (
+    id = (select auth.uid())
+    OR org_id = public.user_org_id()
+    OR public.is_admin()
+  );
 
--- Users can view profiles in their organization
-CREATE POLICY "Users can view org profiles"
-  ON profiles FOR SELECT
-  USING (org_id = public.user_org_id());
-
--- Admins can view all profiles
-CREATE POLICY "Admins can view all profiles"
-  ON profiles FOR SELECT
-  USING (public.is_admin());
-
--- Users can update their own profile
-CREATE POLICY "Users can update own profile"
+CREATE POLICY "Profiles can update"
   ON profiles FOR UPDATE
-  USING (id = auth.uid())
-  WITH CHECK (id = auth.uid());
+  USING (
+    id = (select auth.uid())
+    OR public.is_admin()
+    OR (org_id = public.user_org_id() AND public.is_institution_admin())
+  )
+  WITH CHECK (
+    id = (select auth.uid())
+    OR public.is_admin()
+    OR (org_id = public.user_org_id() AND public.is_institution_admin())
+  );
 
--- Institution admins can update profiles in their org
-CREATE POLICY "Institution admins can update org profiles"
-  ON profiles FOR UPDATE
-  USING (org_id = public.user_org_id() AND public.is_institution_admin());
-
--- Admins can update any profile
-CREATE POLICY "Admins can update any profile"
-  ON profiles FOR UPDATE
-  USING (public.is_admin());
-
--- New users can insert their own profile (on signup)
-CREATE POLICY "Users can insert own profile"
+CREATE POLICY "Profiles can insert"
   ON profiles FOR INSERT
-  WITH CHECK (id = auth.uid());
-
--- Admins can create any profile
-CREATE POLICY "Admins can create profiles"
-  ON profiles FOR INSERT
-  WITH CHECK (public.is_admin());
+  WITH CHECK (id = (select auth.uid()) OR public.is_admin());
 
 -- =====================================================
 -- INVENTORY TABLE RLS
 -- =====================================================
 
--- Users can view inventory for their organization
-CREATE POLICY "Users can view org inventory"
+DROP POLICY IF EXISTS "Users can view org inventory" ON inventory;
+DROP POLICY IF EXISTS "Admins can view all inventory" ON inventory;
+
+DROP POLICY IF EXISTS "Institution admins can update org inventory" ON inventory;
+DROP POLICY IF EXISTS "Admins can update any inventory" ON inventory;
+
+CREATE POLICY "Inventory can view"
   ON inventory FOR SELECT
-  USING (org_id = public.user_org_id());
+  USING (org_id = public.user_org_id() OR public.is_admin());
 
--- Admins can view all inventory
-CREATE POLICY "Admins can view all inventory"
-  ON inventory FOR SELECT
-  USING (public.is_admin());
-
--- Institution admins can update their org's inventory
-CREATE POLICY "Institution admins can update org inventory"
+CREATE POLICY "Inventory can update"
   ON inventory FOR UPDATE
-  USING (org_id = public.user_org_id() AND public.is_institution_admin())
-  WITH CHECK (org_id = public.user_org_id());
-
--- Admins can update any inventory
-CREATE POLICY "Admins can update any inventory"
-  ON inventory FOR UPDATE
-  USING (public.is_admin());
+  USING (
+    public.is_admin()
+    OR (org_id = public.user_org_id() AND public.is_institution_admin())
+  )
+  WITH CHECK (
+    public.is_admin()
+    OR (org_id = public.user_org_id() AND public.is_institution_admin())
+  );
 
 -- Auto-insert is handled by trigger, but allow admins to insert
 CREATE POLICY "Admins can insert inventory"
@@ -205,70 +178,58 @@ CREATE POLICY "Admins can insert inventory"
 -- REPLENISHMENT_REQUESTS TABLE RLS
 -- =====================================================
 
--- Users can view requests for their organization
-CREATE POLICY "Users can view org requests"
-  ON replenishment_requests FOR SELECT
-  USING (org_id = public.user_org_id());
+DROP POLICY IF EXISTS "Users can view org requests" ON replenishment_requests;
+DROP POLICY IF EXISTS "Admins can view all requests" ON replenishment_requests;
+DROP POLICY IF EXISTS "Contractors can view all requests" ON replenishment_requests;
+DROP POLICY IF EXISTS "Users can create org requests" ON replenishment_requests;
+DROP POLICY IF EXISTS "Admins can create any request" ON replenishment_requests;
+DROP POLICY IF EXISTS "Users can update org requests" ON replenishment_requests;
+DROP POLICY IF EXISTS "Contractors can update requests" ON replenishment_requests;
 
--- Admins can view all requests
-CREATE POLICY "Admins can view all requests"
+CREATE POLICY "Replenishment requests can view"
   ON replenishment_requests FOR SELECT
-  USING (public.is_admin());
+  USING (
+    org_id = public.user_org_id()
+    OR public.is_admin()
+    OR public.user_role() IN ('CONTRACTOR', 'LOCAL_AUTHORITY')
+  );
 
--- Contractors and local authorities can view all requests
-CREATE POLICY "Contractors can view all requests"
-  ON replenishment_requests FOR SELECT
-  USING (public.user_role() IN ('CONTRACTOR', 'LOCAL_AUTHORITY'));
-
--- Users can create requests for their organization
-CREATE POLICY "Users can create org requests"
+CREATE POLICY "Replenishment requests can insert"
   ON replenishment_requests FOR INSERT
-  WITH CHECK (org_id = public.user_org_id());
+  WITH CHECK (org_id = public.user_org_id() OR public.is_admin());
 
--- Admins can create any request
-CREATE POLICY "Admins can create any request"
-  ON replenishment_requests FOR INSERT
-  WITH CHECK (public.is_admin());
-
--- Users can update requests for their organization
-CREATE POLICY "Users can update org requests"
+CREATE POLICY "Replenishment requests can update"
   ON replenishment_requests FOR UPDATE
-  USING (org_id = public.user_org_id());
-
--- Contractors can update any request (for fulfillment)
-CREATE POLICY "Contractors can update requests"
-  ON replenishment_requests FOR UPDATE
-  USING (public.user_role() IN ('CONTRACTOR', 'LOCAL_AUTHORITY', 'ADMIN'));
+  USING (
+    org_id = public.user_org_id()
+    OR public.user_role() IN ('CONTRACTOR', 'LOCAL_AUTHORITY', 'ADMIN')
+  );
 
 -- =====================================================
 -- MEMBER_STATUSES TABLE RLS
 -- =====================================================
 
--- Users can view member statuses for their organization
-CREATE POLICY "Users can view org member statuses"
-  ON member_statuses FOR SELECT
-  USING (org_id = public.user_org_id());
+DROP POLICY IF EXISTS "Users can view org member statuses" ON member_statuses;
+DROP POLICY IF EXISTS "Admins and responders can view all statuses" ON member_statuses;
+DROP POLICY IF EXISTS "Users can update org member statuses" ON member_statuses;
+DROP POLICY IF EXISTS "Users can insert org member statuses" ON member_statuses;
+DROP POLICY IF EXISTS "Admins can insert any member status" ON member_statuses;
 
--- Admins and first responders can view all statuses
-CREATE POLICY "Admins and responders can view all statuses"
+CREATE POLICY "Member statuses can view"
   ON member_statuses FOR SELECT
-  USING (public.user_role() IN ('ADMIN', 'FIRST_RESPONDER', 'LOCAL_AUTHORITY'));
+  USING (
+    org_id = public.user_org_id()
+    OR public.user_role() IN ('ADMIN', 'FIRST_RESPONDER', 'LOCAL_AUTHORITY')
+  );
 
--- Users can update member statuses for their organization
-CREATE POLICY "Users can update org member statuses"
+CREATE POLICY "Member statuses can update"
   ON member_statuses FOR UPDATE
   USING (org_id = public.user_org_id())
   WITH CHECK (org_id = public.user_org_id());
 
--- Users can insert member statuses for their organization
-CREATE POLICY "Users can insert org member statuses"
+CREATE POLICY "Member statuses can insert"
   ON member_statuses FOR INSERT
-  WITH CHECK (org_id = public.user_org_id());
-
--- Admins can insert any member status
-CREATE POLICY "Admins can insert any member status"
-  ON member_statuses FOR INSERT
-  WITH CHECK (public.is_admin());
+  WITH CHECK (org_id = public.user_org_id() OR public.is_admin());
 
 -- =====================================================
 -- VITALS TABLE RLS
@@ -276,16 +237,16 @@ CREATE POLICY "Admins can insert any member status"
 
 CREATE POLICY "Users can view own vitals"
   ON vitals FOR SELECT
-  USING (profile_id = auth.uid());
+  USING (profile_id = (select auth.uid()));
 
 CREATE POLICY "Users can update own vitals"
   ON vitals FOR UPDATE
-  USING (profile_id = auth.uid())
-  WITH CHECK (profile_id = auth.uid());
+  USING (profile_id = (select auth.uid()))
+  WITH CHECK (profile_id = (select auth.uid()));
 
 CREATE POLICY "Users can insert own vitals"
   ON vitals FOR INSERT
-  WITH CHECK (profile_id = auth.uid());
+  WITH CHECK (profile_id = (select auth.uid()));
 
 -- =====================================================
 -- READY_KITS TABLE RLS
@@ -293,37 +254,20 @@ CREATE POLICY "Users can insert own vitals"
 
 CREATE POLICY "Users can view own ready kits"
   ON ready_kits FOR SELECT
-  USING (profile_id = auth.uid());
+  USING (profile_id = (select auth.uid()));
 
 CREATE POLICY "Users can insert own ready kits"
   ON ready_kits FOR INSERT
-  WITH CHECK (profile_id = auth.uid());
+  WITH CHECK (profile_id = (select auth.uid()));
 
 CREATE POLICY "Users can update own ready kits"
   ON ready_kits FOR UPDATE
-  USING (profile_id = auth.uid())
-  WITH CHECK (profile_id = auth.uid());
+  USING (profile_id = (select auth.uid()))
+  WITH CHECK (profile_id = (select auth.uid()));
 
 CREATE POLICY "Users can delete own ready kits"
   ON ready_kits FOR DELETE
-  USING (profile_id = auth.uid());
-
--- =====================================================
--- READY_KITS TABLE RLS
--- =====================================================
-
-CREATE POLICY "Users can view own ready kits"
-  ON ready_kits FOR SELECT
-  USING (profile_id = auth.uid());
-
-CREATE POLICY "Users can insert own ready kits"
-  ON ready_kits FOR INSERT
-  WITH CHECK (profile_id = auth.uid());
-
-CREATE POLICY "Users can update own ready kits"
-  ON ready_kits FOR UPDATE
-  USING (profile_id = auth.uid())
-  WITH CHECK (profile_id = auth.uid());
+  USING (profile_id = (select auth.uid()));
 
 -- =====================================================
 -- HOUSEHOLD_MEMBERS TABLE RLS
@@ -331,20 +275,20 @@ CREATE POLICY "Users can update own ready kits"
 
 CREATE POLICY "Users can view own household members"
   ON household_members FOR SELECT
-  USING (profile_id = auth.uid());
+  USING (profile_id = (select auth.uid()));
 
 CREATE POLICY "Users can insert own household members"
   ON household_members FOR INSERT
-  WITH CHECK (profile_id = auth.uid());
+  WITH CHECK (profile_id = (select auth.uid()));
 
 CREATE POLICY "Users can update own household members"
   ON household_members FOR UPDATE
-  USING (profile_id = auth.uid())
-  WITH CHECK (profile_id = auth.uid());
+  USING (profile_id = (select auth.uid()))
+  WITH CHECK (profile_id = (select auth.uid()));
 
 CREATE POLICY "Users can delete own household members"
   ON household_members FOR DELETE
-  USING (profile_id = auth.uid());
+  USING (profile_id = (select auth.uid()));
 
 -- =====================================================
 -- PETS TABLE RLS
@@ -352,20 +296,20 @@ CREATE POLICY "Users can delete own household members"
 
 CREATE POLICY "Users can view own pets"
   ON pets FOR SELECT
-  USING (profile_id = auth.uid());
+  USING (profile_id = (select auth.uid()));
 
 CREATE POLICY "Users can insert own pets"
   ON pets FOR INSERT
-  WITH CHECK (profile_id = auth.uid());
+  WITH CHECK (profile_id = (select auth.uid()));
 
 CREATE POLICY "Users can update own pets"
   ON pets FOR UPDATE
-  USING (profile_id = auth.uid())
-  WITH CHECK (profile_id = auth.uid());
+  USING (profile_id = (select auth.uid()))
+  WITH CHECK (profile_id = (select auth.uid()));
 
 CREATE POLICY "Users can delete own pets"
   ON pets FOR DELETE
-  USING (profile_id = auth.uid());
+  USING (profile_id = (select auth.uid()));
 
 -- =====================================================
 -- TRUSTED_COMMUNITY_CONNECTIONS TABLE RLS
@@ -373,48 +317,47 @@ CREATE POLICY "Users can delete own pets"
 
 CREATE POLICY "Users can view own community connections"
   ON trusted_community_connections FOR SELECT
-  USING (profile_id = auth.uid());
+  USING (profile_id = (select auth.uid()));
 
 CREATE POLICY "Users can insert own community connections"
   ON trusted_community_connections FOR INSERT
-  WITH CHECK (profile_id = auth.uid());
+  WITH CHECK (profile_id = (select auth.uid()));
 
 CREATE POLICY "Users can update own community connections"
   ON trusted_community_connections FOR UPDATE
-  USING (profile_id = auth.uid())
-  WITH CHECK (profile_id = auth.uid());
+  USING (profile_id = (select auth.uid()))
+  WITH CHECK (profile_id = (select auth.uid()));
 
 CREATE POLICY "Users can delete own community connections"
   ON trusted_community_connections FOR DELETE
-  USING (profile_id = auth.uid());
+  USING (profile_id = (select auth.uid()));
 
 -- =====================================================
 -- BROADCASTS TABLE RLS
 -- =====================================================
 
--- Users can view broadcasts for their organization
-CREATE POLICY "Users can view org broadcasts"
+DROP POLICY IF EXISTS "Users can view org broadcasts" ON broadcasts;
+DROP POLICY IF EXISTS "Admins can view all broadcasts" ON broadcasts;
+DROP POLICY IF EXISTS "Institution admins can update org broadcasts" ON broadcasts;
+DROP POLICY IF EXISTS "Admins can update any broadcast" ON broadcasts;
+DROP POLICY IF EXISTS "Admins can insert broadcasts" ON broadcasts;
+
+CREATE POLICY "Broadcasts can view"
   ON broadcasts FOR SELECT
-  USING (org_id = public.user_org_id());
+  USING (org_id = public.user_org_id() OR public.is_admin());
 
--- Admins can view all broadcasts
-CREATE POLICY "Admins can view all broadcasts"
-  ON broadcasts FOR SELECT
-  USING (public.is_admin());
-
--- Institution admins can update their org's broadcasts
-CREATE POLICY "Institution admins can update org broadcasts"
+CREATE POLICY "Broadcasts can update"
   ON broadcasts FOR UPDATE
-  USING (org_id = public.user_org_id() AND public.is_institution_admin())
-  WITH CHECK (org_id = public.user_org_id());
+  USING (
+    public.is_admin()
+    OR (org_id = public.user_org_id() AND public.is_institution_admin())
+  )
+  WITH CHECK (
+    public.is_admin()
+    OR (org_id = public.user_org_id() AND public.is_institution_admin())
+  );
 
--- Admins can update any broadcast
-CREATE POLICY "Admins can update any broadcast"
-  ON broadcasts FOR UPDATE
-  USING (public.is_admin());
-
--- Auto-insert is handled by trigger, but allow admins
-CREATE POLICY "Admins can insert broadcasts"
+CREATE POLICY "Broadcasts can insert"
   ON broadcasts FOR INSERT
   WITH CHECK (public.is_admin());
 
@@ -422,111 +365,104 @@ CREATE POLICY "Admins can insert broadcasts"
 -- HELP_REQUESTS TABLE RLS
 -- =====================================================
 
--- Users can view their own help requests
-CREATE POLICY "Users can view own help requests"
-  ON help_requests FOR SELECT
-  USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can view own help requests" ON help_requests;
+DROP POLICY IF EXISTS "Users can view org help requests" ON help_requests;
+DROP POLICY IF EXISTS "Responders can view all help requests" ON help_requests;
 
--- Users can view help requests for their organization
-CREATE POLICY "Users can view org help requests"
-  ON help_requests FOR SELECT
-  USING (org_id = public.user_org_id());
+DROP POLICY IF EXISTS "Users can create own help requests" ON help_requests;
+DROP POLICY IF EXISTS "Admins can create any help request" ON help_requests;
+DROP POLICY IF EXISTS "Users can update own help requests" ON help_requests;
+DROP POLICY IF EXISTS "Responders can update help requests" ON help_requests;
+DROP POLICY IF EXISTS "Institution admins can update org help requests" ON help_requests;
 
--- First responders and admins can view all help requests
-CREATE POLICY "Responders can view all help requests"
+CREATE POLICY "Help requests can view"
   ON help_requests FOR SELECT
-  USING (public.user_role() IN ('ADMIN', 'FIRST_RESPONDER', 'LOCAL_AUTHORITY'));
+  USING (
+    user_id = (select auth.uid())
+    OR org_id = public.user_org_id()
+    OR public.user_role() IN ('ADMIN', 'FIRST_RESPONDER', 'LOCAL_AUTHORITY')
+  );
 
--- Users can create their own help requests
-CREATE POLICY "Users can create own help requests"
+CREATE POLICY "Help requests can insert"
   ON help_requests FOR INSERT
-  WITH CHECK (user_id = auth.uid());
+  WITH CHECK (user_id = (select auth.uid()) OR public.is_admin());
 
--- Admins can create any help request
-CREATE POLICY "Admins can create any help request"
-  ON help_requests FOR INSERT
-  WITH CHECK (public.is_admin());
-
--- Users can update their own help requests
-CREATE POLICY "Users can update own help requests"
+CREATE POLICY "Help requests can update"
   ON help_requests FOR UPDATE
-  USING (user_id = auth.uid())
-  WITH CHECK (user_id = auth.uid());
-
--- First responders can update help requests
-CREATE POLICY "Responders can update help requests"
-  ON help_requests FOR UPDATE
-  USING (public.user_role() IN ('ADMIN', 'FIRST_RESPONDER', 'LOCAL_AUTHORITY'));
-
--- Institution admins can update help requests for their org
-CREATE POLICY "Institution admins can update org help requests"
-  ON help_requests FOR UPDATE
-  USING (org_id = public.user_org_id() AND public.is_institution_admin());
+  USING (
+    user_id = (select auth.uid())
+    OR public.user_role() IN ('ADMIN', 'FIRST_RESPONDER', 'LOCAL_AUTHORITY')
+    OR (org_id = public.user_org_id() AND public.is_institution_admin())
+  )
+  WITH CHECK (
+    user_id = (select auth.uid())
+    OR public.user_role() IN ('ADMIN', 'FIRST_RESPONDER', 'LOCAL_AUTHORITY')
+    OR (org_id = public.user_org_id() AND public.is_institution_admin())
+  );
 
 -- =====================================================
 -- MEMBERS TABLE RLS
 -- =====================================================
 
--- Users can view members of their organization
-CREATE POLICY "Users can view org members"
+DROP POLICY IF EXISTS "Users can view org members" ON members;
+DROP POLICY IF EXISTS "Admins can view all members" ON members;
+
+DROP POLICY IF EXISTS "Institution admins can insert org members" ON members;
+DROP POLICY IF EXISTS "Institution admins can update org members" ON members;
+DROP POLICY IF EXISTS "Institution admins can delete org members" ON members;
+DROP POLICY IF EXISTS "Admins can insert members" ON members;
+DROP POLICY IF EXISTS "Admins can update members" ON members;
+DROP POLICY IF EXISTS "Admins can delete members" ON members;
+
+CREATE POLICY "Members can view"
   ON members FOR SELECT
-  USING (org_id = public.user_org_id());
+  USING (org_id = public.user_org_id() OR public.is_admin());
 
--- Admins can view all members
-CREATE POLICY "Admins can view all members"
-  ON members FOR SELECT
-  USING (public.is_admin());
-
--- Institution admins can manage their org's members
-CREATE POLICY "Institution admins can insert org members"
+CREATE POLICY "Members can insert"
   ON members FOR INSERT
-  WITH CHECK (org_id = public.user_org_id() AND public.is_institution_admin());
+  WITH CHECK (
+    public.is_admin()
+    OR (org_id = public.user_org_id() AND public.is_institution_admin())
+  );
 
-CREATE POLICY "Institution admins can update org members"
+CREATE POLICY "Members can update"
   ON members FOR UPDATE
-  USING (org_id = public.user_org_id() AND public.is_institution_admin())
-  WITH CHECK (org_id = public.user_org_id());
+  USING (
+    public.is_admin()
+    OR (org_id = public.user_org_id() AND public.is_institution_admin())
+  )
+  WITH CHECK (
+    public.is_admin()
+    OR (org_id = public.user_org_id() AND public.is_institution_admin())
+  );
 
-CREATE POLICY "Institution admins can delete org members"
+CREATE POLICY "Members can delete"
   ON members FOR DELETE
-  USING (org_id = public.user_org_id() AND public.is_institution_admin());
-
--- Admins can manage any members
-CREATE POLICY "Admins can insert members"
-  ON members FOR INSERT
-  WITH CHECK (public.is_admin());
-
-CREATE POLICY "Admins can update members"
-  ON members FOR UPDATE
-  USING (public.is_admin());
-
-CREATE POLICY "Admins can delete members"
-  ON members FOR DELETE
-  USING (public.is_admin());
+  USING (
+    public.is_admin()
+    OR (org_id = public.user_org_id() AND public.is_institution_admin())
+  );
 
 -- =====================================================
 -- ACTIVITY_LOG TABLE RLS
 -- =====================================================
 
--- Users can view their own activity
-CREATE POLICY "Users can view own activity"
-  ON activity_log FOR SELECT
-  USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can view own activity" ON activity_log;
+DROP POLICY IF EXISTS "Institution admins can view org activity" ON activity_log;
+DROP POLICY IF EXISTS "Admins can view all activity" ON activity_log;
+DROP POLICY IF EXISTS "Users can insert activity logs" ON activity_log;
 
--- Institution admins can view activity for their org
-CREATE POLICY "Institution admins can view org activity"
+CREATE POLICY "Activity log can view"
   ON activity_log FOR SELECT
-  USING (org_id = public.user_org_id() AND public.is_institution_admin());
+  USING (
+    user_id = (select auth.uid())
+    OR (org_id = public.user_org_id() AND public.is_institution_admin())
+    OR public.is_admin()
+  );
 
--- Admins can view all activity
-CREATE POLICY "Admins can view all activity"
-  ON activity_log FOR SELECT
-  USING (public.is_admin());
-
--- All authenticated users can insert activity logs
-CREATE POLICY "Users can insert activity logs"
+CREATE POLICY "Activity log can insert"
   ON activity_log FOR INSERT
-  WITH CHECK (user_id = auth.uid() OR public.is_admin());
+  WITH CHECK (user_id = (select auth.uid()) OR public.is_admin());
 
 -- =====================================================
 -- STORAGE BUCKET POLICIES (for file uploads)
@@ -542,7 +478,7 @@ CREATE POLICY "Users can upload own avatar"
   ON storage.objects FOR INSERT
   WITH CHECK (
     bucket_id = 'avatars' AND 
-    auth.uid()::text = (storage.foldername(name))[1]
+    (select auth.uid())::text = (storage.foldername(name))[1]
   );
 
 -- Users can update their own avatar
@@ -550,7 +486,7 @@ CREATE POLICY "Users can update own avatar"
   ON storage.objects FOR UPDATE
   USING (
     bucket_id = 'avatars' AND 
-    auth.uid()::text = (storage.foldername(name))[1]
+    (select auth.uid())::text = (storage.foldername(name))[1]
   );
 
 -- Anyone can view avatars (public bucket)
