@@ -424,15 +424,34 @@ DECLARE
   v_org_id UUID;
   v_entity_id UUID;
   v_user_id UUID;
+  v_row JSONB;
 BEGIN
   v_user_id := auth.uid();
 
   IF TG_OP = 'DELETE' THEN
     v_entity_id := OLD.id;
-    v_org_id := COALESCE(OLD.org_id, NULL);
+    v_row := to_jsonb(OLD);
   ELSE
     v_entity_id := NEW.id;
-    v_org_id := COALESCE(NEW.org_id, NULL);
+    v_row := to_jsonb(NEW);
+  END IF;
+
+  -- Some tables don't have org_id (e.g., organizations, vitals, ready_kits).
+  -- Read dynamically to avoid runtime errors on missing record fields.
+  IF v_row ? 'org_id' THEN
+    BEGIN
+      v_org_id := NULLIF(v_row->>'org_id', '')::uuid;
+    EXCEPTION WHEN others THEN
+      v_org_id := NULL;
+    END;
+  ELSIF v_row ? 'organization_id' THEN
+    BEGIN
+      v_org_id := NULLIF(v_row->>'organization_id', '')::uuid;
+    EXCEPTION WHEN others THEN
+      v_org_id := NULL;
+    END;
+  ELSE
+    v_org_id := NULL;
   END IF;
 
   INSERT INTO activity_log (org_id, user_id, action, entity_type, entity_id, details)
