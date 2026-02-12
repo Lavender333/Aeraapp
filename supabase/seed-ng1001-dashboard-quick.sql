@@ -123,7 +123,7 @@ FROM org,
 (
   VALUES
     ('Water Cases', 20, 'PENDING', 0),
-    ('Medical Kits', 10, 'APPROVED', 0),
+    ('Medical Kits', 10, 'PENDING', 0),
     ('Blankets', 15, 'STOCKED', 15)
 ) AS v(item, quantity, status, delivered_quantity)
 ON CONFLICT DO NOTHING;
