@@ -234,7 +234,143 @@ async function seedMember(member, orgId) {
 
   if (readyError) throw readyError;
 
-  return authUser.id;
+  const criticalMissingItems = [];
+  const outreachFlags = [];
+
+  if (member.medication_dependency) {
+    criticalMissingItems.push({
+      id: 'medication_backup_container',
+      item: 'Medication Backup Container',
+      explanation: 'Medication dependency requires backup storage for continuity.',
+    });
+    outreachFlags.push('medical-medication-continuity');
+  }
+
+  if (member.insulin_dependency) {
+    criticalMissingItems.push({
+      id: 'insulated_medication_pouch',
+      item: 'Insulated Medication Pouch',
+      explanation: 'Insulin users require temperature-stable medication storage.',
+    });
+    outreachFlags.push('medical-insulin-continuity');
+  }
+
+  if (member.oxygen_powered_device) {
+    criticalMissingItems.push({
+      id: 'backup_power_plan',
+      item: 'Backup Power Plan',
+      explanation: 'Powered medical devices require backup power continuity.',
+    });
+    outreachFlags.push('medical-power-continuity');
+  }
+
+  if (!member.transportation_access) {
+    criticalMissingItems.push({
+      id: 'evacuation_assistance_contact',
+      item: 'Evacuation Assistance Contact',
+      explanation: 'No transport access requires pre-arranged evacuation assistance.',
+    });
+    outreachFlags.push('transport-evacuation-coordination');
+  }
+
+  if (member.financial_strain) {
+    outreachFlags.push('financial-support-outreach');
+  }
+
+  const uniqueFlags = Array.from(new Set(outreachFlags));
+  const readinessCap = criticalMissingItems.length > 0 ? 70 : 100;
+  const baseCompletionPct = Number(((starterKit.length / 28) * 100).toFixed(2));
+  const readinessScore = Number(Math.min(baseCompletionPct, readinessCap).toFixed(2));
+
+  const { error: recommendationError } = await supabase
+    .from('kit_recommendations')
+    .upsert(
+      {
+        profile_id: authUser.id,
+        organization_id: orgId,
+        county_id: member.county_id,
+        state_id: member.state_id,
+        risk_score: 0,
+        recommended_duration_days: member.household_size >= 4 ? 7 : 3,
+        required_item_ids: criticalMissingItems.map((i) => i.id),
+        added_items: criticalMissingItems,
+        critical_missing_items: criticalMissingItems,
+        outreach_flags: uniqueFlags,
+        base_completion_pct: baseCompletionPct,
+        readiness_cap: readinessCap,
+        readiness_score: readinessScore,
+        risk_tier: criticalMissingItems.length >= 2 ? 'HIGH' : criticalMissingItems.length === 1 ? 'ELEVATED' : 'STANDARD',
+        source_version: 'seed-ng1001-members-v1',
+        generated_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'profile_id' },
+    );
+
+  if (recommendationError) throw recommendationError;
+
+  return {
+    profileId: authUser.id,
+    memberName: member.full_name,
+    phone: member.phone,
+    needs: criticalMissingItems.map((i) => i.item),
+    status: criticalMissingItems.length >= 2 ? 'DANGER' : criticalMissingItems.length === 1 ? 'UNKNOWN' : 'SAFE',
+  };
+}
+
+async function seedOrgOperationalData(orgId, seededMembers) {
+  const { error: inventoryError } = await supabase
+    .from('inventory')
+    .upsert(
+      {
+        org_id: orgId,
+        water: 42,
+        food: 35,
+        blankets: 28,
+        medical_kits: 18,
+      },
+      { onConflict: 'org_id' },
+    );
+  if (inventoryError) throw inventoryError;
+
+  for (let idx = 0; idx < seededMembers.length; idx += 1) {
+    const m = seededMembers[idx];
+
+    const { error: membersError } = await supabase
+      .from('members')
+      .upsert(
+        {
+          id: m.profileId,
+          org_id: orgId,
+          name: m.memberName,
+          status: m.status,
+          location: `Sector ${idx + 1}, Springfield`,
+          last_update: new Date().toISOString(),
+          needs: m.needs,
+          phone: m.phone,
+          address: `${100 + idx} Relief Ave, Springfield, IL`,
+          emergency_contact_name: `Emergency Contact ${idx + 1}`,
+          emergency_contact_phone: `555-300${idx + 1}`,
+          emergency_contact_relation: 'Family',
+        },
+        { onConflict: 'id' },
+      );
+    if (membersError) throw membersError;
+
+    const { error: statusError } = await supabase
+      .from('member_statuses')
+      .upsert(
+        {
+          org_id: orgId,
+          member_id: m.profileId,
+          name: m.memberName,
+          status: m.status,
+          last_check_in: new Date(Date.now() - idx * 3600 * 1000).toISOString(),
+        },
+        { onConflict: 'org_id,member_id' },
+      );
+    if (statusError) throw statusError;
+  }
 }
 
 async function main() {
@@ -243,10 +379,13 @@ async function main() {
 
   const seeded = [];
   for (const member of demoMembers) {
-    const id = await seedMember(member, org.id);
-    seeded.push({ id, email: member.email, role: member.role });
+    const result = await seedMember(member, org.id);
+    seeded.push({ id: result.profileId, email: member.email, role: member.role, ...result });
     console.log(`Seeded: ${member.email} (${member.role})`);
   }
+
+  await seedOrgOperationalData(org.id, seeded);
+  console.log('Seeded org inventory, member directory, and member status rows.');
 
   console.log('\nDone. Demo accounts for NG-1001:');
   for (const row of seeded) {
