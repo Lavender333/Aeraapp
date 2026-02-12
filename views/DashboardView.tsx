@@ -286,7 +286,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   // Role Helper Checks
   const isResponder = userRole === 'FIRST_RESPONDER' || userRole === 'LOCAL_AUTHORITY' || userRole === 'ADMIN' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN';
   const isOrgAdmin = userRole === 'INSTITUTION_ADMIN' || userRole === 'ORG_ADMIN';
-  const canOpenOrgDashboard = isOrgAdmin || userRole === 'ADMIN';
+  const canOpenOrgDashboard = isOrgAdmin || userRole === 'ADMIN' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN';
   const isContractor = userRole === 'CONTRACTOR';
   const isGeneralUser = userRole === 'GENERAL_USER';
   const isProStatusViewer = userRole === 'ADMIN' || userRole === 'FIRST_RESPONDER' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN';
