@@ -633,10 +633,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         </div>
       </div>
 
-      {canOpenOrgDashboard && connectedOrg && orgInventory && (
+      {canOpenOrgDashboard && connectedOrg && (
         (() => {
+          const effectiveInventory = orgInventory || { water: 0, food: 0, blankets: 0, medicalKits: 0 };
           const coverageBase = orgMemberCount || orgPopulation;
-          const status = getInventoryStatuses(orgInventory, coverageBase);
+          const status = getInventoryStatuses(effectiveInventory, coverageBase);
           return (
         <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 rounded-2xl p-6 shadow-md space-y-3">
           <div className="flex items-center justify-between">
@@ -652,12 +653,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               Manage
             </Button>
           </div>
+          {!orgInventory && (
+            <p className="text-[11px] text-slate-500 font-semibold">Inventory is loading or unavailable. You can still open Manage.</p>
+          )}
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: 'Water Cases', value: orgInventory.water, unit: 'cases', key: 'water' as const, icon: <Droplets size={16} className="text-blue-600" /> },
-              { label: 'Food Boxes', value: orgInventory.food, unit: 'boxes', key: 'food' as const, icon: <Package size={16} className="text-emerald-600" /> },
-              { label: 'Blankets', value: orgInventory.blankets, unit: 'units', key: 'blankets' as const, icon: <Box size={16} className="text-amber-600" /> },
-              { label: 'Med Kits', value: orgInventory.medicalKits, unit: 'kits', key: 'medicalKits' as const, icon: <AlertTriangle size={16} className="text-red-600" /> },
+              { label: 'Water Cases', value: effectiveInventory.water, unit: 'cases', key: 'water' as const, icon: <Droplets size={16} className="text-blue-600" /> },
+              { label: 'Food Boxes', value: effectiveInventory.food, unit: 'boxes', key: 'food' as const, icon: <Package size={16} className="text-emerald-600" /> },
+              { label: 'Blankets', value: effectiveInventory.blankets, unit: 'units', key: 'blankets' as const, icon: <Box size={16} className="text-amber-600" /> },
+              { label: 'Med Kits', value: effectiveInventory.medicalKits, unit: 'kits', key: 'medicalKits' as const, icon: <AlertTriangle size={16} className="text-red-600" /> },
             ].map(item => (
               <div key={item.label} className="bg-white border border-emerald-100 rounded-xl p-3 shadow-sm flex items-center gap-3">
                 <div className="p-2 bg-slate-50 rounded-lg">
