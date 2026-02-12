@@ -65,6 +65,12 @@ interface DashboardViewProps {
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
+  const normalizeRole = (role: any): UserRole => {
+    const normalized = String(role || 'GENERAL_USER').toUpperCase();
+    const validRoles: UserRole[] = ['ADMIN', 'CONTRACTOR', 'LOCAL_AUTHORITY', 'FIRST_RESPONDER', 'GENERAL_USER', 'INSTITUTION_ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'MEMBER'];
+    return validRoles.includes(normalized as UserRole) ? (normalized as UserRole) : 'GENERAL_USER';
+  };
+
   const [activeRequest, setActiveRequest] = useState<HelpRequestRecord | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -99,7 +105,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   useEffect(() => {
     // Load Profile Data
     const profile = StorageService.getProfile();
-    setUserRole(profile.role);
+    setUserRole(normalizeRole(profile.role));
     setUserName(profile.fullName);
     setPendingPing(profile.pendingStatusRequest);
     setCommunityIdInput(profile.communityId || '');
@@ -142,6 +148,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     // Listen for storage events (cross-tab)
     const handleStorageChange = () => {
        const updatedProfile = StorageService.getProfile();
+       setUserRole(normalizeRole(updatedProfile.role));
        setTickerMessage(StorageService.getTicker(updatedProfile));
        setPendingPing(updatedProfile.pendingStatusRequest);
        StorageService.getActiveRequest().then(setActiveRequest);
