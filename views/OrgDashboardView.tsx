@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { ViewState, OrgMember, OrgInventory, ReplenishmentRequest } from '../types';
 import { Button } from '../components/Button';
 import { StorageService } from '../services/storage';
-import { listRequests, createRequest, updateRequestStatus, fetchOrgOutreachFlags } from '../services/api';
+import { listRequests, createRequest, updateRequestStatus, fetchOrgOutreachFlags, fetchOrgMemberPreparednessNeeds } from '../services/api';
 import { REQUEST_ITEM_MAP } from '../services/validation';
 import { getInventoryStatuses, getRecommendedResupply } from '../services/inventoryStatus';
 import { t } from '../services/translations';
@@ -19,6 +19,19 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     outreach_flag: 'LOW' | 'MEDIUM' | 'HIGH';
     member_count: number;
     last_updated: string;
+  };
+
+  type MemberPreparednessNeedRow = {
+    profile_id: string;
+    member_name: string;
+    phone: string | null;
+    readiness_score: number;
+    readiness_cap: number;
+    risk_tier: string;
+    critical_missing_items: Array<{ id?: string; item?: string; explanation?: string | null }>;
+    critical_missing_count: number;
+    outreach_flags: string[];
+    updated_at: string | null;
   };
 
   const [members, setMembers] = useState<OrgMember[]>([]);
@@ -51,6 +64,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [stockLoading, setStockLoading] = useState(false);
   const [outreachFlags, setOutreachFlags] = useState<OutreachFlagRow[]>([]);
+  const [memberNeeds, setMemberNeeds] = useState<MemberPreparednessNeedRow[]>([]);
 
   // Broadcast State
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
@@ -99,6 +113,9 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     fetchOrgOutreachFlags(id)
       .then((rows) => setOutreachFlags(rows as OutreachFlagRow[]))
       .catch(() => setOutreachFlags([]));
+    fetchOrgMemberPreparednessNeeds(id)
+      .then((rows) => setMemberNeeds(rows as MemberPreparednessNeedRow[]))
+      .catch(() => setMemberNeeds([]));
 
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
@@ -579,6 +596,48 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
                              <p className="text-sm text-slate-700">{flag.member_count} members • Updated {new Date(flag.last_updated).toLocaleString()}</p>
                            </div>
                            <span className={`px-2 py-1 text-[11px] border rounded font-bold ${levelClasses}`}>{flag.outreach_flag}</span>
+                         </div>
+                       );
+                     })}
+                   </div>
+                 </div>
+               )}
+               {memberNeeds.length > 0 && (
+                 <div className="bg-white border border-slate-200 rounded-xl p-4 mb-2">
+                   <h3 className="text-sm font-bold text-slate-900 mb-2">Member Preparedness Gaps</h3>
+                   <div className="space-y-2">
+                     {memberNeeds.slice(0, 6).map((need) => {
+                       const score = Math.round(Number(need.readiness_score || 0));
+                       const riskClasses =
+                         need.risk_tier === 'HIGH'
+                           ? 'bg-red-100 text-red-700 border-red-200'
+                           : need.risk_tier === 'ELEVATED'
+                             ? 'bg-amber-100 text-amber-700 border-amber-200'
+                             : 'bg-emerald-100 text-emerald-700 border-emerald-200';
+
+                       return (
+                         <div key={need.profile_id} className="rounded-lg border border-slate-200 p-3">
+                           <div className="flex items-center justify-between gap-2 mb-2">
+                             <div>
+                               <p className="text-sm font-bold text-slate-900">{need.member_name}</p>
+                               <p className="text-xs text-slate-500">{need.phone || 'No phone'} • {need.critical_missing_count} critical missing</p>
+                             </div>
+                             <div className="text-right">
+                               <p className="text-xs text-slate-500 uppercase font-bold">Readiness</p>
+                               <p className="text-sm font-black text-slate-900">{score}%</p>
+                             </div>
+                           </div>
+                           <div className="flex items-center gap-2 flex-wrap">
+                             <span className={`text-[10px] px-2 py-1 border rounded font-bold uppercase ${riskClasses}`}>{need.risk_tier}</span>
+                             {need.outreach_flags.slice(0, 2).map((flag) => (
+                               <span key={flag} className="text-[10px] px-2 py-1 rounded bg-purple-100 text-purple-700 font-bold">{flag}</span>
+                             ))}
+                           </div>
+                           {need.critical_missing_items.length > 0 && (
+                             <div className="mt-2 text-xs text-slate-600">
+                               Missing: {need.critical_missing_items.slice(0, 2).map((m) => m.item || 'Critical item').join(', ')}
+                             </div>
+                           )}
                          </div>
                        );
                      })}

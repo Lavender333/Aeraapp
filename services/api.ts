@@ -269,6 +269,59 @@ export async function fetchOrgOutreachFlags(orgCode: string) {
   return data || [];
 }
 
+export async function fetchOrgMemberPreparednessNeeds(orgCode: string) {
+  const orgId = await getOrgIdByCode(orgCode);
+  if (!orgId) throw new Error('Organization not found');
+
+  const { data: recs, error: recError } = await supabase
+    .from('kit_recommendations')
+    .select('profile_id, readiness_score, readiness_cap, risk_tier, critical_missing_items, outreach_flags, updated_at')
+    .eq('organization_id', orgId)
+    .order('readiness_score', { ascending: true })
+    .limit(100);
+
+  if (recError) throw recError;
+  if (!recs || recs.length === 0) return [];
+
+  const profileIds = Array.from(new Set(recs.map((r: any) => r.profile_id).filter(Boolean)));
+  if (profileIds.length === 0) return [];
+
+  const { data: profiles, error: profileError } = await supabase
+    .from('profiles')
+    .select('id, full_name, phone')
+    .in('id', profileIds)
+    .eq('org_id', orgId);
+
+  if (profileError) throw profileError;
+
+  const profileMap = new Map<string, { full_name: string | null; phone: string | null }>();
+  for (const row of profiles || []) {
+    profileMap.set(String((row as any).id), {
+      full_name: (row as any).full_name || null,
+      phone: (row as any).phone || null,
+    });
+  }
+
+  return (recs || []).map((row: any) => {
+    const profile = profileMap.get(String(row.profile_id));
+    const criticalMissing = Array.isArray(row.critical_missing_items) ? row.critical_missing_items : [];
+    const outreachFlags = Array.isArray(row.outreach_flags) ? row.outreach_flags : [];
+
+    return {
+      profile_id: String(row.profile_id),
+      member_name: profile?.full_name || 'Unknown Member',
+      phone: profile?.phone || null,
+      readiness_score: Number(row.readiness_score || 0),
+      readiness_cap: Number(row.readiness_cap || 100),
+      risk_tier: String(row.risk_tier || 'STANDARD'),
+      critical_missing_items: criticalMissing,
+      critical_missing_count: criticalMissing.length,
+      outreach_flags: outreachFlags,
+      updated_at: row.updated_at || null,
+    };
+  });
+}
+
 export async function getOrganizationByCode(orgCode: string) {
   return getOrgByCode(orgCode);
 }
