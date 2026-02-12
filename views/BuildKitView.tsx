@@ -3,7 +3,7 @@ import { ArrowLeft, Check, ChevronDown, FileText, HeartPulse, Save, Share2, Spar
 import { jsPDF } from 'jspdf';
 import { Button } from '../components/Button';
 import { ViewState } from '../types';
-import { fetchReadyKit, saveReadyKit } from '../services/api';
+import { fetchKitGuidanceForCurrentUser, fetchReadyKit, saveReadyKit } from '../services/api';
 
 const READY_KIT_STORAGE_KEY = 'aeraReadyKit';
 
@@ -20,6 +20,17 @@ type KitCategory = {
   subtitle: string;
   icon: React.ReactNode;
   items: KitItem[];
+};
+
+type KitGuidance = {
+  recommended_duration_days: number;
+  readiness_score: number;
+  readiness_cap: number;
+  base_completion_pct: number;
+  risk_tier: string;
+  added_items: Array<{ id: string; item: string; category: string; priority: string; explanation?: string | null }>;
+  critical_missing_items: Array<{ id: string; item: string; explanation?: string | null }>;
+  outreach_flags: string[];
 };
 
 const CATEGORIES: KitCategory[] = [
@@ -85,8 +96,17 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
   const [showSaved, setShowSaved] = useState(false);
+  const [guidance, setGuidance] = useState<KitGuidance | null>(null);
 
-  const totalItems = useMemo(() => CATEGORIES.reduce((sum, cat) => sum + cat.items.length, 0), []);
+  const dynamicItems = useMemo(() => {
+    const staticIds = new Set(CATEGORIES.flatMap((cat) => cat.items.map((item) => item.id)));
+    return (guidance?.added_items || []).filter((item) => !staticIds.has(item.id));
+  }, [guidance]);
+
+  const totalItems = useMemo(() => {
+    const staticCount = CATEGORIES.reduce((sum, cat) => sum + cat.items.length, 0);
+    return staticCount + dynamicItems.length;
+  }, [dynamicItems]);
   const checkedCount = useMemo(() => Object.values(checkedItems).filter(Boolean).length, [checkedItems]);
   const progressPercent = Math.round((checkedCount / totalItems) * 100);
 
@@ -130,6 +150,13 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       } catch {
         // ignore remote load errors
       }
+
+      try {
+        const kitGuidance = await fetchKitGuidanceForCurrentUser();
+        setGuidance(kitGuidance as KitGuidance);
+      } catch {
+        // ignore guidance errors
+      }
     };
 
     loadRemote();
@@ -160,6 +187,12 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         totalItems,
         checkedItems: checkedIds.length,
       });
+      try {
+        const kitGuidance = await fetchKitGuidanceForCurrentUser();
+        setGuidance(kitGuidance as KitGuidance);
+      } catch {
+        // ignore guidance refresh errors
+      }
     } catch {
       // keep local save even if remote sync fails
     }
@@ -399,6 +432,86 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           <div className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400" style={{ width: `${progressPercent}%` }} />
         </div>
       </div>
+
+      {guidance && (
+        <div className="mx-4 mt-4 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+            <h3 className="text-sm font-bold text-slate-900">Personalized Preparedness Guidance</h3>
+            <p className="text-xs text-slate-500">Based on your profile, we recommend the following:</p>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-2">
+                <p className="text-[10px] text-blue-700 font-bold uppercase">Supply Duration</p>
+                <p className="text-lg font-black text-blue-900">{guidance.recommended_duration_days}d</p>
+              </div>
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2">
+                <p className="text-[10px] text-emerald-700 font-bold uppercase">Readiness</p>
+                <p className="text-lg font-black text-emerald-900">{Math.round(guidance.readiness_score)}%</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                <p className="text-[10px] text-slate-600 font-bold uppercase">Risk Tier</p>
+                <p className="text-lg font-black text-slate-900">{guidance.risk_tier}</p>
+              </div>
+            </div>
+
+            {guidance.critical_missing_items.length > 0 && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                <p className="text-xs font-bold text-red-700 uppercase mb-1">Critical Items Needed</p>
+                <ul className="space-y-1">
+                  {guidance.critical_missing_items.map((item) => (
+                    <li key={item.id} className="text-sm text-red-900">• {item.item}</li>
+                  ))}
+                </ul>
+                <p className="text-xs text-red-700 mt-2">Readiness is currently capped at {Math.round(guidance.readiness_cap)}% until these are completed.</p>
+              </div>
+            )}
+
+            {guidance.added_items.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <p className="text-xs font-bold text-amber-700 uppercase mb-1">Dynamic Kit Additions</p>
+                <ul className="space-y-1">
+                  {guidance.added_items.slice(0, 8).map((item) => (
+                    <li key={item.id} className="text-sm text-amber-900">• {item.item} <span className="text-[11px] uppercase font-semibold">({item.priority})</span></li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {dynamicItems.length > 0 && (
+        <div className="mx-4 mt-4 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 bg-amber-50 border-b border-amber-200">
+            <h3 className="text-sm font-bold text-amber-900">Profile-Based Required Additions</h3>
+            <p className="text-xs text-amber-700">These items were added automatically based on your profile.</p>
+          </div>
+          <div>
+            {dynamicItems.map((item) => {
+              const checked = !!checkedItems[item.id];
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => toggleItem(item.id)}
+                  className="w-full px-4 py-3 flex items-center gap-3 border-b last:border-b-0 border-slate-100 hover:bg-slate-50"
+                >
+                  <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center ${checked ? 'bg-emerald-600 border-emerald-600' : 'border-slate-300'}`}>
+                    {checked && <Check size={12} className="text-white" />}
+                  </div>
+                  <div className={`flex-1 text-left ${checked ? 'opacity-60 line-through' : ''}`}>
+                    <div className="text-sm font-semibold text-slate-900">{item.item}</div>
+                    <div className="text-xs text-slate-500">{item.explanation || 'Added from intake rule engine.'}</div>
+                  </div>
+                  <span className={`text-[10px] px-2 py-1 rounded uppercase font-bold ${String(item.priority).toLowerCase() === 'critical' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                    {item.priority}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="px-4 py-4 space-y-2">
         {CATEGORIES.map((category) => {

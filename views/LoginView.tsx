@@ -104,8 +104,8 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
       console.log('User needs setup, redirecting to ACCOUNT_SETUP');
       setView('ACCOUNT_SETUP');
     }
-    else if (profile.role === 'INSTITUTION_ADMIN') {
-      console.log('Institution admin, redirecting to ORG_DASHBOARD');
+    else if (profile.role === 'INSTITUTION_ADMIN' || profile.role === 'ORG_ADMIN') {
+      console.log('Organization admin, redirecting to ORG_DASHBOARD');
       setView('ORG_DASHBOARD');
     }
     else {

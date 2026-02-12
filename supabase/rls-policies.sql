@@ -95,6 +95,9 @@ DROP POLICY IF EXISTS "orgs_insert_auth" ON organizations;
 DROP POLICY IF EXISTS "Admins can create organizations" ON organizations;
 DROP POLICY IF EXISTS "Admins can update organizations" ON organizations;
 DROP POLICY IF EXISTS "Institution admins can update their organization" ON organizations;
+DROP POLICY IF EXISTS "Organizations can view" ON organizations;
+DROP POLICY IF EXISTS "Organizations can create" ON organizations;
+DROP POLICY IF EXISTS "Organizations can update" ON organizations;
 
 -- profiles
 DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
@@ -105,6 +108,9 @@ DROP POLICY IF EXISTS "Institution admins can update org profiles" ON profiles;
 DROP POLICY IF EXISTS "Admins can update any profile" ON profiles;
 DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
 DROP POLICY IF EXISTS "Admins can create profiles" ON profiles;
+DROP POLICY IF EXISTS "Profiles can view" ON profiles;
+DROP POLICY IF EXISTS "Profiles can update" ON profiles;
+DROP POLICY IF EXISTS "Profiles can insert" ON profiles;
 
 -- inventory
 DROP POLICY IF EXISTS "Users can view org inventory" ON inventory;
@@ -112,6 +118,8 @@ DROP POLICY IF EXISTS "Admins can view all inventory" ON inventory;
 DROP POLICY IF EXISTS "Institution admins can update org inventory" ON inventory;
 DROP POLICY IF EXISTS "Admins can update any inventory" ON inventory;
 DROP POLICY IF EXISTS "Admins can insert inventory" ON inventory;
+DROP POLICY IF EXISTS "Inventory can view" ON inventory;
+DROP POLICY IF EXISTS "Inventory can update" ON inventory;
 
 -- replenishment_requests
 DROP POLICY IF EXISTS "Users can view org requests" ON replenishment_requests;
@@ -121,6 +129,9 @@ DROP POLICY IF EXISTS "Users can create org requests" ON replenishment_requests;
 DROP POLICY IF EXISTS "Admins can create any request" ON replenishment_requests;
 DROP POLICY IF EXISTS "Users can update org requests" ON replenishment_requests;
 DROP POLICY IF EXISTS "Contractors can update requests" ON replenishment_requests;
+DROP POLICY IF EXISTS "Replenishment requests can view" ON replenishment_requests;
+DROP POLICY IF EXISTS "Replenishment requests can insert" ON replenishment_requests;
+DROP POLICY IF EXISTS "Replenishment requests can update" ON replenishment_requests;
 
 -- member_statuses
 DROP POLICY IF EXISTS "Users can view org member statuses" ON member_statuses;
@@ -128,6 +139,9 @@ DROP POLICY IF EXISTS "Admins and responders can view all statuses" ON member_st
 DROP POLICY IF EXISTS "Users can update org member statuses" ON member_statuses;
 DROP POLICY IF EXISTS "Users can insert org member statuses" ON member_statuses;
 DROP POLICY IF EXISTS "Admins can insert any member status" ON member_statuses;
+DROP POLICY IF EXISTS "Member statuses can view" ON member_statuses;
+DROP POLICY IF EXISTS "Member statuses can update" ON member_statuses;
+DROP POLICY IF EXISTS "Member statuses can insert" ON member_statuses;
 
 -- broadcasts
 DROP POLICY IF EXISTS "Users can view org broadcasts" ON broadcasts;
@@ -135,6 +149,9 @@ DROP POLICY IF EXISTS "Admins can view all broadcasts" ON broadcasts;
 DROP POLICY IF EXISTS "Institution admins can update org broadcasts" ON broadcasts;
 DROP POLICY IF EXISTS "Admins can update any broadcast" ON broadcasts;
 DROP POLICY IF EXISTS "Admins can insert broadcasts" ON broadcasts;
+DROP POLICY IF EXISTS "Broadcasts can view" ON broadcasts;
+DROP POLICY IF EXISTS "Broadcasts can update" ON broadcasts;
+DROP POLICY IF EXISTS "Broadcasts can insert" ON broadcasts;
 
 -- help_requests
 DROP POLICY IF EXISTS "Users can view own help requests" ON help_requests;
@@ -145,6 +162,9 @@ DROP POLICY IF EXISTS "Admins can create any help request" ON help_requests;
 DROP POLICY IF EXISTS "Users can update own help requests" ON help_requests;
 DROP POLICY IF EXISTS "Responders can update help requests" ON help_requests;
 DROP POLICY IF EXISTS "Institution admins can update org help requests" ON help_requests;
+DROP POLICY IF EXISTS "Help requests can view" ON help_requests;
+DROP POLICY IF EXISTS "Help requests can insert" ON help_requests;
+DROP POLICY IF EXISTS "Help requests can update" ON help_requests;
 
 -- members
 DROP POLICY IF EXISTS "Users can view org members" ON members;
@@ -155,12 +175,18 @@ DROP POLICY IF EXISTS "Institution admins can delete org members" ON members;
 DROP POLICY IF EXISTS "Admins can insert members" ON members;
 DROP POLICY IF EXISTS "Admins can update members" ON members;
 DROP POLICY IF EXISTS "Admins can delete members" ON members;
+DROP POLICY IF EXISTS "Members can view" ON members;
+DROP POLICY IF EXISTS "Members can insert" ON members;
+DROP POLICY IF EXISTS "Members can update" ON members;
+DROP POLICY IF EXISTS "Members can delete" ON members;
 
 -- activity_log
 DROP POLICY IF EXISTS "Users can view own activity" ON activity_log;
 DROP POLICY IF EXISTS "Institution admins can view org activity" ON activity_log;
 DROP POLICY IF EXISTS "Admins can view all activity" ON activity_log;
 DROP POLICY IF EXISTS "Users can insert activity logs" ON activity_log;
+DROP POLICY IF EXISTS "Activity log can view" ON activity_log;
+DROP POLICY IF EXISTS "Activity log can insert" ON activity_log;
 
 -- vitals
 DROP POLICY IF EXISTS "Users can view own vitals" ON vitals;

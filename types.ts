@@ -45,7 +45,17 @@ export interface HelpRequestRecord extends HelpRequestData {
   synced?: boolean; // Offline sync status
 }
 
-export type UserRole = 'ADMIN' | 'CONTRACTOR' | 'LOCAL_AUTHORITY' | 'FIRST_RESPONDER' | 'GENERAL_USER' | 'INSTITUTION_ADMIN';
+export type UserRole =
+  | 'ADMIN'
+  | 'CONTRACTOR'
+  | 'LOCAL_AUTHORITY'
+  | 'FIRST_RESPONDER'
+  | 'GENERAL_USER'
+  | 'INSTITUTION_ADMIN'
+  | 'STATE_ADMIN'
+  | 'COUNTY_ADMIN'
+  | 'ORG_ADMIN'
+  | 'MEMBER';
 
 export type LanguageCode = 'en' | 'es' | 'fr';
 
@@ -67,6 +77,17 @@ export interface UserProfile {
   household: HouseholdMember[]; // Detailed list
   petDetails: string; // E.g. "2 Dogs"
   medicalNeeds: string; // Critical info (Oxygen, Dialysis, Mobility)
+
+  // Structured vulnerability intake (state-ready)
+  zipCode?: string;
+  medicationDependency?: boolean;
+  insulinDependency?: boolean;
+  oxygenPoweredDevice?: boolean;
+  mobilityLimitation?: boolean;
+  transportationAccess?: boolean;
+  financialStrain?: boolean;
+  consentPreparednessPlanning?: boolean;
+  consentTimestamp?: string;
   
   // Emergency Contact (Split)
   emergencyContactName: string;

@@ -1,6 +1,105 @@
 import { supabase } from './supabaseClient';
 import type { OrgInventory } from '../types';
 
+export type MapRegionRecord = {
+  id: string;
+  organization_id: string | null;
+  county_id: string;
+  state_id: string;
+  region_name: string;
+  region_type: string;
+  geojson: any;
+  centroid_geojson: any;
+  updated_at?: string;
+};
+
+export type RegionSnapshotLatestRecord = {
+  id: string;
+  snapshot_date: string;
+  organization_id: string | null;
+  county_id: string;
+  state_id: string;
+  region_id: string | null;
+  profile_count: number;
+  avg_risk_score: number;
+  max_risk_score: number;
+  min_risk_score: number;
+  risk_growth_pct: number;
+  drift_value: number;
+  drift_status: 'STABLE' | 'ESCALATING' | 'ACCELERATING' | string;
+  kmeans_cluster: number | null;
+  dbscan_cluster: number | null;
+  anomaly_count: number;
+  projection_14d: number | null;
+  model_version: string;
+  pipeline_run_id: string | null;
+  created_at?: string;
+};
+
+export type StateAlertRecord = {
+  id: string;
+  source: string;
+  event_type: string;
+  severity: string;
+  headline: string;
+  description: string | null;
+  effective_at: string | null;
+  expires_at: string | null;
+  organization_id: string | null;
+  county_id: string | null;
+  state_id: string | null;
+  region_id: string | null;
+  created_at?: string;
+};
+
+export async function getCurrentMapScope() {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, role, org_id, county_id, state_id')
+    .eq('id', authData.user.id)
+    .single();
+
+  if (error || !data) throw new Error('Unable to load user map scope');
+  return data;
+}
+
+export async function listMapRegions(): Promise<MapRegionRecord[]> {
+  const { data, error } = await supabase
+    .from('geography_regions_map_view')
+    .select('id, organization_id, county_id, state_id, region_name, region_type, geojson, centroid_geojson, updated_at')
+    .order('region_name', { ascending: true });
+
+  if (error) throw error;
+  return (data || []) as MapRegionRecord[];
+}
+
+export async function listLatestRegionSnapshots(): Promise<RegionSnapshotLatestRecord[]> {
+  const { data, error } = await supabase
+    .from('region_snapshot_latest_view')
+    .select('id, snapshot_date, organization_id, county_id, state_id, region_id, profile_count, avg_risk_score, max_risk_score, min_risk_score, risk_growth_pct, drift_value, drift_status, kmeans_cluster, dbscan_cluster, anomaly_count, projection_14d, model_version, pipeline_run_id, created_at')
+    .order('snapshot_date', { ascending: false });
+
+  if (error) throw error;
+  return (data || []) as RegionSnapshotLatestRecord[];
+}
+
+export async function listActiveStateAlerts(limit = 100): Promise<StateAlertRecord[]> {
+  const nowIso = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from('alerts')
+    .select('id, source, event_type, severity, headline, description, effective_at, expires_at, organization_id, county_id, state_id, region_id, created_at')
+    .or(`expires_at.is.null,expires_at.gte.${nowIso}`)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data || []) as StateAlertRecord[];
+}
+
 const resolveOrgId = async (orgCode: string) => {
   const { data, error } = await supabase
     .from('organizations')

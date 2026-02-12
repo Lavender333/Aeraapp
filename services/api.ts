@@ -65,6 +65,210 @@ const dataUrlToBlob = async (dataUrl: string): Promise<Blob> => {
   return response.blob();
 };
 
+type KitRuleRow = {
+  trigger_type: string;
+  trigger_key: string;
+  operator: string;
+  trigger_value: string;
+  kit_item_id: string;
+  kit_item: string;
+  category: string;
+  priority: string;
+  outreach_flag: string | null;
+  duration_bump_days: number;
+  readiness_cap: number | null;
+  explanation: string | null;
+};
+
+const asBoolean = (value: any): boolean => String(value).toLowerCase() === 'true';
+
+const evaluateRule = (rule: KitRuleRow, context: Record<string, any>) => {
+  const raw = context[rule.trigger_key];
+  const op = (rule.operator || 'equals').toLowerCase();
+  const triggerValue = rule.trigger_value;
+
+  if (rule.trigger_type === 'profile_flag') {
+    const current = Boolean(raw);
+    const expected = asBoolean(triggerValue);
+    if (op === 'equals') return current === expected;
+    return false;
+  }
+
+  if (rule.trigger_type === 'risk_score') {
+    const current = Number(raw || 0);
+    const expected = Number(triggerValue || 0);
+    if (op === 'gte') return current >= expected;
+    if (op === 'lte') return current <= expected;
+    if (op === 'equals') return current === expected;
+    return false;
+  }
+
+  if (rule.trigger_type === 'alert_context') {
+    const current = String(raw || '').toLowerCase();
+    const expected = String(triggerValue || '').toLowerCase();
+    if (op === 'contains') return current.includes(expected);
+    if (op === 'equals') return current === expected;
+    return false;
+  }
+
+  return false;
+};
+
+const durationFromRisk = (risk: number) => {
+  if (risk >= 8) return 10;
+  if (risk >= 5) return 7;
+  return 3;
+};
+
+export async function fetchKitGuidanceForCurrentUser() {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const profileId = authData.user.id;
+
+  const [{ data: vpData }, { data: readyData }, { data: ruleData }, { data: profileScope }] = await Promise.all([
+    supabase
+      .from('vulnerability_profiles')
+      .select('organization_id, county_id, state_id, risk_score, medication_dependency, insulin_dependency, oxygen_powered_device, mobility_limitation, transportation_access, financial_strain')
+      .eq('profile_id', profileId)
+      .maybeSingle(),
+    supabase
+      .from('ready_kits')
+      .select('checked_ids, total_items, checked_items')
+      .eq('profile_id', profileId)
+      .maybeSingle(),
+    supabase
+      .from('kit_rules')
+      .select('trigger_type, trigger_key, operator, trigger_value, kit_item_id, kit_item, category, priority, outreach_flag, duration_bump_days, readiness_cap, explanation')
+      .eq('is_active', true),
+    supabase
+      .from('profiles')
+      .select('org_id, county_id, state_id')
+      .eq('id', profileId)
+      .maybeSingle(),
+  ]);
+
+  const scopeStateId = vpData?.state_id || profileScope?.state_id || null;
+  const scopeCountyId = vpData?.county_id || profileScope?.county_id || null;
+  let activeAlertTypes: string[] = [];
+
+  try {
+    let query = supabase
+      .from('alerts')
+      .select('event_type, expires_at')
+      .or(`expires_at.is.null,expires_at.gte.${new Date().toISOString()}`)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (scopeStateId) query = query.eq('state_id', scopeStateId);
+    if (scopeCountyId) query = query.eq('county_id', scopeCountyId);
+
+    const { data: alertRows } = await query;
+    activeAlertTypes = (alertRows || [])
+      .map((row: any) => String(row.event_type || '').toLowerCase())
+      .filter(Boolean);
+  } catch {
+    activeAlertTypes = [];
+  }
+
+  const context: Record<string, any> = {
+    risk_score: Number(vpData?.risk_score || 0),
+    medication_dependency: Boolean(vpData?.medication_dependency),
+    insulin_dependency: Boolean(vpData?.insulin_dependency),
+    oxygen_powered_device: Boolean(vpData?.oxygen_powered_device),
+    mobility_limitation: Boolean(vpData?.mobility_limitation),
+    transportation_access: Boolean(vpData?.transportation_access ?? true),
+    financial_strain: Boolean(vpData?.financial_strain),
+    active_alert_types: activeAlertTypes.join('|'),
+  };
+
+  const rules = (ruleData || []) as KitRuleRow[];
+  const matched = rules.filter((rule) => evaluateRule(rule, context));
+
+  const checkedIds = new Set<string>((readyData?.checked_ids || []) as string[]);
+  const requiredIds = new Set<string>();
+  const criticalMissingItems: any[] = [];
+  const addedItems = matched.map((rule) => ({
+    id: rule.kit_item_id,
+    item: rule.kit_item,
+    category: rule.category,
+    priority: rule.priority,
+    explanation: rule.explanation,
+  }));
+
+  let recommendedDurationDays = durationFromRisk(Number(context.risk_score || 0));
+  let readinessCap = 100;
+  const outreachFlags = new Set<string>();
+
+  for (const rule of matched) {
+    if (rule.duration_bump_days && Number(rule.duration_bump_days) > 0) {
+      recommendedDurationDays += Number(rule.duration_bump_days);
+    }
+
+    if (String(rule.priority).toLowerCase() === 'critical') {
+      requiredIds.add(rule.kit_item_id);
+      if (!checkedIds.has(rule.kit_item_id)) {
+        criticalMissingItems.push({
+          id: rule.kit_item_id,
+          item: rule.kit_item,
+          explanation: rule.explanation,
+        });
+        readinessCap = Math.min(readinessCap, Number(rule.readiness_cap || 70));
+        if (rule.outreach_flag) outreachFlags.add(rule.outreach_flag);
+      }
+    }
+  }
+
+  const totalItems = Math.max(1, Number(readyData?.total_items || 0));
+  const checkedItems = Math.max(0, Number(readyData?.checked_items || 0));
+  const baseCompletionPct = Number(((checkedItems / totalItems) * 100).toFixed(2));
+  const readinessScore = Number(Math.min(baseCompletionPct, readinessCap).toFixed(2));
+
+  const riskTier = context.risk_score >= 8 ? 'HIGH' : context.risk_score >= 5 ? 'ELEVATED' : 'STANDARD';
+
+  const payload = {
+    profile_id: profileId,
+    organization_id: vpData?.organization_id || profileScope?.org_id || null,
+    county_id: vpData?.county_id || profileScope?.county_id || null,
+    state_id: vpData?.state_id || profileScope?.state_id || null,
+    risk_score: Number(context.risk_score || 0),
+    recommended_duration_days: recommendedDurationDays,
+    required_item_ids: Array.from(requiredIds),
+    added_items: addedItems,
+    critical_missing_items: criticalMissingItems,
+    outreach_flags: Array.from(outreachFlags),
+    base_completion_pct: baseCompletionPct,
+    readiness_cap: readinessCap,
+    readiness_score: readinessScore,
+    risk_tier: riskTier,
+    source_version: 'kit-rules-v1',
+    generated_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error: upsertError } = await supabase
+    .from('kit_recommendations')
+    .upsert(payload, { onConflict: 'profile_id' });
+
+  if (upsertError) throw upsertError;
+
+  return payload;
+}
+
+export async function fetchOrgOutreachFlags(orgCode: string) {
+  const orgId = await getOrgIdByCode(orgCode);
+  if (!orgId) throw new Error('Organization not found');
+
+  const { data, error } = await supabase
+    .from('organization_outreach_flags_view')
+    .select('organization_id, state_id, county_id, outreach_flag, member_count, last_updated')
+    .eq('organization_id', orgId)
+    .order('member_count', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
 export async function getOrganizationByCode(orgCode: string) {
   return getOrgByCode(orgCode);
 }
@@ -192,9 +396,21 @@ export async function updateVitalsForUser(payload: {
   householdMembers: number;
   petDetails: string;
   medicalNeeds: string;
+  zipCode?: string;
+  medicationDependency?: boolean;
+  insulinDependency?: boolean;
+  oxygenPoweredDevice?: boolean;
+  mobilityLimitation?: boolean;
+  transportationAccess?: boolean;
+  financialStrain?: boolean;
+  consentPreparednessPlanning?: boolean;
 }) {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  if (!payload.consentPreparednessPlanning) {
+    throw new Error('Consent is required for Vital Intake data.');
+  }
 
   // Ensure profile exists before vitals upsert (FK constraint)
   const { error: profileError } = await supabase
@@ -213,9 +429,49 @@ export async function updateVitalsForUser(payload: {
       medical_needs: payload.medicalNeeds || null,
       household: payload.household || [],
       pet_details: payload.petDetails || null,
+      household_size: Math.max(1, Number(payload.householdMembers) || (payload.household || []).length || 1),
+      medication_dependency: Boolean(payload.medicationDependency),
+      insulin_dependency: Boolean(payload.insulinDependency),
+      oxygen_powered_device: Boolean(payload.oxygenPoweredDevice),
+      mobility_limitation: Boolean(payload.mobilityLimitation),
+      transportation_access: Boolean(payload.transportationAccess),
+      financial_strain: Boolean(payload.financialStrain),
+      zip_code: payload.zipCode || null,
+      consent_preparedness_planning: true,
+      consent_timestamp: new Date().toISOString(),
     }, { onConflict: 'profile_id' });
 
   if (error) throw error;
+
+  const profile = await getProfileById(authData.user.id);
+  const householdSize = Math.max(1, Number(payload.householdMembers) || (payload.household || []).length || 1);
+
+  const { error: vpError } = await supabase
+    .from('vulnerability_profiles')
+    .upsert({
+      profile_id: authData.user.id,
+      organization_id: profile?.org_id || null,
+      county_id: null,
+      state_id: null,
+      household_size: householdSize,
+      medication_dependency: Boolean(payload.medicationDependency),
+      insulin_dependency: Boolean(payload.insulinDependency),
+      oxygen_powered_device: Boolean(payload.oxygenPoweredDevice),
+      mobility_limitation: Boolean(payload.mobilityLimitation),
+      transportation_access: Boolean(payload.transportationAccess),
+      financial_strain: Boolean(payload.financialStrain),
+      zip_code: payload.zipCode || null,
+      consent_preparedness_planning: true,
+      consent_timestamp: new Date().toISOString(),
+      intake_source: 'settings_vital_intake',
+      intake_version: 'v2-state-ready',
+      updated_by: authData.user.id,
+    }, { onConflict: 'profile_id' });
+
+  if (vpError) {
+    throw vpError;
+  }
+
   await safeLogActivity({
     action: 'UPDATE',
     entityType: 'vitals',
@@ -331,6 +587,12 @@ export async function saveReadyKit(payload: {
     details: { checkedItems: payload.checkedItems, totalItems: payload.totalItems },
   });
 
+  try {
+    await fetchKitGuidanceForCurrentUser();
+  } catch (err) {
+    console.warn('Kit guidance recompute failed', err);
+  }
+
   return { ok: true };
 }
 
@@ -426,7 +688,7 @@ export async function fetchVitalsForUser(): Promise<Partial<UserProfile> | null>
 
   const { data, error } = await supabase
     .from('vitals')
-    .select('household, pet_details, medical_needs')
+    .select('household, pet_details, medical_needs, household_size, medication_dependency, insulin_dependency, oxygen_powered_device, mobility_limitation, transportation_access, financial_strain, zip_code, consent_preparedness_planning, consent_timestamp')
     .eq('profile_id', authData.user.id)
     .single();
 
@@ -434,9 +696,18 @@ export async function fetchVitalsForUser(): Promise<Partial<UserProfile> | null>
 
   return {
     household: (data.household || []) as UserProfile['household'],
-    householdMembers: (data.household || []).length,
+    householdMembers: Number(data.household_size || (data.household || []).length || 1),
     petDetails: data.pet_details || '',
     medicalNeeds: data.medical_needs || '',
+    zipCode: data.zip_code || '',
+    medicationDependency: Boolean(data.medication_dependency),
+    insulinDependency: Boolean(data.insulin_dependency),
+    oxygenPoweredDevice: Boolean(data.oxygen_powered_device),
+    mobilityLimitation: Boolean(data.mobility_limitation),
+    transportationAccess: Boolean(data.transportation_access),
+    financialStrain: Boolean(data.financial_strain),
+    consentPreparednessPlanning: Boolean(data.consent_preparedness_planning),
+    consentTimestamp: data.consent_timestamp || undefined,
   };
 }
 

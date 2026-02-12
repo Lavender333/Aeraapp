@@ -14,7 +14,7 @@ interface SplashViewProps {
 // NOTE: We need to update the prop signature in App.tsx to pass the presentation handler
 export const SplashView: React.FC<SplashViewProps & { onPresentation?: () => void; onFinance?: () => void }> = ({ onEnter, onPresentation, onFinance }) => {
   const profile = StorageService.getProfile();
-  const isAdmin = profile?.role === 'ADMIN';
+  const isAdmin = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(String(profile?.role || '').toUpperCase());
   const [lang, setLang] = useState<LanguageCode>('en');
 
   useEffect(() => {

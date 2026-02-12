@@ -72,8 +72,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     address: '',
     householdMembers: 1,
     household: [],
+    zipCode: '',
     petDetails: '',
     medicalNeeds: '',
+    medicationDependency: false,
+    insulinDependency: false,
+    oxygenPoweredDevice: false,
+    mobilityLimitation: false,
+    transportationAccess: true,
+    financialStrain: false,
+    consentPreparednessPlanning: false,
     emergencyContactName: '',
     emergencyContactPhone: '',
     emergencyContactRelation: '',
@@ -85,7 +93,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   });
 
   const normalizedRole = String(profile.role || '').toUpperCase();
-  const isAdmin = normalizedRole === 'ADMIN';
+  const isAdmin = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(normalizedRole);
   
   // UI States
   const [currentSection, setCurrentSection] = useState<'MAIN' | 'ACCESS_CONTROL' | 'DB_VIEWER' | 'ORG_DIRECTORY' | 'BROADCAST_CONTROL' | 'MASTER_INVENTORY'>('MAIN');
@@ -135,6 +143,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     if (!loaded.language) loaded.language = 'en'; 
     if (loaded.active === undefined) loaded.active = true;
     if (!loaded.household) loaded.household = []; // Ensure array exists
+    if (typeof loaded.zipCode !== 'string') loaded.zipCode = '';
+    if (typeof loaded.medicationDependency !== 'boolean') loaded.medicationDependency = false;
+    if (typeof loaded.insulinDependency !== 'boolean') loaded.insulinDependency = false;
+    if (typeof loaded.oxygenPoweredDevice !== 'boolean') loaded.oxygenPoweredDevice = false;
+    if (typeof loaded.mobilityLimitation !== 'boolean') loaded.mobilityLimitation = false;
+    if (typeof loaded.transportationAccess !== 'boolean') loaded.transportationAccess = true;
+    if (typeof loaded.financialStrain !== 'boolean') loaded.financialStrain = false;
+    if (typeof loaded.consentPreparednessPlanning !== 'boolean') loaded.consentPreparednessPlanning = false;
     setProfile(loaded);
     
     // Assume loaded addresses are valid if they exist
@@ -183,6 +199,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       setCurrentSection('MAIN');
     }
   }, [isAdmin, currentSection]);
+
+  useEffect(() => {
+    const householdCount = Array.isArray(profile.household) ? profile.household.length : 0;
+    if (householdCount > 0 && profile.householdMembers !== householdCount) {
+      setProfile((prev) => ({ ...prev, householdMembers: householdCount }));
+    }
+  }, [profile.household, profile.householdMembers]);
 
   // Fetch members when an org is selected in directory
   useEffect(() => {
@@ -268,6 +291,15 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const handleVitalsSave = async () => {
+    if (!profile.zipCode?.trim()) {
+      setVitalsSaveError('ZIP code is required for preparedness planning.');
+      return;
+    }
+    if (!profile.consentPreparednessPlanning) {
+      setVitalsSaveError('You must provide consent before saving Vital Intake.');
+      return;
+    }
+
     setIsSavingVitals(true);
     setVitalsSaveError(null);
     try {
@@ -276,8 +308,21 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         householdMembers: profile.householdMembers,
         petDetails: profile.petDetails,
         medicalNeeds: profile.medicalNeeds,
+        zipCode: profile.zipCode,
+        medicationDependency: Boolean(profile.medicationDependency),
+        insulinDependency: Boolean(profile.insulinDependency),
+        oxygenPoweredDevice: Boolean(profile.oxygenPoweredDevice),
+        mobilityLimitation: Boolean(profile.mobilityLimitation),
+        transportationAccess: Boolean(profile.transportationAccess),
+        financialStrain: Boolean(profile.financialStrain),
+        consentPreparednessPlanning: Boolean(profile.consentPreparednessPlanning),
       });
-      StorageService.saveProfile(profile);
+      const nextProfile: UserProfile = {
+        ...profile,
+        consentTimestamp: new Date().toISOString(),
+      };
+      setProfile(nextProfile);
+      StorageService.saveProfile(nextProfile);
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 2000);
     } catch (err: any) {
@@ -1674,11 +1719,79 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         </div>
         
         <div>
+          <Input
+            label="Household Size"
+            type="number"
+            min={1}
+            value={String(profile.householdMembers || 1)}
+            onChange={(e) => updateProfile('householdMembers', Math.max(1, Number(e.target.value) || 1))}
+          />
+        </div>
+
+        <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">Household Members</label>
           <HouseholdManager 
             members={profile.household}
             onChange={(updated) => updateProfile('household', updated)}
           />
+        </div>
+
+        <Input
+          label="ZIP Code"
+          placeholder="e.g. 30303"
+          value={profile.zipCode || ''}
+          onChange={(e) => updateProfile('zipCode', e.target.value)}
+        />
+
+        <div className="grid md:grid-cols-2 gap-3">
+          <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+            <span className="text-sm font-medium text-slate-700">Medication Dependency</span>
+            <input
+              type="checkbox"
+              checked={Boolean(profile.medicationDependency)}
+              onChange={(e) => updateProfile('medicationDependency', e.target.checked)}
+            />
+          </label>
+          <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+            <span className="text-sm font-medium text-slate-700">Insulin Dependency</span>
+            <input
+              type="checkbox"
+              checked={Boolean(profile.insulinDependency)}
+              onChange={(e) => updateProfile('insulinDependency', e.target.checked)}
+            />
+          </label>
+          <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+            <span className="text-sm font-medium text-slate-700">Oxygen / Powered Medical Device</span>
+            <input
+              type="checkbox"
+              checked={Boolean(profile.oxygenPoweredDevice)}
+              onChange={(e) => updateProfile('oxygenPoweredDevice', e.target.checked)}
+            />
+          </label>
+          <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+            <span className="text-sm font-medium text-slate-700">Mobility Limitation</span>
+            <input
+              type="checkbox"
+              checked={Boolean(profile.mobilityLimitation)}
+              onChange={(e) => updateProfile('mobilityLimitation', e.target.checked)}
+            />
+          </label>
+          <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+            <span className="text-sm font-medium text-slate-700">Transportation Access</span>
+            <input
+              type="checkbox"
+              checked={Boolean(profile.transportationAccess)}
+              onChange={(e) => updateProfile('transportationAccess', e.target.checked)}
+            />
+          </label>
+          <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+            <span className="text-sm font-medium text-slate-700">Financial Strain</span>
+            <input
+              type="checkbox"
+              checked={Boolean(profile.financialStrain)}
+              onChange={(e) => updateProfile('financialStrain', e.target.checked)}
+            />
+          </label>
         </div>
 
         <Input 
@@ -1692,6 +1805,18 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           value={profile.medicalNeeds}
           onChange={(e) => updateProfile('medicalNeeds', e.target.value)}
         />
+
+        <label className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+          <input
+            className="mt-1"
+            type="checkbox"
+            checked={Boolean(profile.consentPreparednessPlanning)}
+            onChange={(e) => updateProfile('consentPreparednessPlanning', e.target.checked)}
+          />
+          <span className="text-sm text-emerald-900">
+            I understand this data is used only for preparedness planning and can be deleted anytime.
+          </span>
+        </label>
         
         <Button
           onClick={handleVitalsSave}

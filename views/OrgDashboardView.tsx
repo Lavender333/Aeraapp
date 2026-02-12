@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { ViewState, OrgMember, OrgInventory, ReplenishmentRequest } from '../types';
 import { Button } from '../components/Button';
 import { StorageService } from '../services/storage';
-import { listRequests, createRequest, updateRequestStatus } from '../services/api';
+import { listRequests, createRequest, updateRequestStatus, fetchOrgOutreachFlags } from '../services/api';
 import { REQUEST_ITEM_MAP } from '../services/validation';
 import { getInventoryStatuses, getRecommendedResupply } from '../services/inventoryStatus';
 import { t } from '../services/translations';
@@ -12,6 +12,15 @@ import { Textarea } from '../components/Input';
 import { GoogleGenAI } from "../services/mockGenAI";
 
 export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
+  type OutreachFlagRow = {
+    organization_id: string;
+    state_id: string | null;
+    county_id: string | null;
+    outreach_flag: 'LOW' | 'MEDIUM' | 'HIGH';
+    member_count: number;
+    last_updated: string;
+  };
+
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [inventory, setInventory] = useState<OrgInventory>({ water: 0, food: 0, blankets: 0, medicalKits: 0 });
   const [activeTab, setActiveTab] = useState<'MEMBERS' | 'INVENTORY'>('MEMBERS');
@@ -41,6 +50,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
   const [requestAmount, setRequestAmount] = useState(10);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [stockLoading, setStockLoading] = useState(false);
+  const [outreachFlags, setOutreachFlags] = useState<OutreachFlagRow[]>([]);
 
   // Broadcast State
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
@@ -86,6 +96,9 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
       if (resp?.counts) setStatusCounts(resp.counts);
       if (resp?.members?.length) setMembers(resp.members as any);
     });
+    fetchOrgOutreachFlags(id)
+      .then((rows) => setOutreachFlags(rows as OutreachFlagRow[]))
+      .catch(() => setOutreachFlags([]));
 
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
@@ -548,6 +561,30 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
           ) : (
             // List View
             <div className="space-y-3">
+               {outreachFlags.length > 0 && (
+                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-2">
+                   <h3 className="text-sm font-bold text-amber-900 mb-2">Priority Outreach Signals</h3>
+                   <div className="space-y-2">
+                     {outreachFlags.slice(0, 4).map((flag, idx) => {
+                       const levelClasses =
+                         flag.outreach_flag === 'HIGH'
+                           ? 'bg-red-100 text-red-700 border-red-200'
+                           : flag.outreach_flag === 'MEDIUM'
+                             ? 'bg-amber-100 text-amber-700 border-amber-200'
+                             : 'bg-emerald-100 text-emerald-700 border-emerald-200';
+                       return (
+                         <div key={`${flag.county_id || 'state'}-${idx}`} className="bg-white border border-amber-100 rounded-lg p-3 flex items-center justify-between">
+                           <div>
+                             <p className="text-xs text-slate-500 font-bold uppercase">{flag.county_id || flag.state_id || 'Organization Scope'}</p>
+                             <p className="text-sm text-slate-700">{flag.member_count} members • Updated {new Date(flag.last_updated).toLocaleString()}</p>
+                           </div>
+                           <span className={`px-2 py-1 text-[11px] border rounded font-bold ${levelClasses}`}>{flag.outreach_flag}</span>
+                         </div>
+                       );
+                     })}
+                   </div>
+                 </div>
+               )}
                {members.length === 0 && (
                  <p className="text-center text-slate-500 mt-8">No members linked to {communityId} yet.</p>
                )}

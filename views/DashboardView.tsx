@@ -277,11 +277,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   };
 
   // Role Helper Checks
-  const isResponder = userRole === 'FIRST_RESPONDER' || userRole === 'LOCAL_AUTHORITY' || userRole === 'ADMIN';
-  const isOrgAdmin = userRole === 'INSTITUTION_ADMIN';
+  const isResponder = userRole === 'FIRST_RESPONDER' || userRole === 'LOCAL_AUTHORITY' || userRole === 'ADMIN' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN';
+  const isOrgAdmin = userRole === 'INSTITUTION_ADMIN' || userRole === 'ORG_ADMIN';
   const isContractor = userRole === 'CONTRACTOR';
   const isGeneralUser = userRole === 'GENERAL_USER';
-  const isProStatusViewer = userRole === 'ADMIN' || userRole === 'FIRST_RESPONDER';
+  const isProStatusViewer = userRole === 'ADMIN' || userRole === 'FIRST_RESPONDER' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN';
 
   const safeCount = orgMembers.filter((member) => member.status === 'SAFE').length;
   const dangerCount = orgMembers.filter((member) => member.status === 'DANGER').length;

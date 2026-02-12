@@ -118,6 +118,8 @@ npm run dev
 # 1. Create Supabase project at supabase.com
 # 2. Deploy schema: Run supabase/schema.sql in SQL Editor
 # 3. Deploy RLS: Run supabase/rls-policies.sql in SQL Editor
+# 3b. State-ready expansion: Run supabase/state-ready-schema.sql
+# 3c. State-ready RLS: Run supabase/state-ready-rls.sql
 # 4. Install Supabase client
 npm install @supabase/supabase-js
 
@@ -136,10 +138,24 @@ EOF
 ## ✅ What’s Required (Supabase)
 
 - Supabase project with schema + RLS applied: [supabase/schema.sql](supabase/schema.sql), [supabase/rls-policies.sql](supabase/rls-policies.sql)
+- State-ready expansion (Level 3 + PostGIS): [supabase/state-ready-schema.sql](supabase/state-ready-schema.sql), [supabase/state-ready-rls.sql](supabase/state-ready-rls.sql)
 - Env vars in .env: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
 - Seeded organizations (or your own orgs with `org_code`): [scripts/seed-orgs.js](scripts/seed-orgs.js)
 - Frontend app (Vite + React) in this repo
 - Supabase Auth enabled for user login
+
+### Nightly Level 3 Automation
+
+- GitHub scheduled workflow: [.github/workflows/nightly-level3-pipeline.yml](.github/workflows/nightly-level3-pipeline.yml)
+- Manual/local runner: [scripts/run-nightly-level3.sh](scripts/run-nightly-level3.sh)
+- Cron installer script: [scripts/deploy-level3-cron.sh](scripts/deploy-level3-cron.sh)
+
+Required GitHub secrets for scheduled runs:
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+Optional GitHub variable:
+- `AERA_MODEL_VERSION`
 
 ### App Store (iOS)
 

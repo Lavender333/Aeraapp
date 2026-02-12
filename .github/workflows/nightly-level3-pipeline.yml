@@ -1,0 +1,43 @@
+name: Nightly Level 3 Pipeline
+
+on:
+  schedule:
+    # Runs every day at 02:15 UTC
+    - cron: '15 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  level3-nightly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      AERA_MODEL_VERSION: ${{ vars.AERA_MODEL_VERSION || 'level3-2026.02' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: scripts/requirements-level3.txt
+
+      - name: Install pipeline dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/requirements-level3.txt
+
+      - name: Validate required secrets
+        run: |
+          test -n "$SUPABASE_URL"
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+
+      - name: Run nightly Level 3 pipeline
+        run: python scripts/nightly-level3-pipeline.py
