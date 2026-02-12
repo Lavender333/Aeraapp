@@ -714,6 +714,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                 <BellRing size={24} />
               </div>
               <div>
+
+              {canOpenOrgDashboard && (
+                <Card className="hover:border-brand-300 border-emerald-200 bg-emerald-50/50" onClick={() => setView('SETTINGS')}>
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-emerald-100 rounded-lg text-emerald-700">
+                      <Building2 size={20} />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-slate-900">Org Dashboard</h3>
+                      <p className="text-xs text-slate-500 mt-1">Connect a Community ID in Settings to open org-level operations.</p>
+                    </div>
+                  </div>
+                </Card>
+              )}
                 <h2 className="font-bold text-lg leading-tight">Status Check Requested</h2>
                 <p className="text-purple-200 text-sm">By {pendingPing.requesterName}</p>
               </div>
@@ -936,6 +950,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         <>
           <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-2">Recovery & Resources</h3>
           <div className="grid grid-cols-2 gap-4">
+
+        {canOpenOrgDashboard && (
+          <Card
+            className="col-span-2 hover:border-brand-300 border-emerald-200 bg-emerald-50/60"
+            onClick={() => setView('ORG_DASHBOARD')}
+          >
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-white rounded-xl shadow-sm">
+                <Building2 size={24} className="text-emerald-700" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-slate-900">Org Dashboard</h3>
+                <p className="text-sm text-slate-600">View member preparedness gaps, outreach signals, and inventory workflows.</p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+            </div>
+          </Card>
+        )}
         
         {/* G.A.P. Financial Aid - For Users in need of aid */}
         {(isGeneralUser || isOrgAdmin) && (
