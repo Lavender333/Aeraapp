@@ -12,7 +12,8 @@
 ALTER TABLE public.spatial_ref_sys ENABLE ROW LEVEL SECURITY;
 
 -- Create a permissive policy since this is a reference table
-CREATE POLICY IF NOT EXISTS "spatial_ref_sys_read_all" ON public.spatial_ref_sys
+DROP POLICY IF EXISTS "spatial_ref_sys_read_all" ON public.spatial_ref_sys;
+CREATE POLICY "spatial_ref_sys_read_all" ON public.spatial_ref_sys
   FOR SELECT
   USING (true);
 
