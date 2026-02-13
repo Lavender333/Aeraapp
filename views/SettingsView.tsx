@@ -1,12 +1,13 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ViewState, UserProfile, UserRole, RoleDefinition, MockUser, DatabaseSchema, LanguageCode, OrganizationProfile, OrgMember, HouseholdMember, ReplenishmentRequest } from '../types';
 import { Input, Textarea } from '../components/Input';
 import { Button } from '../components/Button';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
-import { fetchProfileForUser, fetchVitalsForUser, updateProfileForUser, updateVitalsForUser } from '../services/api';
+import { createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, joinHouseholdByCode, listHouseholdInvitationsForCurrentUser, HouseholdInvitationRecord, updateProfileForUser, updateVitalsForUser } from '../services/api';
+import { validateHouseholdMembers } from '../services/validation';
 import { t } from '../services/translations';
 import { GoogleGenAI } from "../services/mockGenAI";
 import { User, Bell, Lock, LogOut, Check, Save, Building2, ArrowLeft, ArrowRight, Link as LinkIcon, Loader2, HeartPulse, ShieldCheck, Users, ToggleLeft, ToggleRight, MoreVertical, Copy, CheckCircle, Database, X, XCircle, Globe, Search, Truck, Phone, Mail, MapPin, Power, Ban, Activity, Radio, AlertTriangle, HelpCircle, FileText, Printer, CheckSquare, Download, RefreshCcw, Clipboard, PenTool } from 'lucide-react';
@@ -101,6 +102,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [isVerifying, setIsVerifying] = useState(false);
   const [connectedOrg, setConnectedOrg] = useState<string | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [isDisconnectingOrg, setIsDisconnectingOrg] = useState(false);
 
   // Validation States
   const [phoneError, setPhoneError] = useState<string | null>(null);
@@ -132,9 +134,41 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [isSavingVitals, setIsSavingVitals] = useState(false);
   const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
   const [vitalsSaveError, setVitalsSaveError] = useState<string | null>(null);
+  const [householdCodeInput, setHouseholdCodeInput] = useState('');
+  const [householdCodeError, setHouseholdCodeError] = useState<string | null>(null);
+  const [householdCodeSuccess, setHouseholdCodeSuccess] = useState<string | null>(null);
+  const [isHouseholdCodeBusy, setIsHouseholdCodeBusy] = useState(false);
+  const [memberInvites, setMemberInvites] = useState<HouseholdInvitationRecord[]>([]);
+  const [inviteStatusMessage, setInviteStatusMessage] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteBusyMemberId, setInviteBusyMemberId] = useState<string | null>(null);
 
   // Broadcast Control State
   const [systemTicker, setSystemTicker] = useState('');
+
+  const applyHouseholdSummary = (summary: {
+    householdId: string;
+    householdCode: string;
+    householdName: string;
+    householdRole: 'OWNER' | 'MEMBER';
+  }) => {
+    setProfile((prev) => ({
+      ...prev,
+      householdId: summary.householdId,
+      householdCode: summary.householdCode,
+      householdName: summary.householdName,
+      householdRole: summary.householdRole,
+    }));
+
+    const current = StorageService.getProfile();
+    StorageService.saveProfile({
+      ...current,
+      householdId: summary.householdId,
+      householdCode: summary.householdCode,
+      householdName: summary.householdName,
+      householdRole: summary.householdRole,
+    });
+  };
 
   useEffect(() => {
     const loaded = StorageService.getProfile();
@@ -183,6 +217,17 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           StorageService.saveProfile(merged);
           setProfile(merged);
         }
+
+        const householdSummary = await fetchHouseholdForCurrentUser();
+        if (!active) return;
+
+        if (householdSummary) {
+          applyHouseholdSummary(householdSummary);
+        } else {
+          const created = await ensureHouseholdForCurrentUser();
+          if (!active) return;
+          applyHouseholdSummary(created);
+        }
       } catch {
         // Ignore remote hydration errors; local profile remains available.
       }
@@ -206,6 +251,27 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       setProfile((prev) => ({ ...prev, householdMembers: householdCount }));
     }
   }, [profile.household, profile.householdMembers]);
+
+  useEffect(() => {
+    let active = true;
+    const loadInvites = async () => {
+      if (!profile.householdId) {
+        setMemberInvites([]);
+        return;
+      }
+      try {
+        const invites = await listHouseholdInvitationsForCurrentUser();
+        if (active) setMemberInvites(invites);
+      } catch {
+        if (active) setMemberInvites([]);
+      }
+    };
+
+    loadInvites();
+    return () => {
+      active = false;
+    };
+  }, [profile.householdId]);
 
   // Fetch members when an org is selected in directory
   useEffect(() => {
@@ -295,6 +361,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       setVitalsSaveError('ZIP code is required for preparedness planning.');
       return;
     }
+    const memberValidation = validateHouseholdMembers(profile.household || []);
+    if (!memberValidation.ok) {
+      setVitalsSaveError(memberValidation.error);
+      return;
+    }
     if (!profile.consentPreparednessPlanning) {
       setVitalsSaveError('You must provide consent before saving Vital Intake.');
       return;
@@ -361,6 +432,38 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     }, 800);
   };
 
+  const handleDisconnectCommunity = async () => {
+    if (!profile.communityId) return;
+    setIsDisconnectingOrg(true);
+    setVerifyError(null);
+    try {
+      await updateProfileForUser({
+        fullName: profile.fullName,
+        phone: profile.phone,
+        email: profile.email,
+        address: profile.address,
+        emergencyContactName: profile.emergencyContactName,
+        emergencyContactPhone: profile.emergencyContactPhone,
+        emergencyContactRelation: profile.emergencyContactRelation,
+        communityId: '',
+        role: profile.role,
+      });
+
+      const nextProfile: UserProfile = {
+        ...profile,
+        communityId: '',
+      };
+      setProfile(nextProfile);
+      StorageService.saveProfile(nextProfile);
+      setConnectedOrg(null);
+      setVerifyError(null);
+    } catch (err: any) {
+      setVerifyError(err?.message || 'Unable to disconnect organization right now.');
+    } finally {
+      setIsDisconnectingOrg(false);
+    }
+  };
+
   const toggleNotification = (key: keyof UserProfile['notifications']) => {
     setProfile(prev => ({
       ...prev,
@@ -374,6 +477,78 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     alert('Copied to clipboard');
+  };
+
+  const buildMemberInviteCode = (member: HouseholdMember) => {
+    const household = (profile.householdCode || '').trim().toUpperCase();
+    const fallback = (member.id || '').replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(-3);
+    const nameSeed = (member.name || '').replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 3);
+    const suffix = (nameSeed || fallback || 'MEM').padEnd(3, 'X').slice(0, 3);
+    return household ? `${household}-${suffix}` : suffix;
+  };
+
+  const inviteEnabledMembers = (profile.household || []).filter((member) => member.loginEnabled);
+
+  const latestInviteByMember = useMemo(() => {
+    const mapped: Record<string, HouseholdInvitationRecord> = {};
+    memberInvites.forEach((invite) => {
+      if (!invite.inviteeMemberRef) return;
+      if (!mapped[invite.inviteeMemberRef]) {
+        mapped[invite.inviteeMemberRef] = invite;
+      }
+    });
+    return mapped;
+  }, [memberInvites]);
+
+  const handleCopyMemberInvite = async (member: HouseholdMember) => {
+    setInviteStatusMessage(null);
+    setInviteError(null);
+    setInviteBusyMemberId(member.id);
+    try {
+      const invitation = await createHouseholdInvitationForMember({
+        memberId: member.id,
+        memberName: member.name,
+        suggestedCode: buildMemberInviteCode(member),
+      });
+      const text = `AERA invite for ${member.name}: use invite code ${invitation.invitationCode} to join this household.`;
+      await navigator.clipboard.writeText(text);
+      setInviteStatusMessage(`Invite copied for ${member.name}. Current status: ${invitation.status}.`);
+      const invites = await listHouseholdInvitationsForCurrentUser();
+      setMemberInvites(invites);
+    } catch (err: any) {
+      setInviteError(err?.message || 'Unable to create invite right now.');
+    } finally {
+      setInviteBusyMemberId(null);
+    }
+  };
+
+  const handleJoinHousehold = async () => {
+    setHouseholdCodeError(null);
+    setHouseholdCodeSuccess(null);
+
+    const normalized = householdCodeInput.trim().toUpperCase();
+    if (normalized.length < 6) {
+      setHouseholdCodeError('Enter a valid household or invite code.');
+      return;
+    }
+
+    setIsHouseholdCodeBusy(true);
+    try {
+      const summary = await joinHouseholdByCode(normalized);
+      applyHouseholdSummary(summary);
+      setHouseholdCodeSuccess(`Joined ${summary.householdName}.`);
+      setHouseholdCodeInput('');
+      try {
+        const invites = await listHouseholdInvitationsForCurrentUser();
+        setMemberInvites(invites);
+      } catch {
+        // ignore invite refresh errors
+      }
+    } catch (err: any) {
+      setHouseholdCodeError(err?.message || 'Unable to join household.');
+    } finally {
+      setIsHouseholdCodeBusy(false);
+    }
   };
 
   const handleLogout = () => {
@@ -1626,13 +1801,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         </section>
       )}
 
-      {/* Registration Info */}
+      {/* Identity */}
       <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4">
         <div className="flex items-center gap-4 mb-2">
           <div className="p-3 bg-brand-50 rounded-full text-brand-600">
             <User size={24} />
           </div>
-          <h2 className="text-lg font-semibold text-slate-800">{t('settings.personal_info')}</h2>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-800">Identity</h2>
+            <p className="text-xs text-slate-500">Your personal account and contact details.</p>
+          </div>
         </div>
         <div className="text-xs text-slate-400 font-mono -mt-4 mb-2">ID: {profile.id}</div>
 
@@ -1709,15 +1887,59 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         )}
       </section>
 
-      {/* Vital Intake Info */}
-      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-red-100">
+      {/* Home */}
+      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-emerald-100">
         <div className="flex items-center gap-4 mb-2">
-          <div className="p-3 bg-red-50 rounded-full text-red-600">
-            <HeartPulse size={24} />
+          <div className="p-3 bg-emerald-50 rounded-full text-emerald-700">
+            <Users size={24} />
           </div>
-          <h2 className="text-lg font-semibold text-slate-800">{t('settings.vital_info')}</h2>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-800">Your Home</h2>
+            <p className="text-xs text-slate-500">Household code connects family members to the same home.</p>
+          </div>
         </div>
-        
+
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Household Code</p>
+            <p className="text-2xl font-mono font-black tracking-widest text-emerald-900">
+              {profile.householdCode || '------'}
+            </p>
+            <p className="text-xs text-emerald-700 mt-1">
+              {profile.householdName || 'Your Home'} • {profile.householdRole || 'OWNER'}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => copyToClipboard(profile.householdCode || '')}
+            disabled={!profile.householdCode}
+            className="text-emerald-800 hover:bg-emerald-100"
+          >
+            <Copy size={16} className="mr-2" /> Copy
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
+          <Input
+            label="Join Home by Code"
+            placeholder="e.g. A3K7Q2 or A3K7Q2-BOB"
+            value={householdCodeInput}
+            onChange={(e) => setHouseholdCodeInput(e.target.value.toUpperCase())}
+            maxLength={24}
+          />
+          <Button onClick={handleJoinHousehold} disabled={isHouseholdCodeBusy || householdCodeInput.trim().length < 6}>
+            {isHouseholdCodeBusy ? 'Joining...' : 'Join Home'}
+          </Button>
+        </div>
+
+        {householdCodeError && (
+          <p className="text-xs text-red-600 font-semibold">{householdCodeError}</p>
+        )}
+        {householdCodeSuccess && (
+          <p className="text-xs text-emerald-700 font-semibold">{householdCodeSuccess}</p>
+        )}
+
         <div>
           <Input
             label="Household Size"
@@ -1729,11 +1951,62 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">Household Members</label>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Who lives in your home</label>
+          <p className="text-xs text-slate-500 mb-2">Each member requires DOB in MM/DD/YYYY plus mobility and medical flags.</p>
           <HouseholdManager 
             members={profile.household}
             onChange={(updated) => updateProfile('household', updated)}
           />
+        </div>
+
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
+          <div>
+            <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Member Login Invites</p>
+            <p className="text-xs text-emerald-800 mt-1">Members with login enabled can be invited by manual code and tracked here.</p>
+          </div>
+
+          {inviteEnabledMembers.length === 0 ? (
+            <p className="text-xs text-emerald-700">No member logins enabled yet. Turn on “Enable member login” for a household member to create an invite.</p>
+          ) : (
+            <div className="space-y-2">
+              {inviteEnabledMembers.map((member) => (
+                <div key={member.id} className="flex items-center justify-between rounded-lg border border-emerald-200 bg-white p-3 gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{member.name}</p>
+                    <p className="text-xs text-slate-600">Invite Code: <span className="font-mono font-bold tracking-wider">{latestInviteByMember[member.id]?.invitationCode || buildMemberInviteCode(member)}</span></p>
+                    {latestInviteByMember[member.id] && (
+                      <p className="text-[11px] text-slate-500 mt-0.5">Status: {latestInviteByMember[member.id].status}</p>
+                    )}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-emerald-800 hover:bg-emerald-100"
+                    onClick={() => handleCopyMemberInvite(member)}
+                    disabled={inviteBusyMemberId === member.id}
+                  >
+                    <Copy size={14} className="mr-1" /> {inviteBusyMemberId === member.id ? 'Creating...' : 'Copy Invite'}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {inviteStatusMessage && <p className="text-xs text-emerald-700 font-semibold">{inviteStatusMessage}</p>}
+          {inviteError && <p className="text-xs text-red-600 font-semibold">{inviteError}</p>}
+        </div>
+      </section>
+
+      {/* Safety */}
+      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-red-100">
+        <div className="flex items-center gap-4 mb-2">
+          <div className="p-3 bg-red-50 rounded-full text-red-600">
+            <HeartPulse size={24} />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-800">Safety Setup</h2>
+            <p className="text-xs text-slate-500">Preparedness and vulnerability inputs for planning.</p>
+          </div>
         </div>
 
         <Input
@@ -1909,11 +2182,24 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 {isVerifying ? <Loader2 className="animate-spin" size={20} /> : connectedOrg ? <Check size={20} /> : <LinkIcon size={20} />}
               </Button>
             </div>
+            {connectedOrg && (
+              <p className="text-xs font-semibold text-emerald-700 relative z-10">Connected to {connectedOrg}.</p>
+            )}
             {verifyError && (
                <div className="flex items-center gap-2 text-red-600 text-sm font-bold bg-red-50 p-2 rounded-lg animate-fade-in border border-red-100 relative z-10">
                   <XCircle size={16} /> {verifyError}
                </div>
             )}
+            <div className="relative z-10 flex justify-end">
+              <Button
+                variant="ghost"
+                className="text-red-600 hover:bg-red-50"
+                onClick={handleDisconnectCommunity}
+                disabled={isDisconnectingOrg || !profile.communityId}
+              >
+                {isDisconnectingOrg ? 'Disconnecting...' : 'Disconnect Organization'}
+              </Button>
+            </div>
           </>
         )}
       </section>

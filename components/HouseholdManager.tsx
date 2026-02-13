@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { HouseholdMember } from '../types';
 import { Button } from './Button';
 import { Input } from './Input';
+import { calculateAgeFromDob, deriveAgeGroupFromDob, isValidDobFormat } from '../services/validation';
 import { Plus, User, Trash2, Edit2, X, Save } from 'lucide-react';
 
 interface HouseholdManagerProps {
@@ -12,20 +13,31 @@ interface HouseholdManagerProps {
 
 export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onChange }) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [currentMember, setCurrentMember] = useState<HouseholdMember>({
     id: '',
     name: '',
     age: '',
-    needs: ''
+    needs: '',
+    mobilityFlag: undefined,
+    medicalFlag: undefined,
+    loginEnabled: false,
   });
 
   const startAdd = () => {
-    setCurrentMember({ id: Date.now().toString(), name: '', age: '', needs: '' });
+    setCurrentMember({ id: Date.now().toString(), name: '', age: '', needs: '', mobilityFlag: undefined, medicalFlag: undefined, loginEnabled: false });
+    setFormError(null);
     setIsEditing(true);
   };
 
   const startEdit = (member: HouseholdMember) => {
-    setCurrentMember(member);
+    setCurrentMember({
+      ...member,
+      mobilityFlag: typeof member.mobilityFlag === 'boolean' ? member.mobilityFlag : undefined,
+      medicalFlag: typeof member.medicalFlag === 'boolean' ? member.medicalFlag : undefined,
+      loginEnabled: Boolean(member.loginEnabled),
+    });
+    setFormError(null);
     setIsEditing(true);
   };
 
@@ -36,18 +48,40 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
   };
 
   const handleSave = () => {
-    if (!currentMember.name) return;
+    const trimmedName = currentMember.name.trim();
+    const dob = String(currentMember.age || '').trim();
+
+    if (!trimmedName) {
+      setFormError('Name is required.');
+      return;
+    }
+    if (!isValidDobFormat(dob) || calculateAgeFromDob(dob) === null) {
+      setFormError('Date of birth is required in MM/DD/YYYY format.');
+      return;
+    }
+    if (typeof currentMember.mobilityFlag !== 'boolean' || typeof currentMember.medicalFlag !== 'boolean') {
+      setFormError('Mobility and medical flags are required.');
+      return;
+    }
+
+    const preparedMember: HouseholdMember = {
+      ...currentMember,
+      name: trimmedName,
+      age: dob,
+      ageGroup: deriveAgeGroupFromDob(dob),
+    };
 
     const existingIndex = members.findIndex(m => m.id === currentMember.id);
     let newMembers = [...members];
 
     if (existingIndex >= 0) {
-      newMembers[existingIndex] = currentMember;
+      newMembers[existingIndex] = preparedMember;
     } else {
-      newMembers.push(currentMember);
+      newMembers.push(preparedMember);
     }
 
     onChange(newMembers);
+    setFormError(null);
     setIsEditing(false);
   };
 
@@ -71,10 +105,13 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
           />
           <div className="grid grid-cols-2 gap-3">
             <Input 
-              label="Age" 
-              placeholder="e.g. 5 or 3 months" 
+              label="Date of Birth" 
+              placeholder="MM/DD/YYYY" 
               value={currentMember.age} 
               onChange={e => setCurrentMember({...currentMember, age: e.target.value})}
+              error={currentMember.age && (!isValidDobFormat(currentMember.age) || calculateAgeFromDob(currentMember.age) === null)
+                ? 'Use MM/DD/YYYY'
+                : undefined}
             />
             <Input 
               label="Medical/Needs" 
@@ -83,10 +120,65 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
               onChange={e => setCurrentMember({...currentMember, needs: e.target.value})}
             />
           </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Mobility Flag *</label>
+              <select
+                value={
+                  typeof currentMember.mobilityFlag === 'boolean'
+                    ? String(currentMember.mobilityFlag)
+                    : ''
+                }
+                onChange={(e) =>
+                  setCurrentMember({
+                    ...currentMember,
+                    mobilityFlag: e.target.value === '' ? undefined : e.target.value === 'true',
+                  })
+                }
+                className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all text-slate-900"
+              >
+                <option value="">Select</option>
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Medical Flag *</label>
+              <select
+                value={
+                  typeof currentMember.medicalFlag === 'boolean'
+                    ? String(currentMember.medicalFlag)
+                    : ''
+                }
+                onChange={(e) =>
+                  setCurrentMember({
+                    ...currentMember,
+                    medicalFlag: e.target.value === '' ? undefined : e.target.value === 'true',
+                  })
+                }
+                className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all text-slate-900"
+              >
+                <option value="">Select</option>
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </div>
+          </div>
+
+          <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+            <span className="text-sm font-medium text-slate-700">Enable member login (optional)</span>
+            <input
+              type="checkbox"
+              checked={Boolean(currentMember.loginEnabled)}
+              onChange={(e) => setCurrentMember({ ...currentMember, loginEnabled: e.target.checked })}
+            />
+          </label>
+          {formError && <p className="text-xs text-red-600 font-semibold">{formError}</p>}
           
           <div className="flex gap-2 pt-2">
-            <Button variant="ghost" fullWidth onClick={() => setIsEditing(false)}>Cancel</Button>
-            <Button fullWidth onClick={handleSave} disabled={!currentMember.name}>
+            <Button variant="ghost" fullWidth onClick={() => { setIsEditing(false); setFormError(null); }}>Cancel</Button>
+            <Button fullWidth onClick={handleSave}>
               <Save size={16} className="mr-2" /> Save Member
             </Button>
           </div>
@@ -107,7 +199,13 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
                 </div>
                 <div>
                   <p className="font-bold text-slate-900 leading-tight">{member.name}</p>
-                  <p className="text-xs text-slate-500">Age: {member.age || 'N/A'} {member.needs && `• ${member.needs}`}</p>
+                  <p className="text-xs text-slate-500">
+                    DOB: {member.age || 'N/A'}
+                    {typeof member.mobilityFlag === 'boolean' && ` • Mobility: ${member.mobilityFlag ? 'Yes' : 'No'}`}
+                    {typeof member.medicalFlag === 'boolean' && ` • Medical: ${member.medicalFlag ? 'Yes' : 'No'}`}
+                    {` • Login: ${member.loginEnabled ? 'Enabled' : 'Not enabled'}`}
+                    {member.needs && ` • ${member.needs}`}
+                  </p>
                 </div>
               </div>
               <div className="flex gap-1">

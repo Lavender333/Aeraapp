@@ -4,6 +4,8 @@ import { jsPDF } from 'jspdf';
 import { Button } from '../components/Button';
 import { ViewState } from '../types';
 import { fetchKitGuidanceForCurrentUser, fetchReadyKit, saveReadyKit } from '../services/api';
+import { StorageService } from '../services/storage';
+import { calculateAgeFromDob } from '../services/validation';
 
 const READY_KIT_STORAGE_KEY = 'aeraReadyKit';
 
@@ -97,6 +99,106 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
   const [showSaved, setShowSaved] = useState(false);
   const [guidance, setGuidance] = useState<KitGuidance | null>(null);
+
+  const householdScale = useMemo(() => {
+    const profile = StorageService.getProfile();
+    const members = Array.isArray(profile.household) ? profile.household : [];
+    const fallbackSize = Math.max(1, Number(profile.householdMembers) || 1);
+
+    let adults = 1;
+    let children = 0;
+    let seniors = 0;
+
+    members.forEach((member) => {
+      const raw = String(member.age || '').trim();
+      const dobAge = calculateAgeFromDob(raw);
+      const numericAge = Number.isFinite(Number(raw)) ? Number(raw) : null;
+      const age = dobAge ?? numericAge;
+
+      if (age !== null && age !== undefined) {
+        if (age >= 65) {
+          seniors += 1;
+          return;
+        }
+        if (age <= 17) {
+          children += 1;
+          return;
+        }
+      }
+      if (member.ageGroup === 'SENIOR') {
+        seniors += 1;
+      } else if (member.ageGroup === 'CHILD' || member.ageGroup === 'TEEN' || member.ageGroup === 'INFANT') {
+        children += 1;
+      } else {
+        adults += 1;
+      }
+    });
+
+    const inferredTotal = adults + children + seniors;
+    const people = Math.max(fallbackSize, inferredTotal);
+    return { people, adults, children, seniors };
+  }, []);
+
+  const scaledQuantityForItem = (itemId: string, baseQuantity: string) => {
+    const people = Math.max(1, householdScale.people);
+    const adults = Math.max(1, householdScale.adults);
+    const children = Math.max(0, householdScale.children);
+    const seniors = Math.max(0, householdScale.seniors);
+    const days = Math.max(3, Number(guidance?.recommended_duration_days || 3));
+
+    switch (itemId) {
+      case 'water':
+        return `${people * days} gal (${days}d)`;
+      case 'food':
+        return `${people * days} meals`;
+      case 'plates':
+        return `${Math.max(1, Math.ceil((people * days) / 18))} packs`;
+      case 'filter':
+        return `${Math.max(1, Math.ceil(people / 4))} unit(s)`;
+      case 'bandages':
+        return `${Math.max(1, Math.ceil(people / 2))} kit(s)`;
+      case 'meds':
+        return `${days} days/person`;
+      case 'common-meds':
+        return `${Math.max(1, Math.ceil(people / 2))} supply sets`;
+      case 'sanitizer':
+        return `${Math.max(1, Math.ceil(people / 2))} bottles`;
+      case 'toiletries':
+        return `${Math.max(1, Math.ceil(people / 2))} hygiene kits`;
+      case 'flashlight':
+        return `${Math.max(1, Math.ceil(people / 2))}x`;
+      case 'whistle':
+        return `${people}x`;
+      case 'mask':
+        return `${Math.max(3, people * 3)}x`;
+      case 'cash': {
+        const min = 200 + (people - 1) * 75;
+        const max = 300 + (people - 1) * 100;
+        return `$${min}-${max}`;
+      }
+      case 'contacts':
+        return `${Math.max(1, adults)} list(s)`;
+      case 'photos':
+        return `${Math.max(4, people * 2)} photos`;
+      case 'opener':
+      case 'radio':
+      case 'car-charger':
+      case 'multi-tool':
+      case 'map':
+      case 'usb':
+        return people >= 4 ? '2x' : '1x';
+      case 'glasses':
+        return `1 pair per wearer`;
+      default:
+        if (seniors > 0 && (itemId === 'charger' || itemId === 'power')) {
+          return `${Math.max(2, Math.ceil(people / 2))} sets`;
+        }
+        if (children > 0 && itemId === 'food') {
+          return `${people * days} meals (+ child snacks)`;
+        }
+        return baseQuantity;
+    }
+  };
 
   const dynamicItems = useMemo(() => {
     const staticIds = new Set(CATEGORIES.flatMap((cat) => cat.items.map((item) => item.id)));
@@ -208,7 +310,7 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       lines.push(category.title);
       category.items.forEach((item) => {
         const checked = checkedItems[item.id];
-        lines.push(`${checked ? '✓' : '•'} ${item.title} (${item.quantity}) - ${item.description}`);
+        lines.push(`${checked ? '✓' : '•'} ${item.title} (${scaledQuantityForItem(item.id, item.quantity)}) - ${item.description}`);
       });
       lines.push('');
     });
@@ -329,7 +431,7 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(10);
         setText(colors.textMedium);
-        doc.text(item.quantity, margin + checkboxWidth + textWidth + qtyWidth - 8, y + 18, { align: 'right' });
+        doc.text(scaledQuantityForItem(item.id, item.quantity), margin + checkboxWidth + textWidth + qtyWidth - 8, y + 18, { align: 'right' });
 
         y += rowHeight;
       });
@@ -428,6 +530,9 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           <h3 className="text-sm font-bold text-slate-900">What You’ve Gathered</h3>
           <span className="text-xs font-bold text-emerald-600">{checkedCount} of {totalItems} items</span>
         </div>
+        <p className="text-[11px] text-slate-500 mb-2">
+          Quantities auto-scaled for {householdScale.people} household member{householdScale.people === 1 ? '' : 's'}.
+        </p>
         <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
           <div className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400" style={{ width: `${progressPercent}%` }} />
         </div>
@@ -557,7 +662,7 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                           <div className="text-xs text-slate-500">{item.description}</div>
                         </div>
                         <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-1 rounded-md">
-                          {item.quantity}
+                          {scaledQuantityForItem(item.id, item.quantity)}
                         </span>
                       </button>
                     );

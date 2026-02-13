@@ -13,7 +13,6 @@ import { DroneView } from './views/DroneView';
 import { LogisticsView } from './views/LogisticsView';
 import { RegistrationView } from './views/RegistrationView';
 import { OrgDashboardView } from './views/OrgDashboardView';
-import { OrgRegistrationView } from './views/OrgRegistrationView';
 import { LoginView } from './views/LoginView';
 import { PresentationView } from './views/PresentationView';
 import { PrivacyPolicyView } from './views/PrivacyPolicyView';
@@ -166,8 +165,6 @@ export default function App() {
         return <ResetPasswordView setView={setView} />;
       case 'BUILD_KIT':
         return <BuildKitView setView={setView} />;
-      case 'ORG_REGISTRATION':
-        return <OrgRegistrationView setView={setView} />;
       case 'DASHBOARD':
         return <DashboardView setView={setView} />;
       case 'HELP_WIZARD':
@@ -207,7 +204,6 @@ export default function App() {
                   currentView !== 'LOGIN' && 
                   currentView !== 'RESET_PASSWORD' &&
                   currentView !== 'BUILD_KIT' &&
-                  currentView !== 'ORG_REGISTRATION' &&
                   currentView !== 'ORG_DASHBOARD' &&
                   currentView !== 'PRIVACY_POLICY';
 

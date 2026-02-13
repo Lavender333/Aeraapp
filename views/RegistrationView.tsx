@@ -5,10 +5,11 @@ import { Button } from '../components/Button';
 import { Input, Textarea } from '../components/Input';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { StorageService } from '../services/storage';
-import { getOrganizationByCode, searchOrganizations, updateProfile } from '../services/api';
+import { ensureHouseholdForCurrentUser, syncHouseholdMembersForUser, updateProfile } from '../services/api';
+import { validateHouseholdMembers } from '../services/validation';
 import { supabase } from '../services/supabase';
 import { t } from '../services/translations';
-import { User, Shield, Building2, Check, ArrowRight, Link as LinkIcon, Loader2, Lock, HeartPulse, XCircle, Search, MapPin, AlertTriangle, Globe, Map } from 'lucide-react';
+import { User, HeartPulse } from 'lucide-react';
 
 // Phone Formatter Utility
 const formatPhoneNumber = (value: string) => {
@@ -50,10 +51,6 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     notifications: { push: true, sms: true, email: true }
   });
 
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [connectedOrg, setConnectedOrg] = useState<string | null>(null);
-  const [verifyError, setVerifyError] = useState<string | null>(null);
-  
   // Validation States
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [addressStatus, setAddressStatus] = useState<'IDLE' | 'VERIFYING' | 'VALID' | 'INVALID'>('IDLE');
@@ -66,16 +63,6 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
   const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   
-  // Org Search
-  const [showOrgSearch, setShowOrgSearch] = useState(false);
-  const [orgSearchTerm, setOrgSearchTerm] = useState('');
-  const [foundOrgs, setFoundOrgs] = useState<any[]>([]);
-
-  // Permission States
-  const [locPermission, setLocPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt');
-  const [camPermission, setCamPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt');
-  const [locError, setLocError] = useState<string | null>(null);
-
   // Initialize language from storage if available
   useEffect(() => {
     const profile = StorageService.getProfile();
@@ -92,13 +79,6 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
          communityId: profile.communityId || prev.communityId,
          role: profile.role || prev.role,
        }));
-    }
-    
-    // Check permissions status
-    if (navigator.permissions && navigator.permissions.query) {
-      navigator.permissions.query({ name: 'geolocation' }).then(result => {
-        setLocPermission(result.state);
-      });
     }
   }, []);
 
@@ -135,47 +115,6 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     return true;
   };
 
-
-  const requestLocation = () => {
-    setLocError(null);
-    if (!window.isSecureContext) {
-      setLocPermission('denied');
-      setLocError('Location requires HTTPS. Please use the secure site URL.');
-      return;
-    }
-    if (!navigator.geolocation) {
-      setLocPermission('denied');
-      setLocError('Location is not supported by this browser.');
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      () => {
-        setLocPermission('granted');
-        setLocError(null);
-      },
-      (err) => {
-        setLocPermission('denied');
-        if (err?.code === 1) {
-          setLocError('Location permission denied. Enable it in your browser settings.');
-        } else {
-          setLocError(err?.message || 'Unable to access location.');
-        }
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
-  };
-
-  const requestCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      setCamPermission('granted');
-      // Stop immediately, we just wanted permission
-      stream.getTracks().forEach(t => t.stop());
-    } catch (e) {
-      setCamPermission('denied');
-    }
-  };
-
   const handleNext = () => {
     if (step === 1) {
       const isPhoneValid = validatePhone(formData.phone);
@@ -188,37 +127,6 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       }
     }
     setStep(prev => prev + 1);
-  };
-
-  const verifyCommunityId = async (idToVerify?: string) => {
-    const id = idToVerify || formData.communityId;
-    if (!id) return;
-    
-    setIsVerifying(true);
-    setVerifyError(null);
-    setConnectedOrg(null);
-    try {
-      const org = await getOrganizationByCode(id);
-      setIsVerifying(false);
-      if (org) {
-        setConnectedOrg(org.orgName || org.orgCode);
-        if (idToVerify) updateForm('communityId', idToVerify);
-      } else {
-        setVerifyError("Invalid Community ID. Please check with your institution.");
-      }
-    } catch (e) {
-      setIsVerifying(false);
-      setVerifyError("Unable to verify Community ID. Please try again.");
-    }
-  };
-  
-  const handleSearchOrgs = async () => {
-    try {
-      const results = await searchOrganizations(orgSearchTerm);
-      setFoundOrgs(results as any[]);
-    } catch (e) {
-      setFoundOrgs([]);
-    }
   };
 
   const handleAuthRegister = async () => {
@@ -249,18 +157,14 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     }
   };
 
-  const selectOrg = (org: { org_code?: string; orgCode?: string; id?: string; name?: string }) => {
-    const code = org?.org_code || org?.orgCode || org?.id || '';
-    if (!code) return;
-    updateForm('communityId', code);
-    setConnectedOrg(org?.name || code);
-    setVerifyError(null);
-    setShowOrgSearch(false);
-  };
-
   const handleComplete = async () => {
     // Save to our Backend
     const payload = { ...formData, onboardComplete: true };
+    const memberValidation = validateHouseholdMembers(payload.household || []);
+    if (!memberValidation.ok) {
+      setAuthError(memberValidation.error);
+      return;
+    }
     try {
       const currentProfile = StorageService.getProfile();
       const { data: authData } = await supabase.auth.getUser();
@@ -274,7 +178,16 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
         role: payload.role,
         communityId: payload.communityId,
       });
-      StorageService.saveProfile({ ...payload, id: profileId });
+      await syncHouseholdMembersForUser(payload.household || []);
+      const household = await ensureHouseholdForCurrentUser();
+      StorageService.saveProfile({
+        ...payload,
+        id: profileId,
+        householdId: household.householdId,
+        householdName: household.householdName,
+        householdCode: household.householdCode,
+        householdRole: household.householdRole,
+      });
       setView('DASHBOARD');
     } catch (e: any) {
       const currentProfile = StorageService.getProfile();
@@ -334,7 +247,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
               Go to Log In
             </Button>
           )}
-          <p className="text-xs text-slate-500">You’ll complete required account setup next.</p>
+          <p className="text-xs text-slate-500">Next: complete Identity, Home, and Safety setup.</p>
         </div>
       </div>
     );
@@ -347,6 +260,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       <div className="flex items-center justify-between mb-8 pt-4">
         <div>
           <h1 className="text-xl font-bold text-slate-900">{t('reg.title')}</h1>
+          <p className="text-xs text-slate-500 mt-0.5">Identity → Home & Safety</p>
           {/* Language Toggle */}
           <div className="flex gap-2 mt-1">
             {['en', 'es', 'fr'].map((lang) => (
@@ -365,7 +279,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
           </div>
         </div>
         <div className="flex gap-2">
-          {[1, 2, 3].map(i => (
+          {[1, 2].map(i => (
             <div 
               key={i} 
               className={`h-2 w-8 rounded-full transition-colors ${i <= step ? 'bg-brand-600' : 'bg-slate-300'}`} 
@@ -384,8 +298,8 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
               <div className="w-16 h-16 bg-brand-100 rounded-full flex items-center justify-center mx-auto mb-4 text-brand-700 border border-brand-200">
                 <User size={32} />
               </div>
-              <h2 className="text-2xl font-bold text-slate-900">{t('reg.personal')}</h2>
-              <p className="text-slate-600 font-medium">{t('reg.personal_desc')}</p>
+              <h2 className="text-2xl font-bold text-slate-900">Identity</h2>
+              <p className="text-slate-600 font-medium">Your account and contact details.</p>
             </div>
 
             <div className="space-y-4">
@@ -449,6 +363,17 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
                   </div>
                 </div>
               </div>
+
+              <div className="border-t border-slate-200 pt-4">
+                <Input
+                  label="Organization Code (Optional)"
+                  placeholder="e.g. CH-1001"
+                  value={formData.communityId}
+                  onChange={(e) => updateForm('communityId', e.target.value.toUpperCase())}
+                  className="text-slate-900 placeholder:text-slate-400 font-medium"
+                />
+                <p className="text-xs text-slate-500 mt-1">Optional during signup. You can join or disconnect anytime in Settings.</p>
+              </div>
             </div>
 
             <div className="pt-4 text-center">
@@ -465,7 +390,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
               disabled={!formData.fullName || !formData.phone || !formData.address?.trim()}
               className="mt-6 font-bold shadow-md"
             >
-              Next Step
+              Continue to Home Setup
             </Button>
           </div>
         )}
@@ -476,13 +401,13 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600 border border-red-200">
                  <HeartPulse size={32} />
                </div>
-               <h2 className="text-2xl font-bold text-slate-900">{t('reg.vital')}</h2>
-               <p className="text-slate-600 font-medium">{t('reg.vital_desc')}</p>
+               <h2 className="text-2xl font-bold text-slate-900">Home & Safety Setup</h2>
+               <p className="text-slate-600 font-medium">Add who lives in your home with DOB (MM/DD/YYYY) and required mobility/medical flags.</p>
              </div>
 
              <div className="space-y-4">
                <div>
-                 <label className="block text-sm font-medium text-slate-700 mb-2">Household Members</label>
+                 <label className="block text-sm font-medium text-slate-700 mb-2">Who lives in your home</label>
                  <HouseholdManager 
                    members={formData.household}
                    onChange={(updated) => updateForm('household', updated)}
@@ -508,127 +433,11 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
 
              <div className="flex gap-3 mt-6">
                <Button variant="ghost" onClick={() => setStep(1)}>{t('btn.back')}</Button>
-               <Button fullWidth onClick={handleNext} className="font-bold shadow-md">{t('btn.next')}</Button>
+               <Button fullWidth onClick={handleComplete} className="font-bold shadow-md">{t('reg.complete')}</Button>
              </div>
+             {authError && <p className="text-xs text-red-600 font-semibold mt-1">{authError}</p>}
            </div>
         )}
-
-        {step === 3 && (
-          <div className="space-y-6 animate-slide-up">
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4 text-purple-600 border border-purple-200">
-                <Building2 size={32} />
-              </div>
-              <h2 className="text-2xl font-bold text-slate-900">{t('reg.community')}</h2>
-              <p className="text-slate-600 font-medium">Link to a trusted institution for specialized aid. If you are part of a church, NGO, or local organization, enter your Community ID below.</p>
-            </div>
-
-            <div className="space-y-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-              {!showOrgSearch ? (
-                <>
-                  <Input 
-                    label="Community ID (Optional)" 
-                    placeholder="e.g. CH-1234"
-                    value={formData.communityId}
-                    onChange={(e) => {
-                      updateForm('communityId', e.target.value);
-                      setConnectedOrg(null);
-                      setVerifyError(null);
-                    }}
-                    className={connectedOrg ? "border-green-500 focus:ring-green-500 bg-green-50/30 font-mono text-center tracking-widest text-lg" : "text-center tracking-widest text-lg font-mono"}
-                  />
-
-                  {verifyError && (
-                    <div className="flex items-center justify-center gap-2 text-red-600 text-sm font-bold bg-red-50 p-2 rounded-lg animate-fade-in border border-red-100">
-                       <XCircle size={16} /> {verifyError}
-                    </div>
-                  )}
-
-                  {connectedOrg && (
-                    <div className="bg-green-50 border border-green-200 text-green-800 p-4 rounded-xl flex items-center gap-3 animate-fade-in">
-                       <Check className="shrink-0" />
-                       <div>
-                         <p className="text-xs font-bold uppercase text-green-600">Verified Member</p>
-                         <p className="font-bold">{connectedOrg}</p>
-                       </div>
-                    </div>
-                  )}
-
-                  <Button 
-                    variant={connectedOrg ? "secondary" : "primary"}
-                    fullWidth 
-                    onClick={() => verifyCommunityId()}
-                    disabled={isVerifying || !formData.communityId || !!connectedOrg}
-                    className={connectedOrg ? "bg-green-100 text-green-800 border-green-200" : "bg-purple-600 hover:bg-purple-700"}
-                  >
-                    {isVerifying ? <Loader2 className="animate-spin" /> : connectedOrg ? "Connected" : "Verify Code"}
-                  </Button>
-                  
-                  <div className="text-center">
-                    <button 
-                      onClick={() => setShowOrgSearch(true)}
-                      className="text-sm text-purple-600 font-bold hover:underline flex items-center justify-center gap-1 mx-auto"
-                    >
-                      <Search size={14} /> Search for Organization
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex gap-2">
-                     <Input 
-                       placeholder="Search Org Name..."
-                       value={orgSearchTerm}
-                       onChange={(e) => setOrgSearchTerm(e.target.value)}
-                       autoFocus
-                     />
-                     <Button onClick={handleSearchOrgs} className="px-3 bg-purple-600"><Search size={20} /></Button>
-                  </div>
-                  
-                  <div className="max-h-48 overflow-y-auto space-y-2 border border-slate-100 rounded-lg p-1">
-                     {foundOrgs.map((org, idx) => (
-                       <button 
-                         key={idx}
-                         onClick={() => selectOrg(org)}
-                         className="w-full text-left p-3 hover:bg-purple-50 rounded border border-transparent hover:border-purple-100 transition-colors"
-                       >
-                         <div className="font-bold text-slate-800">{org.name}</div>
-                         <div className="text-xs text-slate-500 flex items-center gap-1">
-                           <MapPin size={10} /> {org.address || org.org_code}
-                         </div>
-                       </button>
-                     ))}
-                     {foundOrgs.length === 0 && (
-                       <div className="text-center py-4 text-slate-400 text-sm">No organizations found</div>
-                     )}
-                  </div>
-                  
-                  <Button variant="ghost" size="sm" fullWidth onClick={() => setShowOrgSearch(false)}>Cancel Search</Button>
-                </div>
-              )}
-            </div>
-            
-            <div className="pt-4 border-t border-slate-200">
-               <p className="text-center text-sm text-slate-500 mb-3">Represent an institution?</p>
-               <Button 
-                 variant="outline" 
-                 fullWidth 
-                 onClick={() => setView('ORG_REGISTRATION')}
-                 className="border-purple-200 text-purple-700 hover:bg-purple-50"
-               >
-                 Register Organization Hub <ArrowRight size={16} className="ml-2" />
-               </Button>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-               <Button variant="ghost" onClick={() => setStep(2)}>{t('btn.back')}</Button>
-               <Button fullWidth onClick={handleComplete} className="font-bold shadow-md">
-                 {t('reg.complete')}
-               </Button>
-            </div>
-          </div>
-        )}
-
       </div>
     </div>
   );

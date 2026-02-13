@@ -1,5 +1,5 @@
 
-export type ViewState = 'SPLASH' | 'LOGIN' | 'REGISTRATION' | 'ACCOUNT_SETUP' | 'ORG_REGISTRATION' | 'DASHBOARD' | 'HELP_WIZARD' | 'SETTINGS' | 'MAP' | 'ALERTS' | 'GAP' | 'ASSESSMENT' | 'POPULATION' | 'RECOVERY' | 'DRONE' | 'LOGISTICS' | 'ORG_DASHBOARD' | 'PRESENTATION' | 'PRIVACY_POLICY' | 'RESET_PASSWORD' | 'BUILD_KIT';
+export type ViewState = 'SPLASH' | 'LOGIN' | 'REGISTRATION' | 'ACCOUNT_SETUP' | 'DASHBOARD' | 'HELP_WIZARD' | 'SETTINGS' | 'MAP' | 'ALERTS' | 'GAP' | 'ASSESSMENT' | 'POPULATION' | 'RECOVERY' | 'DRONE' | 'LOGISTICS' | 'ORG_DASHBOARD' | 'PRESENTATION' | 'PRIVACY_POLICY' | 'RESET_PASSWORD' | 'BUILD_KIT';
 
 export interface HelpRequestData {
   // Step 1: Safety
@@ -64,6 +64,10 @@ export interface HouseholdMember {
   name: string;
   age: string;
   needs: string; // Special needs or medical notes
+  ageGroup?: 'ADULT' | 'TEEN' | 'CHILD' | 'SENIOR' | 'INFANT';
+  mobilityFlag?: boolean;
+  medicalFlag?: boolean;
+  loginEnabled?: boolean;
 }
 
 export interface UserProfile {
@@ -93,6 +97,11 @@ export interface UserProfile {
   emergencyContactName: string;
   emergencyContactPhone: string;
   emergencyContactRelation: string;
+
+  householdId?: string;
+  householdName?: string;
+  householdCode?: string;
+  householdRole?: 'OWNER' | 'MEMBER';
 
   communityId: string; // For Community Onboarding via trusted institutions
   role: UserRole; // Current user's role

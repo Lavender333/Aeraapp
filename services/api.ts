@@ -1,5 +1,6 @@
 import type { HouseholdMember, OrgInventory, UserProfile } from '../types';
 import { supabase, getOrgByCode, getOrgIdByCode } from './supabase';
+import { calculateAgeFromDob, validateHouseholdMembers } from './validation';
 
 const mapInventory = (row: any): OrgInventory => ({
   water: Number(row?.water || 0),
@@ -444,6 +445,393 @@ export async function updateProfileForUser(payload: {
   return { ok: true };
 }
 
+export type HouseholdSummary = {
+  householdId: string;
+  householdCode: string;
+  householdName: string;
+  householdRole: 'OWNER' | 'MEMBER';
+  memberCount: number;
+};
+
+export type HouseholdInvitationStatus = 'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED';
+
+export type HouseholdInvitationRecord = {
+  id: string;
+  householdId: string;
+  inviterProfileId: string;
+  inviteeMemberRef?: string;
+  inviteeName?: string;
+  invitationCode: string;
+  status: HouseholdInvitationStatus;
+  acceptedByProfileId?: string;
+  acceptedAt?: string;
+  expiresAt?: string;
+  createdAt: string;
+};
+
+const normalizeHouseholdCode = (code: string) =>
+  String(code || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 6);
+
+const normalizeInvitationCode = (code: string) =>
+  String(code || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]/g, '')
+    .slice(0, 24);
+
+const mapInvitationRecord = (row: any): HouseholdInvitationRecord => ({
+  id: row.id,
+  householdId: row.household_id,
+  inviterProfileId: row.inviter_profile_id,
+  inviteeMemberRef: row.invitee_member_ref || undefined,
+  inviteeName: row.invitee_name || undefined,
+  invitationCode: row.invitation_code,
+  status: String(row.status || 'PENDING').toUpperCase() as HouseholdInvitationStatus,
+  acceptedByProfileId: row.accepted_by_profile_id || undefined,
+  acceptedAt: row.accepted_at || undefined,
+  expiresAt: row.expires_at || undefined,
+  createdAt: row.created_at,
+});
+
+const getCurrentHouseholdMembership = async (profileId: string) => {
+  const { data: membership, error: membershipError } = await supabase
+    .from('household_memberships')
+    .select('household_id, role')
+    .eq('profile_id', profileId)
+    .maybeSingle();
+
+  if (membershipError) throw membershipError;
+  return membership as { household_id: string; role: 'OWNER' | 'MEMBER' } | null;
+};
+
+const getHouseholdSummaryForMembership = async (membership: {
+  household_id: string;
+  role: 'OWNER' | 'MEMBER';
+}): Promise<HouseholdSummary> => {
+  const { data: household, error: householdError } = await supabase
+    .from('households')
+    .select('id, household_code, home_name')
+    .eq('id', membership.household_id)
+    .single();
+
+  if (householdError || !household) {
+    throw householdError || new Error('Household not found');
+  }
+
+  const { count } = await supabase
+    .from('household_memberships')
+    .select('profile_id', { count: 'exact', head: true })
+    .eq('household_id', membership.household_id);
+
+  return {
+    householdId: household.id,
+    householdCode: household.household_code,
+    householdName: household.home_name || 'Your Home',
+    householdRole: membership.role,
+    memberCount: Number(count || 1),
+  };
+};
+
+export async function fetchHouseholdForCurrentUser(): Promise<HouseholdSummary | null> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const membership = await getCurrentHouseholdMembership(authData.user.id);
+  if (!membership) return null;
+
+  return getHouseholdSummaryForMembership(membership as { household_id: string; role: 'OWNER' | 'MEMBER' });
+}
+
+export async function listHouseholdInvitationsForCurrentUser(): Promise<HouseholdInvitationRecord[]> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const membership = await getCurrentHouseholdMembership(authData.user.id);
+  if (!membership?.household_id) return [];
+
+  const { data, error } = await supabase
+    .from('household_invitations')
+    .select('id, household_id, inviter_profile_id, invitee_member_ref, invitee_name, invitation_code, status, accepted_by_profile_id, accepted_at, expires_at, created_at')
+    .eq('household_id', membership.household_id)
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (error) throw error;
+  return (data || []).map(mapInvitationRecord);
+}
+
+export async function createHouseholdInvitationForMember(payload: {
+  memberId: string;
+  memberName: string;
+  suggestedCode?: string;
+  expiresInDays?: number;
+}): Promise<HouseholdInvitationRecord> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+  const userId = authData.user.id;
+
+  const membership = await getCurrentHouseholdMembership(userId);
+  if (!membership?.household_id) throw new Error('Join or create a household first.');
+  if (membership.role !== 'OWNER') throw new Error('Only household owners can create member invites.');
+
+  const { data: existingPending } = await supabase
+    .from('household_invitations')
+    .select('id, household_id, inviter_profile_id, invitee_member_ref, invitee_name, invitation_code, status, accepted_by_profile_id, accepted_at, expires_at, created_at')
+    .eq('household_id', membership.household_id)
+    .eq('invitee_member_ref', payload.memberId)
+    .eq('status', 'PENDING')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingPending) {
+    const existingExpiresAt = existingPending.expires_at ? Date.parse(existingPending.expires_at) : 0;
+    if (!existingExpiresAt || existingExpiresAt > Date.now()) {
+      return mapInvitationRecord(existingPending);
+    }
+  }
+
+  const household = await getHouseholdSummaryForMembership(membership);
+  const normalizedSuggested = normalizeInvitationCode(payload.suggestedCode || '');
+  const nameSeed = String(payload.memberName || '')
+    .replace(/[^A-Z0-9]/gi, '')
+    .toUpperCase()
+    .slice(0, 3)
+    .padEnd(3, 'X');
+
+  const makeCandidate = (suffix: string) => normalizeInvitationCode(`${household.householdCode}-${suffix}`);
+  let invitationCode = normalizedSuggested || makeCandidate(nameSeed);
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const { data: existingCode } = await supabase
+      .from('household_invitations')
+      .select('id')
+      .eq('invitation_code', invitationCode)
+      .maybeSingle();
+
+    if (!existingCode) break;
+
+    const randomSuffix = Math.random().toString(36).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(2, 5).padEnd(3, 'X');
+    invitationCode = makeCandidate(randomSuffix);
+  }
+
+  const expiresInDays = Math.max(1, Number(payload.expiresInDays || 14));
+  const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: created, error } = await supabase
+    .from('household_invitations')
+    .insert({
+      household_id: membership.household_id,
+      inviter_profile_id: userId,
+      invitee_member_ref: payload.memberId,
+      invitee_name: payload.memberName || null,
+      invitation_code: invitationCode,
+      status: 'PENDING',
+      expires_at: expiresAt,
+    })
+    .select('id, household_id, inviter_profile_id, invitee_member_ref, invitee_name, invitation_code, status, accepted_by_profile_id, accepted_at, expires_at, created_at')
+    .single();
+
+  if (error || !created) throw error || new Error('Unable to create invitation.');
+
+  await safeLogActivity({
+    action: 'CREATE',
+    entityType: 'household_invitations',
+    entityId: created.id,
+    details: { householdId: membership.household_id, invitationCode },
+  });
+
+  return mapInvitationRecord(created);
+}
+
+export async function ensureHouseholdForCurrentUser(): Promise<HouseholdSummary> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const existing = await fetchHouseholdForCurrentUser();
+  if (existing) return existing;
+
+  const userId = authData.user.id;
+
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .upsert(
+      {
+        id: userId,
+        email: authData.user.email || null,
+      },
+      { onConflict: 'id' }
+    );
+
+  if (profileError) throw profileError;
+
+  const { data: household, error: householdError } = await supabase
+    .from('households')
+    .insert({
+      owner_profile_id: userId,
+      home_name: 'Your Home',
+    })
+    .select('id, household_code, home_name')
+    .single();
+
+  if (householdError || !household) throw householdError || new Error('Unable to create household');
+
+  const { error: membershipError } = await supabase
+    .from('household_memberships')
+    .insert({
+      household_id: household.id,
+      profile_id: userId,
+      role: 'OWNER',
+    });
+
+  if (membershipError) throw membershipError;
+
+  await safeLogActivity({
+    action: 'CREATE',
+    entityType: 'households',
+    entityId: household.id,
+    details: { householdCode: household.household_code },
+  });
+
+  return {
+    householdId: household.id,
+    householdCode: household.household_code,
+    householdName: household.home_name || 'Your Home',
+    householdRole: 'OWNER',
+    memberCount: 1,
+  };
+}
+
+export async function joinHouseholdByCode(code: string): Promise<HouseholdSummary> {
+  const normalizedCode = normalizeHouseholdCode(code);
+  const normalizedInviteCode = normalizeInvitationCode(code);
+  const couldBeInvite = normalizedInviteCode.includes('-') || normalizedInviteCode.length > 6;
+  if ((!normalizedCode || normalizedCode.length < 6) && !couldBeInvite) {
+    throw new Error('Enter a valid household or invite code.');
+  }
+
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+  const userId = authData.user.id;
+
+  let target: { id: string; household_code: string; home_name: string | null } | null = null;
+  let usedInvitationId: string | null = null;
+  let usedInvitationCode: string | null = null;
+
+  if (couldBeInvite) {
+    const { data: inviteRow } = await supabase
+      .from('household_invitations')
+      .select('id, household_id, invitation_code, status, expires_at')
+      .eq('invitation_code', normalizedInviteCode)
+      .maybeSingle();
+
+    if (inviteRow) {
+      if (inviteRow.status !== 'PENDING') {
+        throw new Error('This invitation is no longer active.');
+      }
+
+      if (inviteRow.expires_at && Date.parse(inviteRow.expires_at) <= Date.now()) {
+        await supabase
+          .from('household_invitations')
+          .update({ status: 'EXPIRED' })
+          .eq('id', inviteRow.id);
+        throw new Error('This invitation code has expired.');
+      }
+
+      const { data: inviteHousehold } = await supabase
+        .from('households')
+        .select('id, household_code, home_name')
+        .eq('id', inviteRow.household_id)
+        .maybeSingle();
+
+      if (!inviteHousehold) {
+        throw new Error('Invitation household was not found.');
+      }
+
+      target = inviteHousehold;
+      usedInvitationId = inviteRow.id;
+      usedInvitationCode = inviteRow.invitation_code;
+    }
+  }
+
+  if (!target) {
+    const { data, error: targetError } = await supabase
+      .from('households')
+      .select('id, household_code, home_name')
+      .eq('household_code', normalizedCode)
+      .single();
+
+    if (targetError || !data) {
+      throw new Error('Household code not found.');
+    }
+    target = data;
+  }
+
+  const currentMembership = await getCurrentHouseholdMembership(userId);
+
+  if (currentMembership?.household_id === target.id) {
+    if (usedInvitationId) {
+      await supabase
+        .from('household_invitations')
+        .update({
+          status: 'ACCEPTED',
+          accepted_by_profile_id: userId,
+          accepted_at: new Date().toISOString(),
+        })
+        .eq('id', usedInvitationId)
+        .eq('status', 'PENDING');
+    }
+
+    return getHouseholdSummaryForMembership({
+      household_id: target.id,
+      role: (currentMembership.role as 'OWNER' | 'MEMBER') || 'MEMBER',
+    });
+  }
+
+  if (currentMembership?.household_id) {
+    const { error: leaveError } = await supabase
+      .from('household_memberships')
+      .delete()
+      .eq('profile_id', userId);
+    if (leaveError) throw leaveError;
+  }
+
+  const { error: joinError } = await supabase
+    .from('household_memberships')
+    .insert({
+      household_id: target.id,
+      profile_id: userId,
+      role: 'MEMBER',
+    });
+
+  if (joinError) throw joinError;
+
+  if (usedInvitationId) {
+    await supabase
+      .from('household_invitations')
+      .update({
+        status: 'ACCEPTED',
+        accepted_by_profile_id: userId,
+        accepted_at: new Date().toISOString(),
+      })
+      .eq('id', usedInvitationId)
+      .eq('status', 'PENDING');
+  }
+
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'household_memberships',
+    entityId: target.id,
+    details: { joinedBy: userId, householdCode: target.household_code, invitationCode: usedInvitationCode },
+  });
+
+  return getHouseholdSummaryForMembership({ household_id: target.id, role: 'MEMBER' });
+}
+
 export async function updateVitalsForUser(payload: {
   household: UserProfile['household'];
   householdMembers: number;
@@ -460,6 +848,11 @@ export async function updateVitalsForUser(payload: {
 }) {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const memberValidation = validateHouseholdMembers(payload.household || []);
+  if (!memberValidation.ok) {
+    throw new Error(memberValidation.error);
+  }
 
   if (!payload.consentPreparednessPlanning) {
     throw new Error('Consent is required for Vital Intake data.');
@@ -537,6 +930,11 @@ export async function syncHouseholdMembersForUser(household: HouseholdMember[]) 
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData?.user) throw new Error('Not authenticated');
 
+  const memberValidation = validateHouseholdMembers(household || []);
+  if (!memberValidation.ok) {
+    throw new Error(memberValidation.error);
+  }
+
   const profileId = authData.user.id;
 
   const { error: deleteError } = await supabase
@@ -550,7 +948,7 @@ export async function syncHouseholdMembersForUser(household: HouseholdMember[]) 
     profile_id: profileId,
     name: member.name,
     relationship: null,
-    age: Number.isFinite(Number(member.age)) ? Number(member.age) : null,
+    age: calculateAgeFromDob(String(member.age || '')),
     special_needs: member.needs || null,
   }));
 

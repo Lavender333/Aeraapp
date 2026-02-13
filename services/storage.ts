@@ -1,7 +1,7 @@
 
 import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, RoleDefinition } from '../types';
 import { REQUEST_ITEM_MAP } from './validation';
-import { getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, fetchProfileForUser, fetchVitalsForUser } from './api';
+import { ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, fetchProfileForUser, fetchVitalsForUser } from './api';
 import { getMemberStatus, setMemberStatus } from './api';
 
 const DB_KEY = 'aera_backend_db_v4'; // Force fresh database
@@ -419,6 +419,7 @@ export const StorageService = {
           fetchProfileForUser(),
           fetchVitalsForUser(),
         ]);
+        const householdSummary = (await fetchHouseholdForCurrentUser()) || (await ensureHouseholdForCurrentUser());
 
         const profile: UserProfile = {
           id: resp.user.id,
@@ -433,6 +434,10 @@ export const StorageService = {
           emergencyContactName: remoteProfile?.emergencyContactName || '',
           emergencyContactPhone: remoteProfile?.emergencyContactPhone || '',
           emergencyContactRelation: remoteProfile?.emergencyContactRelation || '',
+          householdId: householdSummary?.householdId,
+          householdName: householdSummary?.householdName,
+          householdCode: householdSummary?.householdCode,
+          householdRole: householdSummary?.householdRole,
           communityId: remoteProfile?.communityId || resp.user.orgId || '',
           role: resp.user.role || 'GENERAL_USER',
           language: 'en',
