@@ -530,6 +530,12 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           <h3 className="text-sm font-bold text-slate-900">What You’ve Gathered</h3>
           <span className="text-xs font-bold text-emerald-600">{checkedCount} of {totalItems} items</span>
         </div>
+        <button
+          onClick={() => setView('READINESS_GAP')}
+          className="text-[11px] font-semibold text-brand-600 hover:underline mb-2"
+        >
+          View readiness gaps
+        </button>
         <p className="text-[11px] text-slate-500 mb-2">
           Quantities auto-scaled for {householdScale.people} household member{householdScale.people === 1 ? '' : 's'}.
         </p>

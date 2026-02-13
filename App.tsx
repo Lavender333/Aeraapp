@@ -23,6 +23,8 @@ const PresentationView = lazy(() => import('./views/PresentationView').then((m) 
 const PrivacyPolicyView = lazy(() => import('./views/PrivacyPolicyView').then((m) => ({ default: m.PrivacyPolicyView })));
 const ResetPasswordView = lazy(() => import('./views/ResetPasswordView').then((m) => ({ default: m.ResetPasswordView })));
 const BuildKitView = lazy(() => import('./views/BuildKitView').then((m) => ({ default: m.BuildKitView })));
+const ReadinessView = lazy(() => import('./views/ReadinessView').then((m) => ({ default: m.ReadinessView })));
+const ReadinessGapView = lazy(() => import('./views/ReadinessGapView').then((m) => ({ default: m.ReadinessGapView })));
 
 class ViewErrorBoundary extends React.Component<
   { onRecover: () => void; children: React.ReactNode },
@@ -165,7 +167,11 @@ export default function App() {
       case 'RESET_PASSWORD':
         return <ResetPasswordView setView={setView} />;
       case 'BUILD_KIT':
-        return <BuildKitView setView={setView} />;
+        return <ReadinessView setView={setView} />;
+      case 'READINESS':
+        return <ReadinessView setView={setView} />;
+      case 'READINESS_GAP':
+        return <ReadinessGapView setView={setView} />;
       case 'DASHBOARD':
         return <DashboardView setView={setView} />;
       case 'HELP_WIZARD':
@@ -205,6 +211,8 @@ export default function App() {
                   currentView !== 'LOGIN' && 
                   currentView !== 'RESET_PASSWORD' &&
                   currentView !== 'BUILD_KIT' &&
+                  currentView !== 'READINESS' &&
+                  currentView !== 'READINESS_GAP' &&
                   currentView !== 'ORG_DASHBOARD' &&
                   currentView !== 'PRIVACY_POLICY';
 

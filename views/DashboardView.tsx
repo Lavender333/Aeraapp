@@ -847,7 +847,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               </a>
               <button
                 type="button"
-                onClick={() => setView('BUILD_KIT')}
+                onClick={() => setView('READINESS')}
                 className="text-left bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:border-slate-300 hover:shadow-md transition-all"
               >
                 <div className="w-10 h-10 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center mb-3">
