@@ -313,6 +313,7 @@ CREATE OR REPLACE FUNCTION public.calculate_vulnerability_risk(
 RETURNS NUMERIC
 LANGUAGE plpgsql
 IMMUTABLE
+SET search_path = public
 AS $$
 DECLARE
   score NUMERIC := 0;
@@ -332,6 +333,7 @@ $$;
 CREATE OR REPLACE FUNCTION public.set_vulnerability_risk_score()
 RETURNS TRIGGER
 LANGUAGE plpgsql
+SET search_path = public
 AS $$
 BEGIN
   NEW.risk_score := public.calculate_vulnerability_risk(
@@ -365,6 +367,7 @@ CREATE OR REPLACE FUNCTION public.compute_drift(
 RETURNS NUMERIC
 LANGUAGE SQL
 IMMUTABLE
+SET search_path = public
 AS $$
   SELECT CASE
     WHEN COALESCE(previous_avg, 0) = 0 THEN 0
@@ -376,6 +379,7 @@ CREATE OR REPLACE FUNCTION public.drift_status_from_value(drift NUMERIC)
 RETURNS TEXT
 LANGUAGE SQL
 IMMUTABLE
+SET search_path = public
 AS $$
   SELECT CASE
     WHEN COALESCE(drift, 0) > 0.25 THEN 'ACCELERATING'
@@ -388,6 +392,7 @@ CREATE OR REPLACE FUNCTION public.recommended_kit_duration_from_risk(risk NUMERI
 RETURNS INTEGER
 LANGUAGE SQL
 IMMUTABLE
+SET search_path = public
 AS $$
   SELECT CASE
     WHEN COALESCE(risk, 0) >= 8 THEN 10
