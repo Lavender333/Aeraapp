@@ -289,6 +289,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const canOpenOrgDashboard = isOrgAdmin || userRole === 'ADMIN' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN';
   const isContractor = userRole === 'CONTRACTOR';
   const isGeneralUser = userRole === 'GENERAL_USER';
+  const showCommunityBlocks = !isGeneralUser;
   const isProStatusViewer = userRole === 'ADMIN' || userRole === 'FIRST_RESPONDER' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN';
   const showLogisticsHome = userRole === 'FIRST_RESPONDER' || userRole === 'LOCAL_AUTHORITY' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN' || isContractor;
 
@@ -705,7 +706,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         })()
       )}
 
-      {hasCommunity && (
+      {hasCommunity && showCommunityBlocks && (
         /* Real-time Data Feed / Status Ticker - Clickable */
         <div 
           onClick={() => setShowTickerModal(true)}
@@ -752,7 +753,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         </div>
       )}
 
-      {hasCommunity && (
+      {hasCommunity && showCommunityBlocks && (
         <Card
           title="Community Connection"
           icon={<Building2 size={20} />}
@@ -790,7 +791,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         </Card>
       )}
 
-      {!hasCommunity && (
+      {!hasCommunity && showCommunityBlocks && (
         <Card
           title="Trusted Community Connection"
           icon={<Building2 size={20} />}
@@ -824,6 +825,39 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
       {isGeneralUser && (
         <>
           <div className="mt-4">
+            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Home & Safety</h3>
+            <p className="text-xs text-slate-500 mt-1">Your readiness, household, and emergency settings in one place</p>
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <button
+                type="button"
+                onClick={() => setView('READINESS')}
+                className="text-left bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:border-slate-300 hover:shadow-md transition-all"
+              >
+                <div className="w-10 h-10 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center mb-3">
+                  <ClipboardCheck size={18} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <h4 className="font-semibold text-slate-900 text-sm">Readiness Checklist</h4>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-2">Build and track your kit with quantity guidance.</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('SETTINGS')}
+                className="text-left bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:border-slate-300 hover:shadow-md transition-all"
+              >
+                <div className="w-10 h-10 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center mb-3">
+                  <Phone size={18} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <h4 className="font-semibold text-slate-900 text-sm">Home & Profile</h4>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-2">Household members, emergency contacts, and org connection.</p>
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-6">
             <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">National Preparedness</h3>
             <p className="text-xs text-slate-500 mt-1">Official resources to help you stay ready</p>
             <div className="grid grid-cols-2 gap-3 mt-3">
@@ -845,46 +879,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                   Explore Guides
                 </div>
               </a>
-              <button
-                type="button"
-                onClick={() => setView('READINESS')}
-                className="text-left bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:border-slate-300 hover:shadow-md transition-all"
-              >
+              <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
                 <div className="w-10 h-10 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center mb-3">
-                  <ClipboardCheck size={18} />
+                  <BookOpen size={18} />
                 </div>
-                <div className="flex items-center gap-2">
-                  <h4 className="font-semibold text-slate-900 text-sm">Emergency Checklists</h4>
-                </div>
-                <p className="text-[11px] text-slate-500 mt-2">Printable lists to build a 72-hour safety kit.</p>
-                <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 mt-3">
-                  Build a Kit
-                </div>
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-6">
-            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Your Personal Toolkit</h3>
-            <p className="text-xs text-slate-500 mt-1">Manage your safety info and household details</p>
-            <div className="space-y-3 mt-3">
-              <Card
-                className="hover:border-brand-300"
-                onClick={() => setView('SETTINGS')}
-              >
-                <div className="flex items-start gap-4">
-                  <div className="w-11 h-11 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center">
-                    <Phone size={18} />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-semibold text-slate-900">Profile, Contacts & Household</h4>
-                      <span className="text-[10px] font-bold uppercase bg-slate-100 text-slate-500 px-2 py-1 rounded">Available Now</span>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1">Update emergency contact, home details, household members, and notification preferences in one place.</p>
-                  </div>
-                </div>
-              </Card>
+                <h4 className="font-semibold text-slate-900 text-sm">Community Resources</h4>
+                <p className="text-[11px] text-slate-500 mt-2">Join or update your community connection in Settings.</p>
+                <button
+                  type="button"
+                  onClick={() => setView('SETTINGS')}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 mt-3 hover:underline"
+                >
+                  Open Settings
+                </button>
+              </div>
             </div>
           </div>
         </>
@@ -911,7 +919,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         </>
       )}
 
-      {hasCommunity && (
+      {hasCommunity && showCommunityBlocks && (
         /* Modular Card Layout - DYNAMIC BASED ON ROLE */
         <>
           <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-2">Recovery & Resources</h3>

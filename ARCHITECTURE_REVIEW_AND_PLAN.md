@@ -327,7 +327,7 @@ LOGIN / REGISTRATION
 
 #### Views to remove/deprecate:
 - [x] Delete `OrgRegistrationView.tsx` (org join is optional, in Settings)
-- [ ] Simplify `DashboardView.tsx` (no org-first navigation)
+- [x] Simplify `DashboardView.tsx` (no org-first navigation)
 - [ ] Archive complex admin views (MapView, etc.) for Phase 2
 
 ---
