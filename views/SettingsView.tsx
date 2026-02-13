@@ -6,7 +6,7 @@ import { Button } from '../components/Button';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
-import { createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, joinHouseholdByCode, listHouseholdInvitationsForCurrentUser, HouseholdInvitationRecord, updateProfileForUser, updateVitalsForUser } from '../services/api';
+import { createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, joinHouseholdByCode, listHouseholdInvitationsForCurrentUser, HouseholdInvitationRecord, revokeHouseholdInvitationForCurrentUser, updateProfileForUser, updateVitalsForUser } from '../services/api';
 import { validateHouseholdMembers } from '../services/validation';
 import { t } from '../services/translations';
 import { GoogleGenAI } from "../services/mockGenAI";
@@ -517,6 +517,48 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       setMemberInvites(invites);
     } catch (err: any) {
       setInviteError(err?.message || 'Unable to create invite right now.');
+    } finally {
+      setInviteBusyMemberId(null);
+    }
+  };
+
+  const handleResendMemberInvite = async (member: HouseholdMember) => {
+    setInviteStatusMessage(null);
+    setInviteError(null);
+    setInviteBusyMemberId(member.id);
+    try {
+      const invitation = await createHouseholdInvitationForMember({
+        memberId: member.id,
+        memberName: member.name,
+        suggestedCode: buildMemberInviteCode(member),
+        forceNew: true,
+      });
+      const text = `AERA invite for ${member.name}: use invite code ${invitation.invitationCode} to join this household.`;
+      await navigator.clipboard.writeText(text);
+      setInviteStatusMessage(`New invite generated for ${member.name}.`);
+      const invites = await listHouseholdInvitationsForCurrentUser();
+      setMemberInvites(invites);
+    } catch (err: any) {
+      setInviteError(err?.message || 'Unable to resend invite right now.');
+    } finally {
+      setInviteBusyMemberId(null);
+    }
+  };
+
+  const handleRevokeMemberInvite = async (member: HouseholdMember) => {
+    const currentInvite = latestInviteByMember[member.id];
+    if (!currentInvite?.id || currentInvite.status !== 'PENDING') return;
+
+    setInviteStatusMessage(null);
+    setInviteError(null);
+    setInviteBusyMemberId(member.id);
+    try {
+      await revokeHouseholdInvitationForCurrentUser(currentInvite.id);
+      setInviteStatusMessage(`Invite revoked for ${member.name}.`);
+      const invites = await listHouseholdInvitationsForCurrentUser();
+      setMemberInvites(invites);
+    } catch (err: any) {
+      setInviteError(err?.message || 'Unable to revoke invite right now.');
     } finally {
       setInviteBusyMemberId(null);
     }
@@ -1975,18 +2017,45 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                     <p className="text-sm font-semibold text-slate-900">{member.name}</p>
                     <p className="text-xs text-slate-600">Invite Code: <span className="font-mono font-bold tracking-wider">{latestInviteByMember[member.id]?.invitationCode || buildMemberInviteCode(member)}</span></p>
                     {latestInviteByMember[member.id] && (
-                      <p className="text-[11px] text-slate-500 mt-0.5">Status: {latestInviteByMember[member.id].status}</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Status: {latestInviteByMember[member.id].status}
+                        {latestInviteByMember[member.id].expiresAt
+                          ? ` • Expires ${new Date(latestInviteByMember[member.id].expiresAt as string).toLocaleDateString()}`
+                          : ''}
+                      </p>
                     )}
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-emerald-800 hover:bg-emerald-100"
-                    onClick={() => handleCopyMemberInvite(member)}
-                    disabled={inviteBusyMemberId === member.id}
-                  >
-                    <Copy size={14} className="mr-1" /> {inviteBusyMemberId === member.id ? 'Creating...' : 'Copy Invite'}
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-emerald-800 hover:bg-emerald-100"
+                      onClick={() => handleCopyMemberInvite(member)}
+                      disabled={inviteBusyMemberId === member.id}
+                    >
+                      <Copy size={14} className="mr-1" /> {inviteBusyMemberId === member.id ? 'Working...' : 'Copy'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-slate-700 hover:bg-slate-100"
+                      onClick={() => handleResendMemberInvite(member)}
+                      disabled={inviteBusyMemberId === member.id}
+                    >
+                      {inviteBusyMemberId === member.id ? 'Working...' : 'Resend'}
+                    </Button>
+                    {latestInviteByMember[member.id]?.status === 'PENDING' && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-red-600 hover:bg-red-50"
+                        onClick={() => handleRevokeMemberInvite(member)}
+                        disabled={inviteBusyMemberId === member.id}
+                      >
+                        Revoke
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
