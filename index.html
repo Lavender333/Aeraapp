@@ -61,6 +61,38 @@
         }
       })(window.location);
     </script>
+    <script>
+      (function () {
+        var BOOT_TIMEOUT_MS = 8000;
+
+        function showBootstrapTimeout() {
+          if (window.__AERA_BOOTED__) return;
+          if (document.getElementById('aera-bootstrap-timeout')) return;
+
+          var banner = document.createElement('div');
+          banner.id = 'aera-bootstrap-timeout';
+          banner.style.position = 'fixed';
+          banner.style.left = '12px';
+          banner.style.right = '12px';
+          banner.style.top = '12px';
+          banner.style.zIndex = '2147483647';
+          banner.style.background = '#fff7ed';
+          banner.style.border = '1px solid #fdba74';
+          banner.style.color = '#7c2d12';
+          banner.style.padding = '12px 14px';
+          banner.style.borderRadius = '10px';
+          banner.style.fontFamily = 'Inter, system-ui, -apple-system, sans-serif';
+          banner.style.boxShadow = '0 6px 24px rgba(0,0,0,0.12)';
+          banner.innerHTML = [
+            '<div style="font-size:13px;font-weight:700;line-height:1.3;">AERA did not finish loading</div>',
+            '<div style="font-size:12px;line-height:1.45;margin-top:4px;white-space:pre-wrap;">The app bootstrap timed out. Try Cmd+Shift+R, then open Console and share the first red error.</div>'
+          ].join('');
+          document.body.appendChild(banner);
+        }
+
+        window.setTimeout(showBootstrapTimeout, BOOT_TIMEOUT_MS);
+      })();
+    </script>
 <link rel="stylesheet" href="./index.css">
 </head>
   <body>

@@ -77,6 +77,9 @@ try {
       <App />
     </React.StrictMode>
   );
+  if (typeof window !== 'undefined') {
+    (window as typeof window & { __AERA_BOOTED__?: boolean }).__AERA_BOOTED__ = true;
+  }
 } catch (error) {
   showBootFallbackBanner('AERA failed to boot', normalizeErrorMessage(error));
   throw error;
