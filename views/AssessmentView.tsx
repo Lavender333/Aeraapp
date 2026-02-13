@@ -1,21 +1,32 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ViewState } from '../types';
+import { ViewState, UserRole } from '../types';
 import { Button } from '../components/Button';
-import { Input, Textarea } from '../components/Input';
+import { Textarea } from '../components/Input';
 import { ArrowLeft, Camera, Home, Zap, Droplets, Triangle, CheckCircle, AlertTriangle, Loader2, Sparkles, X, MapPin, RefreshCw, Aperture, Keyboard } from 'lucide-react';
 import { t } from '../services/translations';
-import { GoogleGenAI } from "../services/mockGenAI";
-import { submitDamageAssessment, getAssessmentPhotoSignedUrl } from '../services/api';
+import { submitDamageAssessment, getAssessmentPhotoSignedUrl, listDamageAssessmentsForCurrentUser, DamageAssessmentResult } from '../services/api';
+import { StorageService } from '../services/storage';
 
 // Mock AI Analysis for demo purposes (since we can't upload real files in this env)
 const MOCK_AI_RESPONSE = "Analysis: Detected significant shingle loss on approximately 40% of the visible roof surface. Potential water intrusion points identified near the chimney. Estimated Severity: High.";
 
 export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
+  const normalizeRole = (role: any): UserRole => {
+    const normalized = String(role || 'GENERAL_USER').toUpperCase();
+    const validRoles: UserRole[] = ['ADMIN', 'CONTRACTOR', 'LOCAL_AUTHORITY', 'FIRST_RESPONDER', 'GENERAL_USER', 'INSTITUTION_ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'MEMBER'];
+    return validRoles.includes(normalized as UserRole) ? (normalized as UserRole) : 'GENERAL_USER';
+  };
+
   const [step, setStep] = useState(1);
   const [damageType, setDamageType] = useState<string | null>(null);
   const [severity, setSeverity] = useState<number>(1); // 1-3 (Low, Med, High)
   const [description, setDescription] = useState('');
+  const [userRole, setUserRole] = useState<UserRole>('GENERAL_USER');
+  const [resultsLoading, setResultsLoading] = useState(false);
+  const [resultsError, setResultsError] = useState<string | null>(null);
+  const [reportedAssessments, setReportedAssessments] = useState<DamageAssessmentResult[]>([]);
+  const [assessmentPhotoUrls, setAssessmentPhotoUrls] = useState<Record<string, string>>({});
   
   // Camera & Image State
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -39,12 +50,59 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     { id: 'ACCESS', label: 'Blocked Road', icon: <Triangle size={32} />, color: 'orange' },
   ];
 
+  const canViewReportedResults = userRole === 'ADMIN' || userRole === 'ORG_ADMIN' || userRole === 'INSTITUTION_ADMIN';
+
   // Cleanup camera on unmount
   useEffect(() => {
     return () => {
       stopCameraStream();
     };
   }, []);
+
+  useEffect(() => {
+    const profile = StorageService.getProfile();
+    setUserRole(normalizeRole(profile.role));
+  }, []);
+
+  const loadAssessmentResults = async () => {
+    setResultsLoading(true);
+    setResultsError(null);
+    try {
+      const data = await listDamageAssessmentsForCurrentUser(75);
+      setReportedAssessments(data);
+
+      const withPhotos = data.filter((item) => !!item.photoPath).slice(0, 20);
+      if (withPhotos.length > 0) {
+        const photoEntries = await Promise.all(
+          withPhotos.map(async (item) => {
+            try {
+              const url = await getAssessmentPhotoSignedUrl(item.photoPath as string);
+              return [item.id, url] as const;
+            } catch {
+              return [item.id, ''] as const;
+            }
+          })
+        );
+
+        const urlMap: Record<string, string> = {};
+        photoEntries.forEach(([id, url]) => {
+          if (url) urlMap[id] = url;
+        });
+        setAssessmentPhotoUrls(urlMap);
+      } else {
+        setAssessmentPhotoUrls({});
+      }
+    } catch (err: any) {
+      setResultsError(err?.message || 'Unable to load assessment results.');
+    } finally {
+      setResultsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!canViewReportedResults) return;
+    loadAssessmentResults();
+  }, [canViewReportedResults]);
 
   // Keyboard listener for Spacebar/Enter to snap photo
   useEffect(() => {
@@ -171,6 +229,96 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
       setIsSubmitting(false);
     }
   };
+
+  if (canViewReportedResults) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col pb-safe animate-fade-in">
+        <div className="bg-white border-b border-slate-200 p-4 sticky top-0 z-20">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setView('DASHBOARD')} className="p-2 -ml-2 text-slate-500 hover:text-slate-800">
+                <ArrowLeft size={24} />
+              </button>
+              <div>
+                <h1 className="font-bold text-lg text-slate-900">{t('dash.assess')}</h1>
+                <p className="text-xs text-slate-500">Reported Assessment Results</p>
+              </div>
+            </div>
+            <Button size="sm" variant="outline" onClick={loadAssessmentResults} disabled={resultsLoading}>
+              <RefreshCw size={14} className="mr-1" /> Refresh
+            </Button>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-4 flex-1 overflow-y-auto">
+          {resultsLoading && (
+            <div className="bg-white border border-slate-200 rounded-xl p-6 flex items-center gap-3 text-slate-600">
+              <Loader2 size={18} className="animate-spin" />
+              Loading reported assessments...
+            </div>
+          )}
+
+          {!resultsLoading && resultsError && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm font-medium">
+              {resultsError}
+            </div>
+          )}
+
+          {!resultsLoading && !resultsError && reportedAssessments.length === 0 && (
+            <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-600">
+              <AlertTriangle size={24} className="mx-auto mb-3 text-slate-400" />
+              No reported assessments found yet.
+            </div>
+          )}
+
+          {!resultsLoading && !resultsError && reportedAssessments.map((item) => (
+            <div key={item.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-slate-900">{item.damageType}</p>
+                  <p className="text-xs text-slate-500">{new Date(item.createdAt).toLocaleString()}</p>
+                </div>
+                <span className={`text-xs font-bold px-2.5 py-1 rounded-full uppercase ${
+                  item.severity >= 3 ? 'bg-red-100 text-red-700' : item.severity === 2 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
+                }`}>
+                  {item.severity >= 3 ? 'Critical' : item.severity === 2 ? 'Moderate' : 'Minor'}
+                </span>
+              </div>
+
+              {(item.orgName || item.orgCode) && (
+                <p className="text-xs text-slate-600">
+                  <span className="font-semibold text-slate-700">Organization:</span> {item.orgName || item.orgCode}
+                </p>
+              )}
+
+              <p className="text-xs text-slate-600">
+                <span className="font-semibold text-slate-700">Reporter:</span> {item.reporterName}
+                {item.reporterPhone ? ` • ${item.reporterPhone}` : ''}
+              </p>
+
+              {item.location && (
+                <p className="text-xs text-slate-600 flex items-center gap-1">
+                  <MapPin size={12} /> {item.location}
+                </p>
+              )}
+
+              {item.description && (
+                <p className="text-sm text-slate-700 bg-slate-50 border border-slate-100 rounded-lg p-3">{item.description}</p>
+              )}
+
+              {assessmentPhotoUrls[item.id] && (
+                <img
+                  src={assessmentPhotoUrls[item.id]}
+                  alt="Damage evidence"
+                  className="w-full max-h-56 object-cover rounded-lg border border-slate-200"
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col pb-safe animate-fade-in">

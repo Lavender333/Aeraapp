@@ -1185,6 +1185,96 @@ export async function getAssessmentPhotoSignedUrl(path: string, expiresInSeconds
   return data.signedUrl;
 }
 
+export type DamageAssessmentResult = {
+  id: string;
+  profileId: string;
+  orgId: string | null;
+  orgName: string | null;
+  orgCode: string | null;
+  reporterName: string;
+  reporterEmail: string | null;
+  reporterPhone: string | null;
+  damageType: string;
+  severity: number;
+  description: string | null;
+  photoPath: string | null;
+  location: string | null;
+  createdAt: string;
+};
+
+export async function listDamageAssessmentsForCurrentUser(limit = 75): Promise<DamageAssessmentResult[]> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const profile = await getProfileById(authData.user.id);
+  const role = String(profile?.role || 'GENERAL_USER').toUpperCase();
+
+  const canViewAll = role === 'ADMIN' || role === 'STATE_ADMIN' || role === 'COUNTY_ADMIN';
+  const canViewOrg = role === 'ORG_ADMIN' || role === 'INSTITUTION_ADMIN';
+
+  if (!canViewAll && !canViewOrg) return [];
+
+  let query = supabase
+    .from('damage_assessments')
+    .select('id, profile_id, org_id, damage_type, severity, description, photo_path, location, created_at')
+    .order('created_at', { ascending: false })
+    .limit(Math.max(1, Math.min(limit, 200)));
+
+  if (canViewOrg) {
+    if (!profile?.org_id) return [];
+    query = query.eq('org_id', profile.org_id);
+  }
+
+  const { data: rows, error } = await query;
+  if (error) throw new Error('Failed to load assessment results');
+
+  const profileIds = Array.from(new Set((rows || []).map((r: any) => r.profile_id).filter(Boolean)));
+  const orgIds = Array.from(new Set((rows || []).map((r: any) => r.org_id).filter(Boolean)));
+
+  const [profilesResp, orgsResp] = await Promise.all([
+    profileIds.length
+      ? supabase
+          .from('profiles')
+          .select('id, full_name, email, phone')
+          .in('id', profileIds)
+      : Promise.resolve({ data: [], error: null } as any),
+    orgIds.length
+      ? supabase
+          .from('organizations')
+          .select('id, org_code, name')
+          .in('id', orgIds)
+      : Promise.resolve({ data: [], error: null } as any),
+  ]);
+
+  if (profilesResp.error) throw new Error('Failed to resolve assessment reporters');
+  if (orgsResp.error) throw new Error('Failed to resolve assessment organizations');
+
+  const profileMap = new Map((profilesResp.data || []).map((p: any) => [p.id, p]));
+  const orgMap = new Map((orgsResp.data || []).map((o: any) => [o.id, o]));
+
+  return (rows || []).map((row: any) => {
+    const reporter = profileMap.get(row.profile_id);
+    const org = row.org_id ? orgMap.get(row.org_id) : null;
+
+    return {
+      id: row.id,
+      profileId: row.profile_id,
+      orgId: row.org_id || null,
+      orgName: org?.name || null,
+      orgCode: org?.org_code || null,
+      reporterName: reporter?.full_name || 'Unknown Reporter',
+      reporterEmail: reporter?.email || null,
+      reporterPhone: reporter?.phone || null,
+      damageType: row.damage_type,
+      severity: Number(row.severity || 1),
+      description: row.description || null,
+      photoPath: row.photo_path || null,
+      location: row.location || null,
+      createdAt: row.created_at,
+    };
+  });
+}
+
 // Help Requests
 export async function createHelpRequest(userId: string, payload: any) {
   const orgId = payload?.orgId ? await getOrgIdByCode(payload.orgId) : null;

@@ -643,9 +643,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
 
       {canOpenOrgDashboard && connectedOrg && (
         (() => {
+          const inventoryReady = Boolean(orgInventory);
           const effectiveInventory = orgInventory || { water: 0, food: 0, blankets: 0, medicalKits: 0 };
           const coverageBase = orgMemberCount || orgPopulation;
-          const status = getInventoryStatuses(effectiveInventory, coverageBase);
+          const status: Record<'water' | 'food' | 'blankets' | 'medicalKits', { level: 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN' }> = inventoryReady
+            ? getInventoryStatuses(effectiveInventory, coverageBase)
+            : {
+                water: { level: 'UNKNOWN' },
+                food: { level: 'UNKNOWN' },
+                blankets: { level: 'UNKNOWN' },
+                medicalKits: { level: 'UNKNOWN' },
+              };
           return (
         <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 rounded-2xl p-6 shadow-md space-y-3">
           <div className="flex items-center justify-between">
@@ -677,7 +685,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                 </div>
                 <div className="flex-1 text-left">
                   <p className="text-[11px] uppercase font-bold text-slate-500">{item.label}</p>
-                  <p className="text-2xl font-black text-slate-900 leading-tight">{item.value}</p>
+                  <p className="text-2xl font-black text-slate-900 leading-tight">{inventoryReady ? item.value : '—'}</p>
                   <div className="flex items-center justify-between text-[11px] text-slate-400">
                     <span>{item.unit}</span>
                     <span className={`font-bold ${
@@ -882,7 +890,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         </>
       )}
 
-      {hasCommunity && !(canOpenOrgDashboard && connectedOrg && orgInventory) && (
+      {hasCommunity && userRole !== 'ADMIN' && !isOrgAdmin && !(canOpenOrgDashboard && connectedOrg && orgInventory) && (
         <>
           {/* Resource Alert System (Community Only) */}
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-3 shadow-sm cursor-pointer hover:bg-amber-100 transition-colors" onClick={() => setView('LOGISTICS')}>
