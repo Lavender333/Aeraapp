@@ -481,7 +481,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
            onClick={() => { setActiveTab('PREPAREDNESS'); setSelectedMember(null); }}
            className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'PREPAREDNESS' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500'}`}
          >
-           Preparedness
+           {t('org.tab.preparedness')}
          </button>
          <button 
            onClick={() => setActiveTab('INVENTORY')}
@@ -644,7 +644,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
           <div className="space-y-3">
             {outreachFlags.length > 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                <h3 className="text-sm font-bold text-amber-900 mb-2">Priority Outreach Signals</h3>
+                <h3 className="text-sm font-bold text-amber-900 mb-2">{t('org.outreach.title')}</h3>
                 <div className="space-y-2">
                   {outreachFlags.slice(0, 8).map((flag, idx) => {
                     const levelClasses =
@@ -669,7 +669,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
 
             {memberNeeds.length > 0 && (
               <div className="bg-white border border-slate-200 rounded-xl p-4">
-                <h3 className="text-sm font-bold text-slate-900 mb-2">Member Preparedness Gaps</h3>
+                <h3 className="text-sm font-bold text-slate-900 mb-2">{t('org.gaps.title')}</h3>
                 <div className="space-y-2">
                   {memberNeeds.slice(0, 20).map((need) => {
                     const score = Math.round(Number(need.readiness_score || 0));
@@ -688,7 +688,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
                             <p className="text-xs text-slate-500">{need.phone || 'No phone'} • {need.critical_missing_count} critical missing</p>
                           </div>
                           <div className="text-right">
-                            <p className="text-xs text-slate-500 uppercase font-bold">Readiness</p>
+                            <p className="text-xs text-slate-500 uppercase font-bold">{t('org.gaps.readiness')}</p>
                             <p className="text-sm font-black text-slate-900">{score}%</p>
                           </div>
                         </div>
@@ -700,7 +700,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
                         </div>
                         {need.critical_missing_items.length > 0 && (
                           <div className="mt-2 text-xs text-slate-600">
-                            Missing: {need.critical_missing_items.slice(0, 3).map((m) => m.item || 'Critical item').join(', ')}
+                            {t('org.gaps.missing')}: {need.critical_missing_items.slice(0, 3).map((m) => m.item || 'Critical item').join(', ')}
                           </div>
                         )}
                       </div>
@@ -712,7 +712,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
 
             {outreachFlags.length === 0 && memberNeeds.length === 0 && (
               <div className="bg-white border border-slate-200 rounded-xl p-4 text-sm text-slate-600">
-                No preparedness analytics found yet. Ask members to complete Build Kit and save their checklist to generate recommendations.
+                {t('org.gaps.none')}
               </div>
             )}
           </div>
