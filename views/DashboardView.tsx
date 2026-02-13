@@ -394,7 +394,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
       {/* Broadcast Detail Modal */}
       {showTickerModal && (
         <div 
-          className="fixed inset-0 z-50 flex itemscenter justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in"
           onClick={() => setShowTickerModal(false)}
         >
           <div 
