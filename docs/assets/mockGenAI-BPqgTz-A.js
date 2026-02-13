@@ -1,0 +1,1 @@
+class t{constructor(e){this.apiKey=e.apiKey,this.models={generateContent:async()=>({text:()=>"Mock AI response - feature working without API key"})}}async generateContent(e){return{response:{text:()=>"Mock AI response - feature working without API key"}}}}const n=t;export{n as G};
