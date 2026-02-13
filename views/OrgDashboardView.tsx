@@ -34,6 +34,22 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     updated_at: string | null;
   };
 
+  const normalizeMember = (member: any): OrgMember => ({
+    id: String(member?.id || ''),
+    name: String(member?.name || 'Unknown Member'),
+    status: (member?.status || 'UNKNOWN') as OrgMember['status'],
+    lastUpdate: String(member?.lastUpdate || member?.last_update || 'Unknown'),
+    location: String(member?.location || 'Unknown'),
+    needs: Array.isArray(member?.needs) ? member.needs : [],
+    phone: String(member?.phone || ''),
+    address: String(member?.address || ''),
+    emergencyContactName: String(member?.emergencyContactName || member?.emergency_contact_name || ''),
+    emergencyContactPhone: String(member?.emergencyContactPhone || member?.emergency_contact_phone || ''),
+    emergencyContactRelation: String(member?.emergencyContactRelation || member?.emergency_contact_relation || ''),
+  });
+
+  const normalizeMembers = (list: any[]): OrgMember[] => (Array.isArray(list) ? list.map(normalizeMember) : []);
+
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [inventory, setInventory] = useState<OrgInventory>({ water: 0, food: 0, blankets: 0, medicalKits: 0 });
   const [activeTab, setActiveTab] = useState<'MEMBERS' | 'INVENTORY'>('MEMBERS');
@@ -88,9 +104,9 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     }
     
     // Load Live Data from Backend
-    setMembers(StorageService.getOrgMembers(id));
+    setMembers(normalizeMembers(StorageService.getOrgMembers(id) as any[]));
     StorageService.fetchOrgMembersRemote(id).then(({ members, fromCache }) => {
-      setMembers(members);
+      setMembers(normalizeMembers(members as any[]));
       setMembersFallback(fromCache);
     }).catch(() => setMembersFallback(true));
     StorageService.fetchOrgInventoryRemote(id).then(({ inventory, fromCache }) => {
@@ -108,7 +124,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
       });
     StorageService.fetchMemberStatus(id).then((resp) => {
       if (resp?.counts) setStatusCounts(resp.counts);
-      if (resp?.members?.length) setMembers(resp.members as any);
+      if (resp?.members?.length) setMembers(normalizeMembers(resp.members as any[]));
     });
     fetchOrgOutreachFlags(id)
       .then((rows) => setOutreachFlags(rows as OutreachFlagRow[]))
