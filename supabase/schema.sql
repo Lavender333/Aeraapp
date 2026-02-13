@@ -485,6 +485,41 @@ CREATE TABLE IF NOT EXISTS ready_kits (
 
 CREATE INDEX IF NOT EXISTS idx_ready_kits_profile_id ON ready_kits(profile_id);
 
+-- Household Readiness Scores (normalized readiness domain)
+CREATE TABLE IF NOT EXISTS household_readiness_scores (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  household_id UUID UNIQUE NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  readiness_score NUMERIC(5,2) DEFAULT 0,
+  readiness_tier VARCHAR(20) DEFAULT 'LOW',
+  total_items INTEGER DEFAULT 0,
+  checked_items INTEGER DEFAULT 0,
+  recommended_duration_days INTEGER DEFAULT 3,
+  last_assessed_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_household_readiness_scores_household_id ON household_readiness_scores(household_id);
+CREATE INDEX IF NOT EXISTS idx_household_readiness_scores_score ON household_readiness_scores(readiness_score);
+
+-- Readiness Items (per-household checklist state)
+CREATE TABLE IF NOT EXISTS readiness_items (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  household_id UUID NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  item_id VARCHAR(100) NOT NULL,
+  item_name VARCHAR(255),
+  category VARCHAR(100),
+  quantity_target VARCHAR(100),
+  is_completed BOOLEAN DEFAULT false,
+  source VARCHAR(50) DEFAULT 'ready_kit',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (household_id, item_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_readiness_items_household_id ON readiness_items(household_id);
+CREATE INDEX IF NOT EXISTS idx_readiness_items_completed ON readiness_items(is_completed);
+
 -- =====================================================
 -- AUDIT & ACTIVITY LOGGING
 -- =====================================================
@@ -594,6 +629,14 @@ CREATE TRIGGER update_household_memberships_updated_at BEFORE UPDATE ON househol
 
 DROP TRIGGER IF EXISTS update_household_invitations_updated_at ON household_invitations;
 CREATE TRIGGER update_household_invitations_updated_at BEFORE UPDATE ON household_invitations
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_household_readiness_scores_updated_at ON household_readiness_scores;
+CREATE TRIGGER update_household_readiness_scores_updated_at BEFORE UPDATE ON household_readiness_scores
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_readiness_items_updated_at ON readiness_items;
+CREATE TRIGGER update_readiness_items_updated_at BEFORE UPDATE ON readiness_items
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 DROP TRIGGER IF EXISTS update_inventory_updated_at ON inventory;

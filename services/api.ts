@@ -121,6 +121,12 @@ const durationFromRisk = (risk: number) => {
   return 3;
 };
 
+const deriveReadinessTier = (score: number): 'LOW' | 'MEDIUM' | 'HIGH' => {
+  if (score >= 80) return 'HIGH';
+  if (score >= 40) return 'MEDIUM';
+  return 'LOW';
+};
+
 export async function fetchKitGuidanceForCurrentUser() {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData?.user) throw new Error('Not authenticated');
@@ -1030,6 +1036,64 @@ export async function saveReadyKit(payload: {
     }, { onConflict: 'profile_id' });
 
   if (error) throw error;
+
+  try {
+    let membership = await getCurrentHouseholdMembership(authData.user.id);
+    if (!membership) {
+      await ensureHouseholdForCurrentUser();
+      membership = await getCurrentHouseholdMembership(authData.user.id);
+    }
+
+    if (membership?.household_id) {
+      const safeTotal = Math.max(0, Number(payload.totalItems) || 0);
+      const safeChecked = Math.max(0, Number(payload.checkedItems) || 0);
+      const readinessScore = safeTotal > 0
+        ? Math.round((safeChecked / safeTotal) * 10000) / 100
+        : 0;
+      const nowIso = new Date().toISOString();
+
+      await supabase
+        .from('household_readiness_scores')
+        .upsert({
+          household_id: membership.household_id,
+          readiness_score: readinessScore,
+          readiness_tier: deriveReadinessTier(readinessScore),
+          total_items: safeTotal,
+          checked_items: safeChecked,
+          recommended_duration_days: Math.max(3, Math.ceil(safeTotal / 10) || 3),
+          last_assessed_at: nowIso,
+          updated_at: nowIso,
+        }, { onConflict: 'household_id' });
+
+      await supabase
+        .from('readiness_items')
+        .update({ is_completed: false, updated_at: nowIso })
+        .eq('household_id', membership.household_id)
+        .eq('source', 'ready_kit');
+
+      const checkedRows = (payload.checkedIds || [])
+        .map((itemId) => String(itemId || '').trim())
+        .filter(Boolean)
+        .map((itemId) => ({
+          household_id: membership!.household_id,
+          item_id: itemId,
+          item_name: itemId.replace(/[-_]/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
+          category: null,
+          quantity_target: null,
+          is_completed: true,
+          source: 'ready_kit',
+          updated_at: nowIso,
+        }));
+
+      if (checkedRows.length > 0) {
+        await supabase
+          .from('readiness_items')
+          .upsert(checkedRows, { onConflict: 'household_id,item_id' });
+      }
+    }
+  } catch (readinessSyncError) {
+    console.warn('Readiness domain sync skipped', readinessSyncError);
+  }
 
   await safeLogActivity({
     action: 'UPDATE',
