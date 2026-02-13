@@ -290,6 +290,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const isContractor = userRole === 'CONTRACTOR';
   const isGeneralUser = userRole === 'GENERAL_USER';
   const isProStatusViewer = userRole === 'ADMIN' || userRole === 'FIRST_RESPONDER' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN';
+  const showLogisticsHome = userRole === 'FIRST_RESPONDER' || userRole === 'LOCAL_AUTHORITY' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN' || isContractor;
 
   const safeCount = orgMembers.filter((member) => member.status === 'SAFE').length;
   const dangerCount = orgMembers.filter((member) => member.status === 'DANGER').length;
@@ -946,7 +947,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
           </Card>
         )}
         
-        {(isResponder || isOrgAdmin || isContractor) && (
+        {showLogisticsHome && (
           <Card 
             className="col-span-2 bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-100 hover:border-emerald-200"
             onClick={() => setView('LOGISTICS')}
