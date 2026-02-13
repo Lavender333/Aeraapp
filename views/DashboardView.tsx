@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Card } from '../components/Card';
 import { ViewState, HelpRequestRecord, UserRole, OrgInventory, OrgMember, OrganizationProfile } from '../types';
 import { StorageService } from '../services/storage';
@@ -102,9 +102,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   // Broadcast Modal State
   const [showTickerModal, setShowTickerModal] = useState(false);
 
+  // Memoize profile to prevent unnecessary reloads
+  const profile = useMemo(() => StorageService.getProfile(), []);
+
   useEffect(() => {
     // Load Profile Data
-    const profile = StorageService.getProfile();
     setUserRole(normalizeRole(profile.role));
     setUserName(profile.fullName);
     setPendingPing(profile.pendingStatusRequest);
@@ -115,18 +117,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
        setConnectedOrg(org?.name || profile.communityId);
        setOrgProfile(org || null);
        setOrgPopulation(org?.registeredPopulation || 0);
-       StorageService.fetchOrgMembersRemote(profile.communityId).then(({ members }) => {
-         setOrgMemberCount(members.length);
-         setOrgMembers(members);
+       
+       // Parallelize independent API calls for faster dashboard load
+       Promise.all([
+         StorageService.fetchOrgMembersRemote(profile.communityId),
+         StorageService.fetchOrgInventoryRemote(profile.communityId),
+         StorageService.getActiveRequest(),
+       ]).then(([membersResp, inventoryResp, activeReq]) => {
+         setOrgMemberCount(membersResp.members.length);
+         setOrgMembers(membersResp.members);
+         setOrgInventory(inventoryResp.inventory);
+         setInventoryFallback(inventoryResp.fromCache);
+         setActiveRequest(activeReq);
+       }).catch(err => {
+         console.error('Error loading dashboard data:', err);
        });
-       StorageService.fetchOrgInventoryRemote(profile.communityId).then(({ inventory, fromCache }) => {
-         setOrgInventory(inventory);
-         setInventoryFallback(fromCache);
-       });
+    } else {
+      // Load Active Request even without community
+      StorageService.getActiveRequest().then(setActiveRequest);
     }
-    
-    // Load Active Request
-    StorageService.getActiveRequest().then(setActiveRequest);
     
     // Load Ticker with user context for scoped broadcasts
     setTickerMessage(StorageService.getTicker(profile));
@@ -145,34 +154,42 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     };
     const handleOffline = () => setIsOnline(false);
     
-    // Listen for storage events (cross-tab)
+    // Debounced storage change handler to prevent cascade updates
+    let storageChangeTimeout: NodeJS.Timeout | null = null;
     const handleStorageChange = () => {
-       const updatedProfile = StorageService.getProfile();
-       setUserRole(normalizeRole(updatedProfile.role));
-       setTickerMessage(StorageService.getTicker(updatedProfile));
-       setPendingPing(updatedProfile.pendingStatusRequest);
-       StorageService.getActiveRequest().then(setActiveRequest);
-       if (updatedProfile.communityId) {
-         const org = StorageService.getOrganization(updatedProfile.communityId);
-         setConnectedOrg(org?.name || updatedProfile.communityId);
-         setOrgProfile(org || null);
-         setOrgPopulation(org?.registeredPopulation || 0);
-         StorageService.fetchOrgMembersRemote(updatedProfile.communityId).then(({ members }) => {
-           setOrgMemberCount(members.length);
-           setOrgMembers(members);
-         });
-         StorageService.fetchOrgInventoryRemote(updatedProfile.communityId).then(({ inventory, fromCache }) => {
-           setOrgInventory(inventory);
-           setInventoryFallback(fromCache);
-         });
-       } else {
-         setConnectedOrg(null);
-         setOrgProfile(null);
-         setOrgPopulation(0);
-         setOrgInventory(null);
-         setOrgMemberCount(0);
-         setOrgMembers([]);
+       if (storageChangeTimeout) {
+         clearTimeout(storageChangeTimeout);
        }
+       storageChangeTimeout = setTimeout(() => {
+         const updatedProfile = StorageService.getProfile();
+         setUserRole(normalizeRole(updatedProfile.role));
+         setTickerMessage(StorageService.getTicker(updatedProfile));
+         setPendingPing(updatedProfile.pendingStatusRequest);
+         StorageService.getActiveRequest().then(setActiveRequest);
+         if (updatedProfile.communityId) {
+           const org = StorageService.getOrganization(updatedProfile.communityId);
+           setConnectedOrg(org?.name || updatedProfile.communityId);
+           setOrgProfile(org || null);
+           setOrgPopulation(org?.registeredPopulation || 0);
+           // Parallelize member and inventory fetches
+           Promise.all([
+             StorageService.fetchOrgMembersRemote(updatedProfile.communityId),
+             StorageService.fetchOrgInventoryRemote(updatedProfile.communityId),
+           ]).then(([membersResp, inventoryResp]) => {
+             setOrgMemberCount(membersResp.members.length);
+             setOrgMembers(membersResp.members);
+             setOrgInventory(inventoryResp.inventory);
+             setInventoryFallback(inventoryResp.fromCache);
+           }).catch(() => {});
+         } else {
+           setConnectedOrg(null);
+           setOrgProfile(null);
+           setOrgPopulation(0);
+           setOrgInventory(null);
+           setOrgMemberCount(0);
+           setOrgMembers([]);
+         }
+       }, 300); // 300ms debounce delay
     };
     
     // Listen for custom ticker update event (same-window)

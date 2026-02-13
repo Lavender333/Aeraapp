@@ -103,35 +103,47 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
       setRegisteredPopulation(org.registeredPopulation || 0);
     }
     
-    // Load Live Data from Backend
+    // Load Live Data from Backend - Parallelize all independent API calls
     setMembers(normalizeMembers(StorageService.getOrgMembers(id) as any[]));
-    StorageService.fetchOrgMembersRemote(id).then(({ members, fromCache }) => {
-      setMembers(normalizeMembers(members as any[]));
-      setMembersFallback(fromCache);
-    }).catch(() => setMembersFallback(true));
-    StorageService.fetchOrgInventoryRemote(id).then(({ inventory, fromCache }) => {
-      setInventory(inventory);
-      setInventoryFallback(fromCache);
-    });
-    listRequests(id)
-      .then((data) => {
+    
+    Promise.all([
+      StorageService.fetchOrgMembersRemote(id).catch(() => ({ members: [], fromCache: true })),
+      StorageService.fetchOrgInventoryRemote(id).catch(() => ({ inventory: null, fromCache: true })),
+      listRequests(id).catch(() => null),
+      StorageService.fetchMemberStatus(id).catch(() => null),
+      fetchOrgOutreachFlags(id).catch(() => []),
+      fetchOrgMemberPreparednessNeeds(id).catch(() => []),
+    ]).then(([membersResp, inventoryResp, requestsData, statusResp, outreachData, needsData]) => {
+      // Update members
+      setMembers(normalizeMembers(membersResp.members as any[]));
+      setMembersFallback(membersResp.fromCache);
+      
+      // Update inventory
+      setInventory(inventoryResp.inventory);
+      setInventoryFallback(inventoryResp.fromCache);
+      
+      // Update requests
+      if (requestsData) {
         setRequestsFallback(false);
-        setRequests(data);
-      })
-      .catch(() => {
+        setRequests(requestsData);
+      } else {
         setRequestsFallback(true);
         setRequests(StorageService.getOrgReplenishmentRequests(id));
-      });
-    StorageService.fetchMemberStatus(id).then((resp) => {
-      if (resp?.counts) setStatusCounts(resp.counts);
-      if (resp?.members?.length) setMembers(normalizeMembers(resp.members as any[]));
+      }
+      
+      // Update member status
+      if (statusResp?.counts) setStatusCounts(statusResp.counts);
+      if (statusResp?.members?.length) setMembers(normalizeMembers(statusResp.members as any[]));
+      
+      // Update outreach flags and needs
+      setOutreachFlags(outreachData as OutreachFlagRow[]);
+      setMemberNeeds(needsData as MemberPreparednessNeedRow[]);
+    }).catch(err => {
+      console.error('Error loading org dashboard data:', err);
+      setMembersFallback(true);
+      setInventoryFallback(true);
+      setRequestsFallback(true);
     });
-    fetchOrgOutreachFlags(id)
-      .then((rows) => setOutreachFlags(rows as OutreachFlagRow[]))
-      .catch(() => setOutreachFlags([]));
-    fetchOrgMemberPreparednessNeeds(id)
-      .then((rows) => setMemberNeeds(rows as MemberPreparednessNeedRow[]))
-      .catch(() => setMemberNeeds([]));
 
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
