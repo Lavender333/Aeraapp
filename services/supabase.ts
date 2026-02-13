@@ -1,22 +1,27 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
+// Fallback Supabase project for demos/previews; override with env vars for production use.
+// Managed by AERA team; if rotated, update env or this constant.
 const fallbackSupabaseUrl = 'https://zghyxeeietqubodgplgo.supabase.co';
+// Note: anon (publishable) key is safe for client use.
+// Demo key is intentionally committed to unblock QA; replace/rotate for production.
+// This shared fallback relies on Row Level Security (RLS); override/rotate via env for stricter isolation.
 const fallbackSupabaseAnonKey = 'sb_publishable_nUDmo_Mi3q8lwmmHaeth2Q_tlerDnHb';
 
 const envSupabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const envSupabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
+export const hasUserSupabaseConfig = Boolean(envSupabaseUrl && envSupabaseAnonKey);
 const supabaseUrl = envSupabaseUrl || fallbackSupabaseUrl;
 const supabaseAnonKey = envSupabaseAnonKey || fallbackSupabaseAnonKey;
-
-export const hasUserSupabaseConfig = Boolean(envSupabaseUrl && envSupabaseAnonKey);
+const usingFallback = !hasUserSupabaseConfig;
 export const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
 export const supabaseConfigMessage = hasUserSupabaseConfig
   ? 'Using provided Supabase environment variables.'
   : 'Using bundled Supabase project; set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to override.';
 
-if (!hasUserSupabaseConfig) {
-  console.info('Supabase env not set; falling back to bundled project.');
+if (usingFallback) {
+  console.warn('Supabase env not set; using bundled demo credentials—replace for production.');
 }
 
 export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
