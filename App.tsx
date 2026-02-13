@@ -24,6 +24,48 @@ import { ViewState } from './types';
 import { StorageService } from './services/storage';
 import { hasSupabaseConfig, supabaseConfigMessage, supabase } from './services/supabase';
 
+class ViewErrorBoundary extends React.Component<
+  { onRecover: () => void; children: React.ReactNode },
+  { hasError: boolean; message?: string }
+> {
+  constructor(props: { onRecover: () => void; children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, message: undefined };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, message: String(error?.message || error || 'Unknown view error') };
+  }
+
+  componentDidCatch(error: any) {
+    console.error('View render error:', error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+          <div className="max-w-sm w-full bg-white border border-red-200 rounded-2xl p-5 shadow-sm">
+            <h2 className="text-lg font-bold text-red-700 mb-2">Screen failed to load</h2>
+            <p className="text-sm text-slate-600 mb-4">{this.state.message || 'An unexpected error occurred in this view.'}</p>
+            <button
+              className="w-full bg-slate-900 text-white rounded-lg py-2.5 font-semibold"
+              onClick={() => {
+                this.setState({ hasError: false, message: undefined });
+                this.props.onRecover();
+              }}
+            >
+              Return to Dashboard
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 export default function App() {
   const [currentView, setView] = useState<ViewState>('SPLASH');
   const [isBootstrapping, setIsBootstrapping] = useState(true);
@@ -178,7 +220,9 @@ export default function App() {
           </div>
         </div>
       )}
-      {renderView()}
+      <ViewErrorBoundary onRecover={() => setView('DASHBOARD')}>
+        {renderView()}
+      </ViewErrorBoundary>
       {!showNav && (
         <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center print:hidden">
           <button
