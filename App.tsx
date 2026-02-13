@@ -1,27 +1,28 @@
 
-import React, { useEffect, useState } from 'react';
-import { SplashView } from './views/SplashView';
-import { DashboardView } from './views/DashboardView';
-import { HelpFormView } from './views/HelpFormView';
-import { SettingsView } from './views/SettingsView';
-import { MapView } from './views/MapView';
-import { GapView } from './views/GapView';
-import { AssessmentView } from './views/AssessmentView';
-import { PopulationView } from './views/PopulationView';
-import { RecoveryView } from './views/RecoveryView';
-import { DroneView } from './views/DroneView';
-import { LogisticsView } from './views/LogisticsView';
-import { RegistrationView } from './views/RegistrationView';
-import { OrgDashboardView } from './views/OrgDashboardView';
-import { LoginView } from './views/LoginView';
-import { PresentationView } from './views/PresentationView';
-import { PrivacyPolicyView } from './views/PrivacyPolicyView';
-import { ResetPasswordView } from './views/ResetPasswordView';
-import { BuildKitView } from './views/BuildKitView';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { BottomNav } from './components/BottomNav';
 import { ViewState } from './types';
 import { StorageService } from './services/storage';
 import { hasSupabaseConfig, supabaseConfigMessage, supabase } from './services/supabase';
+
+const SplashView = lazy(() => import('./views/SplashView').then((m) => ({ default: m.SplashView })));
+const DashboardView = lazy(() => import('./views/DashboardView').then((m) => ({ default: m.DashboardView })));
+const HelpFormView = lazy(() => import('./views/HelpFormView').then((m) => ({ default: m.HelpFormView })));
+const SettingsView = lazy(() => import('./views/SettingsView').then((m) => ({ default: m.SettingsView })));
+const MapView = lazy(() => import('./views/MapView').then((m) => ({ default: m.MapView })));
+const GapView = lazy(() => import('./views/GapView').then((m) => ({ default: m.GapView })));
+const AssessmentView = lazy(() => import('./views/AssessmentView').then((m) => ({ default: m.AssessmentView })));
+const PopulationView = lazy(() => import('./views/PopulationView').then((m) => ({ default: m.PopulationView })));
+const RecoveryView = lazy(() => import('./views/RecoveryView').then((m) => ({ default: m.RecoveryView })));
+const DroneView = lazy(() => import('./views/DroneView').then((m) => ({ default: m.DroneView })));
+const LogisticsView = lazy(() => import('./views/LogisticsView').then((m) => ({ default: m.LogisticsView })));
+const RegistrationView = lazy(() => import('./views/RegistrationView').then((m) => ({ default: m.RegistrationView })));
+const OrgDashboardView = lazy(() => import('./views/OrgDashboardView').then((m) => ({ default: m.OrgDashboardView })));
+const LoginView = lazy(() => import('./views/LoginView').then((m) => ({ default: m.LoginView })));
+const PresentationView = lazy(() => import('./views/PresentationView').then((m) => ({ default: m.PresentationView })));
+const PrivacyPolicyView = lazy(() => import('./views/PrivacyPolicyView').then((m) => ({ default: m.PrivacyPolicyView })));
+const ResetPasswordView = lazy(() => import('./views/ResetPasswordView').then((m) => ({ default: m.ResetPasswordView })));
+const BuildKitView = lazy(() => import('./views/BuildKitView').then((m) => ({ default: m.BuildKitView })));
 
 class ViewErrorBoundary extends React.Component<
   { onRecover: () => void; children: React.ReactNode },
@@ -217,7 +218,15 @@ export default function App() {
         </div>
       )}
       <ViewErrorBoundary onRecover={() => setView('DASHBOARD')}>
-        {renderView()}
+        <Suspense
+          fallback={
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+              <p className="text-sm font-medium text-slate-500">Loading…</p>
+            </div>
+          }
+        >
+          {renderView()}
+        </Suspense>
       </ViewErrorBoundary>
       {!showNav && (
         <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center print:hidden">

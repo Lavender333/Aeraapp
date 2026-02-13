@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Check, ChevronDown, FileText, HeartPulse, Save, Share2, Sparkles, Droplets, Flashlight } from 'lucide-react';
-import { jsPDF } from 'jspdf';
 import { Button } from '../components/Button';
 import { ViewState } from '../types';
 import { fetchKitGuidanceForCurrentUser, fetchReadyKit, saveReadyKit } from '../services/api';
@@ -317,7 +316,8 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     return lines;
   };
 
-  const exportPDF = () => {
+  const exportPDF = async () => {
+    const { jsPDF } = await import('jspdf');
     const doc = new jsPDF({ unit: 'pt', format: 'letter' });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
