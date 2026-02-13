@@ -721,20 +721,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                 <BellRing size={24} />
               </div>
               <div>
-
-              {canOpenOrgDashboard && (
-                <Card className="hover:border-brand-300 border-emerald-200 bg-emerald-50/50" onClick={() => setView('SETTINGS')}>
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 bg-emerald-100 rounded-lg text-emerald-700">
-                      <Building2 size={20} />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-slate-900">Org Dashboard</h3>
-                      <p className="text-xs text-slate-500 mt-1">Connect a Community ID in Settings to open org-level operations.</p>
-                    </div>
-                  </div>
-                </Card>
-              )}
                 <h2 className="font-bold text-lg leading-tight">Status Check Requested</h2>
                 <p className="text-purple-200 text-sm">By {pendingPing.requesterName}</p>
               </div>
@@ -883,46 +869,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-semibold text-slate-900">Emergency Contact</h4>
+                      <h4 className="font-semibold text-slate-900">Profile, Contacts & Household</h4>
                       <span className="text-[10px] font-bold uppercase bg-slate-100 text-slate-500 px-2 py-1 rounded">Available Now</span>
                     </div>
-                    <p className="text-xs text-slate-500 mt-1">Designate a trusted person to receive your safety status updates and alerts.</p>
-                  </div>
-                </div>
-              </Card>
-
-              <Card
-                className="hover:border-brand-300"
-                onClick={() => setView('SETTINGS')}
-              >
-                <div className="flex items-start gap-4">
-                  <div className="w-11 h-11 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
-                    <Home size={18} />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-semibold text-slate-900">Household Details</h4>
-                      <span className="text-[10px] font-bold uppercase bg-slate-100 text-slate-500 px-2 py-1 rounded">Available Now</span>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1">Add family members, track their safety status, and keep household info organized.</p>
-                  </div>
-                </div>
-              </Card>
-
-              <Card
-                className="hover:border-brand-300"
-                onClick={() => setView('SETTINGS')}
-              >
-                <div className="flex items-start gap-4">
-                  <div className="w-11 h-11 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center">
-                    <User size={18} />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-semibold text-slate-900">My Profile</h4>
-                      <span className="text-[10px] font-bold uppercase bg-slate-100 text-slate-500 px-2 py-1 rounded">Available Now</span>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1">Update your contact info, location settings, and notification preferences.</p>
+                    <p className="text-xs text-slate-500 mt-1">Update emergency contact, home details, household members, and notification preferences in one place.</p>
                   </div>
                 </div>
               </Card>
