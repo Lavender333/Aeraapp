@@ -73,6 +73,9 @@ export default function App() {
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [postSplashView, setPostSplashView] = useState<ViewState>('LOGIN');
   const showSetupNotice = !hasSupabaseConfig;
+  const currentRole = String(StorageService.getProfile()?.role || 'GENERAL_USER').toUpperCase();
+  const canAccessAdvancedViews = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN', 'FIRST_RESPONDER', 'LOCAL_AUTHORITY', 'CONTRACTOR'].includes(currentRole);
+  const canAccessOrgDashboard = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(currentRole);
 
   useEffect(() => {
     StorageService.startOfflineSyncListener();
@@ -179,7 +182,7 @@ export default function App() {
       case 'SETTINGS':
         return <SettingsView setView={setView} />;
       case 'MAP':
-        return <MapView setView={setView} />;
+        return canAccessAdvancedViews ? <MapView setView={setView} /> : <DashboardView setView={setView} />;
       case 'ALERTS':
         return <DashboardView setView={setView} />;
       case 'GAP':
@@ -187,15 +190,15 @@ export default function App() {
       case 'ASSESSMENT':
         return <AssessmentView setView={setView} />;
       case 'POPULATION':
-        return <PopulationView setView={setView} />;
+        return canAccessAdvancedViews ? <PopulationView setView={setView} /> : <DashboardView setView={setView} />;
       case 'RECOVERY':
-        return <RecoveryView setView={setView} />;
+        return canAccessAdvancedViews ? <RecoveryView setView={setView} /> : <DashboardView setView={setView} />;
       case 'DRONE':
-        return <DroneView setView={setView} />;
+        return canAccessAdvancedViews ? <DroneView setView={setView} /> : <DashboardView setView={setView} />;
       case 'LOGISTICS':
-        return <LogisticsView setView={setView} />;
+        return canAccessAdvancedViews ? <LogisticsView setView={setView} /> : <DashboardView setView={setView} />;
       case 'ORG_DASHBOARD':
-        return <OrgDashboardView setView={setView} />;
+        return canAccessOrgDashboard ? <OrgDashboardView setView={setView} /> : <DashboardView setView={setView} />;
       case 'PRIVACY_POLICY':
         return <PrivacyPolicyView setView={setView} />;
       default:

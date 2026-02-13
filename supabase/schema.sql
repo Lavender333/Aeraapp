@@ -298,6 +298,11 @@ CREATE TABLE IF NOT EXISTS household_members (
   name VARCHAR(255) NOT NULL,
   relationship VARCHAR(255),
   age INTEGER,
+  date_of_birth VARCHAR(10),
+  age_group VARCHAR(20),
+  mobility_flag BOOLEAN DEFAULT false,
+  medical_flag BOOLEAN DEFAULT false,
+  login_enabled BOOLEAN DEFAULT false,
   special_needs TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -471,6 +476,10 @@ CREATE TABLE IF NOT EXISTS members (
 CREATE INDEX IF NOT EXISTS idx_members_org_id ON members(org_id);
 CREATE INDEX IF NOT EXISTS idx_members_status ON members(status);
 CREATE INDEX IF NOT EXISTS idx_members_created ON members(created_at DESC);
+
+-- Org members naming cleanup (compatibility alias)
+CREATE OR REPLACE VIEW org_members AS
+SELECT * FROM members;
 
 -- Ready Kit (user preparedness checklist)
 CREATE TABLE IF NOT EXISTS ready_kits (

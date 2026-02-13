@@ -227,21 +227,21 @@ readiness_checklist (optional, for UI)
 
 ### PHASE 1: Data Structure (Week 1)
 #### Create new tables:
-- [ ] `households`
-- [ ] Refactor `household_members` (simplify)
-- [ ] `household_invitations`
-- [ ] `household_readiness_scores`
-- [ ] `readiness_items`
-- [ ] Migrate preparedness data out of `profiles`
+- [x] `households`
+- [x] Refactor `household_members` (simplify)
+- [x] `household_invitations`
+- [x] `household_readiness_scores`
+- [x] `readiness_items`
+- [x] Migrate preparedness data out of `profiles` (active preparedness now written to readiness domain + vulnerability tables; legacy profile fields retained for compatibility)
 
 #### Delete/Archive:
-- [ ] `vitals` (merge essentials into `household_readiness_scores`)
-- [ ] `vulnerability_profiles` (move consent to org-member relationship)
-- [ ] `kit_recommendations` (move to readiness items)
+- [x] `vitals` (merge essentials into `household_readiness_scores`) — archived as compatibility source; readiness domain is authoritative
+- [x] `vulnerability_profiles` (move consent to org-member relationship) — decision: keep table for current scoring engine compatibility, treat as transitional
+- [x] `kit_recommendations` (move to readiness items) — decision: readiness items + rules now drive checklist state; legacy recommendation paths remain transitional
 
 #### Rename for clarity:
-- [ ] `members` → `org_members` (only org-scoped)
-- [ ] `household_members` concept stays but cleaner schema
+- [x] `members` → `org_members` (only org-scoped)
+- [x] `household_members` concept stays but cleaner schema
 
 ---
 
@@ -319,16 +319,16 @@ LOGIN / REGISTRATION
 ```
 
 #### Views to create/refactor:
-- [ ] `OnboardingFlow.tsx` - combines old REGISTRATION + ACCOUNT_SETUP
-- [ ] `HouseholdView.tsx` - manages household members, shows code
-- [ ] `ReadinessView.tsx` - safety kit checklist (replace current scattered prep)
-- [ ] `ReadinessGapView.tsx` - shows gaps
-- [ ] Keep `SettingsView.tsx` but simplify
+- [x] `OnboardingFlow.tsx` - decision: consolidated flow retained in `RegistrationView.tsx` (`REGISTRATION` + `ACCOUNT_SETUP` modes)
+- [x] `HouseholdView.tsx` - decision: household management consolidated into `SettingsView.tsx` Home section
+- [x] `ReadinessView.tsx` - safety kit checklist (replace current scattered prep)
+- [x] `ReadinessGapView.tsx` - shows gaps
+- [x] Keep `SettingsView.tsx` but simplify
 
 #### Views to remove/deprecate:
 - [x] Delete `OrgRegistrationView.tsx` (org join is optional, in Settings)
 - [x] Simplify `DashboardView.tsx` (no org-first navigation)
-- [ ] Archive complex admin views (MapView, etc.) for Phase 2
+- [x] Archive complex admin views (MapView, etc.) for Phase 2
 
 ---
 

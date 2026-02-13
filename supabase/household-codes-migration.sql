@@ -15,6 +15,12 @@ EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;
 
+ALTER TABLE IF EXISTS household_members ADD COLUMN IF NOT EXISTS date_of_birth VARCHAR(10);
+ALTER TABLE IF EXISTS household_members ADD COLUMN IF NOT EXISTS age_group VARCHAR(20);
+ALTER TABLE IF EXISTS household_members ADD COLUMN IF NOT EXISTS mobility_flag BOOLEAN DEFAULT false;
+ALTER TABLE IF EXISTS household_members ADD COLUMN IF NOT EXISTS medical_flag BOOLEAN DEFAULT false;
+ALTER TABLE IF EXISTS household_members ADD COLUMN IF NOT EXISTS login_enabled BOOLEAN DEFAULT false;
+
 CREATE TABLE IF NOT EXISTS households (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   owner_profile_id UUID UNIQUE NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -215,3 +221,6 @@ ON CONFLICT (household_id, item_id) DO UPDATE SET
   is_completed = EXCLUDED.is_completed,
   source = EXCLUDED.source,
   updated_at = NOW();
+
+CREATE OR REPLACE VIEW org_members AS
+SELECT * FROM members;

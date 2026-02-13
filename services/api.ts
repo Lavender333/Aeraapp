@@ -567,7 +567,26 @@ export async function listHouseholdInvitationsForCurrentUser(): Promise<Househol
     .limit(100);
 
   if (error) throw error;
-  return (data || []).map(mapInvitationRecord);
+
+  const rows = data || [];
+  const now = Date.now();
+  const expiredIds = rows
+    .filter((row: any) => row.status === 'PENDING' && row.expires_at && Date.parse(row.expires_at) <= now)
+    .map((row: any) => row.id);
+
+  if (expiredIds.length > 0) {
+    await supabase
+      .from('household_invitations')
+      .update({ status: 'EXPIRED' })
+      .in('id', expiredIds);
+  }
+
+  return rows.map((row: any) => {
+    if (expiredIds.includes(row.id)) {
+      return mapInvitationRecord({ ...row, status: 'EXPIRED' });
+    }
+    return mapInvitationRecord(row);
+  });
 }
 
 export async function createHouseholdInvitationForMember(payload: {
@@ -575,6 +594,7 @@ export async function createHouseholdInvitationForMember(payload: {
   memberName: string;
   suggestedCode?: string;
   expiresInDays?: number;
+  forceNew?: boolean;
 }): Promise<HouseholdInvitationRecord> {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData?.user) throw new Error('Not authenticated');
@@ -594,11 +614,19 @@ export async function createHouseholdInvitationForMember(payload: {
     .limit(1)
     .maybeSingle();
 
-  if (existingPending) {
+  if (existingPending && !payload.forceNew) {
     const existingExpiresAt = existingPending.expires_at ? Date.parse(existingPending.expires_at) : 0;
     if (!existingExpiresAt || existingExpiresAt > Date.now()) {
       return mapInvitationRecord(existingPending);
     }
+  }
+
+  if (existingPending && payload.forceNew) {
+    await supabase
+      .from('household_invitations')
+      .update({ status: 'REVOKED' })
+      .eq('id', existingPending.id)
+      .eq('status', 'PENDING');
   }
 
   const household = await getHouseholdSummaryForMembership(membership);
@@ -652,6 +680,46 @@ export async function createHouseholdInvitationForMember(payload: {
   });
 
   return mapInvitationRecord(created);
+}
+
+export async function revokeHouseholdInvitationForCurrentUser(invitationId: string): Promise<{ ok: true }> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const membership = await getCurrentHouseholdMembership(authData.user.id);
+  if (!membership?.household_id) throw new Error('Household not found.');
+  if (membership.role !== 'OWNER') throw new Error('Only household owners can revoke invites.');
+
+  const { data: invite, error: inviteError } = await supabase
+    .from('household_invitations')
+    .select('id, household_id, status')
+    .eq('id', invitationId)
+    .maybeSingle();
+
+  if (inviteError) throw inviteError;
+  if (!invite || invite.household_id !== membership.household_id) {
+    throw new Error('Invitation not found.');
+  }
+  if (invite.status !== 'PENDING') {
+    throw new Error('Only pending invitations can be revoked.');
+  }
+
+  const { error } = await supabase
+    .from('household_invitations')
+    .update({ status: 'REVOKED' })
+    .eq('id', invitationId)
+    .eq('status', 'PENDING');
+
+  if (error) throw error;
+
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'household_invitations',
+    entityId: invitationId,
+    details: { status: 'REVOKED' },
+  });
+
+  return { ok: true };
 }
 
 export async function ensureHouseholdForCurrentUser(): Promise<HouseholdSummary> {
@@ -955,6 +1023,11 @@ export async function syncHouseholdMembersForUser(household: HouseholdMember[]) 
     name: member.name,
     relationship: null,
     age: calculateAgeFromDob(String(member.age || '')),
+    date_of_birth: String(member.age || '').trim() || null,
+    age_group: member.ageGroup || null,
+    mobility_flag: Boolean(member.mobilityFlag),
+    medical_flag: Boolean(member.medicalFlag),
+    login_enabled: Boolean(member.loginEnabled),
     special_needs: member.needs || null,
   }));
 
