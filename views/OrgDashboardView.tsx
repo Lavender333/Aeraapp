@@ -52,7 +52,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
 
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [inventory, setInventory] = useState<OrgInventory>({ water: 0, food: 0, blankets: 0, medicalKits: 0 });
-  const [activeTab, setActiveTab] = useState<'MEMBERS' | 'INVENTORY'>('MEMBERS');
+  const [activeTab, setActiveTab] = useState<'MEMBERS' | 'PREPAREDNESS' | 'INVENTORY'>('MEMBERS');
   const [orgName, setOrgName] = useState('Community Organization');
   const [communityId, setCommunityId] = useState('');
   const [registeredPopulation, setRegisteredPopulation] = useState<number>(0);
@@ -478,6 +478,12 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
            {t('org.tab.members')}
          </button>
          <button 
+           onClick={() => { setActiveTab('PREPAREDNESS'); setSelectedMember(null); }}
+           className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'PREPAREDNESS' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500'}`}
+         >
+           Preparedness
+         </button>
+         <button 
            onClick={() => setActiveTab('INVENTORY')}
            className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'INVENTORY' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500'}`}
          >
@@ -594,72 +600,6 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
           ) : (
             // List View
             <div className="space-y-3">
-               {outreachFlags.length > 0 && (
-                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-2">
-                   <h3 className="text-sm font-bold text-amber-900 mb-2">Priority Outreach Signals</h3>
-                   <div className="space-y-2">
-                     {outreachFlags.slice(0, 4).map((flag, idx) => {
-                       const levelClasses =
-                         flag.outreach_flag === 'HIGH'
-                           ? 'bg-red-100 text-red-700 border-red-200'
-                           : flag.outreach_flag === 'MEDIUM'
-                             ? 'bg-amber-100 text-amber-700 border-amber-200'
-                             : 'bg-emerald-100 text-emerald-700 border-emerald-200';
-                       return (
-                         <div key={`${flag.county_id || 'state'}-${idx}`} className="bg-white border border-amber-100 rounded-lg p-3 flex items-center justify-between">
-                           <div>
-                             <p className="text-xs text-slate-500 font-bold uppercase">{flag.county_id || flag.state_id || 'Organization Scope'}</p>
-                             <p className="text-sm text-slate-700">{flag.member_count} members • Updated {new Date(flag.last_updated).toLocaleString()}</p>
-                           </div>
-                           <span className={`px-2 py-1 text-[11px] border rounded font-bold ${levelClasses}`}>{flag.outreach_flag}</span>
-                         </div>
-                       );
-                     })}
-                   </div>
-                 </div>
-               )}
-               {memberNeeds.length > 0 && (
-                 <div className="bg-white border border-slate-200 rounded-xl p-4 mb-2">
-                   <h3 className="text-sm font-bold text-slate-900 mb-2">Member Preparedness Gaps</h3>
-                   <div className="space-y-2">
-                     {memberNeeds.slice(0, 6).map((need) => {
-                       const score = Math.round(Number(need.readiness_score || 0));
-                       const riskClasses =
-                         need.risk_tier === 'HIGH'
-                           ? 'bg-red-100 text-red-700 border-red-200'
-                           : need.risk_tier === 'ELEVATED'
-                             ? 'bg-amber-100 text-amber-700 border-amber-200'
-                             : 'bg-emerald-100 text-emerald-700 border-emerald-200';
-
-                       return (
-                         <div key={need.profile_id} className="rounded-lg border border-slate-200 p-3">
-                           <div className="flex items-center justify-between gap-2 mb-2">
-                             <div>
-                               <p className="text-sm font-bold text-slate-900">{need.member_name}</p>
-                               <p className="text-xs text-slate-500">{need.phone || 'No phone'} • {need.critical_missing_count} critical missing</p>
-                             </div>
-                             <div className="text-right">
-                               <p className="text-xs text-slate-500 uppercase font-bold">Readiness</p>
-                               <p className="text-sm font-black text-slate-900">{score}%</p>
-                             </div>
-                           </div>
-                           <div className="flex items-center gap-2 flex-wrap">
-                             <span className={`text-[10px] px-2 py-1 border rounded font-bold uppercase ${riskClasses}`}>{need.risk_tier}</span>
-                             {need.outreach_flags.slice(0, 2).map((flag) => (
-                               <span key={flag} className="text-[10px] px-2 py-1 rounded bg-purple-100 text-purple-700 font-bold">{flag}</span>
-                             ))}
-                           </div>
-                           {need.critical_missing_items.length > 0 && (
-                             <div className="mt-2 text-xs text-slate-600">
-                               Missing: {need.critical_missing_items.slice(0, 2).map((m) => m.item || 'Critical item').join(', ')}
-                             </div>
-                           )}
-                         </div>
-                       );
-                     })}
-                   </div>
-                 </div>
-               )}
                {members.length === 0 && (
                  <p className="text-center text-slate-500 mt-8">No members linked to {communityId} yet.</p>
                )}
@@ -698,6 +638,84 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
                ))}
             </div>
           )
+        )}
+
+        {activeTab === 'PREPAREDNESS' && (
+          <div className="space-y-3">
+            {outreachFlags.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                <h3 className="text-sm font-bold text-amber-900 mb-2">Priority Outreach Signals</h3>
+                <div className="space-y-2">
+                  {outreachFlags.slice(0, 8).map((flag, idx) => {
+                    const levelClasses =
+                      flag.outreach_flag === 'HIGH'
+                        ? 'bg-red-100 text-red-700 border-red-200'
+                        : flag.outreach_flag === 'MEDIUM'
+                          ? 'bg-amber-100 text-amber-700 border-amber-200'
+                          : 'bg-emerald-100 text-emerald-700 border-emerald-200';
+                    return (
+                      <div key={`${flag.county_id || 'state'}-${idx}`} className="bg-white border border-amber-100 rounded-lg p-3 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-slate-500 font-bold uppercase">{flag.county_id || flag.state_id || 'Organization Scope'}</p>
+                          <p className="text-sm text-slate-700">{flag.member_count} members • Updated {new Date(flag.last_updated).toLocaleString()}</p>
+                        </div>
+                        <span className={`px-2 py-1 text-[11px] border rounded font-bold ${levelClasses}`}>{flag.outreach_flag}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {memberNeeds.length > 0 && (
+              <div className="bg-white border border-slate-200 rounded-xl p-4">
+                <h3 className="text-sm font-bold text-slate-900 mb-2">Member Preparedness Gaps</h3>
+                <div className="space-y-2">
+                  {memberNeeds.slice(0, 20).map((need) => {
+                    const score = Math.round(Number(need.readiness_score || 0));
+                    const riskClasses =
+                      need.risk_tier === 'HIGH'
+                        ? 'bg-red-100 text-red-700 border-red-200'
+                        : need.risk_tier === 'ELEVATED'
+                          ? 'bg-amber-100 text-amber-700 border-amber-200'
+                          : 'bg-emerald-100 text-emerald-700 border-emerald-200';
+
+                    return (
+                      <div key={need.profile_id} className="rounded-lg border border-slate-200 p-3">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div>
+                            <p className="text-sm font-bold text-slate-900">{need.member_name}</p>
+                            <p className="text-xs text-slate-500">{need.phone || 'No phone'} • {need.critical_missing_count} critical missing</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-slate-500 uppercase font-bold">Readiness</p>
+                            <p className="text-sm font-black text-slate-900">{score}%</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-[10px] px-2 py-1 border rounded font-bold uppercase ${riskClasses}`}>{need.risk_tier}</span>
+                          {need.outreach_flags.slice(0, 3).map((flag) => (
+                            <span key={flag} className="text-[10px] px-2 py-1 rounded bg-purple-100 text-purple-700 font-bold">{flag}</span>
+                          ))}
+                        </div>
+                        {need.critical_missing_items.length > 0 && (
+                          <div className="mt-2 text-xs text-slate-600">
+                            Missing: {need.critical_missing_items.slice(0, 3).map((m) => m.item || 'Critical item').join(', ')}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {outreachFlags.length === 0 && memberNeeds.length === 0 && (
+              <div className="bg-white border border-slate-200 rounded-xl p-4 text-sm text-slate-600">
+                No preparedness analytics found yet. Ask members to complete Build Kit and save their checklist to generate recommendations.
+              </div>
+            )}
+          </div>
         )}
 
         {/* Inventory Tab (Same as previous) */}
