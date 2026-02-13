@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Card } from '../components/Card';
 import { ViewState, HelpRequestRecord, UserRole, OrgInventory, OrgMember, OrganizationProfile } from '../types';
 import { StorageService } from '../services/storage';
@@ -102,11 +102,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   // Broadcast Modal State
   const [showTickerModal, setShowTickerModal] = useState(false);
 
-  // Memoize profile to prevent unnecessary reloads
-  const profile = useMemo(() => StorageService.getProfile(), []);
+  // useRef for debounce timeout to maintain reference across renders
+  const storageChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // Load Profile Data
+    // Load Profile Data fresh on mount
+    const profile = StorageService.getProfile();
     setUserRole(normalizeRole(profile.role));
     setUserName(profile.fullName);
     setPendingPing(profile.pendingStatusRequest);
@@ -155,12 +156,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     const handleOffline = () => setIsOnline(false);
     
     // Debounced storage change handler to prevent cascade updates
-    let storageChangeTimeout: NodeJS.Timeout | null = null;
     const handleStorageChange = () => {
-       if (storageChangeTimeout) {
-         clearTimeout(storageChangeTimeout);
+       if (storageChangeTimeoutRef.current) {
+         clearTimeout(storageChangeTimeoutRef.current);
        }
-       storageChangeTimeout = setTimeout(() => {
+       storageChangeTimeoutRef.current = setTimeout(() => {
          const updatedProfile = StorageService.getProfile();
          setUserRole(normalizeRole(updatedProfile.role));
          setTickerMessage(StorageService.getTicker(updatedProfile));
