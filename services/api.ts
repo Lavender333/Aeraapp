@@ -410,6 +410,16 @@ export async function updateProfileForUser(payload: {
   phone: string;
   email?: string;
   address?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  latitude?: number;
+  longitude?: number;
+  googlePlaceId?: string;
+  addressVerified?: boolean;
+  addressVerifiedAt?: string;
   emergencyContactName?: string;
   emergencyContactPhone?: string;
   emergencyContactRelation?: string;
@@ -427,18 +437,51 @@ export async function updateProfileForUser(payload: {
     relation: payload.emergencyContactRelation || null,
   };
 
+  const profileUpdate: Record<string, any> = {
+    full_name: payload.fullName || null,
+    phone: payload.phone || null,
+    mobile_phone: payload.phone || null,
+    email: payload.email || null,
+    role: payload.role || undefined,
+    org_id: orgId,
+    home_address: payload.address || null,
+    emergency_contact: emergencyContact,
+  };
+
+  if (Object.prototype.hasOwnProperty.call(payload, 'addressLine1')) {
+    profileUpdate.address_line_1 = payload.addressLine1 || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'addressLine2')) {
+    profileUpdate.address_line_2 = payload.addressLine2 || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'city')) {
+    profileUpdate.city = payload.city || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'state')) {
+    profileUpdate.state = payload.state || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'zip')) {
+    profileUpdate.zip = payload.zip || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'latitude')) {
+    profileUpdate.latitude = Number.isFinite(payload.latitude as number) ? payload.latitude : null;
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'longitude')) {
+    profileUpdate.longitude = Number.isFinite(payload.longitude as number) ? payload.longitude : null;
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'googlePlaceId')) {
+    profileUpdate.google_place_id = payload.googlePlaceId || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'addressVerified')) {
+    profileUpdate.address_verified = Boolean(payload.addressVerified);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'addressVerifiedAt')) {
+    profileUpdate.address_verified_at = payload.addressVerifiedAt || null;
+  }
+
   const { error } = await supabase
     .from('profiles')
-    .update({
-      full_name: payload.fullName || null,
-      phone: payload.phone || null,
-      mobile_phone: payload.phone || null,
-      email: payload.email || null,
-      role: payload.role || undefined,
-      org_id: orgId,
-      home_address: payload.address || null,
-      emergency_contact: emergencyContact,
-    })
+    .update(profileUpdate)
     .eq('id', authData.user.id);
 
   if (error) throw error;
@@ -1249,7 +1292,7 @@ export async function fetchProfileForUser(): Promise<Partial<UserProfile> | null
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('full_name, phone, mobile_phone, email, role, org_id, home_address, emergency_contact')
+    .select('full_name, phone, mobile_phone, email, role, org_id, home_address, address_line_1, address_line_2, city, state, zip, latitude, longitude, google_place_id, address_verified, address_verified_at, emergency_contact')
     .eq('id', authData.user.id)
     .single();
 
@@ -1264,6 +1307,16 @@ export async function fetchProfileForUser(): Promise<Partial<UserProfile> | null
     role: (data.role as UserProfile['role']) || 'GENERAL_USER',
     communityId: orgCode || '',
     address: data.home_address || '',
+    addressLine1: data.address_line_1 || '',
+    addressLine2: data.address_line_2 || '',
+    city: data.city || '',
+    state: data.state || '',
+    zipCode: data.zip || '',
+    latitude: Number.isFinite(data.latitude) ? Number(data.latitude) : undefined,
+    longitude: Number.isFinite(data.longitude) ? Number(data.longitude) : undefined,
+    googlePlaceId: data.google_place_id || '',
+    addressVerified: Boolean(data.address_verified),
+    addressVerifiedAt: data.address_verified_at || undefined,
     emergencyContactName: data.emergency_contact?.name || '',
     emergencyContactPhone: data.emergency_contact?.phone || '',
     emergencyContactRelation: data.emergency_contact?.relation || '',
@@ -1555,14 +1608,20 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
     },
   });
 
-  if (error) throw error;
+  if (error) {
+    const message = String((error as any)?.message || '').toLowerCase();
+    if (message.includes('already registered') || message.includes('already been registered') || message.includes('already exists')) {
+      throw new Error('That email already has an account. Log in or reset your password.');
+    }
+    throw error;
+  }
 
   const userId = data.user?.id;
   let resolvedOrgId: string | null = null;
   if (orgId) resolvedOrgId = await getOrgIdByCode(orgId);
 
   if (userId && data.session?.access_token) {
-    await supabase.from('profiles').upsert({
+    const { error: profileError } = await supabase.from('profiles').upsert({
       id: userId,
       email: data.user?.email || email || null,
       phone: phone || null,
@@ -1570,6 +1629,14 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
       role: role || 'GENERAL_USER',
       org_id: resolvedOrgId,
     });
+
+    if (profileError) {
+      const profileMessage = String((profileError as any)?.message || '').toLowerCase();
+      if (profileMessage.includes('profiles_email_key') || profileMessage.includes('duplicate key')) {
+        throw new Error('That email already has an account. Log in or reset your password.');
+      }
+      throw profileError;
+    }
   }
 
   return {
@@ -1894,7 +1961,37 @@ export async function listMembers(orgCode: string) {
     .order('created_at', { ascending: false });
 
   if (error) throw new Error('Failed to load members');
-  return data || [];
+
+  const memberRows = data || [];
+  const existingIds = new Set(memberRows.map((row: any) => row.id));
+
+  const { data: profileRows, error: profileError } = await supabase
+    .from('profiles')
+    .select('id, full_name, email, phone, mobile_phone, home_address, emergency_contact, created_at')
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: false });
+
+  if (profileError) {
+    return memberRows;
+  }
+
+  const profileBackfill = (profileRows || [])
+    .filter((profile: any) => profile?.id && !existingIds.has(profile.id))
+    .map((profile: any) => ({
+      id: profile.id,
+      name: profile.full_name || profile.email || 'Member',
+      status: 'UNKNOWN',
+      location: null,
+      last_update: null,
+      needs: [],
+      phone: profile.phone || profile.mobile_phone || null,
+      address: profile.home_address || null,
+      emergency_contact_name: profile.emergency_contact?.name || null,
+      emergency_contact_phone: profile.emergency_contact?.phone || null,
+      emergency_contact_relation: profile.emergency_contact?.relation || null,
+    }));
+
+  return [...memberRows, ...profileBackfill];
 }
 
 export async function addMember(orgCode: string, payload: any) {

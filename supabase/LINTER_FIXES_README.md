@@ -4,11 +4,11 @@ This document explains the Supabase database linter warnings/errors and how to f
 
 ## Issues Addressed
 
-### 1. ✅ RLS Disabled on `spatial_ref_sys` (ERROR)
-**Status:** Fixed via SQL  
-**File:** `fix-linter-warnings.sql`
+### 1. ✅/⚠️ RLS Disabled on `spatial_ref_sys` (ERROR)
+**Status:** Attempted via SQL; may remain on managed PostGIS instances  
+**File:** `fix-linter-warnings.sql` and follow-up migration in `supabase/migrations`
 
-The PostGIS `spatial_ref_sys` table is a reference table that didn't have Row Level Security enabled. We've enabled RLS and created a permissive read policy since it contains no sensitive user data.
+The PostGIS `spatial_ref_sys` table is a reference table that may be extension-owned. We attempt to enable RLS and create a permissive read policy since it contains no sensitive user data. On managed projects where ownership is restricted, this can still be reported by the linter and should be treated as a documented exception.
 
 ### 2. ✅ Function Search Path Mutable (WARN)
 **Status:** Fixed via SQL  

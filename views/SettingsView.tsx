@@ -7,9 +7,9 @@ import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
 import { createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, joinHouseholdByCode, listHouseholdInvitationsForCurrentUser, HouseholdInvitationRecord, revokeHouseholdInvitationForCurrentUser, updateProfileForUser, updateVitalsForUser } from '../services/api';
+import { getOrgByCode } from '../services/supabase';
 import { validateHouseholdMembers } from '../services/validation';
 import { t } from '../services/translations';
-import { GoogleGenAI } from "../services/mockGenAI";
 import { User, Bell, Lock, LogOut, Check, Save, Building2, ArrowLeft, ArrowRight, Link as LinkIcon, Loader2, HeartPulse, ShieldCheck, Users, ToggleLeft, ToggleRight, MoreVertical, Copy, CheckCircle, Database, X, XCircle, Globe, Search, Truck, Phone, Mail, MapPin, Power, Ban, Activity, Radio, AlertTriangle, HelpCircle, FileText, Printer, CheckSquare, Download, RefreshCcw, Clipboard, PenTool } from 'lucide-react';
 
 // Phone Formatter Utility
@@ -22,6 +22,18 @@ const formatPhoneNumber = (value: string) => {
     return `(${phoneNumber.slice(0, 3)}) ${phoneNumber.slice(3)}`;
   }
   return `(${phoneNumber.slice(0, 3)}) ${phoneNumber.slice(3, 6)}-${phoneNumber.slice(6, 10)}`;
+};
+
+const formatCommunityIdInput = (value: string) => {
+  const cleaned = String(value || '')
+    .toUpperCase()
+    .replace(/[–—−]/g, '-')
+    .replace(/[^A-Z0-9-]/g, '')
+    .replace(/-+/g, '-');
+
+  if (cleaned.length <= 2) return cleaned;
+  if (cleaned.includes('-')) return cleaned;
+  return `${cleaned.slice(0, 2)}-${cleaned.slice(2)}`;
 };
 
 // --- Mock Data for Access Control ---
@@ -64,7 +76,14 @@ const INITIAL_ROLES: RoleDefinition[] = [
   }
 ];
 
+type PlaceSuggestion = {
+  placeId: string;
+  description: string;
+};
+
 export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
+  const mapsApiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined)?.trim();
+
   // Main Settings State
   const [profile, setProfile] = useState<UserProfile>({
     id: '',
@@ -95,6 +114,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   const normalizedRole = String(profile.role || '').toUpperCase();
   const isAdmin = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(normalizedRole);
+  const hasAddressInput = String(profile.address || '').trim().length > 0;
+  const isAddressVerificationRequired = hasAddressInput && Boolean(mapsApiKey) && !profile.addressVerified;
+  const addressVerifiedLabel = profile.addressVerifiedAt
+    ? new Date(profile.addressVerifiedAt).toLocaleString()
+    : null;
   
   // UI States
   const [currentSection, setCurrentSection] = useState<'MAIN' | 'ACCESS_CONTROL' | 'DB_VIEWER' | 'ORG_DIRECTORY' | 'BROADCAST_CONTROL' | 'MASTER_INVENTORY'>('MAIN');
@@ -107,6 +131,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   // Validation States
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [addressStatus, setAddressStatus] = useState<'IDLE' | 'VERIFYING' | 'VALID' | 'INVALID'>('IDLE');
+  const [addressSuggestions, setAddressSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [isAddressSuggesting, setIsAddressSuggesting] = useState(false);
+  const [highlightedAddressIndex, setHighlightedAddressIndex] = useState(-1);
 
   // Access Control State
   type AccessTab = 'ALL_USERS' | 'ROLE_DEFINITIONS';
@@ -187,8 +214,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     if (typeof loaded.consentPreparednessPlanning !== 'boolean') loaded.consentPreparednessPlanning = false;
     setProfile(loaded);
     
-    // Assume loaded addresses are valid if they exist
-    if (loaded.address && loaded.address.length > 5) setAddressStatus('VALID');
+    if (loaded.addressVerified) {
+      setAddressStatus('VALID');
+    } else if (loaded.address && loaded.address.length > 5) {
+      setAddressStatus('IDLE');
+    }
     
     if (loaded.communityId && loaded.role !== 'INSTITUTION_ADMIN') {
       const org = StorageService.getOrganization(loaded.communityId);
@@ -216,6 +246,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           } as UserProfile;
           StorageService.saveProfile(merged);
           setProfile(merged);
+          setAddressStatus(merged.addressVerified ? 'VALID' : 'IDLE');
         }
 
         const householdSummary = await fetchHouseholdForCurrentUser();
@@ -297,35 +328,247 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     return true;
   };
 
-  const verifyAddressWithAI = async () => {
-    if (!profile.address || profile.address.length < 5) return;
-    setAddressStatus('VERIFYING');
-    
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `Locate the following address: "${profile.address}". Return the official address if found on Maps.`,
-        config: { tools: [{ googleMaps: {} }] }
-      });
-      
-      const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-      const hasMapResult = chunks.some((c: any) => c.maps);
+  const applyAddressResultToProfile = (result: any, fallbackAddress: string) => {
+    const components = Array.isArray(result?.address_components)
+      ? result.address_components
+      : Array.isArray(result?.addressComponents)
+        ? result.addressComponents
+        : [];
+    const findComponent = (kind: string, short = false) => {
+      const match = components.find((part: any) => Array.isArray(part.types) && part.types.includes(kind));
+      if (!match) return '';
+      return short
+        ? String(match.short_name || match.shortText || '')
+        : String(match.long_name || match.longText || '');
+    };
 
-      if (hasMapResult) {
-        setAddressStatus('VALID');
-      } else {
-        setAddressStatus('INVALID');
+    const streetNumber = findComponent('street_number');
+    const route = findComponent('route');
+    const city = findComponent('locality') || findComponent('sublocality') || findComponent('administrative_area_level_2');
+    const state = findComponent('administrative_area_level_1', true);
+    const zip = findComponent('postal_code');
+    const addressLine1 = [streetNumber, route].filter(Boolean).join(' ').trim();
+    const addressLine2 = findComponent('subpremise');
+
+    const lat = result?.geometry?.location?.lat ?? result?.location?.latitude;
+    const lng = result?.geometry?.location?.lng ?? result?.location?.longitude;
+    const formattedAddress = String(result?.formatted_address || result?.formattedAddress || fallbackAddress);
+    const placeId = String(result?.place_id || result?.id || '');
+
+    setProfile((prev) => ({
+      ...prev,
+      address: formattedAddress,
+      addressLine1: addressLine1 || undefined,
+      addressLine2: addressLine2 || undefined,
+      city: city || undefined,
+      state: state || undefined,
+      zipCode: zip || prev.zipCode,
+      latitude: Number.isFinite(lat) ? Number(lat) : undefined,
+      longitude: Number.isFinite(lng) ? Number(lng) : undefined,
+      googlePlaceId: placeId || undefined,
+      addressVerified: true,
+      addressVerifiedAt: new Date().toISOString(),
+    }));
+  };
+
+  const fetchAddressSuggestions = async (rawAddress: string) => {
+    const address = String(rawAddress || '').trim();
+    if (!mapsApiKey || address.length < 3 || addressStatus === 'VERIFYING') {
+      setAddressSuggestions([]);
+      return;
+    }
+
+    setIsAddressSuggesting(true);
+    try {
+      const response = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': mapsApiKey,
+          'X-Goog-FieldMask': 'suggestions.placePrediction.place,suggestions.placePrediction.placeId,suggestions.placePrediction.text',
+        },
+        body: JSON.stringify({
+          input: address,
+          includedRegionCodes: ['us'],
+        }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setAddressSuggestions([]);
+        return;
       }
-    } catch (e) {
-      console.error("AI Validation failed", e);
-      setAddressStatus('VALID'); // Fallback
+
+      const suggestions: PlaceSuggestion[] = Array.isArray(payload?.suggestions)
+        ? payload.suggestions
+            .map((item: any) => {
+              const prediction = item?.placePrediction;
+              const placeRef = String(prediction?.place || '');
+              const placeId = String(prediction?.placeId || (placeRef.startsWith('places/') ? placeRef.replace('places/', '') : placeRef));
+              const description = String(prediction?.text?.text || '').trim();
+              return { placeId, description };
+            })
+            .filter((item: PlaceSuggestion) => item.placeId && item.description)
+            .slice(0, 5)
+        : [];
+
+      setAddressSuggestions(suggestions);
+      setHighlightedAddressIndex(-1);
+    } catch {
+      setAddressSuggestions([]);
+      setHighlightedAddressIndex(-1);
+    } finally {
+      setIsAddressSuggesting(false);
+    }
+  };
+
+  const handleSelectAddressSuggestion = async (suggestion: PlaceSuggestion) => {
+    if (!mapsApiKey || !suggestion.placeId) return;
+    setAddressStatus('VERIFYING');
+
+    try {
+      const response = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(suggestion.placeId)}`, {
+        method: 'GET',
+        headers: {
+          'X-Goog-Api-Key': mapsApiKey,
+          'X-Goog-FieldMask': 'id,formattedAddress,addressComponents,location',
+        },
+      });
+      const place = await response.json();
+
+      if (!response.ok || !place) {
+        await verifyAddressWithGoogle(suggestion.description);
+        return;
+      }
+
+      applyAddressResultToProfile(place, suggestion.description);
+      setAddressStatus('VALID');
+      setAddressSuggestions([]);
+      setHighlightedAddressIndex(-1);
+      setProfileSaveError(null);
+    } catch {
+      await verifyAddressWithGoogle(suggestion.description);
+    }
+  };
+
+  const handleAddressInputBlur = () => {
+    setAddressSuggestions([]);
+    setHighlightedAddressIndex(-1);
+    verifyAddressWithGoogle(profile.address);
+  };
+
+  const handleAddressInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Escape') {
+      setAddressSuggestions([]);
+      setHighlightedAddressIndex(-1);
+      return;
+    }
+
+    if (addressSuggestions.length === 0) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        verifyAddressWithGoogle(profile.address);
+      }
+      return;
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setHighlightedAddressIndex((prev) => (prev + 1) % addressSuggestions.length);
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setHighlightedAddressIndex((prev) => {
+        if (prev <= 0) return addressSuggestions.length - 1;
+        return prev - 1;
+      });
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const selected = addressSuggestions[highlightedAddressIndex] || addressSuggestions[0];
+      if (selected) {
+        handleSelectAddressSuggestion(selected);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const address = String(profile.address || '').trim();
+    if (!mapsApiKey || address.length < 3 || profile.addressVerified) {
+      setAddressSuggestions([]);
+      setHighlightedAddressIndex(-1);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      fetchAddressSuggestions(address);
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [profile.address, profile.addressVerified, mapsApiKey]);
+
+  const verifyAddressWithGoogle = async (rawAddress?: string) => {
+    const address = (rawAddress ?? profile.address ?? '').trim();
+    if (address.length < 5) {
+      setAddressStatus('IDLE');
+      return;
+    }
+    if (!mapsApiKey) {
+      setAddressStatus('IDLE');
+      return;
+    }
+
+    setAddressStatus('VERIFYING');
+
+    try {
+      const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${mapsApiKey}`);
+      const geocode = await response.json();
+      const topResult = geocode?.results?.[0];
+
+      if (!response.ok || geocode?.status !== 'OK' || !topResult) {
+        setAddressStatus('INVALID');
+        setAddressSuggestions([]);
+        setHighlightedAddressIndex(-1);
+        setProfile((prev) => ({
+          ...prev,
+          addressVerified: false,
+          addressVerifiedAt: undefined,
+          googlePlaceId: undefined,
+          latitude: undefined,
+          longitude: undefined,
+          addressLine1: undefined,
+          addressLine2: undefined,
+          city: undefined,
+          state: undefined,
+        }));
+        return;
+      }
+
+      applyAddressResultToProfile(topResult, address);
+      setAddressStatus('VALID');
+      setAddressSuggestions([]);
+      setHighlightedAddressIndex(-1);
+      setProfileSaveError(null);
+    } catch {
+      setAddressStatus('INVALID');
     }
   };
 
   const handleProfileSave = async () => {
+    const trimmedAddress = String(profile.address || '').trim();
+
     if (!validatePhone(profile.phone)) {
       alert("Please fix phone number errors before saving.");
+      return;
+    }
+    if (trimmedAddress.length > 0 && mapsApiKey && !profile.addressVerified) {
+      setProfileSaveError('Please select a verified address from suggestions or verify your address before saving.');
       return;
     }
     if (addressStatus === 'INVALID') {
@@ -340,6 +583,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         phone: profile.phone,
         email: profile.email,
         address: profile.address,
+        addressLine1: profile.addressLine1,
+        addressLine2: profile.addressLine2,
+        city: profile.city,
+        state: profile.state,
+        zip: profile.zipCode,
+        latitude: profile.latitude,
+        longitude: profile.longitude,
+        googlePlaceId: profile.googlePlaceId,
+        addressVerified: Boolean(profile.addressVerified),
+        addressVerifiedAt: profile.addressVerifiedAt,
         emergencyContactName: profile.emergencyContactName,
         emergencyContactPhone: profile.emergencyContactPhone,
         emergencyContactRelation: profile.emergencyContactRelation,
@@ -358,7 +611,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   const handleVitalsSave = async () => {
     if (!profile.zipCode?.trim()) {
-      setVitalsSaveError('ZIP code is required for preparedness planning.');
+      setVitalsSaveError('ZIP is pulled from your Home Address. Verify your address in Identity first.');
       return;
     }
     const memberValidation = validateHouseholdMembers(profile.household || []);
@@ -404,32 +657,95 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const updateProfile = (key: keyof UserProfile, value: any) => {
-    setProfile(prev => ({ ...prev, [key]: value }));
+    setProfile((prev) => {
+      const next = { ...prev, [key]: value };
+      if (key === 'address') {
+        next.addressVerified = false;
+        next.addressVerifiedAt = undefined;
+        next.googlePlaceId = undefined;
+        next.latitude = undefined;
+        next.longitude = undefined;
+        next.addressLine1 = undefined;
+        next.addressLine2 = undefined;
+        next.city = undefined;
+        next.state = undefined;
+      }
+      return next;
+    });
     if (key === 'communityId') {
       setConnectedOrg(null);
       setVerifyError(null);
     }
-    if (key === 'address') setAddressStatus('IDLE');
+    if (key === 'address') {
+      setAddressStatus('IDLE');
+      setAddressSuggestions([]);
+      setHighlightedAddressIndex(-1);
+      setProfileSaveError(null);
+    }
   };
 
-  const verifyCommunityId = () => {
-    if (!profile.communityId) return;
+  const verifyCommunityId = async () => {
+    const normalized = String(profile.communityId || '')
+      .trim()
+      .replace(/[–—−]/g, '-')
+      .replace(/\s+/g, '')
+      .toUpperCase();
+
+    if (!normalized) return;
+
     setIsVerifying(true);
     setVerifyError(null);
     setConnectedOrg(null);
 
-    // Simulate API delay
-    setTimeout(() => {
-      const org = StorageService.getOrganization(profile.communityId);
-      setIsVerifying(false);
-      
-      if (org) {
-        setConnectedOrg(org.name);
-        // We do NOT auto-save here anymore, explicit save is safer
-      } else {
-        setVerifyError("Invalid Community ID");
+    try {
+      const localOrg = StorageService.getOrganization(normalized);
+      const remoteOrg = localOrg ? { orgCode: normalized, orgName: localOrg.name } : await getOrgByCode(normalized);
+
+      if (!remoteOrg) {
+        setVerifyError('Invalid Community ID');
+        return;
       }
-    }, 800);
+
+      const orgName = remoteOrg.orgName || localOrg?.name || normalized;
+      const nextProfile: UserProfile = {
+        ...profile,
+        communityId: normalized,
+      };
+
+      setProfile(nextProfile);
+      StorageService.saveProfile(nextProfile);
+      setConnectedOrg(orgName);
+
+      try {
+        await updateProfileForUser({
+          fullName: nextProfile.fullName,
+          phone: nextProfile.phone,
+          email: nextProfile.email,
+          address: nextProfile.address,
+          addressLine1: nextProfile.addressLine1,
+          addressLine2: nextProfile.addressLine2,
+          city: nextProfile.city,
+          state: nextProfile.state,
+          zip: nextProfile.zipCode,
+          latitude: nextProfile.latitude,
+          longitude: nextProfile.longitude,
+          googlePlaceId: nextProfile.googlePlaceId,
+          addressVerified: Boolean(nextProfile.addressVerified),
+          addressVerifiedAt: nextProfile.addressVerifiedAt,
+          emergencyContactName: nextProfile.emergencyContactName,
+          emergencyContactPhone: nextProfile.emergencyContactPhone,
+          emergencyContactRelation: nextProfile.emergencyContactRelation,
+          communityId: normalized,
+          role: nextProfile.role,
+        });
+      } catch {
+        // Keep local connection state; profile update will retry on next explicit save.
+      }
+    } catch {
+      setVerifyError('Unable to verify Community ID right now. Please try again.');
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   const handleDisconnectCommunity = async () => {
@@ -1874,20 +2190,63 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Home Address</label>
-          <div>
+          <div className="relative">
             <input 
               placeholder="123 Main St..."
               value={profile.address}
-              onChange={(e) => updateProfile('address', e.target.value)}
+              onChange={(e) => {
+                setHighlightedAddressIndex(-1);
+                updateProfile('address', e.target.value);
+              }}
+              onBlur={handleAddressInputBlur}
+              onKeyDown={handleAddressInputKeyDown}
               className={`w-full px-4 py-3 rounded-lg border focus:ring-2 outline-none transition-all font-medium ${
                 addressStatus === 'VALID' ? 'border-green-500 bg-green-50 focus:ring-green-500' :
                 addressStatus === 'INVALID' ? 'border-red-500 bg-red-50 focus:ring-red-500' :
                 'border-slate-300 focus:ring-brand-500 focus:border-brand-500'
               }`}
             />
+            {addressSuggestions.length > 0 && addressStatus !== 'VERIFYING' && (
+              <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg max-h-56 overflow-auto">
+                {addressSuggestions.map((result, index) => (
+                  <button
+                    key={`${result.placeId || 'addr'}-${index}`}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => handleSelectAddressSuggestion(result)}
+                    className={`w-full text-left px-3 py-2 text-sm border-b border-slate-100 last:border-b-0 ${
+                      index === highlightedAddressIndex
+                        ? 'bg-slate-100 text-slate-900'
+                        : 'text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    {result.description || 'Suggested address'}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
+          {isAddressSuggesting && addressStatus !== 'VERIFYING' && <p className="text-xs text-slate-500 font-semibold mt-1">Finding address suggestions...</p>}
+          {addressStatus === 'VERIFYING' && <p className="text-xs text-slate-500 font-semibold mt-1">Verifying with Google Maps...</p>}
           {addressStatus === 'VALID' && <p className="text-xs text-green-600 font-bold mt-1">Verified with Google Maps</p>}
           {addressStatus === 'INVALID' && <p className="text-xs text-red-600 font-bold mt-1">Address not found on Maps</p>}
+          {addressStatus === 'VALID' && addressVerifiedLabel && (
+            <p className="text-xs text-slate-500 mt-1">Verified on {addressVerifiedLabel}</p>
+          )}
+          {isAddressVerificationRequired && (
+            <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+              <p className="text-xs font-semibold text-amber-800 flex items-center gap-1">
+                <Lock size={13} /> Address verification required before saving.
+              </p>
+              <button
+                type="button"
+                onClick={() => verifyAddressWithGoogle(profile.address)}
+                className="text-xs font-bold text-amber-800 hover:text-amber-900 underline"
+              >
+                Retry
+              </button>
+            </div>
+          )}
         </div>
         
         {/* Emergency Contact */}
@@ -1994,7 +2353,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">Who lives in your home</label>
-          <p className="text-xs text-slate-500 mb-2">Each member requires DOB in MM/DD/YYYY plus mobility and medical flags.</p>
+          <p className="text-xs text-slate-500 mb-2">Each member requires DOB in MM/DD/YYYY. Young children and seniors are flagged automatically.</p>
           <HouseholdManager 
             members={profile.household}
             onChange={(updated) => updateProfile('household', updated)}
@@ -2078,62 +2437,70 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           </div>
         </div>
 
-        <Input
-          label="ZIP Code"
-          placeholder="e.g. 30303"
-          value={profile.zipCode || ''}
-          onChange={(e) => updateProfile('zipCode', e.target.value)}
-        />
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+          <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">ZIP Code</p>
+          <p className="text-sm font-semibold text-slate-900 mt-1">{profile.zipCode || 'Not detected yet'}</p>
+          <p className="text-xs text-slate-500 mt-1">From your Home Address</p>
+        </div>
 
-        <div className="grid md:grid-cols-2 gap-3">
-          <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
-            <span className="text-sm font-medium text-slate-700">Medication Dependency</span>
-            <input
-              type="checkbox"
-              checked={Boolean(profile.medicationDependency)}
-              onChange={(e) => updateProfile('medicationDependency', e.target.checked)}
-            />
-          </label>
-          <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
-            <span className="text-sm font-medium text-slate-700">Insulin Dependency</span>
-            <input
-              type="checkbox"
-              checked={Boolean(profile.insulinDependency)}
-              onChange={(e) => updateProfile('insulinDependency', e.target.checked)}
-            />
-          </label>
-          <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
-            <span className="text-sm font-medium text-slate-700">Oxygen / Powered Medical Device</span>
-            <input
-              type="checkbox"
-              checked={Boolean(profile.oxygenPoweredDevice)}
-              onChange={(e) => updateProfile('oxygenPoweredDevice', e.target.checked)}
-            />
-          </label>
-          <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
-            <span className="text-sm font-medium text-slate-700">Mobility Limitation</span>
-            <input
-              type="checkbox"
-              checked={Boolean(profile.mobilityLimitation)}
-              onChange={(e) => updateProfile('mobilityLimitation', e.target.checked)}
-            />
-          </label>
-          <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
-            <span className="text-sm font-medium text-slate-700">Transportation Access</span>
-            <input
-              type="checkbox"
-              checked={Boolean(profile.transportationAccess)}
-              onChange={(e) => updateProfile('transportationAccess', e.target.checked)}
-            />
-          </label>
-          <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
-            <span className="text-sm font-medium text-slate-700">Financial Strain</span>
-            <input
-              type="checkbox"
-              checked={Boolean(profile.financialStrain)}
-              onChange={(e) => updateProfile('financialStrain', e.target.checked)}
-            />
-          </label>
+        <div className="space-y-3">
+          <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">Medical</p>
+          <div className="grid md:grid-cols-2 gap-3">
+            <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+              <span className="text-sm font-medium text-slate-700">Medication Dependency</span>
+              <input
+                type="checkbox"
+                checked={Boolean(profile.medicationDependency)}
+                onChange={(e) => updateProfile('medicationDependency', e.target.checked)}
+              />
+            </label>
+            <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+              <span className="text-sm font-medium text-slate-700">Insulin Dependency</span>
+              <input
+                type="checkbox"
+                checked={Boolean(profile.insulinDependency)}
+                onChange={(e) => updateProfile('insulinDependency', e.target.checked)}
+              />
+            </label>
+            <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3 md:col-span-2">
+              <span className="text-sm font-medium text-slate-700">Oxygen / Powered Medical Device</span>
+              <input
+                type="checkbox"
+                checked={Boolean(profile.oxygenPoweredDevice)}
+                onChange={(e) => updateProfile('oxygenPoweredDevice', e.target.checked)}
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">Accessibility</p>
+          <div className="grid md:grid-cols-2 gap-3">
+            <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+              <span className="text-sm font-medium text-slate-700">Mobility Limitation</span>
+              <input
+                type="checkbox"
+                checked={Boolean(profile.mobilityLimitation)}
+                onChange={(e) => updateProfile('mobilityLimitation', e.target.checked)}
+              />
+            </label>
+            <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+              <span className="text-sm font-medium text-slate-700">Transportation Access</span>
+              <input
+                type="checkbox"
+                checked={Boolean(profile.transportationAccess)}
+                onChange={(e) => updateProfile('transportationAccess', e.target.checked)}
+              />
+            </label>
+            <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3 md:col-span-2">
+              <span className="text-sm font-medium text-slate-700">Financial Strain</span>
+              <input
+                type="checkbox"
+                checked={Boolean(profile.financialStrain)}
+                onChange={(e) => updateProfile('financialStrain', e.target.checked)}
+              />
+            </label>
+          </div>
         </div>
 
         <Input 
@@ -2143,11 +2510,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           onChange={(e) => updateProfile('petDetails', e.target.value)}
         />
         <Textarea 
-          label="Medical / Special Needs" 
+          label="Anything else not listed above" 
           value={profile.medicalNeeds}
           onChange={(e) => updateProfile('medicalNeeds', e.target.value)}
         />
 
+        <p className="text-sm font-semibold text-slate-800">Final step: confirm preparedness consent</p>
         <label className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
           <input
             className="mt-1"
@@ -2155,7 +2523,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             checked={Boolean(profile.consentPreparednessPlanning)}
             onChange={(e) => updateProfile('consentPreparednessPlanning', e.target.checked)}
           />
-          <span className="text-sm text-emerald-900">
+          <span className="text-sm text-emerald-900 font-medium">
             I understand this data is used only for preparedness planning and can be deleted anytime.
           </span>
         </label>
@@ -2207,12 +2575,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                      label="Change Organization ID" 
                      value={profile.communityId}
                      onChange={(e) => {
-                        updateProfile('communityId', e.target.value);
+                      updateProfile('communityId', formatCommunityIdInput(e.target.value));
                         setConnectedOrg(null);
                         setVerifyError(null);
                      }}
                      className={connectedOrg ? "border-green-500 focus:ring-green-500 bg-green-50/30" : verifyError ? "border-red-500 focus:ring-red-500" : ""}
                    />
+                   <p className="text-[11px] text-slate-500 mt-1">Format: CH-1234</p>
                 </div>
                 <Button 
                   className={`mb-[1px] min-w-[50px] ${connectedOrg ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'}`}
@@ -2236,12 +2605,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                   label="Community ID" 
                   value={profile.communityId}
                   onChange={(e) => {
-                     updateProfile('communityId', e.target.value);
+                     updateProfile('communityId', formatCommunityIdInput(e.target.value));
                      setConnectedOrg(null);
                      setVerifyError(null);
                   }}
                   className={connectedOrg ? "border-green-500 focus:ring-green-500 bg-green-50/30" : verifyError ? "border-red-500 focus:ring-red-500" : ""}
                 />
+                <p className="text-[11px] text-slate-500 mt-1">Format: CH-1234</p>
               </div>
               <Button 
                 className={`mb-[1px] min-w-[50px] ${connectedOrg ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'}`}
@@ -2259,9 +2629,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                   <XCircle size={16} /> {verifyError}
                </div>
             )}
-            <div className="relative z-10 flex justify-end">
+            <div className="relative z-10 mt-4 border-t border-slate-200 pt-3">
+              <p className="text-[11px] text-slate-500 mb-2">Advanced</p>
               <Button
                 variant="ghost"
+                size="sm"
                 className="text-red-600 hover:bg-red-50"
                 onClick={handleDisconnectCommunity}
                 disabled={isDisconnectingOrg || !profile.communityId}

@@ -64,11 +64,15 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
       return;
     }
 
+    const derivedAgeGroup = deriveAgeGroupFromDob(dob);
+    const autoMobilityFlag = ['INFANT', 'CHILD', 'SENIOR'].includes(derivedAgeGroup);
+
     const preparedMember: HouseholdMember = {
       ...currentMember,
       name: trimmedName,
       age: dob,
-      ageGroup: deriveAgeGroupFromDob(dob),
+      ageGroup: derivedAgeGroup,
+      mobilityFlag: Boolean(currentMember.mobilityFlag) || autoMobilityFlag,
     };
 
     const existingIndex = members.findIndex(m => m.id === currentMember.id);

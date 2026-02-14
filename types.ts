@@ -77,6 +77,15 @@ export interface UserProfile {
   createdAt?: string; // ISO timestamp of account creation
   phone: string;
   address: string; // Home Address for dispatch
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  latitude?: number;
+  longitude?: number;
+  googlePlaceId?: string;
+  addressVerified?: boolean;
+  addressVerifiedAt?: string;
   householdMembers: number; // Legacy count (kept for backward compat, derived from household array)
   household: HouseholdMember[]; // Detailed list
   petDetails: string; // E.g. "2 Dogs"

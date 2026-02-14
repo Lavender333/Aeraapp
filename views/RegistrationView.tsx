@@ -136,6 +136,11 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       setAuthError('Email and password required.');
       return;
     }
+    const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+    if (!strongPassword.test(password)) {
+      setAuthError('Use at least 8 characters with uppercase, lowercase, and a number.');
+      return;
+    }
     if (password !== confirmPassword) {
       setAuthError('Passwords do not match.');
       return;
@@ -240,6 +245,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
           <Button size="lg" onClick={handleAuthRegister} className="font-bold" disabled={isRegistering}>
             {isRegistering ? 'Creating…' : 'Create Account & Continue'}
           </Button>
+          <p className="text-xs text-slate-500">Password must be 8+ characters and include uppercase, lowercase, and a number.</p>
           {authError && <p className="text-sm text-red-600">{authError}</p>}
           {authSuccess && <p className="text-sm text-emerald-600">{authSuccess}</p>}
           {needsEmailConfirm && (

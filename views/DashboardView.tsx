@@ -65,6 +65,18 @@ interface DashboardViewProps {
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
+  const formatCommunityIdInput = (value: string) => {
+    const cleaned = String(value || '')
+      .toUpperCase()
+      .replace(/[–—−]/g, '-')
+      .replace(/[^A-Z0-9-]/g, '')
+      .replace(/-+/g, '-');
+
+    if (cleaned.length <= 2) return cleaned;
+    if (cleaned.includes('-')) return cleaned;
+    return `${cleaned.slice(0, 2)}-${cleaned.slice(2)}`;
+  };
+
   const normalizeRole = (role: any): UserRole => {
     const normalized = String(role || 'GENERAL_USER').toUpperCase();
     const validRoles: UserRole[] = ['ADMIN', 'CONTRACTOR', 'LOCAL_AUTHORITY', 'FIRST_RESPONDER', 'GENERAL_USER', 'INSTITUTION_ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'MEMBER'];
@@ -94,6 +106,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [communityIdInput, setCommunityIdInput] = useState('');
   const [communityConnectError, setCommunityConnectError] = useState<string | null>(null);
   const [isConnectingCommunity, setIsConnectingCommunity] = useState(false);
+  const [isAddressVerified, setIsAddressVerified] = useState(false);
+  const [addressVerifiedAt, setAddressVerifiedAt] = useState<string | null>(null);
   const hasCommunity = !!connectedOrg;
   
   // Status Ping State
@@ -107,6 +121,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     const profile = StorageService.getProfile();
     setUserRole(normalizeRole(profile.role));
     setUserName(profile.fullName);
+    setIsAddressVerified(Boolean(profile.addressVerified));
+    setAddressVerifiedAt(profile.addressVerifiedAt || null);
     setPendingPing(profile.pendingStatusRequest);
     setCommunityIdInput(profile.communityId || '');
     
@@ -149,6 +165,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     const handleStorageChange = () => {
        const updatedProfile = StorageService.getProfile();
        setUserRole(normalizeRole(updatedProfile.role));
+      setIsAddressVerified(Boolean(updatedProfile.addressVerified));
+      setAddressVerifiedAt(updatedProfile.addressVerifiedAt || null);
        setTickerMessage(StorageService.getTicker(updatedProfile));
        setPendingPing(updatedProfile.pendingStatusRequest);
        StorageService.getActiveRequest().then(setActiveRequest);
@@ -300,6 +318,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const totalMembers = orgMembers.length || orgMemberCount || orgPopulation;
   const evacuatedPercent = totalMembers ? Math.round((accountedCount / totalMembers) * 100) : null;
   const rescuedDisplay = totalMembers ? safeCount : null;
+  const addressVerifiedDisplay = addressVerifiedAt
+    ? new Date(addressVerifiedAt).toLocaleString()
+    : null;
   const sheltersOpen = orgProfile?.currentBroadcast
     ? orgProfile.currentBroadcast.toLowerCase().includes('shelter') ? 1 : 0
     : null;
@@ -767,8 +788,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
             <Input
               placeholder="Community ID (e.g., CH-1234)"
               value={communityIdInput}
-              onChange={(e) => setCommunityIdInput(e.target.value)}
+              onChange={(e) => setCommunityIdInput(formatCommunityIdInput(e.target.value))}
             />
+            <p className="text-[11px] text-slate-500">Format: CH-1234</p>
             {communityConnectError && (
               <p className="text-xs text-red-600 font-semibold">{communityConnectError}</p>
             )}
@@ -780,9 +802,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               >
                 {isConnectingCommunity ? 'Updating...' : 'Update Community'}
               </Button>
+            </div>
+            <div className="pt-2 border-t border-slate-200">
+              <p className="text-[11px] text-slate-500 mb-1">Advanced</p>
               <Button
                 size="sm"
-                variant="outline"
+                variant="ghost"
+                className="text-red-600 hover:bg-red-50"
                 onClick={handleDisconnectCommunity}
               >
                 Disconnect
@@ -805,8 +831,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
             <Input
               placeholder="Community ID (e.g., CH-1234)"
               value={communityIdInput}
-              onChange={(e) => setCommunityIdInput(e.target.value)}
+              onChange={(e) => setCommunityIdInput(formatCommunityIdInput(e.target.value))}
             />
+            <p className="text-[11px] text-slate-500">Format: CH-1234</p>
             {communityConnectError && (
               <p className="text-xs text-red-600 font-semibold">{communityConnectError}</p>
             )}
@@ -854,6 +881,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                   <h4 className="font-semibold text-slate-900 text-sm">Home & Profile</h4>
                 </div>
                 <p className="text-[11px] text-slate-500 mt-2">Household members, emergency contacts, and org connection.</p>
+                {isAddressVerified && addressVerifiedDisplay ? (
+                  <p className="text-[11px] text-emerald-700 font-semibold mt-2 inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded px-2 py-1">
+                    <Check size={12} /> Last verified: {addressVerifiedDisplay}
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-amber-700 font-semibold mt-2 inline-flex items-center gap-1 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                    <Shield size={12} /> Address verification needed
+                  </p>
+                )}
               </button>
             </div>
           </div>
