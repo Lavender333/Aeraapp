@@ -123,7 +123,7 @@ const DICTIONARY: Record<LanguageCode, Record<string, string>> = {
     "help.consent": "I consent to share my information with AERA and, when appropriate, with emergency services. If I am experiencing an immediate emergency, I understand that I should call 911.",
     "help.submit_btn": "Submit Emergency Request",
     "help.success_title": "Request Sent",
-    "help.success_desc": "Emergency responders have received your request and are tracking your real-time location.",
+    "help.success_desc": "Emergency responders have received your request.",
     "help.text_contact": "Notify Contact via SMS",
     "help.return_dash": "Return to Dashboard",
 
@@ -268,7 +268,7 @@ const DICTIONARY: Record<LanguageCode, Record<string, string>> = {
     "help.consent": "I consent to share my information with AERA and, when appropriate, with emergency services. If I am experiencing an immediate emergency, I understand that I should call 911.",
     "help.submit_btn": "Enviar Solicitud de Emergencia",
     "help.success_title": "Solicitud Enviada",
-    "help.success_desc": "Los servicios de emergencia han recibido tu solicitud y están rastreando tu ubicación.",
+    "help.success_desc": "Los servicios de emergencia han recibido tu solicitud.",
     "help.text_contact": "Notificar Contacto por SMS",
     "help.return_dash": "Volver al Tablero",
 
@@ -413,7 +413,7 @@ const DICTIONARY: Record<LanguageCode, Record<string, string>> = {
     "help.consent": "I consent to share my information with AERA and, when appropriate, with emergency services. If I am experiencing an immediate emergency, I understand that I should call 911.",
     "help.submit_btn": "Envoyer Demande",
     "help.success_title": "Demande Envoyée",
-    "help.success_desc": "Les secours ont reçu votre demande et suivent votre position.",
+    "help.success_desc": "Les secours ont reçu votre demande.",
     "help.text_contact": "Notifier par SMS",
     "help.return_dash": "Retour au Tableau de Bord",
 

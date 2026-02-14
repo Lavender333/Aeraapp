@@ -427,7 +427,7 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
           }
         </p>
 
-        {emergencyContactPhone && !isOfflineMode && (
+        {emergencyContactPhone && !isOfflineMode && smsStatus !== 'idle' && (
           <div className={`text-sm font-bold px-4 py-3 rounded-xl border max-w-xs mx-auto ${
             smsStatus === 'sent'
               ? 'bg-green-50 text-green-800 border-green-200'
@@ -438,7 +438,6 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
             {smsStatus === 'sent' && 'Emergency contact notified via SMS.'}
             {smsStatus === 'failed' && 'Unable to notify emergency contact. You can continue.'}
             {smsStatus === 'sending' && 'Notifying emergency contact...'}
-            {smsStatus === 'idle' && 'Emergency contact notification queued.'}
           </div>
         )}
         
