@@ -63,34 +63,84 @@
     </script>
     <script>
       (function () {
-        var BOOT_TIMEOUT_MS = 8000;
+        var BOOT_TIMEOUT_MS = 20000;
+        var BANNER_ID = 'aera-bootstrap-timeout';
+        var firstErrorText = null;
+
+        function getBanner() {
+          return document.getElementById(BANNER_ID);
+        }
+
+        function renderBanner(message, detail) {
+          var banner = getBanner();
+          if (!banner) {
+            banner = document.createElement('div');
+            banner.id = BANNER_ID;
+            banner.style.position = 'fixed';
+            banner.style.left = '12px';
+            banner.style.right = '12px';
+            banner.style.top = '12px';
+            banner.style.zIndex = '2147483647';
+            banner.style.background = '#fff7ed';
+            banner.style.border = '1px solid #fdba74';
+            banner.style.color = '#7c2d12';
+            banner.style.padding = '12px 14px';
+            banner.style.borderRadius = '10px';
+            banner.style.fontFamily = 'Inter, system-ui, -apple-system, sans-serif';
+            banner.style.boxShadow = '0 6px 24px rgba(0,0,0,0.12)';
+            document.body.appendChild(banner);
+          }
+
+          banner.innerHTML = [
+            '<div style="font-size:13px;font-weight:700;line-height:1.3;">' + message + '</div>',
+            '<div style="font-size:12px;line-height:1.45;margin-top:4px;white-space:pre-wrap;">' + detail + '</div>'
+          ].join('');
+        }
+
+        function normalizeError(value) {
+          if (!value) return 'Unknown error';
+          if (typeof value === 'string') return value;
+          if (value.message) return String(value.message);
+          try {
+            return JSON.stringify(value);
+          } catch (e) {
+            return String(value);
+          }
+        }
 
         function showBootstrapTimeout() {
           if (window.__AERA_BOOTED__) return;
-          if (document.getElementById('aera-bootstrap-timeout')) return;
-
-          var banner = document.createElement('div');
-          banner.id = 'aera-bootstrap-timeout';
-          banner.style.position = 'fixed';
-          banner.style.left = '12px';
-          banner.style.right = '12px';
-          banner.style.top = '12px';
-          banner.style.zIndex = '2147483647';
-          banner.style.background = '#fff7ed';
-          banner.style.border = '1px solid #fdba74';
-          banner.style.color = '#7c2d12';
-          banner.style.padding = '12px 14px';
-          banner.style.borderRadius = '10px';
-          banner.style.fontFamily = 'Inter, system-ui, -apple-system, sans-serif';
-          banner.style.boxShadow = '0 6px 24px rgba(0,0,0,0.12)';
-          banner.innerHTML = [
-            '<div style="font-size:13px;font-weight:700;line-height:1.3;">AERA did not finish loading</div>',
-            '<div style="font-size:12px;line-height:1.45;margin-top:4px;white-space:pre-wrap;">The app bootstrap timed out. Try Cmd+Shift+R, then open Console and share the first red error.</div>'
-          ].join('');
-          document.body.appendChild(banner);
+          var detail = firstErrorText
+            ? ('First error: ' + firstErrorText)
+            : 'The app bootstrap timed out. This is usually a blocked script, stale cache, or browser compatibility issue. Try Cmd+Shift+R.';
+          renderBanner('AERA did not finish loading', detail);
         }
 
+        window.addEventListener('error', function (event) {
+          if (window.__AERA_BOOTED__) return;
+          var target = event && event.target;
+          var loadError = target && target.tagName === 'SCRIPT' && target.src
+            ? ('Script failed to load: ' + target.src)
+            : null;
+          firstErrorText = firstErrorText || loadError || normalizeError(event && (event.error || event.message));
+          renderBanner('AERA startup error', firstErrorText || 'Unknown startup error');
+        }, true);
+
+        window.addEventListener('unhandledrejection', function (event) {
+          if (window.__AERA_BOOTED__) return;
+          firstErrorText = firstErrorText || normalizeError(event && event.reason);
+          renderBanner('AERA startup rejection', firstErrorText || 'Unhandled promise rejection');
+        });
+
         window.setTimeout(showBootstrapTimeout, BOOT_TIMEOUT_MS);
+
+        window.setInterval(function () {
+          if (!window.__AERA_BOOTED__) return;
+          var banner = getBanner();
+          if (banner && banner.parentNode) {
+            banner.parentNode.removeChild(banner);
+          }
+        }, 1000);
       })();
     </script>
 <link rel="stylesheet" href="./index.css">
