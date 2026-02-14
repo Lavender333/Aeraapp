@@ -5,26 +5,55 @@ import { ViewState } from './types';
 import { StorageService } from './services/storage';
 import { hasSupabaseConfig, supabaseConfigMessage, supabase } from './services/supabase';
 
-const SplashView = lazy(() => import('./views/SplashView').then((m) => ({ default: m.SplashView })));
-const DashboardView = lazy(() => import('./views/DashboardView').then((m) => ({ default: m.DashboardView })));
-const HelpFormView = lazy(() => import('./views/HelpFormView').then((m) => ({ default: m.HelpFormView })));
-const SettingsView = lazy(() => import('./views/SettingsView').then((m) => ({ default: m.SettingsView })));
-const MapView = lazy(() => import('./views/MapView').then((m) => ({ default: m.MapView })));
-const GapView = lazy(() => import('./views/GapView').then((m) => ({ default: m.GapView })));
-const AssessmentView = lazy(() => import('./views/AssessmentView').then((m) => ({ default: m.AssessmentView })));
-const PopulationView = lazy(() => import('./views/PopulationView').then((m) => ({ default: m.PopulationView })));
-const RecoveryView = lazy(() => import('./views/RecoveryView').then((m) => ({ default: m.RecoveryView })));
-const DroneView = lazy(() => import('./views/DroneView').then((m) => ({ default: m.DroneView })));
-const LogisticsView = lazy(() => import('./views/LogisticsView').then((m) => ({ default: m.LogisticsView })));
-const RegistrationView = lazy(() => import('./views/RegistrationView').then((m) => ({ default: m.RegistrationView })));
-const OrgDashboardView = lazy(() => import('./views/OrgDashboardView').then((m) => ({ default: m.OrgDashboardView })));
-const LoginView = lazy(() => import('./views/LoginView').then((m) => ({ default: m.LoginView })));
-const PresentationView = lazy(() => import('./views/PresentationView').then((m) => ({ default: m.PresentationView })));
-const PrivacyPolicyView = lazy(() => import('./views/PrivacyPolicyView').then((m) => ({ default: m.PrivacyPolicyView })));
-const ResetPasswordView = lazy(() => import('./views/ResetPasswordView').then((m) => ({ default: m.ResetPasswordView })));
-const BuildKitView = lazy(() => import('./views/BuildKitView').then((m) => ({ default: m.BuildKitView })));
-const ReadinessView = lazy(() => import('./views/ReadinessView').then((m) => ({ default: m.ReadinessView })));
-const ReadinessGapView = lazy(() => import('./views/ReadinessGapView').then((m) => ({ default: m.ReadinessGapView })));
+const lazyWithRetry = <T extends React.ComponentType<any>>(
+  importer: () => Promise<{ default: T }>
+) =>
+  lazy(async () => {
+    const retryKey = 'aera.lazyImportRetried';
+    try {
+      const module = await importer();
+      sessionStorage.removeItem(retryKey);
+      return module;
+    } catch (err: any) {
+      const message = String(err?.message || err || '');
+      const isChunkLoadError = /importing a module script failed|failed to fetch dynamically imported module|loading chunk/i.test(
+        message.toLowerCase()
+      );
+
+      if (isChunkLoadError) {
+        const hasRetried = sessionStorage.getItem(retryKey) === '1';
+        if (!hasRetried) {
+          sessionStorage.setItem(retryKey, '1');
+          window.location.reload();
+          return new Promise(() => {
+          }) as Promise<{ default: T }>;
+        }
+      }
+
+      throw err;
+    }
+  });
+
+const SplashView = lazyWithRetry(() => import('./views/SplashView').then((m) => ({ default: m.SplashView })));
+const DashboardView = lazyWithRetry(() => import('./views/DashboardView').then((m) => ({ default: m.DashboardView })));
+const HelpFormView = lazyWithRetry(() => import('./views/HelpFormView').then((m) => ({ default: m.HelpFormView })));
+const SettingsView = lazyWithRetry(() => import('./views/SettingsView').then((m) => ({ default: m.SettingsView })));
+const MapView = lazyWithRetry(() => import('./views/MapView').then((m) => ({ default: m.MapView })));
+const GapView = lazyWithRetry(() => import('./views/GapView').then((m) => ({ default: m.GapView })));
+const AssessmentView = lazyWithRetry(() => import('./views/AssessmentView').then((m) => ({ default: m.AssessmentView })));
+const PopulationView = lazyWithRetry(() => import('./views/PopulationView').then((m) => ({ default: m.PopulationView })));
+const RecoveryView = lazyWithRetry(() => import('./views/RecoveryView').then((m) => ({ default: m.RecoveryView })));
+const DroneView = lazyWithRetry(() => import('./views/DroneView').then((m) => ({ default: m.DroneView })));
+const LogisticsView = lazyWithRetry(() => import('./views/LogisticsView').then((m) => ({ default: m.LogisticsView })));
+const RegistrationView = lazyWithRetry(() => import('./views/RegistrationView').then((m) => ({ default: m.RegistrationView })));
+const OrgDashboardView = lazyWithRetry(() => import('./views/OrgDashboardView').then((m) => ({ default: m.OrgDashboardView })));
+const LoginView = lazyWithRetry(() => import('./views/LoginView').then((m) => ({ default: m.LoginView })));
+const PresentationView = lazyWithRetry(() => import('./views/PresentationView').then((m) => ({ default: m.PresentationView })));
+const PrivacyPolicyView = lazyWithRetry(() => import('./views/PrivacyPolicyView').then((m) => ({ default: m.PrivacyPolicyView })));
+const ResetPasswordView = lazyWithRetry(() => import('./views/ResetPasswordView').then((m) => ({ default: m.ResetPasswordView })));
+const BuildKitView = lazyWithRetry(() => import('./views/BuildKitView').then((m) => ({ default: m.BuildKitView })));
+const ReadinessView = lazyWithRetry(() => import('./views/ReadinessView').then((m) => ({ default: m.ReadinessView })));
+const ReadinessGapView = lazyWithRetry(() => import('./views/ReadinessGapView').then((m) => ({ default: m.ReadinessGapView })));
 
 class ViewErrorBoundary extends React.Component<
   { onRecover: () => void; children: React.ReactNode },
