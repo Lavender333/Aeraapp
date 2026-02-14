@@ -68,6 +68,7 @@ export interface HouseholdMember {
   mobilityFlag?: boolean;
   medicalFlag?: boolean;
   loginEnabled?: boolean;
+  loginPhone?: string;
 }
 
 export interface UserProfile {

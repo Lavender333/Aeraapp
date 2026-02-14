@@ -13,8 +13,11 @@ export const isValidRequestItem = (item: string): item is keyof typeof REQUEST_I
 };
 
 const DOB_REGEX = /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/(19\d{2}|20\d{2})$/;
+const PHONE_DIGITS_REGEX = /^\d{10,15}$/;
 
 export const isValidDobFormat = (value: string): boolean => DOB_REGEX.test((value || '').trim());
+export const normalizePhoneDigits = (value: string): string => String(value || '').replace(/\D/g, '');
+export const isValidPhoneForInvite = (value: string): boolean => PHONE_DIGITS_REGEX.test(normalizePhoneDigits(value));
 
 const parseDob = (value: string): Date | null => {
   if (!isValidDobFormat(value)) return null;
@@ -67,6 +70,11 @@ export const validateHouseholdMembers = (members: HouseholdMember[]): { ok: true
     }
     if (typeof member.medicalFlag !== 'boolean') {
       return { ok: false, error: `${label}: Medical flag is required.` };
+    }
+    if (member.loginEnabled) {
+      if (!isValidPhoneForInvite(member.loginPhone || '')) {
+        return { ok: false, error: `${label}: A valid member phone is required when account invites are enabled.` };
+      }
     }
   }
 

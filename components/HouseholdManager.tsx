@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { HouseholdMember } from '../types';
 import { Button } from './Button';
 import { Input } from './Input';
-import { calculateAgeFromDob, deriveAgeGroupFromDob, isValidDobFormat } from '../services/validation';
+import { calculateAgeFromDob, deriveAgeGroupFromDob, isValidDobFormat, isValidPhoneForInvite, normalizePhoneDigits } from '../services/validation';
 import { Plus, User, Trash2, Edit2, X, Save } from 'lucide-react';
 
 interface HouseholdManagerProps {
@@ -22,10 +22,21 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
     mobilityFlag: undefined,
     medicalFlag: undefined,
     loginEnabled: false,
+    loginPhone: '',
   });
 
+  const formatInvitePhone = (value: string) => {
+    const digits = normalizePhoneDigits(value).slice(0, 15);
+    if (digits.length <= 10) {
+      if (digits.length < 4) return digits;
+      if (digits.length < 7) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+      return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+    }
+    return `+${digits}`;
+  };
+
   const startAdd = () => {
-    setCurrentMember({ id: Date.now().toString(), name: '', age: '', needs: '', mobilityFlag: undefined, medicalFlag: undefined, loginEnabled: false });
+    setCurrentMember({ id: Date.now().toString(), name: '', age: '', needs: '', mobilityFlag: undefined, medicalFlag: undefined, loginEnabled: false, loginPhone: '' });
     setFormError(null);
     setIsEditing(true);
   };
@@ -36,6 +47,7 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
       mobilityFlag: typeof member.mobilityFlag === 'boolean' ? member.mobilityFlag : undefined,
       medicalFlag: typeof member.medicalFlag === 'boolean' ? member.medicalFlag : undefined,
       loginEnabled: Boolean(member.loginEnabled),
+      loginPhone: member.loginPhone || '',
     });
     setFormError(null);
     setIsEditing(true);
@@ -63,6 +75,10 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
       setFormError('Mobility and medical flags are required.');
       return;
     }
+    if (currentMember.loginEnabled && !isValidPhoneForInvite(currentMember.loginPhone || '')) {
+      setFormError('A valid member phone is required to enable account invites.');
+      return;
+    }
 
     const derivedAgeGroup = deriveAgeGroupFromDob(dob);
     const autoMobilityFlag = ['INFANT', 'CHILD', 'SENIOR'].includes(derivedAgeGroup);
@@ -73,6 +89,7 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
       age: dob,
       ageGroup: derivedAgeGroup,
       mobilityFlag: Boolean(currentMember.mobilityFlag) || autoMobilityFlag,
+      loginPhone: currentMember.loginEnabled ? formatInvitePhone(currentMember.loginPhone || '') : '',
     };
 
     const existingIndex = members.findIndex(m => m.id === currentMember.id);
@@ -171,13 +188,23 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
           </div>
 
           <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
-            <span className="text-sm font-medium text-slate-700">Enable member login (optional)</span>
+            <span className="text-sm font-medium text-slate-700">Allow account invite (optional)</span>
             <input
               type="checkbox"
               checked={Boolean(currentMember.loginEnabled)}
               onChange={(e) => setCurrentMember({ ...currentMember, loginEnabled: e.target.checked })}
             />
           </label>
+          <p className="text-xs text-slate-500 -mt-1">This does not create an account. It only enables invite-code access for this person.</p>
+          {currentMember.loginEnabled && (
+            <Input
+              label="Member Mobile Phone *"
+              placeholder="(555) 123-4567"
+              value={currentMember.loginPhone || ''}
+              onChange={e => setCurrentMember({ ...currentMember, loginPhone: formatInvitePhone(e.target.value) })}
+              error={currentMember.loginPhone && !isValidPhoneForInvite(currentMember.loginPhone) ? 'Enter a valid phone number' : undefined}
+            />
+          )}
           {formError && <p className="text-xs text-red-600 font-semibold">{formError}</p>}
           
           <div className="flex gap-2 pt-2">
@@ -207,7 +234,8 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
                     DOB: {member.age || 'N/A'}
                     {typeof member.mobilityFlag === 'boolean' && ` • Mobility: ${member.mobilityFlag ? 'Yes' : 'No'}`}
                     {typeof member.medicalFlag === 'boolean' && ` • Medical: ${member.medicalFlag ? 'Yes' : 'No'}`}
-                    {` • Login: ${member.loginEnabled ? 'Enabled' : 'Not enabled'}`}
+                    {` • Account Invite: ${member.loginEnabled ? 'Enabled' : 'Not enabled'}`}
+                    {member.loginEnabled && member.loginPhone && ` • ${member.loginPhone}`}
                     {member.needs && ` • ${member.needs}`}
                   </p>
                 </div>

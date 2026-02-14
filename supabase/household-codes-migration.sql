@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS household_invitations (
   inviter_profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   invitee_member_ref VARCHAR(100),
   invitee_name VARCHAR(255),
+  invitee_phone VARCHAR(20),
   invitation_code VARCHAR(24) UNIQUE NOT NULL,
   status household_invitation_status NOT NULL DEFAULT 'PENDING',
   accepted_by_profile_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
@@ -101,6 +102,7 @@ CREATE TABLE IF NOT EXISTS household_invitations (
 CREATE INDEX IF NOT EXISTS idx_household_invitations_household_id ON household_invitations(household_id);
 CREATE INDEX IF NOT EXISTS idx_household_invitations_code ON household_invitations(invitation_code);
 CREATE INDEX IF NOT EXISTS idx_household_invitations_status ON household_invitations(status);
+CREATE INDEX IF NOT EXISTS idx_household_invitations_invitee_phone ON household_invitations(invitee_phone);
 
 CREATE TABLE IF NOT EXISTS household_readiness_scores (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

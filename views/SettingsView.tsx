@@ -8,7 +8,7 @@ import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
 import { createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, joinHouseholdByCode, listHouseholdInvitationsForCurrentUser, HouseholdInvitationRecord, revokeHouseholdInvitationForCurrentUser, updateProfileForUser, updateVitalsForUser } from '../services/api';
 import { getOrgByCode } from '../services/supabase';
-import { validateHouseholdMembers } from '../services/validation';
+import { isValidPhoneForInvite, validateHouseholdMembers } from '../services/validation';
 import { t } from '../services/translations';
 import { User, Bell, Lock, LogOut, Check, Save, Building2, ArrowLeft, ArrowRight, Link as LinkIcon, Loader2, HeartPulse, ShieldCheck, Users, ToggleLeft, ToggleRight, MoreVertical, Copy, CheckCircle, Database, X, XCircle, Globe, Search, Truck, Phone, Mail, MapPin, Power, Ban, Activity, Radio, AlertTriangle, HelpCircle, FileText, Printer, CheckSquare, Download, RefreshCcw, Clipboard, PenTool } from 'lucide-react';
 
@@ -34,6 +34,13 @@ const formatCommunityIdInput = (value: string) => {
   if (cleaned.length <= 2) return cleaned;
   if (cleaned.includes('-')) return cleaned;
   return `${cleaned.slice(0, 2)}-${cleaned.slice(2)}`;
+};
+
+const maskPhoneNumber = (value: string) => {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.length < 4) return value;
+  const last4 = digits.slice(-4);
+  return `***-***-${last4}`;
 };
 
 // --- Mock Data for Access Control ---
@@ -821,12 +828,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setInviteError(null);
     setInviteBusyMemberId(member.id);
     try {
+      if (!isValidPhoneForInvite(member.loginPhone || '')) {
+        throw new Error(`${member.name} needs a valid phone number before creating an account invite.`);
+      }
       const invitation = await createHouseholdInvitationForMember({
         memberId: member.id,
         memberName: member.name,
+        inviteePhone: member.loginPhone || '',
         suggestedCode: buildMemberInviteCode(member),
       });
-      const text = `AERA invite for ${member.name}: use invite code ${invitation.invitationCode} to join this household.`;
+      const text = `AERA invite for ${member.name}: create or log in to your account, then use invite code ${invitation.invitationCode} to join this household.`;
       await navigator.clipboard.writeText(text);
       setInviteStatusMessage(`Invite copied for ${member.name}. Current status: ${invitation.status}.`);
       const invites = await listHouseholdInvitationsForCurrentUser();
@@ -843,13 +854,17 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setInviteError(null);
     setInviteBusyMemberId(member.id);
     try {
+      if (!isValidPhoneForInvite(member.loginPhone || '')) {
+        throw new Error(`${member.name} needs a valid phone number before creating an account invite.`);
+      }
       const invitation = await createHouseholdInvitationForMember({
         memberId: member.id,
         memberName: member.name,
+        inviteePhone: member.loginPhone || '',
         suggestedCode: buildMemberInviteCode(member),
         forceNew: true,
       });
-      const text = `AERA invite for ${member.name}: use invite code ${invitation.invitationCode} to join this household.`;
+      const text = `AERA invite for ${member.name}: create or log in to your account, then use invite code ${invitation.invitationCode} to join this household.`;
       await navigator.clipboard.writeText(text);
       setInviteStatusMessage(`New invite generated for ${member.name}.`);
       const invites = await listHouseholdInvitationsForCurrentUser();
@@ -2333,6 +2348,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             {isHouseholdCodeBusy ? 'Joining...' : 'Join Home'}
           </Button>
         </div>
+        <p className="text-xs text-slate-500">Invite codes are redeemed after the member creates or logs into their own account.</p>
 
         {householdCodeError && (
           <p className="text-xs text-red-600 font-semibold">{householdCodeError}</p>
@@ -2362,12 +2378,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
           <div>
-            <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Member Login Invites</p>
-            <p className="text-xs text-emerald-800 mt-1">Members with login enabled can be invited by manual code and tracked here.</p>
+            <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Member Account Invites</p>
+            <p className="text-xs text-emerald-800 mt-1">1) Turn on “Allow account invite” and add the member phone. 2) Copy their invite code. 3) They create or log into their own account with that same phone and join with the code.</p>
           </div>
 
           {inviteEnabledMembers.length === 0 ? (
-            <p className="text-xs text-emerald-700">No member logins enabled yet. Turn on “Enable member login” for a household member to create an invite.</p>
+            <p className="text-xs text-emerald-700">No invite-enabled members yet. Turn on “Allow account invite” for a household member to create an invite code.</p>
           ) : (
             <div className="space-y-2">
               {inviteEnabledMembers.map((member) => (
@@ -2375,6 +2391,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                   <div>
                     <p className="text-sm font-semibold text-slate-900">{member.name}</p>
                     <p className="text-xs text-slate-600">Invite Code: <span className="font-mono font-bold tracking-wider">{latestInviteByMember[member.id]?.invitationCode || buildMemberInviteCode(member)}</span></p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Bound phone: {maskPhoneNumber(latestInviteByMember[member.id]?.inviteePhone || member.loginPhone || '') || 'Not set'}</p>
+                    {!isValidPhoneForInvite(member.loginPhone || '') && (
+                      <p className="text-[11px] text-amber-700 mt-0.5">Add a valid member phone in Household Members before creating an invite.</p>
+                    )}
                     {latestInviteByMember[member.id] && (
                       <p className="text-[11px] text-slate-500 mt-0.5">
                         Status: {latestInviteByMember[member.id].status}
@@ -2390,7 +2410,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                       variant="ghost"
                       className="text-emerald-800 hover:bg-emerald-100"
                       onClick={() => handleCopyMemberInvite(member)}
-                      disabled={inviteBusyMemberId === member.id}
+                      disabled={inviteBusyMemberId === member.id || !isValidPhoneForInvite(member.loginPhone || '')}
                     >
                       <Copy size={14} className="mr-1" /> {inviteBusyMemberId === member.id ? 'Working...' : 'Copy'}
                     </Button>
@@ -2399,7 +2419,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                       variant="ghost"
                       className="text-slate-700 hover:bg-slate-100"
                       onClick={() => handleResendMemberInvite(member)}
-                      disabled={inviteBusyMemberId === member.id}
+                      disabled={inviteBusyMemberId === member.id || !isValidPhoneForInvite(member.loginPhone || '')}
                     >
                       {inviteBusyMemberId === member.id ? 'Working...' : 'Resend'}
                     </Button>

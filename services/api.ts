@@ -1,6 +1,6 @@
 import type { HouseholdMember, OrgInventory, UserProfile } from '../types';
 import { supabase, getOrgByCode, getOrgIdByCode } from './supabase';
-import { calculateAgeFromDob, validateHouseholdMembers } from './validation';
+import { calculateAgeFromDob, isValidPhoneForInvite, normalizePhoneDigits, validateHouseholdMembers } from './validation';
 
 const mapInventory = (row: any): OrgInventory => ({
   water: Number(row?.water || 0),
@@ -510,6 +510,7 @@ export type HouseholdInvitationRecord = {
   inviterProfileId: string;
   inviteeMemberRef?: string;
   inviteeName?: string;
+  inviteePhone?: string;
   invitationCode: string;
   status: HouseholdInvitationStatus;
   acceptedByProfileId?: string;
@@ -532,12 +533,27 @@ const normalizeInvitationCode = (code: string) =>
     .replace(/[^A-Z0-9-]/g, '')
     .slice(0, 24);
 
+const normalizeInvitePhone = (phone: string) => {
+  const digits = normalizePhoneDigits(phone || '');
+  if (!digits) return '';
+  return digits.length > 10 ? digits : digits.slice(-10);
+};
+
+const phonesMatchForInvite = (invitePhone: string, userPhone: string) => {
+  const left = normalizeInvitePhone(invitePhone);
+  const right = normalizeInvitePhone(userPhone);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  return left.slice(-10) === right.slice(-10);
+};
+
 const mapInvitationRecord = (row: any): HouseholdInvitationRecord => ({
   id: row.id,
   householdId: row.household_id,
   inviterProfileId: row.inviter_profile_id,
   inviteeMemberRef: row.invitee_member_ref || undefined,
   inviteeName: row.invitee_name || undefined,
+  inviteePhone: row.invitee_phone || undefined,
   invitationCode: row.invitation_code,
   status: String(row.status || 'PENDING').toUpperCase() as HouseholdInvitationStatus,
   acceptedByProfileId: row.accepted_by_profile_id || undefined,
@@ -604,7 +620,7 @@ export async function listHouseholdInvitationsForCurrentUser(): Promise<Househol
 
   const { data, error } = await supabase
     .from('household_invitations')
-    .select('id, household_id, inviter_profile_id, invitee_member_ref, invitee_name, invitation_code, status, accepted_by_profile_id, accepted_at, expires_at, created_at')
+    .select('id, household_id, inviter_profile_id, invitee_member_ref, invitee_name, invitee_phone, invitation_code, status, accepted_by_profile_id, accepted_at, expires_at, created_at')
     .eq('household_id', membership.household_id)
     .order('created_at', { ascending: false })
     .limit(100);
@@ -635,6 +651,7 @@ export async function listHouseholdInvitationsForCurrentUser(): Promise<Househol
 export async function createHouseholdInvitationForMember(payload: {
   memberId: string;
   memberName: string;
+  inviteePhone: string;
   suggestedCode?: string;
   expiresInDays?: number;
   forceNew?: boolean;
@@ -647,9 +664,14 @@ export async function createHouseholdInvitationForMember(payload: {
   if (!membership?.household_id) throw new Error('Join or create a household first.');
   if (membership.role !== 'OWNER') throw new Error('Only household owners can create member invites.');
 
+  if (!isValidPhoneForInvite(payload.inviteePhone || '')) {
+    throw new Error('A valid member phone is required to create an account invite.');
+  }
+  const normalizedInvitePhone = normalizeInvitePhone(payload.inviteePhone);
+
   const { data: existingPending } = await supabase
     .from('household_invitations')
-    .select('id, household_id, inviter_profile_id, invitee_member_ref, invitee_name, invitation_code, status, accepted_by_profile_id, accepted_at, expires_at, created_at')
+    .select('id, household_id, inviter_profile_id, invitee_member_ref, invitee_name, invitee_phone, invitation_code, status, accepted_by_profile_id, accepted_at, expires_at, created_at')
     .eq('household_id', membership.household_id)
     .eq('invitee_member_ref', payload.memberId)
     .eq('status', 'PENDING')
@@ -657,14 +679,16 @@ export async function createHouseholdInvitationForMember(payload: {
     .limit(1)
     .maybeSingle();
 
-  if (existingPending && !payload.forceNew) {
+  const existingPendingPhone = normalizeInvitePhone((existingPending as any)?.invitee_phone || '');
+
+  if (existingPending && !payload.forceNew && existingPendingPhone === normalizedInvitePhone) {
     const existingExpiresAt = existingPending.expires_at ? Date.parse(existingPending.expires_at) : 0;
     if (!existingExpiresAt || existingExpiresAt > Date.now()) {
       return mapInvitationRecord(existingPending);
     }
   }
 
-  if (existingPending && payload.forceNew) {
+  if (existingPending && (payload.forceNew || existingPendingPhone !== normalizedInvitePhone)) {
     await supabase
       .from('household_invitations')
       .update({ status: 'REVOKED' })
@@ -706,11 +730,12 @@ export async function createHouseholdInvitationForMember(payload: {
       inviter_profile_id: userId,
       invitee_member_ref: payload.memberId,
       invitee_name: payload.memberName || null,
+      invitee_phone: normalizedInvitePhone,
       invitation_code: invitationCode,
       status: 'PENDING',
       expires_at: expiresAt,
     })
-    .select('id, household_id, inviter_profile_id, invitee_member_ref, invitee_name, invitation_code, status, accepted_by_profile_id, accepted_at, expires_at, created_at')
+    .select('id, household_id, inviter_profile_id, invitee_member_ref, invitee_name, invitee_phone, invitation_code, status, accepted_by_profile_id, accepted_at, expires_at, created_at')
     .single();
 
   if (error || !created) throw error || new Error('Unable to create invitation.');
@@ -842,7 +867,7 @@ export async function joinHouseholdByCode(code: string): Promise<HouseholdSummar
   if (couldBeInvite) {
     const { data: inviteRow } = await supabase
       .from('household_invitations')
-      .select('id, household_id, invitation_code, status, expires_at')
+      .select('id, household_id, invitation_code, invitee_phone, status, expires_at')
       .eq('invitation_code', normalizedInviteCode)
       .maybeSingle();
 
@@ -857,6 +882,20 @@ export async function joinHouseholdByCode(code: string): Promise<HouseholdSummar
           .update({ status: 'EXPIRED' })
           .eq('id', inviteRow.id);
         throw new Error('This invitation code has expired.');
+      }
+
+      if (inviteRow.invitee_phone) {
+        const { data: profileRow } = await supabase
+          .from('profiles')
+          .select('phone')
+          .eq('id', userId)
+          .maybeSingle();
+
+        const authPhone = authData.user.phone || '';
+        const profilePhone = (profileRow as any)?.phone || '';
+        if (!phonesMatchForInvite(inviteRow.invitee_phone, profilePhone) && !phonesMatchForInvite(inviteRow.invitee_phone, authPhone)) {
+          throw new Error('This invite is tied to a different phone number. Sign in with the invited account phone.');
+        }
       }
 
       const { data: inviteHousehold } = await supabase
