@@ -415,11 +415,12 @@ export const StorageService = {
       if (resp?.token) this.setAuthToken(resp.token);
       if (resp?.refreshToken) this.setRefreshToken(resp.refreshToken);
       if (resp?.user) {
-        const [remoteProfile, remoteVitals] = await Promise.all([
+        // Parallelize all independent data fetches for faster login
+        const [remoteProfile, remoteVitals, householdSummary] = await Promise.all([
           fetchProfileForUser(),
           fetchVitalsForUser(),
+          fetchHouseholdForCurrentUser().then(h => h || ensureHouseholdForCurrentUser()),
         ]);
-        const householdSummary = (await fetchHouseholdForCurrentUser()) || (await ensureHouseholdForCurrentUser());
 
         const profile: UserProfile = {
           id: resp.user.id,

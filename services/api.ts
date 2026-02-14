@@ -280,9 +280,22 @@ export async function fetchOrgMemberPreparednessNeeds(orgCode: string) {
   const orgId = await getOrgIdByCode(orgCode);
   if (!orgId) throw new Error('Organization not found');
 
+  // Use SQL JOIN to fetch recommendations with profile data in a single query
   const { data: recs, error: recError } = await supabase
     .from('kit_recommendations')
-    .select('profile_id, readiness_score, readiness_cap, risk_tier, critical_missing_items, outreach_flags, updated_at')
+    .select(`
+      profile_id,
+      readiness_score,
+      readiness_cap,
+      risk_tier,
+      critical_missing_items,
+      outreach_flags,
+      updated_at,
+      profiles!kit_recommendations_profile_id_fkey (
+        full_name,
+        phone
+      )
+    `)
     .eq('organization_id', orgId)
     .order('readiness_score', { ascending: true })
     .limit(100);
@@ -290,27 +303,9 @@ export async function fetchOrgMemberPreparednessNeeds(orgCode: string) {
   if (recError) throw recError;
   if (!recs || recs.length === 0) return [];
 
-  const profileIds = Array.from(new Set(recs.map((r: any) => r.profile_id).filter(Boolean)));
-  if (profileIds.length === 0) return [];
-
-  const { data: profiles, error: profileError } = await supabase
-    .from('profiles')
-    .select('id, full_name, phone')
-    .in('id', profileIds)
-    .eq('org_id', orgId);
-
-  if (profileError) throw profileError;
-
-  const profileMap = new Map<string, { full_name: string | null; phone: string | null }>();
-  for (const row of profiles || []) {
-    profileMap.set(String((row as any).id), {
-      full_name: (row as any).full_name || null,
-      phone: (row as any).phone || null,
-    });
-  }
-
-  return (recs || []).map((row: any) => {
-    const profile = profileMap.get(String(row.profile_id));
+  // Map the joined data directly without additional queries
+  return recs.map((row: any) => {
+    const profile = row.profiles;
     const criticalMissing = Array.isArray(row.critical_missing_items) ? row.critical_missing_items : [];
     const outreachFlags = Array.isArray(row.outreach_flags) ? row.outreach_flags : [];
 
