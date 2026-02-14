@@ -19,8 +19,8 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
     name: '',
     age: '',
     needs: '',
-    mobilityFlag: undefined,
-    medicalFlag: undefined,
+    mobilityFlag: false,
+    medicalFlag: false,
     loginEnabled: false,
     loginPhone: '',
   });
@@ -36,7 +36,7 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
   };
 
   const startAdd = () => {
-    setCurrentMember({ id: Date.now().toString(), name: '', age: '', needs: '', mobilityFlag: undefined, medicalFlag: undefined, loginEnabled: false, loginPhone: '' });
+    setCurrentMember({ id: Date.now().toString(), name: '', age: '', needs: '', mobilityFlag: false, medicalFlag: false, loginEnabled: false, loginPhone: '' });
     setFormError(null);
     setIsEditing(true);
   };
@@ -44,8 +44,8 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
   const startEdit = (member: HouseholdMember) => {
     setCurrentMember({
       ...member,
-      mobilityFlag: typeof member.mobilityFlag === 'boolean' ? member.mobilityFlag : undefined,
-      medicalFlag: typeof member.medicalFlag === 'boolean' ? member.medicalFlag : undefined,
+      mobilityFlag: Boolean(member.mobilityFlag),
+      medicalFlag: Boolean(member.medicalFlag),
       loginEnabled: Boolean(member.loginEnabled),
       loginPhone: member.loginPhone || '',
     });
@@ -71,10 +71,6 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
       setFormError('Date of birth is required in MM/DD/YYYY format.');
       return;
     }
-    if (typeof currentMember.mobilityFlag !== 'boolean' || typeof currentMember.medicalFlag !== 'boolean') {
-      setFormError('Mobility and medical flags are required.');
-      return;
-    }
     if (currentMember.loginEnabled && !isValidPhoneForInvite(currentMember.loginPhone || '')) {
       setFormError('A valid member phone is required to enable account invites.');
       return;
@@ -89,6 +85,7 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
       age: dob,
       ageGroup: derivedAgeGroup,
       mobilityFlag: Boolean(currentMember.mobilityFlag) || autoMobilityFlag,
+      medicalFlag: Boolean(currentMember.medicalFlag),
       loginPhone: currentMember.loginEnabled ? formatInvitePhone(currentMember.loginPhone || '') : '',
     };
 
@@ -144,43 +141,33 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Mobility Flag *</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Mobility Flag</label>
               <select
-                value={
-                  typeof currentMember.mobilityFlag === 'boolean'
-                    ? String(currentMember.mobilityFlag)
-                    : ''
-                }
+                value={String(Boolean(currentMember.mobilityFlag))}
                 onChange={(e) =>
                   setCurrentMember({
                     ...currentMember,
-                    mobilityFlag: e.target.value === '' ? undefined : e.target.value === 'true',
+                    mobilityFlag: e.target.value === 'true',
                   })
                 }
                 className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all text-slate-900"
               >
-                <option value="">Select</option>
                 <option value="true">Yes</option>
                 <option value="false">No</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Medical Flag *</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Medical Flag</label>
               <select
-                value={
-                  typeof currentMember.medicalFlag === 'boolean'
-                    ? String(currentMember.medicalFlag)
-                    : ''
-                }
+                value={String(Boolean(currentMember.medicalFlag))}
                 onChange={(e) =>
                   setCurrentMember({
                     ...currentMember,
-                    medicalFlag: e.target.value === '' ? undefined : e.target.value === 'true',
+                    medicalFlag: e.target.value === 'true',
                   })
                 }
                 className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all text-slate-900"
               >
-                <option value="">Select</option>
                 <option value="true">Yes</option>
                 <option value="false">No</option>
               </select>

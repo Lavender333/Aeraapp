@@ -2098,30 +2098,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         </div>
       </section>
 
-      {/* Legal & Consent */}
-      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-emerald-50 rounded-full text-emerald-700">
-            <ShieldCheck size={24} />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-800">Legal & Consent</h2>
-            <p className="text-xs text-slate-500">Privacy policy and proof of consent</p>
-          </div>
-        </div>
-        <Button
-          onClick={() => {
-            sessionStorage.setItem('privacyReturnView', 'SETTINGS');
-            setView('PRIVACY_POLICY');
-          }}
-          variant="outline"
-          className="w-full justify-between"
-        >
-          <span>View Proof of Consent & Privacy Policy</span>
-          <FileText size={18} />
-        </Button>
-      </section>
-
       {isAdmin && (
         <section className="bg-slate-900 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
           <div className="absolute top-0 right-0 p-6 opacity-10">
@@ -2535,7 +2511,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           onChange={(e) => updateProfile('medicalNeeds', e.target.value)}
         />
 
-        <p className="text-sm font-semibold text-slate-800">Final step: confirm preparedness consent</p>
+        <div className="border-t border-slate-200 pt-4">
+          <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wide">Final Step</p>
+          <p className="text-sm font-bold text-slate-800 mt-1">Confirm preparedness consent</p>
+        </div>
         <label className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
           <input
             className="mt-1"
@@ -2543,7 +2522,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             checked={Boolean(profile.consentPreparednessPlanning)}
             onChange={(e) => updateProfile('consentPreparednessPlanning', e.target.checked)}
           />
-          <span className="text-sm text-emerald-900 font-medium">
+          <span className="text-sm text-emerald-900 font-semibold">
             I understand this data is used only for preparedness planning and can be deleted anytime.
           </span>
         </label>
@@ -2663,6 +2642,29 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             </div>
           </>
         )}
+      </section>
+
+      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-emerald-50 rounded-full text-emerald-700">
+            <ShieldCheck size={24} />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-800">Legal & Consent</h2>
+            <p className="text-xs text-slate-500">Privacy policy and proof of consent</p>
+          </div>
+        </div>
+        <Button
+          onClick={() => {
+            sessionStorage.setItem('privacyReturnView', 'SETTINGS');
+            setView('PRIVACY_POLICY');
+          }}
+          variant="outline"
+          className="w-full justify-between"
+        >
+          <span>View Proof of Consent & Privacy Policy</span>
+          <FileText size={18} />
+        </Button>
       </section>
 
       <div className="space-y-4 pt-4 border-t border-slate-200">

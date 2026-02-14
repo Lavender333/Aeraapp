@@ -65,12 +65,6 @@ export const validateHouseholdMembers = (members: HouseholdMember[]): { ok: true
     if (!isValidDobFormat(dob) || calculateAgeFromDob(dob) === null) {
       return { ok: false, error: `${label}: Date of birth must use MM/DD/YYYY.` };
     }
-    if (typeof member.mobilityFlag !== 'boolean') {
-      return { ok: false, error: `${label}: Mobility flag is required.` };
-    }
-    if (typeof member.medicalFlag !== 'boolean') {
-      return { ok: false, error: `${label}: Medical flag is required.` };
-    }
     if (member.loginEnabled) {
       if (!isValidPhoneForInvite(member.loginPhone || '')) {
         return { ok: false, error: `${label}: A valid member phone is required when account invites are enabled.` };

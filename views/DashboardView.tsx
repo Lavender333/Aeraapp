@@ -921,13 +921,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                   <BookOpen size={18} />
                 </div>
                 <h4 className="font-semibold text-slate-900 text-sm">Community Resources</h4>
-                <p className="text-[11px] text-slate-500 mt-2">Join or update your community connection in Settings.</p>
+                <p className="text-[11px] text-slate-500 mt-2">
+                  {hasCommunity ? `Connected to ${connectedOrg}.` : 'Join or update your community connection in Settings.'}
+                </p>
                 <button
                   type="button"
                   onClick={() => setView('SETTINGS')}
                   className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 mt-3 hover:underline"
                 >
-                  Open Settings
+                  {hasCommunity ? 'Manage in Settings' : 'Open Settings'}
                 </button>
               </div>
             </div>
