@@ -924,6 +924,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                 <p className="text-[11px] text-slate-500 mt-2">
                   {hasCommunity ? `Connected to ${connectedOrg}.` : 'Join or update your community connection in Settings.'}
                 </p>
+                {hasCommunity && communityIdInput && (
+                  <p className="text-[11px] text-emerald-700 font-semibold mt-1">Community ID: {communityIdInput}</p>
+                )}
                 <button
                   type="button"
                   onClick={() => setView('SETTINGS')}

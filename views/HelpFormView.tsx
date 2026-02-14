@@ -420,12 +420,11 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
            </span>
         </div>
 
-        <p className="text-slate-800 font-medium mb-8 max-w-sm">
-          {isOfflineMode 
-            ? "Your report has been saved to your device. It will automatically upload to responders as soon as you connect to the internet."
-            : t('help.success_desc')
-          }
-        </p>
+        {isOfflineMode && (
+          <p className="text-slate-800 font-medium mb-8 max-w-sm">
+            Your report has been saved to your device. It will automatically upload to responders as soon as you connect to the internet.
+          </p>
+        )}
 
         {emergencyContactPhone && !isOfflineMode && smsStatus !== 'idle' && (
           <div className={`text-sm font-bold px-4 py-3 rounded-xl border max-w-xs mx-auto ${
