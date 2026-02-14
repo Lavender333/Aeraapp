@@ -2051,7 +2051,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   // --- Render: Main Settings ---
   return (
-    <div className="p-6 pb-28 space-y-8 animate-fade-in bg-slate-50 min-h-screen">
+    <div className="p-6 pb-28 space-y-8 animate-fade-in bg-slate-50 min-h-screen flex flex-col">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-3">
@@ -2069,7 +2069,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </div>
 
       {/* Language Selector */}
-      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4">
+      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 order-10">
         <div className="flex items-center gap-4 mb-2">
           <div className="p-3 bg-indigo-50 rounded-full text-indigo-600">
             <Globe size={24} />
@@ -2293,7 +2293,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {/* Home */}
-      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-emerald-100">
+      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-emerald-100 order-30">
         <div className="flex items-center gap-4 mb-2">
           <div className="p-3 bg-emerald-50 rounded-full text-emerald-700">
             <Users size={24} />
@@ -2434,7 +2434,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {/* Safety */}
-      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-red-100">
+      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-red-100 order-20">
         <div className="flex items-center gap-4 mb-2">
           <div className="p-3 bg-red-50 rounded-full text-red-600">
             <HeartPulse size={24} />
@@ -2553,7 +2553,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {/* Community Onboarding */}
-      <section ref={trustedCommunityRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-purple-100 relative overflow-hidden">
+      <section ref={trustedCommunityRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-purple-100 relative overflow-hidden order-40">
         <div className="absolute top-0 right-0 p-4 opacity-10">
           <Building2 size={64} className="text-purple-600" />
         </div>
@@ -2656,7 +2656,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         )}
       </section>
 
-      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4">
+      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 order-50">
         <div className="flex items-center gap-4">
           <div className="p-3 bg-emerald-50 rounded-full text-emerald-700">
             <ShieldCheck size={24} />
@@ -2679,7 +2679,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         </Button>
       </section>
 
-      <div className="space-y-4 pt-4 border-t border-slate-200">
+      <div className="space-y-4 pt-4 border-t border-slate-200 order-60">
         <Button onClick={handleLogout} variant="ghost" fullWidth className="text-red-600 hover:bg-red-50 hover:text-red-700">
           <LogOut className="mr-2" size={18} />
           Log Out
