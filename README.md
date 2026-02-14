@@ -12,6 +12,22 @@
 
 ---
 
+## ⚡ First Time Setup
+
+Just cloned the repository? Get the website running in 2 steps:
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Start the development server
+npm run dev
+```
+
+The app will be available at `http://localhost:3000`. It will work in demo mode without Supabase configuration. For full functionality with backend features, see the [Quick Start Guide](QUICK_START.md).
+
+---
+
 ## 🎯 Quick Links
 
 - **🚀 [Quick Start Guide](QUICK_START.md)** - Get running in 5 minutes
