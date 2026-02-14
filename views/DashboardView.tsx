@@ -290,6 +290,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const isContractor = userRole === 'CONTRACTOR';
   const isGeneralUser = userRole === 'GENERAL_USER';
   const showCommunityBlocks = !isGeneralUser;
+  const showCommunityAnnouncements = hasCommunity;
   const isProStatusViewer = userRole === 'ADMIN' || userRole === 'FIRST_RESPONDER' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN';
   const showLogisticsHome = userRole === 'FIRST_RESPONDER' || userRole === 'LOCAL_AUTHORITY' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN' || isContractor;
 
@@ -706,7 +707,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         })()
       )}
 
-      {hasCommunity && showCommunityBlocks && (
+      {showCommunityAnnouncements && (
         /* Real-time Data Feed / Status Ticker - Clickable */
         <div 
           onClick={() => setShowTickerModal(true)}
