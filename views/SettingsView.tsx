@@ -1,5 +1,5 @@
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ViewState, UserProfile, UserRole, RoleDefinition, MockUser, DatabaseSchema, LanguageCode, OrganizationProfile, OrgMember, HouseholdMember, ReplenishmentRequest } from '../types';
 import { Input, Textarea } from '../components/Input';
 import { Button } from '../components/Button';
@@ -90,6 +90,7 @@ type PlaceSuggestion = {
 
 export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const mapsApiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined)?.trim();
+  const trustedCommunityRef = useRef<HTMLElement | null>(null);
 
   // Main Settings State
   const [profile, setProfile] = useState<UserProfile>({
@@ -282,6 +283,18 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       setCurrentSection('MAIN');
     }
   }, [isAdmin, currentSection]);
+
+  useEffect(() => {
+    const target = sessionStorage.getItem('settingsScrollTarget');
+    if (target !== 'TRUSTED_COMMUNITY') return;
+
+    const timer = window.setTimeout(() => {
+      trustedCommunityRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      sessionStorage.removeItem('settingsScrollTarget');
+    }, 150);
+
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const householdCount = Array.isArray(profile.household) ? profile.household.length : 0;
@@ -2355,11 +2368,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
           <div>
             <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Member Account Invites</p>
-            <p className="text-xs text-emerald-800 mt-1">1) Turn on “Allow account invite” and add the member phone. 2) Copy their invite code. 3) They create or log into their own account with that same phone and join with the code.</p>
           </div>
 
           {inviteEnabledMembers.length === 0 ? (
-            <p className="text-xs text-emerald-700">No invite-enabled members yet. Turn on “Allow account invite” for a household member to create an invite code.</p>
+            <></>
           ) : (
             <div className="space-y-2">
               {inviteEnabledMembers.map((member) => (
@@ -2541,7 +2553,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {/* Community Onboarding */}
-      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-purple-100 relative overflow-hidden">
+      <section ref={trustedCommunityRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-purple-100 relative overflow-hidden">
         <div className="absolute top-0 right-0 p-4 opacity-10">
           <Building2 size={64} className="text-purple-600" />
         </div>
