@@ -95,54 +95,123 @@ export const downloadAdminPresentationPptx = async (): Promise<void> => {
   pptx.title = 'AERA Presentation';
   pptx.company = 'AERA';
 
+  // Define background colors to match the on-screen presentation
+  const slideBackgrounds = [
+    '0F172A', // slate-900 - AERA intro
+    '991B1B', // red-900 - The Challenge
+    '2563EB', // blue-600 - The User Journey
+    'B45309', // amber-700 - Offline Resilience
+    '6D28D9', // purple-700 - Organization Hubs
+    '4338CA', // indigo-700 - Active Safety Checks
+    '047857', // emerald-700 - Economic Recovery
+    '1E293B', // slate-800 - Admin Command
+    '0F766E'  // teal-700 - Future Tech
+  ];
+
   DECK.forEach((item, index) => {
     const slide = pptx.addSlide();
 
-    slide.background = { color: '0F172A' };
+    // Set background color matching the on-screen presentation
+    slide.background = { color: slideBackgrounds[index] || '0F172A' };
 
+    // Add slide number in the top right
+    slide.addText(`${index + 1}`, {
+      x: 12.5,
+      y: 0.3,
+      w: 0.5,
+      h: 0.3,
+      fontSize: 14,
+      bold: true,
+      color: 'FFFFFF',
+      align: 'right',
+      transparency: 50
+    });
+
+    // Add title with better styling
     slide.addText(`${index + 1}. ${item.title}`, {
       x: 0.6,
-      y: 0.5,
-      w: 12,
-      h: 0.7,
-      fontSize: 34,
+      y: 0.6,
+      w: 11.5,
+      h: 0.8,
+      fontSize: 40,
       bold: true,
-      color: 'F8FAFC'
+      color: 'FFFFFF',
+      fontFace: 'Arial'
     });
 
+    // Add subtitle with better contrast
     slide.addText(item.subtitle, {
       x: 0.6,
-      y: 1.25,
-      w: 12,
+      y: 1.5,
+      w: 11.5,
       h: 0.5,
-      fontSize: 18,
-      color: '94A3B8'
+      fontSize: 20,
+      color: 'CBD5E1',
+      fontFace: 'Arial',
+      italic: true
     });
 
+    // Add a decorative accent line under the subtitle
+    slide.addShape(pptx.ShapeType.rect, {
+      x: 0.6,
+      y: 2.1,
+      w: 2,
+      h: 0.05,
+      fill: { color: 'FFFFFF', transparency: 30 },
+      line: { type: 'none' }
+    });
+
+    // Add content box with better styling
     slide.addShape(pptx.ShapeType.roundRect, {
       x: 0.6,
-      y: 1.95,
+      y: 2.4,
       w: 12,
-      h: 4.7,
-      radius: 0.12,
-      fill: { color: '1E293B', transparency: 6 },
-      line: { color: '334155', pt: 1 }
+      h: 4.3,
+      radius: 0.15,
+      fill: { color: '1E293B', transparency: 20 },
+      line: { color: '475569', pt: 2 }
     });
 
+    // Add bullets with improved formatting and spacing
     slide.addText(
-      item.bullets.map((text) => ({ text, options: { bullet: { indent: 18 } } })),
+      item.bullets.map((text) => ({ 
+        text, 
+        options: { 
+          bullet: { 
+            type: 'number',
+            style: 'arabicPeriod',
+            indent: 24 
+          } 
+        } 
+      })),
       {
-        x: 0.95,
-        y: 2.3,
+        x: 1.0,
+        y: 2.7,
         w: 11.2,
-        h: 3.9,
+        h: 3.7,
         fontSize: 20,
-        color: 'E2E8F0',
+        color: 'F1F5F9',
         breakLine: true,
-        paraSpaceAfterPt: 10,
-        valign: 'top'
+        paraSpaceBefore: 8,
+        paraSpaceAfter: 12,
+        valign: 'top',
+        lineSpacing: 24,
+        fontFace: 'Arial'
       }
     );
+
+    // Add footer with branding
+    slide.addText('AERA - Accelerated Emergency Response Application', {
+      x: 0.6,
+      y: 7.0,
+      w: 11.5,
+      h: 0.3,
+      fontSize: 10,
+      color: 'FFFFFF',
+      align: 'left',
+      transparency: 50,
+      fontFace: 'Arial'
+    });
   });
 
   const fileDate = new Date().toISOString().slice(0, 10);
