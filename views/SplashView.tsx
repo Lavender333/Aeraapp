@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { Button } from '../components/Button';
-import { ShieldAlert, Globe, Presentation } from 'lucide-react';
+import { ShieldAlert, Globe, Presentation, Download } from 'lucide-react';
 import { t, LanguageCode } from '../services/translations';
 import { StorageService } from '../services/storage';
+import { downloadAdminPresentationPptx } from '../services/presentationExport';
 
 interface SplashViewProps {
   onEnter: () => void;
@@ -90,6 +91,18 @@ export const SplashView: React.FC<SplashViewProps & { onPresentation?: () => voi
               className="bg-white/60 hover:bg-white border-white/50 text-slate-600 font-semibold"
             >
               <Presentation size={18} className="mr-2" /> View Presentation
+            </Button>
+          )}
+          {isAdmin && (
+            <Button
+              onClick={() => {
+                void downloadAdminPresentationPptx();
+              }}
+              variant="outline"
+              fullWidth
+              className="border-slate-300 text-slate-700 font-semibold"
+            >
+              <Download size={18} className="mr-2" /> Download Presentation
             </Button>
           )}
           {onFinance && isAdmin && (

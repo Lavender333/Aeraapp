@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import { ViewState } from '../types';
 import { Button } from '../components/Button';
-import { ArrowRight, ArrowLeft, ShieldCheck, Users, Building2, Radio, Navigation, X, AlertOctagon, WifiOff, DollarSign, Activity, BellRing, CheckCircle, MessageSquare } from 'lucide-react';
+import { ArrowRight, ArrowLeft, ShieldCheck, Users, Building2, Radio, Navigation, X, AlertOctagon, WifiOff, DollarSign, Activity, BellRing, CheckCircle, MessageSquare, Download } from 'lucide-react';
+import { downloadAdminPresentationPptx } from '../services/presentationExport';
 
 interface Slide {
   id: number;
@@ -269,9 +270,19 @@ export const PresentationView: React.FC<{ setView: (v: ViewState) => void }> = (
   return (
     <div className={`min-h-screen flex flex-col ${slide.bg} transition-colors duration-500`}>
       <div className="flex justify-between items-center p-6">
-        <button onClick={() => setView('SPLASH')} className="text-white/50 hover:text-white transition-colors">
-          <X size={24} />
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              void downloadAdminPresentationPptx();
+            }}
+            className="inline-flex items-center gap-2 text-white/70 hover:text-white transition-colors text-sm font-semibold"
+          >
+            <Download size={16} /> Download
+          </button>
+          <button onClick={() => setView('SPLASH')} className="text-white/50 hover:text-white transition-colors">
+            <X size={24} />
+          </button>
+        </div>
         <div className="flex gap-1">
           {slides.map((s, i) => (
             <div 
