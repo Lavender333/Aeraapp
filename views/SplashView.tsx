@@ -87,22 +87,20 @@ export const SplashView: React.FC<SplashViewProps & { onPresentation?: () => voi
             <Button
               onClick={onPresentation}
               variant="secondary"
-              fullWidth 
-              className="bg-white/60 hover:bg-white border-white/50 text-slate-600 font-semibold"
+              fullWidth
+              className="bg-white/70 hover:bg-white border-white/60 text-slate-700 font-bold tracking-wide shadow-sm"
             >
-              <Presentation size={18} className="mr-2" /> View Presentation
+              <Presentation size={17} className="mr-2 text-brand-600" /> View Presentation
             </Button>
           )}
           {isAdmin && (
             <Button
-              onClick={() => {
-                void downloadAdminPresentationPptx();
-              }}
+              onClick={() => { void downloadAdminPresentationPptx(); }}
               variant="outline"
               fullWidth
-              className="border-slate-300 text-slate-700 font-semibold"
+              className="border-brand-200 text-brand-700 hover:bg-brand-50 font-bold tracking-wide shadow-sm"
             >
-              <Download size={18} className="mr-2" /> Download Presentation
+              <Download size={17} className="mr-2" /> Download .pptx
             </Button>
           )}
           {onFinance && isAdmin && (
