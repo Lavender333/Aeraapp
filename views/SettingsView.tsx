@@ -392,9 +392,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   }, []);
 
   useEffect(() => {
-    const householdCount = Array.isArray(profile.household) ? profile.household.length : 0;
-    if (householdCount > 0 && profile.householdMembers !== householdCount) {
-      setProfile((prev) => ({ ...prev, householdMembers: householdCount }));
+    const additionalMembers = Array.isArray(profile.household) ? profile.household.length : 0;
+    const derivedHouseholdSize = Math.max(1, additionalMembers + 1);
+    if (profile.householdMembers !== derivedHouseholdSize) {
+      setProfile((prev) => ({ ...prev, householdMembers: derivedHouseholdSize }));
     }
   }, [profile.household, profile.householdMembers]);
 
@@ -2855,11 +2856,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         <div>
           <Input
             label="Household Size"
-            type="number"
-            min={1}
+            type="text"
             value={String(profile.householdMembers || 1)}
-            onChange={(e) => updateProfile('householdMembers', Math.max(1, Number(e.target.value) || 1))}
+            readOnly
+            className="bg-slate-50"
           />
+          <p className="text-[11px] text-slate-500 mt-1">Includes you as the first household occupant.</p>
         </div>
 
         <div>
