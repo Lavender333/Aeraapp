@@ -99,7 +99,7 @@ const DICTIONARY: Record<LanguageCode, Record<string, string>> = {
     "org.submit_req": "Submit Request",
 
     // Help Form
-    "help.title": "Emergency Report",
+    "help.title": "Report",
     "help.safe_q": "Are you safe right now?",
     "help.yes_safe": "Yes, I'm safe",
     "help.no_danger": "No, I'm in danger",
@@ -121,7 +121,7 @@ const DICTIONARY: Record<LanguageCode, Record<string, string>> = {
     "help.upload": "Upload Photos / Video (Optional)",
     "help.review": "Review & Submit",
     "help.consent": "I consent to share my information with AERA and, when appropriate, with emergency services. If I am experiencing an immediate emergency, I understand that I should call 911.",
-    "help.submit_btn": "Submit Emergency Request",
+    "help.submit_btn": "Send Report",
     "help.success_title": "Request Sent",
     "help.success_desc": "Emergency responders have received your request.",
     "help.text_contact": "Notify Contact via SMS",

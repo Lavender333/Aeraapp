@@ -11,7 +11,7 @@ interface BottomNavProps {
 export const BottomNav: React.FC<BottomNavProps> = ({ currentView, setView }) => {
   const navItems = [
     { id: 'DASHBOARD' as ViewState, icon: <Home size={24} />, label: 'Home' },
-    { id: 'HELP_WIZARD' as ViewState, icon: <AlertCircle size={24} />, label: 'Get Help' },
+    { id: 'HELP_WIZARD' as ViewState, icon: <AlertCircle size={24} />, label: 'Report' },
     { id: 'SETTINGS' as ViewState, icon: <Settings size={24} />, label: 'Settings' },
   ];
 
