@@ -154,6 +154,47 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
     return { lat, lng };
   };
 
+  const searchManualAddressOnMap = async () => {
+    const raw = String(data.location || '').trim();
+    if (!raw) return;
+
+    const parsed = parseLatLngString(raw);
+    if (parsed) {
+      setIsTracking(false);
+      setIsIpFallback(false);
+      setPinLocation(parsed);
+      setShowMapPicker(true);
+      setLocationError(null);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(raw)}&limit=1`,
+      );
+      const results = await response.json();
+      const first = Array.isArray(results) ? results[0] : null;
+      const lat = first ? Number(first.lat) : NaN;
+      const lng = first ? Number(first.lon) : NaN;
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        setLocationError('Address not found. Try a more specific address.');
+        return;
+      }
+
+      const latlng = { lat, lng };
+      setIsTracking(false);
+      setIsIpFallback(false);
+      setPinLocation(latlng);
+      setShowMapPicker(true);
+      setLocationError(null);
+      updateData({ location: `${lat.toFixed(6)}, ${lng.toFixed(6)}` });
+      setLastLocUpdate(new Date().toLocaleTimeString());
+    } catch {
+      setLocationError('Map search failed. Please try again.');
+    }
+  };
+
   const mapCenter = useMemo(() => {
     const parsed = parseLatLngString(data.location || '');
     if (parsed) return parsed;
@@ -552,6 +593,12 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
                   setPinLocation(null);
                   updateData({ location: e.target.value });
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void searchManualAddressOnMap();
+                  }
+                }}
                 className={`bg-white font-mono text-sm border-slate-300 text-slate-900 font-semibold pr-24 ${
                   isTracking ? 'border-brand-500 ring-1 ring-brand-500' : 
                   isIpFallback ? 'border-amber-500 ring-1 ring-amber-500' :
@@ -560,6 +607,15 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
                 error={!isTracking && !isIpFallback && !data.location && locationError && !permissionDenied ? locationError : undefined}
               />
               <div className="flex items-center gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void searchManualAddressOnMap();
+                  }}
+                  className="inline-flex items-center gap-2 text-xs font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-full"
+                >
+                  <Navigation size={12} /> Search Map
+                </button>
                 <button
                   type="button"
                   onClick={() => {
