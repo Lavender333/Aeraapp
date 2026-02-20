@@ -11,7 +11,7 @@ import { getOrgByCode } from '../services/supabase';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
 import { isValidPhoneForInvite, validateHouseholdMembers } from '../services/validation';
 import { t } from '../services/translations';
-import { User, Bell, Lock, LogOut, Check, Save, Building2, ArrowLeft, ArrowRight, Link as LinkIcon, Loader2, HeartPulse, ShieldCheck, Users, ToggleLeft, ToggleRight, MoreVertical, Copy, CheckCircle, Database, X, XCircle, Globe, Search, Truck, Phone, Mail, MapPin, Power, Ban, Activity, Radio, AlertTriangle, HelpCircle, FileText, Printer, CheckSquare, Download, RefreshCcw, Clipboard, PenTool } from 'lucide-react';
+import { User, Bell, Lock, LogOut, Check, Save, Building2, ArrowLeft, ArrowRight, Link as LinkIcon, Loader2, HeartPulse, ShieldCheck, Users, ToggleLeft, ToggleRight, MoreVertical, Copy, CheckCircle, Database, X, XCircle, Globe, Search, Truck, Phone, Mail, MapPin, Power, Ban, Activity, Radio, AlertTriangle, HelpCircle, FileText, Printer, CheckSquare, Download, RefreshCcw, Clipboard, PenTool, ChevronDown } from 'lucide-react';
 
 // Phone Formatter Utility
 const formatPhoneNumber = (value: string) => {
@@ -92,6 +92,26 @@ type PlaceSuggestion = {
 export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const mapsApiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined)?.trim();
   const trustedCommunityRef = useRef<HTMLElement | null>(null);
+  const profileSectionRef = useRef<HTMLElement | null>(null);
+  const contactsSectionRef = useRef<HTMLElement | null>(null);
+  const householdSectionRef = useRef<HTMLElement | null>(null);
+  const securitySectionRef = useRef<HTMLElement | null>(null);
+
+  type SettingsAccordionKey = 'profile' | 'household' | 'contacts' | 'community' | 'security';
+  const [expandedSections, setExpandedSections] = useState<Record<SettingsAccordionKey, boolean>>({
+    profile: false,
+    household: false,
+    contacts: false,
+    community: false,
+    security: false,
+  });
+  const [showMoreSections, setShowMoreSections] = useState<Record<SettingsAccordionKey, boolean>>({
+    profile: false,
+    household: false,
+    contacts: false,
+    community: false,
+    security: false,
+  });
 
   // Main Settings State
   const [profile, setProfile] = useState<UserProfile>({
@@ -185,6 +205,65 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [notifications, setNotifications] = useState<AppNotificationRecord[]>([]);
   const [joinRequestBusyId, setJoinRequestBusyId] = useState<string | null>(null);
   const [notificationsBusy, setNotificationsBusy] = useState(false);
+
+  const toggleSection = (section: SettingsAccordionKey) => {
+    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const toggleShowMore = (section: SettingsAccordionKey) => {
+    setShowMoreSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const openSectionAndScroll = (section: SettingsAccordionKey) => {
+    setExpandedSections((prev) => ({ ...prev, [section]: true }));
+    const targetRef = section === 'profile'
+      ? profileSectionRef
+      : section === 'contacts'
+        ? contactsSectionRef
+        : section === 'household'
+          ? householdSectionRef
+          : section === 'community'
+            ? trustedCommunityRef
+            : securitySectionRef;
+
+    window.setTimeout(() => {
+      targetRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  };
+
+  const discardLocalChanges = () => {
+    const loaded = StorageService.getProfile();
+    if (!loaded.role) loaded.role = 'GENERAL_USER';
+    if (!loaded.language) loaded.language = 'en';
+    if (loaded.active === undefined) loaded.active = true;
+    if (!loaded.household) loaded.household = [];
+    setProfile(loaded);
+    setPhoneError(null);
+    setProfileSaveError(null);
+    setVitalsSaveError(null);
+    setHouseholdCodeError(null);
+    setHouseholdCodeSuccess(null);
+    setInviteError(null);
+    setInviteStatusMessage(null);
+    setVerifyError(null);
+    if (loaded.addressVerified) {
+      setAddressStatus('VALID');
+    } else if (loaded.address && loaded.address.length > 5) {
+      setAddressStatus('IDLE');
+    } else {
+      setAddressStatus('IDLE');
+    }
+    setAddressSuggestions([]);
+    setHighlightedAddressIndex(-1);
+  };
+
+  const saveVisibleSection = async () => {
+    if (expandedSections.security || expandedSections.household) {
+      await handleVitalsSave();
+      return;
+    }
+    await handleProfileSave();
+  };
 
   // Broadcast Control State
   const [systemTicker, setSystemTicker] = useState('');
@@ -304,6 +383,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     if (target !== 'TRUSTED_COMMUNITY') return;
 
     const timer = window.setTimeout(() => {
+      setExpandedSections((prev) => ({ ...prev, community: true }));
       trustedCommunityRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       sessionStorage.removeItem('settingsScrollTarget');
     }, 150);
@@ -687,14 +767,17 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     const trimmedAddress = String(profile.address || '').trim();
 
     if (!validatePhone(profile.phone)) {
+      setExpandedSections((prev) => ({ ...prev, profile: true }));
       alert("Please fix phone number errors before saving.");
       return;
     }
     if (trimmedAddress.length > 0 && mapsApiKey && !profile.addressVerified) {
+      setExpandedSections((prev) => ({ ...prev, profile: true }));
       setProfileSaveError('Please select a verified address from suggestions or verify your address before saving.');
       return;
     }
     if (addressStatus === 'INVALID') {
+      setExpandedSections((prev) => ({ ...prev, profile: true }));
       alert("Please verify your address.");
       return;
     }
@@ -734,15 +817,18 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   const handleVitalsSave = async () => {
     if (!profile.zipCode?.trim()) {
+      setExpandedSections((prev) => ({ ...prev, profile: true }));
       setVitalsSaveError('ZIP is pulled from your Home Address. Verify your address in Identity first.');
       return;
     }
     const memberValidation = validateHouseholdMembers(profile.household || []);
     if (!memberValidation.ok) {
+      setExpandedSections((prev) => ({ ...prev, household: true }));
       setVitalsSaveError(memberValidation.error);
       return;
     }
     if (!profile.consentPreparednessPlanning) {
+      setExpandedSections((prev) => ({ ...prev, security: true }));
       setVitalsSaveError('You must provide consent before saving Vital Intake.');
       return;
     }
@@ -2276,6 +2362,17 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         )}
       </div>
 
+      <section className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Quick Jump</p>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+          <button type="button" onClick={() => openSectionAndScroll('profile')} className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Profile</button>
+          <button type="button" onClick={() => openSectionAndScroll('household')} className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Household</button>
+          <button type="button" onClick={() => openSectionAndScroll('contacts')} className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Contacts</button>
+          <button type="button" onClick={() => openSectionAndScroll('community')} className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Community</button>
+          <button type="button" onClick={() => openSectionAndScroll('security')} className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Security</button>
+        </div>
+      </section>
+
       {/* Language Selector */}
       <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 order-10">
         <div className="flex items-center gap-4 mb-2">
@@ -2371,146 +2468,204 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         </section>
       )}
 
-      {/* Identity */}
-      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4">
-        <div className="flex items-center gap-4 mb-2">
-          <div className="p-3 bg-brand-50 rounded-full text-brand-600">
-            <User size={24} />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-800">Identity</h2>
-            <p className="text-xs text-slate-500">Your personal account and contact details.</p>
-          </div>
-        </div>
-        <div className="text-xs text-slate-400 font-mono -mt-4 mb-2">ID: {profile.id}</div>
-
-        <Input 
-          label="Full Name" 
-          value={profile.fullName}
-          onChange={(e) => updateProfile('fullName', e.target.value)}
-          placeholder="e.g. Jane Doe"
-        />
-        <Input 
-          label="Mobile Phone" 
-          value={profile.phone}
-          onChange={(e) => updateProfile('phone', formatPhoneNumber(e.target.value))}
-          onBlur={() => validatePhone(profile.phone)}
-          placeholder="e.g. (555) 123-4567"
-          className={phoneError ? 'border-red-500 bg-red-50' : ''}
-          error={phoneError || undefined}
-        />
-        
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">Home Address</label>
-          <div className="relative">
-            <input 
-              placeholder="123 Main St..."
-              value={profile.address}
-              onChange={(e) => {
-                setHighlightedAddressIndex(-1);
-                updateProfile('address', e.target.value);
-              }}
-              onBlur={handleAddressInputBlur}
-              onKeyDown={handleAddressInputKeyDown}
-              className={`w-full px-4 py-3 rounded-lg border focus:ring-2 outline-none transition-all font-medium ${
-                addressStatus === 'VALID' ? 'border-green-500 bg-green-50 focus:ring-green-500' :
-                addressStatus === 'INVALID' ? 'border-red-500 bg-red-50 focus:ring-red-500' :
-                'border-slate-300 focus:ring-brand-500 focus:border-brand-500'
-              }`}
-            />
-            {addressSuggestions.length > 0 && addressStatus !== 'VERIFYING' && (
-              <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg max-h-56 overflow-auto">
-                {addressSuggestions.map((result, index) => (
-                  <button
-                    key={`${result.placeId || 'addr'}-${index}`}
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => handleSelectAddressSuggestion(result)}
-                    className={`w-full text-left px-3 py-2 text-sm border-b border-slate-100 last:border-b-0 ${
-                      index === highlightedAddressIndex
-                        ? 'bg-slate-100 text-slate-900'
-                        : 'text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    {result.description || 'Suggested address'}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          {isAddressSuggesting && addressStatus !== 'VERIFYING' && <p className="text-xs text-slate-500 font-semibold mt-1">Finding address suggestions...</p>}
-          {addressStatus === 'VERIFYING' && <p className="text-xs text-slate-500 font-semibold mt-1">Verifying with Google Maps...</p>}
-          {addressStatus === 'VALID' && <p className="text-xs text-green-600 font-bold mt-1">Verified with Google Maps</p>}
-          {addressStatus === 'INVALID' && <p className="text-xs text-red-600 font-bold mt-1">Address not found on Maps</p>}
-          {addressStatus === 'VALID' && addressVerifiedLabel && (
-            <p className="text-xs text-slate-500 mt-1">Verified on {addressVerifiedLabel}</p>
-          )}
-          {isAddressVerificationRequired && (
-            <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-              <p className="text-xs font-semibold text-amber-800 flex items-center gap-1">
-                <Lock size={13} /> Address verification required before saving.
-              </p>
-              <button
-                type="button"
-                onClick={() => verifyAddressWithGoogle(profile.address)}
-                className="text-xs font-bold text-amber-800 hover:text-amber-900 underline"
-              >
-                Retry
-              </button>
+      {/* Profile */}
+      <section ref={profileSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4">
+        <button
+          type="button"
+          onClick={() => toggleSection('profile')}
+          className="w-full flex items-center justify-between gap-4"
+        >
+          <div className="flex items-center gap-4 text-left">
+            <div className="p-3 bg-brand-50 rounded-full text-brand-600">
+              <User size={24} />
             </div>
-          )}
-        </div>
-        
-        {/* Emergency Contact */}
-        <div className="border-t border-slate-200 pt-4">
-           <label className="text-sm font-medium text-slate-700 mb-2 block">Emergency Contact</label>
-           <div className="space-y-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-800">Profile</h2>
+              <p className="text-xs text-slate-500">{profile.fullName || 'Name not set'} • {profile.phone || 'Phone not set'}</p>
+            </div>
+          </div>
+          <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.profile ? 'rotate-180' : ''}`} />
+        </button>
+
+        {!expandedSections.profile && (
+          <p className="text-xs text-slate-500">{profile.address ? `Address set • ${profile.address}` : 'Address not set yet'}</p>
+        )}
+
+        {expandedSections.profile && (
+          <>
+            {showMoreSections.profile && <div className="text-xs text-slate-400 font-mono -mt-2 mb-1">ID: {profile.id}</div>}
+
+            <Input 
+              label="Full Name" 
+              value={profile.fullName}
+              onChange={(e) => updateProfile('fullName', e.target.value)}
+              placeholder="e.g. Jane Doe"
+            />
+            <Input 
+              label="Mobile Phone" 
+              value={profile.phone}
+              onChange={(e) => updateProfile('phone', formatPhoneNumber(e.target.value))}
+              onBlur={() => expandedSections.profile && validatePhone(profile.phone)}
+              placeholder="e.g. (555) 123-4567"
+              className={phoneError ? 'border-red-500 bg-red-50' : ''}
+              error={phoneError || undefined}
+            />
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Home Address</label>
+              <div className="relative">
+                <input 
+                  placeholder="123 Main St..."
+                  value={profile.address}
+                  onChange={(e) => {
+                    setHighlightedAddressIndex(-1);
+                    updateProfile('address', e.target.value);
+                  }}
+                  onBlur={handleAddressInputBlur}
+                  onKeyDown={handleAddressInputKeyDown}
+                  className={`w-full px-4 py-3 rounded-lg border focus:ring-2 outline-none transition-all font-medium ${
+                    addressStatus === 'VALID' ? 'border-green-500 bg-green-50 focus:ring-green-500' :
+                    addressStatus === 'INVALID' ? 'border-red-500 bg-red-50 focus:ring-red-500' :
+                    'border-slate-300 focus:ring-brand-500 focus:border-brand-500'
+                  }`}
+                />
+                {addressSuggestions.length > 0 && addressStatus !== 'VERIFYING' && (
+                  <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg max-h-56 overflow-auto">
+                    {addressSuggestions.map((result, index) => (
+                      <button
+                        key={`${result.placeId || 'addr'}-${index}`}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => handleSelectAddressSuggestion(result)}
+                        className={`w-full text-left px-3 py-2 text-sm border-b border-slate-100 last:border-b-0 ${
+                          index === highlightedAddressIndex
+                            ? 'bg-slate-100 text-slate-900'
+                            : 'text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        {result.description || 'Suggested address'}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {isAddressSuggesting && addressStatus !== 'VERIFYING' && <p className="text-xs text-slate-500 font-semibold mt-1">Finding address suggestions...</p>}
+              {addressStatus === 'VERIFYING' && <p className="text-xs text-slate-500 font-semibold mt-1">Verifying with Google Maps...</p>}
+              {addressStatus === 'VALID' && <p className="text-xs text-green-600 font-bold mt-1">Verified with Google Maps</p>}
+              {addressStatus === 'INVALID' && <p className="text-xs text-red-600 font-bold mt-1">Address not found on Maps</p>}
+              {addressStatus === 'VALID' && addressVerifiedLabel && (
+                <p className="text-xs text-slate-500 mt-1">Verified on {addressVerifiedLabel}</p>
+              )}
+              {isAddressVerificationRequired && (
+                <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                  <p className="text-xs font-semibold text-amber-800 flex items-center gap-1">
+                    <Lock size={13} /> Address verification required before saving.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => verifyAddressWithGoogle(profile.address)}
+                    className="text-xs font-bold text-amber-800 hover:text-amber-900 underline"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => toggleShowMore('profile')}
+              className="text-xs font-semibold text-brand-600 hover:underline"
+            >
+              {showMoreSections.profile ? 'Show less' : 'Show more'}
+            </button>
+            {profileSaveError && (
+              <p className="text-xs text-red-600 font-semibold mt-2">{profileSaveError}</p>
+            )}
+          </>
+        )}
+      </section>
+
+      {/* Contacts */}
+      <section ref={contactsSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4">
+        <button
+          type="button"
+          onClick={() => toggleSection('contacts')}
+          className="w-full flex items-center justify-between gap-4"
+        >
+          <div className="flex items-center gap-4 text-left">
+            <div className="p-3 bg-cyan-50 rounded-full text-cyan-700">
+              <Phone size={24} />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-slate-800">Contacts</h2>
+              <p className="text-xs text-slate-500">
+                {profile.emergencyContactName ? `${profile.emergencyContactName} • ${profile.emergencyContactPhone || 'No phone'}` : 'Emergency contact not set'}
+              </p>
+            </div>
+          </div>
+          <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.contacts ? 'rotate-180' : ''}`} />
+        </button>
+
+        {expandedSections.contacts && (
+          <>
+            <div className="space-y-3">
               <Input 
                 placeholder="Contact Name"
                 value={profile.emergencyContactName}
                 onChange={(e) => updateProfile('emergencyContactName', e.target.value)}
               />
-              <div className="grid grid-cols-2 gap-3">
-                <Input 
-                  placeholder="Mobile Phone"
-                  type="tel"
-                  value={profile.emergencyContactPhone}
-                  onChange={(e) => updateProfile('emergencyContactPhone', formatPhoneNumber(e.target.value))}
-                />
+              <Input 
+                placeholder="Mobile Phone"
+                type="tel"
+                value={profile.emergencyContactPhone}
+                onChange={(e) => updateProfile('emergencyContactPhone', formatPhoneNumber(e.target.value))}
+              />
+              {showMoreSections.contacts && (
                 <Input 
                   placeholder="Relationship"
                   value={profile.emergencyContactRelation}
                   onChange={(e) => updateProfile('emergencyContactRelation', e.target.value)}
                 />
-              </div>
-           </div>
-        </div>
-        
-        <Button 
-          onClick={handleProfileSave} 
-          fullWidth 
-          className="shadow-md mt-4 bg-slate-800 hover:bg-slate-700" 
-          size="lg"
-          disabled={isSavingProfile}
-        >
-          <Save size={20} className="mr-2" /> {isSavingProfile ? 'Saving...' : 'Update Profile'}
-        </Button>
-        {profileSaveError && (
-          <p className="text-xs text-red-600 font-semibold mt-2">{profileSaveError}</p>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => toggleShowMore('contacts')}
+              className="text-xs font-semibold text-brand-600 hover:underline"
+            >
+              {showMoreSections.contacts ? 'Show less' : 'Show more'}
+            </button>
+          </>
         )}
       </section>
 
-      {/* Home */}
-      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-emerald-100 order-30">
-        <div className="flex items-center gap-4 mb-2">
-          <div className="p-3 bg-emerald-50 rounded-full text-emerald-700">
-            <Users size={24} />
+      {/* Household */}
+      <section ref={householdSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-emerald-100 order-30">
+        <button
+          type="button"
+          onClick={() => toggleSection('household')}
+          className="w-full flex items-center justify-between gap-4"
+        >
+          <div className="flex items-center gap-4 text-left">
+            <div className="p-3 bg-emerald-50 rounded-full text-emerald-700">
+              <Users size={24} />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-slate-800">Household</h2>
+              <p className="text-xs text-slate-500">{profile.householdName || 'Your Home'} • {profile.householdCode || 'Code not set'}</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-800">Your Home</h2>
-            <p className="text-xs text-slate-500">Household code connects family members to the same home.</p>
-          </div>
-        </div>
+          <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.household ? 'rotate-180' : ''}`} />
+        </button>
+
+        {!expandedSections.household && (
+          <p className="text-xs text-slate-500">{(profile.household || []).length} members • Role: {profile.householdRole || 'OWNER'}</p>
+        )}
+
+        {expandedSections.household && (
+          <>
 
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between gap-3">
           <div>
@@ -2587,7 +2742,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           <p className="text-xs text-emerald-700 font-semibold">{householdCodeSuccess}</p>
         )}
 
-        {profile.householdRole === 'OWNER' && (
+        {showMoreSections.household && profile.householdRole === 'OWNER' && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
             <p className="text-xs font-bold text-amber-700 uppercase tracking-wider">New Household Join Request{pendingOwnerRequests.length === 1 ? '' : 's'}</p>
 
@@ -2628,6 +2783,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           </div>
         )}
 
+        {showMoreSections.household && (
         <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-2">
           <div className="flex items-center justify-between">
             <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Notifications</p>
@@ -2666,6 +2822,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             </div>
           )}
         </div>
+        )}
 
         <div>
           <Input
@@ -2686,6 +2843,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           />
         </div>
 
+        {showMoreSections.household && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
           <div>
             <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Member Account Invites</p>
@@ -2752,19 +2910,49 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           {inviteStatusMessage && <p className="text-xs text-emerald-700 font-semibold">{inviteStatusMessage}</p>}
           {inviteError && <p className="text-xs text-red-600 font-semibold">{inviteError}</p>}
         </div>
+        )}
+
+        <button
+          type="button"
+          onClick={() => toggleShowMore('household')}
+          className="text-xs font-semibold text-brand-600 hover:underline"
+        >
+          {showMoreSections.household ? 'Show less' : 'Show more'}
+        </button>
+        {vitalsSaveError && (
+          <p className="text-xs text-red-600 font-semibold mt-2">{vitalsSaveError}</p>
+        )}
+        </>
+        )}
       </section>
 
-      {/* Safety */}
-      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-red-100 order-20">
-        <div className="flex items-center gap-4 mb-2">
-          <div className="p-3 bg-red-50 rounded-full text-red-600">
-            <HeartPulse size={24} />
+      {/* Security */}
+      <section ref={securitySectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-red-100 order-20">
+        <button
+          type="button"
+          onClick={() => toggleSection('security')}
+          className="w-full flex items-center justify-between gap-4"
+        >
+          <div className="flex items-center gap-4 text-left">
+            <div className="p-3 bg-red-50 rounded-full text-red-600">
+              <HeartPulse size={24} />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-slate-800">Security</h2>
+              <p className="text-xs text-slate-500">Preparedness and vulnerability inputs for planning.</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-800">Safety Setup</h2>
-            <p className="text-xs text-slate-500">Preparedness and vulnerability inputs for planning.</p>
-          </div>
-        </div>
+          <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.security ? 'rotate-180' : ''}`} />
+        </button>
+
+        {!expandedSections.security && (
+          <p className="text-xs text-slate-500">
+            Consent: {profile.consentPreparednessPlanning ? 'Provided' : 'Pending'} • ZIP: {profile.zipCode || 'Not detected'}
+          </p>
+        )}
+
+        {expandedSections.security && (
+          <>
 
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
           <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">ZIP Code</p>
@@ -2838,11 +3026,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           value={profile.petDetails}
           onChange={(e) => updateProfile('petDetails', e.target.value)}
         />
-        <Textarea 
-          label="Anything else not listed above" 
-          value={profile.medicalNeeds}
-          onChange={(e) => updateProfile('medicalNeeds', e.target.value)}
-        />
+        {showMoreSections.security && (
+          <Textarea 
+            label="Anything else not listed above" 
+            value={profile.medicalNeeds}
+            onChange={(e) => updateProfile('medicalNeeds', e.target.value)}
+          />
+        )}
 
         <div className="border-t border-slate-200 pt-4">
           <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wide">Final Step</p>
@@ -2859,17 +3049,18 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             I understand this data is used only for preparedness planning and can be deleted anytime.
           </span>
         </label>
-        
-        <Button
-          onClick={handleVitalsSave}
-          fullWidth
-          className="bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 shadow-sm"
-          disabled={isSavingVitals}
+
+        <button
+          type="button"
+          onClick={() => toggleShowMore('security')}
+          className="text-xs font-semibold text-brand-600 hover:underline"
         >
-           {isSavingVitals ? 'Saving...' : 'Update Vitals'}
-        </Button>
+          {showMoreSections.security ? 'Show less' : 'Show more'}
+        </button>
         {vitalsSaveError && (
           <p className="text-xs text-red-600 font-semibold mt-2">{vitalsSaveError}</p>
+        )}
+        </>
         )}
       </section>
 
@@ -2878,12 +3069,25 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         <div className="absolute top-0 right-0 p-4 opacity-10">
           <Building2 size={64} className="text-purple-600" />
         </div>
-        <div className="flex items-center gap-4 mb-2 relative z-10">
-          <div className="p-3 bg-purple-50 rounded-full text-purple-600">
-            <Building2 size={24} />
+        <button
+          type="button"
+          onClick={() => toggleSection('community')}
+          className="w-full flex items-center justify-between gap-4 relative z-10"
+        >
+          <div className="flex items-center gap-4 mb-2 text-left">
+            <div className="p-3 bg-purple-50 rounded-full text-purple-600">
+              <Building2 size={24} />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-slate-800">{t('settings.trusted_conn')}</h2>
+              <p className="text-xs text-slate-500">{connectedOrg ? `Connected to ${connectedOrg}` : 'No community connected'}</p>
+            </div>
           </div>
-          <h2 className="text-lg font-semibold text-slate-800">{t('settings.trusted_conn')}</h2>
-        </div>
+          <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.community ? 'rotate-180' : ''}`} />
+        </button>
+
+        {expandedSections.community && (
+          <>
         
         {profile.role === 'INSTITUTION_ADMIN' ? (
           <div className="relative z-10 space-y-3">
@@ -2961,19 +3165,31 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                   <XCircle size={16} /> {verifyError}
                </div>
             )}
-            <div className="relative z-10 mt-4 border-t border-slate-200 pt-3">
-              <p className="text-[11px] text-slate-500 mb-2">Advanced</p>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-red-600 hover:bg-red-50"
-                onClick={handleDisconnectCommunity}
-                disabled={isDisconnectingOrg || !profile.communityId}
-              >
-                {isDisconnectingOrg ? 'Disconnecting...' : 'Disconnect Organization'}
-              </Button>
-            </div>
+            {showMoreSections.community && (
+              <div className="relative z-10 mt-4 border-t border-slate-200 pt-3">
+                <p className="text-[11px] text-slate-500 mb-2">Advanced</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-red-600 hover:bg-red-50"
+                  onClick={handleDisconnectCommunity}
+                  disabled={isDisconnectingOrg || !profile.communityId}
+                >
+                  {isDisconnectingOrg ? 'Disconnecting...' : 'Disconnect Organization'}
+                </Button>
+              </div>
+            )}
           </>
+        )}
+
+        <button
+          type="button"
+          onClick={() => toggleShowMore('community')}
+          className="text-xs font-semibold text-brand-600 hover:underline relative z-10"
+        >
+          {showMoreSections.community ? 'Show less' : 'Show more'}
+        </button>
+        </>
         )}
       </section>
 
@@ -2999,6 +3215,31 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           <FileText size={18} />
         </Button>
       </section>
+
+      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur px-4 py-3">
+        <div className="max-w-3xl mx-auto flex items-center gap-3">
+          <Button
+            variant="ghost"
+            className="flex-1"
+            onClick={discardLocalChanges}
+            disabled={isSavingProfile || isSavingVitals}
+          >
+            Discard
+          </Button>
+          <Button
+            className="flex-1"
+            onClick={saveVisibleSection}
+            disabled={isSavingProfile || isSavingVitals}
+          >
+            <Save size={16} className="mr-2" />
+            {isSavingProfile || isSavingVitals
+              ? 'Saving...'
+              : expandedSections.security || expandedSections.household
+                ? 'Save Household & Security'
+                : 'Save Profile'}
+          </Button>
+        </div>
+      </div>
 
       <div className="space-y-4 pt-4 border-t border-slate-200 order-60">
         <Button onClick={handleLogout} variant="ghost" fullWidth className="text-red-600 hover:bg-red-50 hover:text-red-700">

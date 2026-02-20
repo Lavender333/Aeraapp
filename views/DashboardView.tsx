@@ -37,7 +37,6 @@ import {
   BarChart3,
   Shield,
   TrendingUp,
-  BookOpen,
   ExternalLink,
   ClipboardCheck,
   Phone,
@@ -894,34 +893,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
             </div>
           </div>
 
-          <div className="mt-6">
-            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">National Preparedness</h3>
-            <p className="text-xs text-slate-500 mt-1">Official resources to help you stay ready</p>
-            <div className="grid grid-cols-1 gap-3 mt-3">
-              <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-                <div className="w-10 h-10 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center mb-3">
-                  <BookOpen size={18} />
-                </div>
-                <h4 className="font-semibold text-slate-900 text-sm">Community Resources</h4>
-                <p className="text-[11px] text-slate-500 mt-2">
-                  {hasCommunity ? `Connected to ${connectedOrg}.` : 'Join or update your community connection in Settings.'}
-                </p>
-                {hasCommunity && communityIdInput && (
-                  <p className="text-[11px] text-emerald-700 font-semibold mt-1">Community ID: {communityIdInput}</p>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    sessionStorage.setItem('settingsScrollTarget', 'TRUSTED_COMMUNITY');
-                    setView('SETTINGS');
-                  }}
-                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 mt-3 hover:underline"
-                >
-                  {hasCommunity ? 'Manage in Settings' : 'Open Settings'}
-                </button>
-              </div>
-            </div>
-          </div>
         </>
       )}
 
