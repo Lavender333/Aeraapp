@@ -386,10 +386,12 @@ export const StorageService = {
   },
 
   async loginWithCredentials(email: string, password: string) {
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    const normalizedPassword = String(password || '');
     const db = this.getDB();
     if (!IS_PRODUCTION) {
       // Try local database first (for demo/offline mode)
-      const user = db.users.find(u => u.email === email);
+      const user = db.users.find(u => String(u.email || '').trim().toLowerCase() === normalizedEmail);
       if (user) {
         if (user.active === false) {
           throw new Error('Account deactivated. Contact Admin.');
@@ -411,7 +413,7 @@ export const StorageService = {
 
     // Supabase auth
     try {
-      const resp = await loginAuth({ email, password });
+      const resp = await loginAuth({ email: normalizedEmail, password: normalizedPassword });
       if (resp?.token) this.setAuthToken(resp.token);
       if (resp?.refreshToken) this.setRefreshToken(resp.refreshToken);
       if (resp?.user) {
@@ -492,7 +494,7 @@ export const StorageService = {
   },
 
   async requestPasswordReset(email: string) {
-    return forgotPassword({ email });
+    return forgotPassword({ email: String(email || '').trim().toLowerCase() });
   },
 
   async resetPassword(email: string, token: string, newPassword: string) {

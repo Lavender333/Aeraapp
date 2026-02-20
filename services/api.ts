@@ -2007,9 +2007,10 @@ export async function setBroadcast(orgCode: string, message: string) {
 
 // Auth
 export async function registerAuth(payload: { email?: string; phone?: string; password: string; fullName?: string; role?: string; orgId?: string }) {
-  const { email, phone, password, fullName, role, orgId } = payload;
+  const normalizedEmail = payload.email ? String(payload.email).trim().toLowerCase() : undefined;
+  const { phone, password, fullName, role, orgId } = payload;
   const { data, error } = await supabase.auth.signUp({
-    email: email || undefined,
+    email: normalizedEmail || undefined,
     phone: phone || undefined,
     password,
     options: {
@@ -2036,7 +2037,7 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
   if (userId && data.session?.access_token) {
     const { error: profileError } = await supabase.from('profiles').upsert({
       id: userId,
-      email: data.user?.email || email || null,
+      email: data.user?.email || normalizedEmail || null,
       phone: phone || null,
       full_name: fullName || null,
       role: role || 'GENERAL_USER',
@@ -2058,7 +2059,7 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
     needsEmailConfirm: !data.session?.access_token,
     user: {
       id: userId,
-      email: data.user?.email || email || '',
+      email: data.user?.email || normalizedEmail || '',
       phone: phone || '',
       fullName: fullName || '',
       role: role || 'GENERAL_USER',
@@ -2068,10 +2069,11 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
 }
 
 export async function loginAuth(payload: { email?: string; phone?: string; password: string }) {
-  if (!payload.email && !payload.phone) throw new Error('Email or phone required');
+  const normalizedEmail = payload.email ? String(payload.email).trim().toLowerCase() : undefined;
+  if (!normalizedEmail && !payload.phone) throw new Error('Email or phone required');
 
   const { data, error } = await supabase.auth.signInWithPassword({
-    email: payload.email || undefined,
+    email: normalizedEmail || undefined,
     password: payload.password,
   });
 
@@ -2086,7 +2088,7 @@ export async function loginAuth(payload: { email?: string; phone?: string; passw
     refreshToken: data.session?.refresh_token || null,
     user: {
       id: userId,
-      email: data.user?.email || payload.email || '',
+      email: data.user?.email || normalizedEmail || '',
       phone: profile?.phone || '',
       fullName: profile?.full_name || '',
       role: profile?.role || 'GENERAL_USER',
@@ -2096,11 +2098,13 @@ export async function loginAuth(payload: { email?: string; phone?: string; passw
 }
 
 export async function forgotPassword(payload: { email: string }) {
+  const normalizedEmail = String(payload.email || '').trim().toLowerCase();
+  if (!normalizedEmail) throw new Error('Email is required');
   const redirectTo = typeof window !== 'undefined'
     ? `${window.location.origin}/reset-password`
     : undefined;
 
-  const { error } = await supabase.auth.resetPasswordForEmail(payload.email, {
+  const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
     redirectTo,
   });
   if (error) throw error;

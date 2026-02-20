@@ -51,12 +51,14 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
     setInfo('');
     try {
       setIsLoggingIn(true);
-      if (!email || !password) {
+      const normalizedEmail = String(email || '').trim().toLowerCase();
+      const enteredPassword = String(password || '');
+      if (!normalizedEmail || !enteredPassword) {
         setError('Email and password are required.');
         return;
       }
-      console.log('Attempting login with email:', email);
-      await StorageService.loginWithCredentials(email, password);
+      console.log('Attempting login with email:', normalizedEmail);
+      await StorageService.loginWithCredentials(normalizedEmail, enteredPassword);
       const profile = StorageService.getProfile();
       console.log('Login successful! Profile:', { 
         id: profile.id, 
@@ -191,6 +193,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
                       setIsRecovery(false);
                       setShowReset(false);
                       setRecoveryPassword('');
+                      await supabase.auth.signOut({ scope: 'local' });
                       window.history.replaceState({}, document.title, window.location.pathname);
                     } catch (e: any) {
                       setError(e?.message || 'Password reset failed');
@@ -218,7 +221,8 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
                     setInfo('');
                     try {
                       setIsResetting(true);
-                      await StorageService.requestPasswordReset(resetEmail);
+                      const normalizedResetEmail = String(resetEmail || '').trim().toLowerCase();
+                      await StorageService.requestPasswordReset(normalizedResetEmail);
                       setInfo('Check your email to reset your password.');
                     } catch (e: any) {
                       const message = String(e?.message || '').toLowerCase();
