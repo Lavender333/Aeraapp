@@ -1004,6 +1004,41 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     alert('Copied to clipboard');
   };
 
+  const shareInviteMessage = async (memberName: string, text: string) => {
+    const title = `AERA household invite for ${memberName}`;
+    const encodedText = encodeURIComponent(text);
+    const encodedSubject = encodeURIComponent(title);
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text });
+        return { method: 'native' as const, copied: false };
+      } catch (err: any) {
+        if (err?.name === 'AbortError') {
+          return { method: 'cancelled' as const, copied: false };
+        }
+      }
+    }
+
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(text);
+      copied = true;
+    } catch {
+      copied = false;
+    }
+
+    try {
+      window.location.href = `mailto:?subject=${encodedSubject}&body=${encodedText}`;
+      return { method: 'email' as const, copied };
+    } catch {
+      if (copied) {
+        return { method: 'clipboard' as const, copied };
+      }
+      throw new Error('Unable to open share options on this device.');
+    }
+  };
+
   const buildMemberInviteCode = (member: HouseholdMember) => {
     const household = (profile.householdCode || '').trim().toUpperCase();
     const fallback = (member.id || '').replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(-3);
@@ -1055,18 +1090,15 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         suggestedCode: buildMemberInviteCode(member),
       });
       const text = `AERA invite for ${member.name}: create or log in to your account, then use invite code ${invitation.invitationCode} to join this household.`;
-      const encodedText = encodeURIComponent(text);
-      const encodedSubject = encodeURIComponent(`AERA household invite for ${member.name}`);
-      if (navigator.share) {
-        await navigator.share({
-          title: `AERA household invite for ${member.name}`,
-          text,
-        });
+      const result = await shareInviteMessage(member.name, text);
+      if (result.method === 'cancelled') {
+        setInviteStatusMessage('Share cancelled.');
+      } else if (result.method === 'native') {
         setInviteStatusMessage(`Invite shared for ${member.name}. Current status: ${invitation.status}.`);
-      } else {
-        window.location.href = `mailto:?subject=${encodedSubject}&body=${encodedText}`;
-        await navigator.clipboard.writeText(text);
+      } else if (result.copied) {
         setInviteStatusMessage(`Invite prepared for ${member.name}. Opened email and copied message.`);
+      } else {
+        setInviteStatusMessage(`Invite prepared for ${member.name}. Opened email draft.`);
       }
       const invites = await listHouseholdInvitationsForCurrentUser();
       setMemberInvites(invites);
@@ -1093,18 +1125,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         forceNew: true,
       });
       const text = `AERA invite for ${member.name}: create or log in to your account, then use invite code ${invitation.invitationCode} to join this household.`;
-      const encodedText = encodeURIComponent(text);
-      const encodedSubject = encodeURIComponent(`AERA household invite for ${member.name}`);
-      if (navigator.share) {
-        await navigator.share({
-          title: `AERA household invite for ${member.name}`,
-          text,
-        });
+      const result = await shareInviteMessage(member.name, text);
+      if (result.method === 'cancelled') {
+        setInviteStatusMessage('Share cancelled.');
+      } else if (result.copied) {
+        setInviteStatusMessage(`New invite generated for ${member.name}. Opened email and copied message.`);
       } else {
-        window.location.href = `mailto:?subject=${encodedSubject}&body=${encodedText}`;
-        await navigator.clipboard.writeText(text);
+        setInviteStatusMessage(`New invite generated for ${member.name}.`);
       }
-      setInviteStatusMessage(`New invite generated for ${member.name}.`);
       const invites = await listHouseholdInvitationsForCurrentUser();
       setMemberInvites(invites);
     } catch (err: any) {

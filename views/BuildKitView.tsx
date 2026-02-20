@@ -496,13 +496,25 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       try {
         await navigator.share({ title: 'AERA Ready Kit', text });
         return;
-      } catch {
-        // fall through to clipboard
+      } catch (err: any) {
+        if (err?.name === 'AbortError') {
+          alert('Share cancelled.');
+          return;
+        }
       }
     }
+
     try {
       await navigator.clipboard.writeText(text);
       alert('Ready kit copied to clipboard.');
+      return;
+    } catch {}
+
+    try {
+      const encodedSubject = encodeURIComponent('AERA Ready Kit');
+      const encodedBody = encodeURIComponent(text);
+      window.location.href = `mailto:?subject=${encodedSubject}&body=${encodedBody}`;
+      alert('Opened email draft with your ready kit summary.');
     } catch {
       alert('Unable to share right now.');
     }

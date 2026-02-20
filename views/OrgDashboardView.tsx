@@ -173,9 +173,32 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     alert("Inventory Updated in Central Database");
   };
 
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(communityId);
-    alert(`Copied Community ID: ${communityId}`);
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(communityId);
+      alert(`Copied Community ID: ${communityId}`);
+      return;
+    } catch {}
+
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = communityId;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-9999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const copied = document.execCommand('copy');
+      document.body.removeChild(textArea);
+
+      if (copied) {
+        alert(`Copied Community ID: ${communityId}`);
+      } else {
+        alert(`Community ID: ${communityId}`);
+      }
+    } catch {
+      alert(`Community ID: ${communityId}`);
+    }
   };
 
   const openBroadcastModal = () => {
