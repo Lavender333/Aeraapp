@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "unstage:docs-assets": "bash scripts/unstage-docs-assets.sh",
     "preview": "vite preview",
     "server": "node server.js",
     "test": "vitest",

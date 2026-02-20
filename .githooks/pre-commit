@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -x scripts/unstage-docs-assets.sh ]]; then
+  bash scripts/unstage-docs-assets.sh
+fi
