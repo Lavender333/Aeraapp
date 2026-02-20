@@ -2706,15 +2706,17 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               {profile.householdName || 'Your Home'} • {profile.householdRole || 'OWNER'}
             </p>
           </div>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => copyToClipboard(profile.householdCode || '')}
-            disabled={!profile.householdCode}
-            className="text-emerald-800 hover:bg-emerald-100"
-          >
-            <Copy size={16} className="mr-2" /> Copy
-          </Button>
+          {profile.householdRole === 'OWNER' && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => copyToClipboard(profile.householdCode || '')}
+              disabled={!profile.householdCode}
+              className="text-emerald-800 hover:bg-emerald-100"
+            >
+              <Copy size={16} className="mr-2" /> Copy
+            </Button>
+          )}
         </div>
 
         {householdOptions.length > 1 && (
@@ -2812,7 +2814,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           </div>
         )}
 
-        {showMoreSections.household && (
+        {showMoreSections.household && profile.householdRole === 'OWNER' && (
         <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-2">
           <div className="flex items-center justify-between">
             <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Notifications</p>
