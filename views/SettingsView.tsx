@@ -2871,7 +2871,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           />
         </div>
 
-        {showMoreSections.household && (
+        {showMoreSections.household && profile.householdRole === 'OWNER' && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
           <div>
             <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Member Account Invites</p>
