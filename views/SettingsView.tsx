@@ -2364,12 +2364,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
       <section className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Quick Jump</p>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-          <button type="button" onClick={() => openSectionAndScroll('profile')} className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Profile</button>
-          <button type="button" onClick={() => openSectionAndScroll('household')} className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Household</button>
-          <button type="button" onClick={() => openSectionAndScroll('contacts')} className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Contacts</button>
-          <button type="button" onClick={() => openSectionAndScroll('community')} className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Community</button>
-          <button type="button" onClick={() => openSectionAndScroll('security')} className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Security</button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => openSectionAndScroll('profile')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Profile</button>
+          <button type="button" onClick={() => openSectionAndScroll('household')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Household</button>
+          <button type="button" onClick={() => openSectionAndScroll('contacts')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Contacts</button>
+          <button type="button" onClick={() => openSectionAndScroll('community')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Community</button>
+          <button type="button" onClick={() => openSectionAndScroll('security')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Security</button>
         </div>
       </section>
 
@@ -3205,8 +3205,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <ShieldCheck size={24} />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-slate-800">Legal & Consent</h2>
-            <p className="text-xs text-slate-500">Privacy policy and proof of consent</p>
+            <h2 className="text-lg font-semibold text-slate-800">Legal</h2>
+            <p className="text-xs text-slate-500">Privacy & consent</p>
           </div>
         </div>
         <Button
@@ -3215,9 +3215,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             setView('PRIVACY_POLICY');
           }}
           variant="outline"
-          className="w-full justify-between"
+          className="w-full justify-between border-slate-300 hover:bg-slate-50"
         >
-          <span>View Proof of Consent & Privacy Policy</span>
+          <span>View Privacy & Consent</span>
           <FileText size={18} />
         </Button>
       </section>
@@ -3230,7 +3230,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             onClick={discardLocalChanges}
             disabled={isSavingProfile || isSavingVitals}
           >
-            Discard
+            Reset
           </Button>
           <Button
             className="flex-1"
@@ -3241,8 +3241,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             {isSavingProfile || isSavingVitals
               ? 'Saving...'
               : expandedSections.security || expandedSections.household
-                ? 'Save Household & Security'
-                : 'Save Profile'}
+                ? 'Save'
+                : 'Save'}
           </Button>
         </div>
       </div>
