@@ -1,0 +1,1 @@
+System.register([],function(e,t){"use strict";return{execute:function(){e("G",class{constructor(e){this.apiKey=e.apiKey,this.models={generateContent:async()=>({text:()=>"Mock AI response - feature working without API key"})}}async generateContent(e){return{response:{text:()=>"Mock AI response - feature working without API key"}}}})}}});

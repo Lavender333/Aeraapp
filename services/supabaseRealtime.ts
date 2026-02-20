@@ -29,3 +29,18 @@ export const subscribeToInventory = async (orgId: string, onChange: (payload: an
     supabase.removeChannel(channel);
   };
 };
+
+export const subscribeToNotifications = async (onNotification: (payload: any) => void) => {
+  const channel = supabase
+    .channel('notifications')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'notifications' },
+      (payload) => onNotification(payload)
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+};

@@ -1602,7 +1602,7 @@ $  ✓ JWT + bcrypt                   $  Passport.js, Auth0, Firebase Auth      
 $  Database:                        $                                          $
 $  ✓ MongoDB Atlas                  $  PostgreSQL, Firebase, Supabase         $
 $  Hosting:                         $                                          $
-$  ✓ Netlify (frontend)             $  Vercel, Cloudflare Pages               $
+$  ✓ Netlify (frontend)             $  Supabase, Cloudflare Pages             $
 $  ✓ Render (backend)               $  Railway, Fly.io, AWS                   $
 $  AI:                              $                                          $
 $  ✓ Google Gemini                  $  OpenAI GPT-4, Claude, Llama            $
@@ -1666,7 +1666,7 @@ Database $25-40/mo (MongoDB Atlas)$25/mo (included)
 Backend hosting$20-30/mo (Render) $0 (Supabase handles)
 Auth service $15-20/mo (or security risk)$0 (included)
 Real-time $25-30/mo (Pusher) or none$0 (included)
-Frontend $0 (Vercel free) $20/mo (Vercel Pro)
+Frontend $0 (Supabase free) $20/mo (Supabase Pro)
 Total $85-102/mo ~$45/mo
 Annual savings: ~$480-684/year
 Plus avoided development costs:
@@ -1747,7 +1747,7 @@ Why Supabase: The Evidence We evaluated the current stack against Supabase acros
 Current State Assessment
 ✅ What Works Well (Keep) Component Assessment React 19 + Vite Modern, fast, well-structured. Keep this entirely. Tailwind CSS Clean responsive design. No changes needed. 17-View Architecture Well-organized component structure. Portable to Supabase. Multi-language (en/es/fr) Critical for emergency response. Already implemented. Google Gemini AI Good integration. Works with any backend.
 " What Must Change (Replace) Component Problem Supabase Solution Express.js Backend Auth middleware defined but never applied to routes RLS policies MongoDB Document store for relational data; no FK enforcement PostgreSQL Custom JWT Auth Hardcoded secrets, no refresh tokens, reset token exposed Supabase Auth No Real-Time 60-second delays during emergencies could cost lives Supabase Realtime
-Financial Analysis Monthly Operating Costs Component Current Stack Supabase Stack Database $25-40 (MongoDB Atlas) $25 (included) Backend Hosting $20-30 (Render) $0 (Supabase handles) Auth Service $15-20 (or security risk) $0 (included) Real-time Service $25-30 (Pusher) or none $0 (included) Frontend Hosting $0 (Vercel free) $20 (Vercel Pro) MONTHLY TOTAL $85-102 ~$45 ANNUAL TOTAL $1,020-1,224 ~$540  Development Cost Comparison Work Required Fix Current Supabase Security fixes (auth, validation, secrets) $14,000 $0 (built-in) Real-time implementation $7,000 $0 (built-in) Database migration N/A $5,000 Frontend integration $2,000 $4,000 TOTAL DEVELOPMENT $23,000 $9,000
+Financial Analysis Monthly Operating Costs Component Current Stack Supabase Stack Database $25-40 (MongoDB Atlas) $25 (included) Backend Hosting $20-30 (Render) $0 (Supabase handles) Auth Service $15-20 (or security risk) $0 (included) Real-time Service $25-30 (Pusher) or none $0 (included) Frontend Hosting $0 (Supabase free) $20 (Supabase Pro) MONTHLY TOTAL $85-102 ~$45 ANNUAL TOTAL $1,020-1,224 ~$540  Development Cost Comparison Work Required Fix Current Supabase Security fixes (auth, validation, secrets) $14,000 $0 (built-in) Real-time implementation $7,000 $0 (built-in) Database migration N/A $5,000 Frontend integration $2,000 $4,000 TOTAL DEVELOPMENT $23,000 $9,000
 # Financial Summary Development savings: $14,000 (Supabase vs fixing current) Annual operating savings: $480-684 2-year total savings: ~$15,000-15,400
 Implementation Plan Hybrid approach: Fix critical security issues immediately for controlled beta, then migrate to Supabase in parallel. Phase Timeline Deliverables Phase 1 Weeks 1-3 Security fixes to current stack: Apply auth middleware, move secrets to env vars, add input validation. App safe for controlled beta. Phase 2 Weeks 2-3 Supabase setup: Create project, design PostgreSQL schema, implement Row Level Security policies, configure auth. Phase 3 Weeks 4-5 Data migration: Write migration scripts, run parallel writes, verify integrity, switch reads to Supabase. Phase 4 Weeks 6-7 Frontend integration: Replace API calls with Supabase client, add real-time subscriptions, update auth flow. Phase 5 Week 8 Cleanup: Remove Express server and MongoDB, update deployment pipeline, documentation.  Milestone Target App safe for controlled beta Week 3 Supabase migration complete Week 7 Production-ready with real-time Week 8
 Mobile Deployment Strategy For emergency response apps, speed of deployment matters more than app store presence. Approach Timeline When to Use PWA (Recommended) 1-2 days Default choice. Works offline, no app store approval, instant updates. Capacitor Wrapper 1 week Only if native push notifications are absolutely required. React Native 2-3 months Only if scale exceeds 50k users and native performance is needed.
@@ -1817,7 +1817,7 @@ Tailwind CSS                Node.js                     GitHub Actions
 Google GenAI (Gemini)
 Quick Start for Reviewers
 React 19 (keep)             Supabase                    Supabase (DB + Auth)
-TypeScript (keep)           - Auto-generated APIs       Vercel (frontend)
+TypeScript (keep)           - Auto-generated APIs       Supabase (frontend)
 Vite (keep)                 - Row Level Security        Edge Functions
 Tailwind CSS (keep)         - Real-time subscriptions   GitHub Actions
 TanStack Query (add)        Edge Functions (custom)

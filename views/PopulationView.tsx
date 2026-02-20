@@ -10,8 +10,10 @@ import {
   listActiveStateAlerts,
   listLatestRegionSnapshots,
   listMapRegions,
+  listStateHouseholdJoinActivity,
   type MapRegionRecord,
   type RegionSnapshotLatestRecord,
+  type StateHouseholdJoinActivityRecord,
   type StateAlertRecord,
 } from '../services/supabaseApi';
 import { supabase } from '../services/supabase';
@@ -32,6 +34,7 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
   const [regions, setRegions] = useState<MapRegionRecord[]>([]);
   const [snapshots, setSnapshots] = useState<RegionSnapshotLatestRecord[]>([]);
   const [alerts, setAlerts] = useState<StateAlertRecord[]>([]);
+  const [householdJoinActivity, setHouseholdJoinActivity] = useState<StateHouseholdJoinActivityRecord[]>([]);
   const [mapScope, setMapScope] = useState<{ role?: UserRole; org_id?: string | null; county_id?: string | null; state_id?: string | null } | null>(null);
 
   const localProfile = useMemo(() => StorageService.getProfile(), []);
@@ -43,17 +46,19 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     setLoading(true);
     setLoadError(null);
     try {
-      const [scope, regionRows, snapshotRows, alertRows] = await Promise.all([
+      const [scope, regionRows, snapshotRows, alertRows, joinRows] = await Promise.all([
         getCurrentMapScope(),
         listMapRegions(),
         listLatestRegionSnapshots(),
         listActiveStateAlerts(100),
+        listStateHouseholdJoinActivity(),
       ]);
 
       setMapScope(scope as any);
       setRegions(regionRows);
       setSnapshots(snapshotRows);
       setAlerts(alertRows);
+      setHouseholdJoinActivity(joinRows);
     } catch (err: any) {
       setLoadError(err?.message || 'Unable to load map layers.');
     } finally {
@@ -75,6 +80,9 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
         loadPopulationData();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'geography_regions' }, () => {
+        loadPopulationData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'household_join_requests' }, () => {
         loadPopulationData();
       })
       .subscribe();
@@ -155,6 +163,13 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     [visibleSnapshots],
   );
 
+  const joinActivitySummary = useMemo(() => {
+    const pending = householdJoinActivity.reduce((sum, row) => sum + Number(row.pending_requests || 0), 0);
+    const approved24h = householdJoinActivity.reduce((sum, row) => sum + Number(row.approved_last_24h || 0), 0);
+    const submitted24h = householdJoinActivity.reduce((sum, row) => sum + Number(row.submitted_last_24h || 0), 0);
+    return { pending, approved24h, submitted24h };
+  }, [householdJoinActivity]);
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col pb-safe animate-fade-in">
       <div className="bg-white border-b border-slate-200 p-4 sticky top-0 z-20 shadow-sm">
@@ -190,6 +205,8 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
           <span className="px-3 py-1 bg-amber-50 border border-amber-200 text-amber-700 rounded-full text-xs font-medium whitespace-nowrap">Escalating</span>
           <span className="px-3 py-1 bg-green-50 border border-green-200 text-green-700 rounded-full text-xs font-medium whitespace-nowrap">Stable</span>
           <span className="px-3 py-1 bg-blue-50 border border-blue-200 text-blue-700 rounded-full text-xs font-medium whitespace-nowrap">Active Alerts: {alerts.length}</span>
+          <span className="px-3 py-1 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-full text-xs font-medium whitespace-nowrap">Join Requests Pending: {joinActivitySummary.pending}</span>
+          <span className="px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-full text-xs font-medium whitespace-nowrap">Join Approvals 24h: {joinActivitySummary.approved24h}</span>
         </div>
       </div>
 
@@ -232,7 +249,7 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                   <div>
                     <p className="text-xs font-bold text-slate-500 uppercase">Map Summary</p>
                     <p className="text-base font-bold text-slate-900">{visibleSnapshots.length} region snapshot(s)</p>
-                    <p className="text-sm text-slate-600">{alerts.length} active alert(s) • realtime enabled</p>
+                    <p className="text-sm text-slate-600">{alerts.length} active alert(s) • {joinActivitySummary.submitted24h} join submissions in 24h • realtime enabled</p>
                   </div>
                   <Layers className="text-slate-400" />
                 </div>

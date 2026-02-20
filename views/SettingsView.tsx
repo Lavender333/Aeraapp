@@ -6,8 +6,9 @@ import { Button } from '../components/Button';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
-import { createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, joinHouseholdByCode, listHouseholdInvitationsForCurrentUser, HouseholdInvitationRecord, revokeHouseholdInvitationForCurrentUser, updateProfileForUser, updateVitalsForUser } from '../services/api';
+import { AppNotificationRecord, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, updateProfileForUser, updateVitalsForUser } from '../services/api';
 import { getOrgByCode } from '../services/supabase';
+import { subscribeToNotifications } from '../services/supabaseRealtime';
 import { isValidPhoneForInvite, validateHouseholdMembers } from '../services/validation';
 import { t } from '../services/translations';
 import { User, Bell, Lock, LogOut, Check, Save, Building2, ArrowLeft, ArrowRight, Link as LinkIcon, Loader2, HeartPulse, ShieldCheck, Users, ToggleLeft, ToggleRight, MoreVertical, Copy, CheckCircle, Database, X, XCircle, Globe, Search, Truck, Phone, Mail, MapPin, Power, Ban, Activity, Radio, AlertTriangle, HelpCircle, FileText, Printer, CheckSquare, Download, RefreshCcw, Clipboard, PenTool } from 'lucide-react';
@@ -177,6 +178,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [inviteStatusMessage, setInviteStatusMessage] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteBusyMemberId, setInviteBusyMemberId] = useState<string | null>(null);
+  const [ownerJoinRequests, setOwnerJoinRequests] = useState<HouseholdJoinRequestRecord[]>([]);
+  const [myJoinRequests, setMyJoinRequests] = useState<HouseholdJoinRequestRecord[]>([]);
+  const [notifications, setNotifications] = useState<AppNotificationRecord[]>([]);
+  const [joinRequestBusyId, setJoinRequestBusyId] = useState<string | null>(null);
+  const [notificationsBusy, setNotificationsBusy] = useState(false);
 
   // Broadcast Control State
   const [systemTicker, setSystemTicker] = useState('');
@@ -323,6 +329,77 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       active = false;
     };
   }, [profile.householdId]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadJoinState = async () => {
+      if (!profile.householdId) {
+        setOwnerJoinRequests([]);
+        setMyJoinRequests([]);
+      }
+
+      try {
+        const [ownerRequests, myRequests] = await Promise.all([
+          listHouseholdJoinRequestsForOwner(),
+          listMyHouseholdJoinRequests(),
+        ]);
+        if (!active) return;
+        setOwnerJoinRequests(ownerRequests);
+        setMyJoinRequests(myRequests);
+      } catch {
+        if (!active) return;
+        setOwnerJoinRequests([]);
+        setMyJoinRequests([]);
+      }
+
+      try {
+        const inbox = await listNotificationsForCurrentUser(50);
+        if (active) setNotifications(inbox);
+      } catch {
+        if (active) setNotifications([]);
+      }
+    };
+
+    loadJoinState();
+    return () => {
+      active = false;
+    };
+  }, [profile.householdId, profile.householdRole]);
+
+  useEffect(() => {
+    let unsub: (() => void) | null = null;
+    let active = true;
+
+    const bind = async () => {
+      try {
+        unsub = await subscribeToNotifications(async () => {
+          if (!active) return;
+          try {
+            const [inbox, ownerRequests, myRequests] = await Promise.all([
+              listNotificationsForCurrentUser(50),
+              listHouseholdJoinRequestsForOwner(),
+              listMyHouseholdJoinRequests(),
+            ]);
+            if (!active) return;
+            setNotifications(inbox);
+            setOwnerJoinRequests(ownerRequests);
+            setMyJoinRequests(myRequests);
+          } catch {
+            // Ignore transient realtime refresh failures.
+          }
+        });
+      } catch {
+        unsub = null;
+      }
+    };
+
+    bind();
+    return () => {
+      active = false;
+      if (unsub) unsub();
+    };
+  }, []);
 
   // Fetch members when an org is selected in directory
   useEffect(() => {
@@ -836,6 +913,21 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     return mapped;
   }, [memberInvites]);
 
+  const pendingOwnerRequests = useMemo(
+    () => ownerJoinRequests.filter((request) => request.status === 'pending'),
+    [ownerJoinRequests],
+  );
+
+  const latestMyJoinRequest = useMemo(
+    () => myJoinRequests[0] || null,
+    [myJoinRequests],
+  );
+
+  const unreadNotificationCount = useMemo(
+    () => notifications.filter((item) => !item.read).length,
+    [notifications],
+  );
+
   const handleCopyMemberInvite = async (member: HouseholdMember) => {
     setInviteStatusMessage(null);
     setInviteError(null);
@@ -913,27 +1005,72 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setHouseholdCodeSuccess(null);
 
     const normalized = householdCodeInput.trim().toUpperCase();
-    if (normalized.length < 6) {
-      setHouseholdCodeError('Enter a valid household or invite code.');
+    if (normalized.length < 6 || normalized.includes('-')) {
+      setHouseholdCodeError('Enter a valid 6-character household code.');
       return;
     }
 
     setIsHouseholdCodeBusy(true);
     try {
-      const summary = await joinHouseholdByCode(normalized);
-      applyHouseholdSummary(summary);
-      setHouseholdCodeSuccess(`Joined ${summary.householdName}.`);
+      const response = await requestHouseholdJoinByCode(normalized);
+      setHouseholdCodeSuccess(response.message || 'Your request has been sent to the household administrator.');
       setHouseholdCodeInput('');
       try {
-        const invites = await listHouseholdInvitationsForCurrentUser();
-        setMemberInvites(invites);
+        const [ownerRequests, myRequests, inbox] = await Promise.all([
+          listHouseholdJoinRequestsForOwner(),
+          listMyHouseholdJoinRequests(),
+          listNotificationsForCurrentUser(50),
+        ]);
+        setOwnerJoinRequests(ownerRequests);
+        setMyJoinRequests(myRequests);
+        setNotifications(inbox);
       } catch {
-        // ignore invite refresh errors
+        // Ignore refresh errors.
       }
     } catch (err: any) {
-      setHouseholdCodeError(err?.message || 'Unable to join household.');
+      setHouseholdCodeError(err?.message || 'Unable to submit join request.');
     } finally {
       setIsHouseholdCodeBusy(false);
+    }
+  };
+
+  const handleResolveJoinRequest = async (request: HouseholdJoinRequestRecord, action: 'approved' | 'rejected') => {
+    setHouseholdCodeError(null);
+    setHouseholdCodeSuccess(null);
+    setJoinRequestBusyId(request.id);
+    try {
+      await resolveHouseholdJoinRequest(request.id, action);
+      const [ownerRequests, myRequests, inbox] = await Promise.all([
+        listHouseholdJoinRequestsForOwner(),
+        listMyHouseholdJoinRequests(),
+        listNotificationsForCurrentUser(50),
+      ]);
+      setOwnerJoinRequests(ownerRequests);
+      setMyJoinRequests(myRequests);
+      setNotifications(inbox);
+      setHouseholdCodeSuccess(
+        action === 'approved'
+          ? 'Connection successful. This member has been added.'
+          : 'Request rejected.',
+      );
+    } catch (err: any) {
+      setHouseholdCodeError(err?.message || 'Unable to resolve request right now.');
+    } finally {
+      setJoinRequestBusyId(null);
+    }
+  };
+
+  const handleMarkAllNotificationsRead = async () => {
+    setNotificationsBusy(true);
+    try {
+      const unread = notifications.filter((item) => !item.read);
+      await Promise.all(unread.map((item) => markNotificationRead(item.id)));
+      const inbox = await listNotificationsForCurrentUser(50);
+      setNotifications(inbox);
+    } catch {
+      // Best effort read state update.
+    } finally {
+      setNotificationsBusy(false);
     }
   };
 
@@ -2327,17 +2464,31 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
           <Input
-            label="Join Home by Code"
-            placeholder="e.g. A3K7Q2 or A3K7Q2-BOB"
+            label="Request Home Join by Code"
+            placeholder="e.g. A3K7Q2"
             value={householdCodeInput}
             onChange={(e) => setHouseholdCodeInput(e.target.value.toUpperCase())}
-            maxLength={24}
+            maxLength={6}
           />
-          <Button onClick={handleJoinHousehold} disabled={isHouseholdCodeBusy || householdCodeInput.trim().length < 6}>
-            {isHouseholdCodeBusy ? 'Joining...' : 'Join Home'}
+          <Button onClick={handleJoinHousehold} disabled={isHouseholdCodeBusy || householdCodeInput.trim().length < 6 || householdCodeInput.includes('-')}>
+            {isHouseholdCodeBusy ? 'Sending...' : 'Send Request'}
           </Button>
         </div>
-        <p className="text-xs text-slate-500">Invite codes are redeemed after the member creates or logs into their own account.</p>
+        <p className="text-xs text-slate-500">Your request has been sent to the household administrator and requires approval.</p>
+
+        {latestMyJoinRequest && (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="text-[11px] uppercase tracking-wide font-bold text-slate-500">Latest Join Request</p>
+            <p className="text-sm font-semibold text-slate-900 mt-1">
+              Status: {latestMyJoinRequest.status === 'pending'
+                ? 'Pending Approval'
+                : latestMyJoinRequest.status === 'approved'
+                  ? 'Approved'
+                  : 'Rejected'}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Submitted {new Date(latestMyJoinRequest.createdAt).toLocaleString()}</p>
+          </div>
+        )}
 
         {householdCodeError && (
           <p className="text-xs text-red-600 font-semibold">{householdCodeError}</p>
@@ -2345,6 +2496,86 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         {householdCodeSuccess && (
           <p className="text-xs text-emerald-700 font-semibold">{householdCodeSuccess}</p>
         )}
+
+        {profile.householdRole === 'OWNER' && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+            <p className="text-xs font-bold text-amber-700 uppercase tracking-wider">New Household Join Request{pendingOwnerRequests.length === 1 ? '' : 's'}</p>
+
+            {pendingOwnerRequests.length === 0 ? (
+              <p className="text-xs text-amber-700">No pending requests.</p>
+            ) : (
+              <div className="space-y-2">
+                {pendingOwnerRequests.map((request) => (
+                  <div key={request.id} className="rounded-lg border border-amber-200 bg-white p-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{request.requestingUserName || 'AERA user'}</p>
+                      <p className="text-[11px] text-slate-500">{request.requestingUserPhone || request.requestingUserEmail || 'No contact preview available'}</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">Requested {new Date(request.createdAt).toLocaleString()}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700"
+                        onClick={() => handleResolveJoinRequest(request, 'approved')}
+                        disabled={joinRequestBusyId === request.id}
+                      >
+                        {joinRequestBusyId === request.id ? 'Working...' : 'Approve'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-red-600 hover:bg-red-50"
+                        onClick={() => handleResolveJoinRequest(request, 'rejected')}
+                        disabled={joinRequestBusyId === request.id}
+                      >
+                        Reject
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Notifications</p>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-indigo-700 hover:bg-indigo-100"
+              onClick={handleMarkAllNotificationsRead}
+              disabled={notificationsBusy || unreadNotificationCount === 0}
+            >
+              Mark Read ({unreadNotificationCount})
+            </Button>
+          </div>
+
+          {notifications.length === 0 ? (
+            <p className="text-xs text-indigo-700">No notifications yet.</p>
+          ) : (
+            <div className="space-y-1">
+              {notifications.slice(0, 5).map((item) => (
+                <div
+                  key={item.id}
+                  className={`rounded-md border px-3 py-2 text-xs ${item.read ? 'border-indigo-100 bg-white text-slate-500' : 'border-indigo-300 bg-white text-slate-800 font-semibold'}`}
+                >
+                  <p>
+                    {item.type === 'household_join_request'
+                      ? 'New Household Join Request'
+                      : item.type === 'household_join_approved'
+                        ? 'Your request was approved.'
+                        : item.type === 'household_join_rejected'
+                          ? 'Your request was not approved.'
+                          : item.type}
+                  </p>
+                  <p className="text-[10px] mt-0.5 opacity-80">{new Date(item.createdAt).toLocaleString()}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div>
           <Input

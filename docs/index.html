@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <script type="module" crossorigin src="/assets/polyfills-50c9KVBo.js"></script>
+
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
     <title>AERA</title>
@@ -61,16 +63,97 @@
         }
       })(window.location);
     </script>
-  <script type="module" crossorigin src="/assets/index-Cbj0oizH.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/vendor-CCVjAPEY.js">
-  <link rel="modulepreload" crossorigin href="/assets/vendor-maps-S3fC-LOA.js">
-  <link rel="modulepreload" crossorigin href="/assets/vendor-react-DZ0IVLBb.js">
-  <link rel="modulepreload" crossorigin href="/assets/vendor-jspdf-Bd23t5aa.js">
-  <link rel="modulepreload" crossorigin href="/assets/vendor-supabase-ChvUvA8t.js">
-  <link rel="stylesheet" crossorigin href="/assets/vendor-maps-CIGW-MKW.css">
-  <link rel="stylesheet" crossorigin href="/assets/index-BYbDMLiU.css">
+    <script>
+      (function () {
+        var BOOT_TIMEOUT_MS = 20000;
+        var BANNER_ID = 'aera-bootstrap-timeout';
+        var firstErrorText = null;
+
+        function getBanner() {
+          return document.getElementById(BANNER_ID);
+        }
+
+        function renderBanner(message, detail) {
+          var banner = getBanner();
+          if (!banner) {
+            banner = document.createElement('div');
+            banner.id = BANNER_ID;
+            banner.style.position = 'fixed';
+            banner.style.left = '12px';
+            banner.style.right = '12px';
+            banner.style.top = '12px';
+            banner.style.zIndex = '2147483647';
+            banner.style.background = '#fff7ed';
+            banner.style.border = '1px solid #fdba74';
+            banner.style.color = '#7c2d12';
+            banner.style.padding = '12px 14px';
+            banner.style.borderRadius = '10px';
+            banner.style.fontFamily = 'Inter, system-ui, -apple-system, sans-serif';
+            banner.style.boxShadow = '0 6px 24px rgba(0,0,0,0.12)';
+            document.body.appendChild(banner);
+          }
+
+          banner.innerHTML = [
+            '<div style="font-size:13px;font-weight:700;line-height:1.3;">' + message + '</div>',
+            '<div style="font-size:12px;line-height:1.45;margin-top:4px;white-space:pre-wrap;">' + detail + '</div>'
+          ].join('');
+        }
+
+        function normalizeError(value) {
+          if (!value) return 'Unknown error';
+          if (typeof value === 'string') return value;
+          if (value.message) return String(value.message);
+          try {
+            return JSON.stringify(value);
+          } catch (e) {
+            return String(value);
+          }
+        }
+
+        function showBootstrapTimeout() {
+          if (window.__AERA_BOOTED__) return;
+          var detail = firstErrorText
+            ? ('First error: ' + firstErrorText)
+            : 'The app bootstrap timed out. This is usually a blocked script, stale cache, or browser compatibility issue. Try Cmd+Shift+R.';
+          renderBanner('AERA did not finish loading', detail);
+        }
+
+        window.addEventListener('error', function (event) {
+          if (window.__AERA_BOOTED__) return;
+          var target = event && event.target;
+          var loadError = target && target.tagName === 'SCRIPT' && target.src
+            ? ('Script failed to load: ' + target.src)
+            : null;
+          firstErrorText = firstErrorText || loadError || normalizeError(event && (event.error || event.message));
+          renderBanner('AERA startup error', firstErrorText || 'Unknown startup error');
+        }, true);
+
+        window.addEventListener('unhandledrejection', function (event) {
+          if (window.__AERA_BOOTED__) return;
+          firstErrorText = firstErrorText || normalizeError(event && event.reason);
+          renderBanner('AERA startup rejection', firstErrorText || 'Unhandled promise rejection');
+        });
+
+        window.setTimeout(showBootstrapTimeout, BOOT_TIMEOUT_MS);
+
+        window.setInterval(function () {
+          if (!window.__AERA_BOOTED__) return;
+          var banner = getBanner();
+          if (banner && banner.parentNode) {
+            banner.parentNode.removeChild(banner);
+          }
+        }, 1000);
+      })();
+    </script>
+  <script type="module" crossorigin src="/assets/index-D21_jD2s.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-DfKhLcPw.css">
+  <script type="module">import.meta.url;import("_").catch(()=>1);(async function*(){})().next();if(location.protocol!="file:"){window.__vite_is_modern_browser=true}</script>
+  <script type="module">!function(){if(window.__vite_is_modern_browser)return;console.warn("vite: loading legacy chunks, syntax error above and the same error below should be ignored");var e=document.getElementById("vite-legacy-polyfill"),n=document.createElement("script");n.src=e.src,n.onload=function(){System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))},document.body.appendChild(n)}();</script>
 </head>
   <body>
     <div id="root"></div>
+  <script nomodule>!function(){var e=document,t=e.createElement("script");if(!("noModule"in t)&&"onbeforeload"in t){var n=!1;e.addEventListener("beforeload",(function(e){if(e.target===t)n=!0;else if(!e.target.hasAttribute("nomodule")||!n)return;e.preventDefault()}),!0),t.type="module",t.src=".",e.head.appendChild(t),t.remove()}}();</script>
+  <script nomodule crossorigin id="vite-legacy-polyfill" src="/assets/polyfills-legacy-BK7ftpn4.js"></script>
+  <script nomodule crossorigin id="vite-legacy-entry" data-src="/assets/index-legacy-BC6n9_Fz.js">System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))</script>
 </body>
 </html>

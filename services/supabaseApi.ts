@@ -52,6 +52,16 @@ export type StateAlertRecord = {
   created_at?: string;
 };
 
+export type StateHouseholdJoinActivityRecord = {
+  state_id: string;
+  county_id: string;
+  pending_requests: number;
+  approved_last_24h: number;
+  rejected_last_24h: number;
+  submitted_last_24h: number;
+  last_activity_at: string | null;
+};
+
 export async function getCurrentMapScope() {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData?.user) throw new Error('Not authenticated');
@@ -98,6 +108,17 @@ export async function listActiveStateAlerts(limit = 100): Promise<StateAlertReco
 
   if (error) throw error;
   return (data || []) as StateAlertRecord[];
+}
+
+export async function listStateHouseholdJoinActivity(): Promise<StateHouseholdJoinActivityRecord[]> {
+  const { data, error } = await supabase
+    .from('state_household_join_activity_view')
+    .select('state_id, county_id, pending_requests, approved_last_24h, rejected_last_24h, submitted_last_24h, last_activity_at')
+    .order('pending_requests', { ascending: false })
+    .limit(250);
+
+  if (error) throw error;
+  return (data || []) as StateHouseholdJoinActivityRecord[];
 }
 
 const resolveOrgId = async (orgCode: string) => {

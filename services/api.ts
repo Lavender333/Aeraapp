@@ -519,6 +519,62 @@ export type HouseholdInvitationRecord = {
   createdAt: string;
 };
 
+export type HouseholdJoinRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export type HouseholdJoinRequestRecord = {
+  id: string;
+  householdId: string;
+  requestingUserId: string;
+  requestingUserName?: string;
+  requestingUserPhone?: string;
+  requestingUserEmail?: string;
+  status: HouseholdJoinRequestStatus;
+  createdAt: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+};
+
+export type AppNotificationRecord = {
+  id: string;
+  userId: string;
+  type: string;
+  relatedId?: string;
+  read: boolean;
+  createdAt: string;
+  metadata?: Record<string, any>;
+};
+
+export type HouseholdJoinResolutionAction = 'approved' | 'rejected';
+
+const mapJoinRequestRecord = (
+  row: any,
+  profileLookup: Map<string, { full_name?: string | null; phone?: string | null; email?: string | null }>
+): HouseholdJoinRequestRecord => {
+  const requester = profileLookup.get(String(row.requesting_user_id));
+  return {
+    id: row.id,
+    householdId: row.household_id,
+    requestingUserId: row.requesting_user_id,
+    requestingUserName: requester?.full_name || undefined,
+    requestingUserPhone: requester?.phone || undefined,
+    requestingUserEmail: requester?.email || undefined,
+    status: String(row.status || 'pending').toLowerCase() as HouseholdJoinRequestStatus,
+    createdAt: row.created_at,
+    resolvedAt: row.resolved_at || undefined,
+    resolvedBy: row.resolved_by || undefined,
+  };
+};
+
+const mapNotificationRecord = (row: any): AppNotificationRecord => ({
+  id: row.id,
+  userId: row.user_id,
+  type: row.type,
+  relatedId: row.related_id || undefined,
+  read: Boolean(row.read),
+  createdAt: row.created_at,
+  metadata: row.metadata || {},
+});
+
 const normalizeHouseholdCode = (code: string) =>
   String(code || '')
     .trim()
@@ -986,6 +1042,147 @@ export async function joinHouseholdByCode(code: string): Promise<HouseholdSummar
   });
 
   return getHouseholdSummaryForMembership({ household_id: target.id, role: 'MEMBER' });
+}
+
+export async function requestHouseholdJoinByCode(code: string): Promise<{
+  joinRequestId: string;
+  householdId: string;
+  status: HouseholdJoinRequestStatus;
+  message: string;
+}> {
+  const normalized = normalizeHouseholdCode(code);
+  if (!normalized || normalized.length < 6) {
+    throw new Error('Enter a valid household code.');
+  }
+
+  const { data, error } = await supabase.rpc('request_household_join_by_code', {
+    p_household_code: normalized,
+  });
+
+  if (error) throw error;
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row?.join_request_id) throw new Error('Unable to create household join request.');
+
+  return {
+    joinRequestId: row.join_request_id,
+    householdId: row.household_id,
+    status: String(row.status || 'pending').toLowerCase() as HouseholdJoinRequestStatus,
+    message: String(row.message || 'Request sent. Waiting for approval.'),
+  };
+}
+
+export async function listMyHouseholdJoinRequests(limit = 20): Promise<HouseholdJoinRequestRecord[]> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('household_join_requests')
+    .select('id, household_id, requesting_user_id, status, created_at, resolved_at, resolved_by')
+    .eq('requesting_user_id', authData.user.id)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+
+  const profileLookup = new Map<string, { full_name?: string | null; phone?: string | null; email?: string | null }>();
+  return (data || []).map((row: any) => mapJoinRequestRecord(row, profileLookup));
+}
+
+export async function listHouseholdJoinRequestsForOwner(limit = 50): Promise<HouseholdJoinRequestRecord[]> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const membership = await getCurrentHouseholdMembership(authData.user.id);
+  if (!membership?.household_id || membership.role !== 'OWNER') return [];
+
+  const { data, error } = await supabase
+    .from('household_join_requests')
+    .select('id, household_id, requesting_user_id, status, created_at, resolved_at, resolved_by')
+    .eq('household_id', membership.household_id)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+
+  const requesterIds = Array.from(new Set((data || []).map((row: any) => String(row.requesting_user_id)).filter(Boolean)));
+  const profileLookup = new Map<string, { full_name?: string | null; phone?: string | null; email?: string | null }>();
+
+  if (requesterIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, phone, email')
+      .in('id', requesterIds);
+
+    for (const profile of profiles || []) {
+      profileLookup.set(String((profile as any).id), {
+        full_name: (profile as any).full_name,
+        phone: (profile as any).phone,
+        email: (profile as any).email,
+      });
+    }
+  }
+
+  return (data || []).map((row: any) => mapJoinRequestRecord(row, profileLookup));
+}
+
+export async function resolveHouseholdJoinRequest(
+  joinRequestId: string,
+  action: HouseholdJoinResolutionAction,
+): Promise<{ joinRequestId: string; status: HouseholdJoinRequestStatus }> {
+  const normalizedAction = action === 'rejected' ? 'rejected' : 'approved';
+
+  const { data, error } = await supabase.functions.invoke('approve-household-join', {
+    body: {
+      join_request_id: joinRequestId,
+      action: normalizedAction,
+    },
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Unable to resolve household join request.');
+  }
+
+  if (!data?.success) {
+    throw new Error(data?.error || 'Unable to resolve household join request.');
+  }
+
+  return {
+    joinRequestId,
+    status: normalizedAction,
+  };
+}
+
+export async function listNotificationsForCurrentUser(limit = 50): Promise<AppNotificationRecord[]> {
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('id, user_id, type, related_id, metadata, read, created_at')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data || []).map(mapNotificationRecord);
+}
+
+export async function markNotificationRead(notificationId: string): Promise<{ ok: true }> {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read: true })
+    .eq('id', notificationId);
+
+  if (error) throw error;
+  return { ok: true };
+}
+
+export async function listRecentHouseholdModelEvents(limit = 50) {
+  const { data, error } = await supabase
+    .from('household_model_events')
+    .select('id, household_id, event_type, payload, created_at, processed_at')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return data || [];
 }
 
 export async function updateVitalsForUser(payload: {
