@@ -2868,6 +2868,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           <HouseholdManager 
             members={profile.household}
             onChange={(updated) => updateProfile('household', updated)}
+            readOnly={profile.householdRole !== 'OWNER'}
           />
         </div>
 

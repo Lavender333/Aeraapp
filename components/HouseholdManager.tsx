@@ -9,9 +9,10 @@ import { Plus, User, Trash2, Edit2, X, Save } from 'lucide-react';
 interface HouseholdManagerProps {
   members: HouseholdMember[];
   onChange: (members: HouseholdMember[]) => void;
+  readOnly?: boolean;
 }
 
-export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onChange }) => {
+export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onChange, readOnly = false }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [currentMember, setCurrentMember] = useState<HouseholdMember>({
@@ -227,20 +228,22 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
                   </p>
                 </div>
               </div>
-              <div className="flex gap-1">
-                <button 
-                  onClick={() => startEdit(member)} 
-                  className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                >
-                  <Edit2 size={16} />
-                </button>
-                <button 
-                  onClick={() => handleDelete(member.id)} 
-                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
+              {!readOnly && (
+                <div className="flex gap-1">
+                  <button 
+                    onClick={() => startEdit(member)} 
+                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                  >
+                    <Edit2 size={16} />
+                  </button>
+                  <button 
+                    onClick={() => handleDelete(member.id)} 
+                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -249,10 +252,11 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
           No household members added yet.
         </div>
       )}
-
-      <Button variant="outline" fullWidth onClick={startAdd} className="border-dashed border-slate-300 text-slate-600 hover:border-brand-400 hover:text-brand-600">
-        <Plus size={18} className="mr-2" /> Add Member
-      </Button>
+      {!readOnly && (
+        <Button variant="outline" fullWidth onClick={startAdd} className="border-dashed border-slate-300 text-slate-600 hover:border-brand-400 hover:text-brand-600">
+          <Plus size={18} className="mr-2" /> Add Member
+        </Button>
+      )}
     </div>
   );
 };
