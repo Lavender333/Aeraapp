@@ -796,30 +796,32 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
                </p>
             )}
 
-            <div className="space-y-3">
-              <label className="text-xl font-bold text-slate-900">{t('help.what_need')}</label>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { id: 'Medical', icon: <Ambulance size={24}/>, color: 'red' },
-                  { id: 'Fire', icon: <Flame size={24}/>, color: 'orange' },
-                  { id: 'Flood', icon: <Droplets size={24}/>, color: 'blue' },
-                  { id: 'Police', icon: <Shield size={24}/>, color: 'slate' },
-                ].map((type) => (
-                  <button
-                    key={type.id}
-                    onClick={() => updateData({ emergencyType: type.id })}
-                    className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${
-                      data.emergencyType === type.id 
-                      ? `border-${type.color}-600 bg-${type.color}-50 text-${type.color}-900 ring-2 ring-${type.color}-600 ring-offset-1` 
-                      : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
-                    }`}
-                  >
-                    {type.icon}
-                    <span className="font-bold text-lg">{type.id}</span>
-                  </button>
-                ))}
+            {data.isSafe === false && (
+              <div className="space-y-3">
+                <label className="text-xl font-bold text-slate-900">{t('help.what_need')}</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { id: 'Medical', icon: <Ambulance size={24}/>, color: 'red' },
+                    { id: 'Fire', icon: <Flame size={24}/>, color: 'orange' },
+                    { id: 'Flood', icon: <Droplets size={24}/>, color: 'blue' },
+                    { id: 'Police', icon: <Shield size={24}/>, color: 'slate' },
+                  ].map((type) => (
+                    <button
+                      key={type.id}
+                      onClick={() => updateData({ emergencyType: type.id })}
+                      className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${
+                        data.emergencyType === type.id 
+                        ? `border-${type.color}-600 bg-${type.color}-50 text-${type.color}-900 ring-2 ring-${type.color}-600 ring-offset-1` 
+                        : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
+                      }`}
+                    >
+                      {type.icon}
+                      <span className="font-bold text-lg">{type.id}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="space-y-3">
               <label className="text-xl font-bold text-slate-900">{t('help.injured_q')}</label>
