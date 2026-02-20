@@ -415,30 +415,24 @@ export const StorageService = {
       if (resp?.token) this.setAuthToken(resp.token);
       if (resp?.refreshToken) this.setRefreshToken(resp.refreshToken);
       if (resp?.user) {
-        const [remoteProfile, remoteVitals] = await Promise.all([
-          fetchProfileForUser(),
-          fetchVitalsForUser(),
-        ]);
-        const householdSummary = (await fetchHouseholdForCurrentUser()) || (await ensureHouseholdForCurrentUser());
-
         const profile: UserProfile = {
           id: resp.user.id,
-          fullName: remoteProfile?.fullName || resp.user.fullName || '',
-          email: remoteProfile?.email || resp.user.email || '',
-          phone: remoteProfile?.phone || resp.user.phone || '',
-          address: remoteProfile?.address || '',
-          householdMembers: remoteVitals?.householdMembers || 1,
-          household: remoteVitals?.household || [],
-          petDetails: remoteVitals?.petDetails || '',
-          medicalNeeds: remoteVitals?.medicalNeeds || '',
-          emergencyContactName: remoteProfile?.emergencyContactName || '',
-          emergencyContactPhone: remoteProfile?.emergencyContactPhone || '',
-          emergencyContactRelation: remoteProfile?.emergencyContactRelation || '',
-          householdId: householdSummary?.householdId,
-          householdName: householdSummary?.householdName,
-          householdCode: householdSummary?.householdCode,
-          householdRole: householdSummary?.householdRole,
-          communityId: remoteProfile?.communityId || resp.user.orgId || '',
+          fullName: resp.user.fullName || '',
+          email: resp.user.email || '',
+          phone: resp.user.phone || '',
+          address: '',
+          householdMembers: 1,
+          household: [],
+          petDetails: '',
+          medicalNeeds: '',
+          emergencyContactName: '',
+          emergencyContactPhone: '',
+          emergencyContactRelation: '',
+          householdId: undefined,
+          householdName: undefined,
+          householdCode: undefined,
+          householdRole: undefined,
+          communityId: resp.user.orgId || '',
           role: resp.user.role || 'GENERAL_USER',
           language: 'en',
           active: true,
@@ -446,6 +440,49 @@ export const StorageService = {
           notifications: { push: true, sms: true, email: true }
         };
         this.saveProfile(profile);
+
+        void (async () => {
+          try {
+            const [profileResult, vitalsResult, householdResult] = await Promise.allSettled([
+              fetchProfileForUser(),
+              fetchVitalsForUser(),
+              fetchHouseholdForCurrentUser(),
+            ]);
+
+            const remoteProfile = profileResult.status === 'fulfilled' ? profileResult.value : null;
+            const remoteVitals = vitalsResult.status === 'fulfilled' ? vitalsResult.value : null;
+
+            let householdSummary = householdResult.status === 'fulfilled' ? householdResult.value : null;
+            if (!householdSummary) {
+              householdSummary = await ensureHouseholdForCurrentUser();
+            }
+
+            const latest = this.getProfile();
+            if (!latest?.id || latest.id !== resp.user.id) return;
+
+            this.saveProfile({
+              ...latest,
+              fullName: remoteProfile?.fullName || latest.fullName || resp.user.fullName || '',
+              email: remoteProfile?.email || latest.email || resp.user.email || '',
+              phone: remoteProfile?.phone || latest.phone || resp.user.phone || '',
+              address: remoteProfile?.address || latest.address || '',
+              householdMembers: remoteVitals?.householdMembers || latest.householdMembers || 1,
+              household: remoteVitals?.household || latest.household || [],
+              petDetails: remoteVitals?.petDetails || latest.petDetails || '',
+              medicalNeeds: remoteVitals?.medicalNeeds || latest.medicalNeeds || '',
+              emergencyContactName: remoteProfile?.emergencyContactName || latest.emergencyContactName || '',
+              emergencyContactPhone: remoteProfile?.emergencyContactPhone || latest.emergencyContactPhone || '',
+              emergencyContactRelation: remoteProfile?.emergencyContactRelation || latest.emergencyContactRelation || '',
+              householdId: householdSummary?.householdId,
+              householdName: householdSummary?.householdName,
+              householdCode: householdSummary?.householdCode,
+              householdRole: householdSummary?.householdRole,
+              communityId: remoteProfile?.communityId || latest.communityId || resp.user.orgId || '',
+            });
+          } catch (hydrateErr) {
+            console.warn('Post-login profile hydration failed', hydrateErr);
+          }
+        })();
       }
       return resp;
     } catch (err: any) {
