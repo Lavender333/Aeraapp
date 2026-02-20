@@ -640,7 +640,9 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
                   CALL 911 NOW
                 </Button>
                 <p className="text-center text-sm font-bold opacity-80">
-                  If you cannot call, continue filling this form.
+                  Do not continue this form.
+                  <br />
+                  After contacting 911, you may notify your emergency contact.
                 </p>
               </div>
             )}
