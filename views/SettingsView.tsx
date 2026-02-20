@@ -2369,7 +2369,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           <button type="button" onClick={() => openSectionAndScroll('household')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Household</button>
           <button type="button" onClick={() => openSectionAndScroll('contacts')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Contacts</button>
           <button type="button" onClick={() => openSectionAndScroll('community')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Community</button>
-          <button type="button" onClick={() => openSectionAndScroll('security')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Security</button>
+          <button type="button" onClick={() => openSectionAndScroll('security')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Preparedness</button>
         </div>
       </section>
 
@@ -2938,8 +2938,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               <HeartPulse size={24} />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-slate-800">Security</h2>
-              <p className="text-xs text-slate-500">Preparedness and vulnerability inputs for planning.</p>
+              <h2 className="text-lg font-semibold text-slate-800">Preparedness</h2>
+              <p className="text-xs text-slate-500">Health and mobility planning details.</p>
             </div>
           </div>
           <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.security ? 'rotate-180' : ''}`} />
