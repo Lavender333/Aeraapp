@@ -6,7 +6,7 @@ import { Button } from '../components/Button';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
-import { AppNotificationRecord, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, updateProfileForUser, updateVitalsForUser } from '../services/api';
+import { AppNotificationRecord, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdsForCurrentUser, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, switchActiveHousehold, updateProfileForUser, updateVitalsForUser } from '../services/api';
 import { getOrgByCode } from '../services/supabase';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
 import { isValidPhoneForInvite, validateHouseholdMembers } from '../services/validation';
@@ -180,6 +180,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [inviteBusyMemberId, setInviteBusyMemberId] = useState<string | null>(null);
   const [ownerJoinRequests, setOwnerJoinRequests] = useState<HouseholdJoinRequestRecord[]>([]);
   const [myJoinRequests, setMyJoinRequests] = useState<HouseholdJoinRequestRecord[]>([]);
+  const [householdOptions, setHouseholdOptions] = useState<HouseholdOption[]>([]);
+  const [isSwitchingHousehold, setIsSwitchingHousehold] = useState(false);
   const [notifications, setNotifications] = useState<AppNotificationRecord[]>([]);
   const [joinRequestBusyId, setJoinRequestBusyId] = useState<string | null>(null);
   const [notificationsBusy, setNotificationsBusy] = useState(false);
@@ -273,6 +275,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           if (!active) return;
           applyHouseholdSummary(created);
         }
+
+        try {
+          const options = await listHouseholdsForCurrentUser();
+          if (active) setHouseholdOptions(options);
+        } catch {
+          if (active) setHouseholdOptions([]);
+        }
       } catch {
         // Ignore remote hydration errors; local profile remains available.
       }
@@ -329,6 +338,23 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       active = false;
     };
   }, [profile.householdId]);
+
+  useEffect(() => {
+    let active = true;
+    const loadHouseholds = async () => {
+      try {
+        const options = await listHouseholdsForCurrentUser();
+        if (active) setHouseholdOptions(options);
+      } catch {
+        if (active) setHouseholdOptions([]);
+      }
+    };
+
+    loadHouseholds();
+    return () => {
+      active = false;
+    };
+  }, [profile.householdId, profile.householdRole]);
 
   useEffect(() => {
     let active = true;
@@ -943,8 +969,19 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         suggestedCode: buildMemberInviteCode(member),
       });
       const text = `AERA invite for ${member.name}: create or log in to your account, then use invite code ${invitation.invitationCode} to join this household.`;
-      await navigator.clipboard.writeText(text);
-      setInviteStatusMessage(`Invite copied for ${member.name}. Current status: ${invitation.status}.`);
+      const encodedText = encodeURIComponent(text);
+      const encodedSubject = encodeURIComponent(`AERA household invite for ${member.name}`);
+      if (navigator.share) {
+        await navigator.share({
+          title: `AERA household invite for ${member.name}`,
+          text,
+        });
+        setInviteStatusMessage(`Invite shared for ${member.name}. Current status: ${invitation.status}.`);
+      } else {
+        window.location.href = `mailto:?subject=${encodedSubject}&body=${encodedText}`;
+        await navigator.clipboard.writeText(text);
+        setInviteStatusMessage(`Invite prepared for ${member.name}. Opened email and copied message.`);
+      }
       const invites = await listHouseholdInvitationsForCurrentUser();
       setMemberInvites(invites);
     } catch (err: any) {
@@ -970,7 +1007,17 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         forceNew: true,
       });
       const text = `AERA invite for ${member.name}: create or log in to your account, then use invite code ${invitation.invitationCode} to join this household.`;
-      await navigator.clipboard.writeText(text);
+      const encodedText = encodeURIComponent(text);
+      const encodedSubject = encodeURIComponent(`AERA household invite for ${member.name}`);
+      if (navigator.share) {
+        await navigator.share({
+          title: `AERA household invite for ${member.name}`,
+          text,
+        });
+      } else {
+        window.location.href = `mailto:?subject=${encodedSubject}&body=${encodedText}`;
+        await navigator.clipboard.writeText(text);
+      }
       setInviteStatusMessage(`New invite generated for ${member.name}.`);
       const invites = await listHouseholdInvitationsForCurrentUser();
       setMemberInvites(invites);
@@ -1031,6 +1078,30 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       setHouseholdCodeError(err?.message || 'Unable to submit join request.');
     } finally {
       setIsHouseholdCodeBusy(false);
+    }
+  };
+
+  const handleSwitchHousehold = async (nextHouseholdId: string) => {
+    if (!nextHouseholdId || nextHouseholdId === profile.householdId) return;
+    setHouseholdCodeError(null);
+    setHouseholdCodeSuccess(null);
+    setIsSwitchingHousehold(true);
+    try {
+      await switchActiveHousehold(nextHouseholdId);
+      const selected = householdOptions.find((item) => item.householdId === nextHouseholdId);
+      if (selected) {
+        applyHouseholdSummary({
+          householdId: selected.householdId,
+          householdCode: selected.householdCode,
+          householdName: selected.householdName,
+          householdRole: selected.householdRole,
+        });
+      }
+      setHouseholdCodeSuccess('Active household updated.');
+    } catch (err: any) {
+      setHouseholdCodeError(err?.message || 'Unable to switch households right now.');
+    } finally {
+      setIsSwitchingHousehold(false);
     }
   };
 
@@ -2462,6 +2533,25 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           </Button>
         </div>
 
+        {householdOptions.length > 1 && (
+          <div className="space-y-1">
+            <label className="block text-sm font-medium text-slate-700">Active Household</label>
+            <select
+              value={profile.householdId || ''}
+              onChange={(e) => handleSwitchHousehold(e.target.value)}
+              disabled={isSwitchingHousehold}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              {householdOptions.map((option) => (
+                <option key={option.householdId} value={option.householdId}>
+                  {option.householdName} ({option.householdCode}) • {option.householdRole}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-500">Switch to another linked household context.</p>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
           <Input
             label="Request Home Join by Code"
@@ -2471,7 +2561,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             maxLength={6}
           />
           <Button onClick={handleJoinHousehold} disabled={isHouseholdCodeBusy || householdCodeInput.trim().length < 6 || householdCodeInput.includes('-')}>
-            {isHouseholdCodeBusy ? 'Sending...' : 'Send Request'}
+            {isHouseholdCodeBusy ? 'Sending...' : 'Click Here to Connect'}
           </Button>
         </div>
         <p className="text-xs text-slate-500">Your request has been sent to the household administrator and requires approval.</p>
@@ -2631,7 +2721,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                       onClick={() => handleCopyMemberInvite(member)}
                       disabled={inviteBusyMemberId === member.id || !isValidPhoneForInvite(member.loginPhone || '')}
                     >
-                      <Copy size={14} className="mr-1" /> {inviteBusyMemberId === member.id ? 'Working...' : 'Copy'}
+                      <Copy size={14} className="mr-1" /> {inviteBusyMemberId === member.id ? 'Working...' : 'Share'}
                     </Button>
                     <Button
                       size="sm"

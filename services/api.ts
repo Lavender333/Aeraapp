@@ -502,6 +502,13 @@ export type HouseholdSummary = {
   memberCount: number;
 };
 
+export type HouseholdOption = {
+  householdId: string;
+  householdCode: string;
+  householdName: string;
+  householdRole: 'OWNER' | 'MEMBER';
+};
+
 export type HouseholdInvitationStatus = 'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED';
 
 export type HouseholdInvitationRecord = {
@@ -1005,11 +1012,14 @@ export async function joinHouseholdByCode(code: string): Promise<HouseholdSummar
   }
 
   if (currentMembership?.household_id) {
-    const { error: leaveError } = await supabase
-      .from('household_memberships')
-      .delete()
-      .eq('profile_id', userId);
+    const { data: leaveData, error: leaveError } = await supabase.rpc('leave_household', {
+      p_household_id: currentMembership.household_id,
+      p_profile_id: userId,
+    });
     if (leaveError) throw leaveError;
+    if (leaveData && typeof leaveData === 'object' && leaveData.success === false) {
+      throw new Error(leaveData.error || 'Unable to leave existing household.');
+    }
   }
 
   const { error: joinError } = await supabase
@@ -1151,6 +1161,98 @@ export async function resolveHouseholdJoinRequest(
     joinRequestId,
     status: normalizedAction,
   };
+}
+
+export async function listHouseholdsForCurrentUser(): Promise<HouseholdOption[]> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const { data: memberships, error: membershipsError } = await supabase
+    .from('household_memberships')
+    .select('household_id, role')
+    .eq('profile_id', authData.user.id);
+
+  if (membershipsError) throw membershipsError;
+  if (!memberships?.length) return [];
+
+  const householdIds = Array.from(new Set(memberships.map((row: any) => row.household_id).filter(Boolean)));
+  if (householdIds.length === 0) return [];
+
+  const { data: households, error: householdsError } = await supabase
+    .from('households')
+    .select('id, household_code, home_name')
+    .in('id', householdIds);
+
+  if (householdsError) throw householdsError;
+
+  const householdMap = new Map<string, any>((households || []).map((household: any) => [String(household.id), household]));
+
+  return memberships
+    .map((membership: any) => {
+      const household = householdMap.get(String(membership.household_id));
+      if (!household) return null;
+      return {
+        householdId: String(household.id),
+        householdCode: String(household.household_code || ''),
+        householdName: String(household.home_name || 'Your Home'),
+        householdRole: (String(membership.role || 'MEMBER').toUpperCase() === 'OWNER' ? 'OWNER' : 'MEMBER') as 'OWNER' | 'MEMBER',
+      };
+    })
+    .filter(Boolean) as HouseholdOption[];
+}
+
+export async function switchActiveHousehold(householdId: string): Promise<{ activeHouseholdId: string }> {
+  const { data, error } = await supabase.rpc('switch_active_household', {
+    p_household_id: householdId,
+  });
+
+  if (error) throw error;
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row?.active_household_id && !row?.activeHouseholdId) {
+    return { activeHouseholdId: householdId };
+  }
+
+  return {
+    activeHouseholdId: String(row.active_household_id || row.activeHouseholdId || householdId),
+  };
+}
+
+export async function transferHouseholdOwnership(householdId: string, newOwnerId: string): Promise<{ success: true }> {
+  const { data, error } = await supabase.functions.invoke('transfer-household-ownership', {
+    body: {
+      household_id: householdId,
+      new_owner_id: newOwnerId,
+    },
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Unable to transfer ownership.');
+  }
+
+  if (!data?.success) {
+    throw new Error(data?.error || 'Unable to transfer ownership.');
+  }
+
+  return { success: true };
+}
+
+export async function leaveCurrentHousehold(householdId?: string): Promise<{ success: true }> {
+  const { data, error } = await supabase.functions.invoke('leave-household', {
+    body: {
+      household_id: householdId || null,
+    },
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Unable to leave household.');
+  }
+
+  if (!data?.success) {
+    throw new Error(data?.error || 'Unable to leave household.');
+  }
+
+  return { success: true };
 }
 
 export async function listNotificationsForCurrentUser(limit = 50): Promise<AppNotificationRecord[]> {

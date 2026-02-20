@@ -81,6 +81,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
   const [stockLoading, setStockLoading] = useState(false);
   const [outreachFlags, setOutreachFlags] = useState<OutreachFlagRow[]>([]);
   const [memberNeeds, setMemberNeeds] = useState<MemberPreparednessNeedRow[]>([]);
+  const [memberSearch, setMemberSearch] = useState('');
 
   // Broadcast State
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
@@ -149,6 +150,10 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     danger: statusCounts.danger || members.filter(m => m.status === 'DANGER').length,
     unknown: statusCounts.unknown || members.filter(m => m.status === 'UNKNOWN').length,
   };
+
+  const filteredMembers = members.filter((member) =>
+    member.name.toLowerCase().includes(memberSearch.trim().toLowerCase())
+  );
 
   // Use member count for coverage; fallback to registeredPopulation if no linked members yet
   const coverageBase = stats.total || registeredPopulation;
@@ -600,10 +605,21 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
           ) : (
             // List View
             <div className="space-y-3">
-               {members.length === 0 && (
-                 <p className="text-center text-slate-500 mt-8">No members linked to {communityId} yet.</p>
+               <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Search Members</label>
+                 <input
+                   value={memberSearch}
+                   onChange={(e) => setMemberSearch(e.target.value)}
+                   placeholder="Search by first or last name"
+                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                 />
+               </div>
+               {filteredMembers.length === 0 && (
+                 <p className="text-center text-slate-500 mt-8">
+                   {members.length === 0 ? `No members linked to ${communityId} yet.` : 'No members match your search.'}
+                 </p>
                )}
-               {members.map(member => (
+               {filteredMembers.map(member => (
                  <div 
                    key={member.id} 
                    onClick={() => setSelectedMember(member)}
