@@ -6,6 +6,13 @@ import { t } from '../services/translations';
 import { StorageService } from '../services/storage';
 import { getInventoryStatuses } from '../services/inventoryStatus';
 
+const REQUESTED_RESOURCE_COUNTS = {
+  water: 42,
+  food: 35,
+  blankets: 28,
+  medicalKits: 18,
+} as const;
+
 export const LogisticsView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const [depot, setDepot] = useState<OrganizationProfile | null>(null);
   const [inventory, setInventory] = useState<OrgInventory>({ water: 0, food: 0, blankets: 0, medicalKits: 0 });
@@ -48,6 +55,23 @@ export const LogisticsView: React.FC<{ setView: (v: ViewState) => void }> = ({ s
 
   const coverageBase = memberCount || depot?.registeredPopulation || 0;
   const status = getInventoryStatuses(inventory, coverageBase);
+  const totalRequestedResources =
+    REQUESTED_RESOURCE_COUNTS.water +
+    REQUESTED_RESOURCE_COUNTS.food +
+    REQUESTED_RESOURCE_COUNTS.blankets +
+    REQUESTED_RESOURCE_COUNTS.medicalKits;
+
+  const depotResourcePercentages = [
+    { label: 'Water', key: 'water' as const, unit: 'cases', count: REQUESTED_RESOURCE_COUNTS.water },
+    { label: 'Food', key: 'food' as const, unit: 'boxes', count: REQUESTED_RESOURCE_COUNTS.food },
+    { label: 'Blankets', key: 'blankets' as const, unit: 'units', count: REQUESTED_RESOURCE_COUNTS.blankets },
+    { label: 'Med Kits', key: 'medicalKits' as const, unit: 'kits', count: REQUESTED_RESOURCE_COUNTS.medicalKits },
+  ].map((item) => ({
+    ...item,
+    percentage: totalRequestedResources > 0
+      ? Number(((item.count / totalRequestedResources) * 100).toFixed(1))
+      : 0,
+  }));
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col pb-safe animate-fade-in">
@@ -115,8 +139,35 @@ export const LogisticsView: React.FC<{ setView: (v: ViewState) => void }> = ({ s
                    })}
                  </div>
                </div>
+
+               <div className="mt-4 pt-3 border-t border-brand-200/50 space-y-2">
+                 <p className="text-[10px] uppercase font-bold text-brand-600">Nearest Resource Depot</p>
+                 {depotResourcePercentages.map((resource) => (
+                   <div key={resource.key} className="rounded-lg border border-brand-100 bg-white p-2">
+                     <div className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1">
+                       <span>{resource.label} ({resource.count} {resource.unit})</span>
+                       <span>{resource.percentage.toFixed(1)}%</span>
+                     </div>
+                     <div className="h-2 rounded bg-brand-100 overflow-hidden">
+                       <div
+                         className="h-full bg-brand-600"
+                         style={{ width: `${resource.percentage}%` }}
+                       />
+                     </div>
+                   </div>
+                 ))}
+               </div>
              </div>
            </div>
+        </div>
+
+        <div className="pt-2">
+          <button
+            onClick={() => setView('DASHBOARD')}
+            className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
+          >
+            <ArrowLeft size={16} /> Back to Dashboard
+          </button>
         </div>
 
       </div>
