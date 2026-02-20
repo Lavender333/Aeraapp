@@ -12,7 +12,7 @@ import { ProgressBar } from '../components/ProgressBar';
 import { StorageService } from '../services/storage';
 import { notifyEmergencyContact } from '../services/api';
 import { t } from '../services/translations';
-import { ArrowLeft, CheckCircle, Ambulance, Flame, Droplets, Zap, Shield, Camera, StopCircle, RefreshCw, MessageSquare, Navigation, MapPin, X, Wifi, Settings, HelpCircle, Globe, AlertTriangle, WifiOff, Clock, LocateFixed } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Ambulance, Flame, Droplets, Zap, Shield, Camera, StopCircle, RefreshCw, MessageSquare, Navigation, MapPin, X, Wifi, Settings, HelpCircle, Globe, AlertTriangle, AlertOctagon, WifiOff, Clock, LocateFixed } from 'lucide-react';
 
 delete (L.Icon.Default as any).prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
