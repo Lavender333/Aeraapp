@@ -83,6 +83,17 @@ class SupabaseClient:
         resp.raise_for_status()
         return resp.json()
 
+    def delete(self, table: str, filters: Dict[str, Any]) -> None:
+        headers = dict(self.headers)
+        headers["Prefer"] = "return=minimal"
+        resp = requests.delete(
+            f"{self.url}/rest/v1/{table}",
+            headers=headers,
+            params=filters,
+            timeout=120,
+        )
+        resp.raise_for_status()
+
 
 def calculate_risk(df: pd.DataFrame) -> pd.Series:
     household_component = np.clip(df["household_size"].fillna(1).astype(float), 1, None) * 0.4
@@ -271,11 +282,15 @@ def run() -> int:
                 }
             )
 
-        client.upsert(
-            "region_snapshots",
-            snapshot_rows,
-            on_conflict="snapshot_date,county_id,state_id,organization_id",
-        )
+        try:
+            client.upsert(
+                "region_snapshots",
+                snapshot_rows,
+                on_conflict="snapshot_date,county_id,state_id,organization_id",
+            )
+        except requests.HTTPError:
+            client.delete("region_snapshots", {"snapshot_date": f"eq.{today.isoformat()}"})
+            client.insert("region_snapshots", snapshot_rows)
         log_stage("drift", "SUCCESS", processed=len(snapshot_rows), metrics={"snapshot_rows": len(snapshot_rows)})
 
         log_stage("pipeline", "SUCCESS", processed=len(df), metrics={"run_id": run_id})
