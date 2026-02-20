@@ -1276,6 +1276,81 @@ export async function markNotificationRead(notificationId: string): Promise<{ ok
   return { ok: true };
 }
 
+export async function createHouseholdSafetyNotificationsForCurrentUser(payload: {
+  status: 'SAFE' | 'DANGER';
+  requestId?: string;
+  location?: string;
+  emergencyType?: string;
+}): Promise<{ count: number }> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const userId = authData.user.id;
+  const membership = await getCurrentHouseholdMembership(userId);
+  if (!membership?.household_id) return { count: 0 };
+
+  const [{ data: profile }, { data: householdMembers }, { data: acceptedInvite }] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', userId)
+      .maybeSingle(),
+    supabase
+      .from('household_memberships')
+      .select('profile_id')
+      .eq('household_id', membership.household_id),
+    supabase
+      .from('household_invitations')
+      .select('invitee_member_ref')
+      .eq('household_id', membership.household_id)
+      .eq('accepted_by_profile_id', userId)
+      .eq('status', 'ACCEPTED')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  const reporterName = String((profile as any)?.full_name || 'Household member');
+  const memberRef = String((acceptedInvite as any)?.invitee_member_ref || '');
+
+  const recipientIds = Array.from(new Set((householdMembers || [])
+    .map((row: any) => String(row.profile_id || ''))
+    .filter((id: string) => Boolean(id) && id !== userId)));
+
+  if (recipientIds.length === 0) return { count: 0 };
+
+  const notificationType = payload.status === 'DANGER'
+    ? 'household_member_reported_danger'
+    : 'household_member_reported_safe';
+
+  const metadata = {
+    householdId: membership.household_id,
+    reporterId: userId,
+    reporterName,
+    status: payload.status,
+    emergencyType: payload.emergencyType || null,
+    location: payload.location || null,
+    requestId: payload.requestId || null,
+    memberRef: memberRef || null,
+    createdAt: new Date().toISOString(),
+  };
+
+  const rows = recipientIds.map((recipientId) => ({
+    user_id: recipientId,
+    type: notificationType,
+    related_id: payload.requestId || null,
+    metadata,
+    read: false,
+  }));
+
+  const { error } = await supabase
+    .from('notifications')
+    .insert(rows);
+
+  if (error) throw error;
+  return { count: rows.length };
+}
+
 export async function listRecentHouseholdModelEvents(limit = 50) {
   const { data, error } = await supabase
     .from('household_model_events')

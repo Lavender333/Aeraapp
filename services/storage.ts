@@ -1,7 +1,7 @@
 
 import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, RoleDefinition } from '../types';
 import { REQUEST_ITEM_MAP } from './validation';
-import { ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, fetchProfileForUser, fetchVitalsForUser } from './api';
+import { ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, fetchProfileForUser, fetchVitalsForUser, createHouseholdSafetyNotificationsForCurrentUser } from './api';
 import { getMemberStatus, setMemberStatus } from './api';
 
 const DB_KEY = 'aera_backend_db_v4'; // Force fresh database
@@ -1085,6 +1085,18 @@ export const StorageService = {
       db.requests[0].clientId = clientId;
       db.requests[0].synced = true;
       this.saveDB(db);
+      if (data.isSafe !== null) {
+        try {
+          await createHouseholdSafetyNotificationsForCurrentUser({
+            status: data.isSafe ? 'SAFE' : 'DANGER',
+            requestId: serverId,
+            location: locationToUse,
+            emergencyType: data.emergencyType,
+          });
+        } catch (notifyErr) {
+          console.warn('Household safety notifications failed', notifyErr);
+        }
+      }
       if (profile?.communityId && profile?.fullName && data.isSafe !== null) {
         const status = data.isSafe ? 'SAFE' : 'DANGER';
         this.saveMemberStatus(profile.communityId, profile.id, profile.fullName, status as any);
@@ -1351,6 +1363,19 @@ export const StorageService = {
                 priority: remote.priority || db.requests[idx].priority,
                 synced: true,
               };
+            }
+          }
+          const reportData = requestPayload?.data || {};
+          if (reportData?.isSafe !== null && reportData?.isSafe !== undefined) {
+            try {
+              await createHouseholdSafetyNotificationsForCurrentUser({
+                status: reportData.isSafe ? 'SAFE' : 'DANGER',
+                requestId: remote.id || op.localRequestId,
+                location: requestPayload?.location,
+                emergencyType: reportData?.emergencyType,
+              });
+            } catch (notifyErr) {
+              console.warn('Household safety notifications (sync) failed', notifyErr);
             }
           }
           processed++;

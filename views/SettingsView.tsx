@@ -1076,6 +1076,21 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     [notifications],
   );
 
+  const latestSafetyStatusByMember = useMemo(() => {
+    const mapped: Record<string, { status: 'SAFE' | 'DANGER'; at?: string }> = {};
+    for (const item of notifications) {
+      if (item.type !== 'household_member_reported_safe' && item.type !== 'household_member_reported_danger') continue;
+      const metadata = item.metadata || {};
+      const memberRef = String((metadata as any).memberRef || '');
+      if (!memberRef || mapped[memberRef]) continue;
+      mapped[memberRef] = {
+        status: item.type === 'household_member_reported_danger' ? 'DANGER' : 'SAFE',
+        at: item.createdAt,
+      };
+    }
+    return mapped;
+  }, [notifications]);
+
   const handleCopyMemberInvite = async (member: HouseholdMember) => {
     setInviteStatusMessage(null);
     setInviteError(null);
@@ -2845,6 +2860,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                         ? 'Your request was approved.'
                         : item.type === 'household_join_rejected'
                           ? 'Your request was not approved.'
+                          : item.type === 'household_member_reported_danger'
+                            ? `${String((item.metadata as any)?.reporterName || 'A household member')} reported DANGER.`
+                            : item.type === 'household_member_reported_safe'
+                              ? `${String((item.metadata as any)?.reporterName || 'A household member')} reported SAFE.`
                           : item.type}
                   </p>
                   <p className="text-[10px] mt-0.5 opacity-80">{new Date(item.createdAt).toLocaleString()}</p>
@@ -2873,6 +2892,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             members={profile.household}
             onChange={(updated) => updateProfile('household', updated)}
             readOnly={profile.householdRole !== 'OWNER'}
+            latestSafetyStatusByMember={latestSafetyStatusByMember}
           />
         </div>
 

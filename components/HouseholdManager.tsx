@@ -10,9 +10,10 @@ interface HouseholdManagerProps {
   members: HouseholdMember[];
   onChange: (members: HouseholdMember[]) => void;
   readOnly?: boolean;
+  latestSafetyStatusByMember?: Record<string, { status: 'SAFE' | 'DANGER'; at?: string }>;
 }
 
-export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onChange, readOnly = false }) => {
+export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onChange, readOnly = false, latestSafetyStatusByMember = {} }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [currentMember, setCurrentMember] = useState<HouseholdMember>({
@@ -226,6 +227,14 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
                     {member.loginEnabled && member.loginPhone && ` • ${member.loginPhone}`}
                     {member.needs && ` • ${member.needs}`}
                   </p>
+                  {latestSafetyStatusByMember[member.id] && (
+                    <p className={`text-[11px] mt-0.5 font-semibold ${latestSafetyStatusByMember[member.id].status === 'DANGER' ? 'text-red-700' : 'text-emerald-700'}`}>
+                      Latest safety status: {latestSafetyStatusByMember[member.id].status}
+                      {latestSafetyStatusByMember[member.id].at
+                        ? ` • ${new Date(latestSafetyStatusByMember[member.id].at as string).toLocaleString()}`
+                        : ''}
+                    </p>
+                  )}
                 </div>
               </div>
               {!readOnly && (
