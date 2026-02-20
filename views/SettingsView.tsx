@@ -2367,7 +2367,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => openSectionAndScroll('profile')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Profile</button>
           <button type="button" onClick={() => openSectionAndScroll('household')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Household</button>
-          <button type="button" onClick={() => openSectionAndScroll('contacts')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Contacts</button>
+          <button type="button" onClick={() => openSectionAndScroll('contacts')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Emergancy Contact</button>
           <button type="button" onClick={() => openSectionAndScroll('community')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Community</button>
           <button type="button" onClick={() => openSectionAndScroll('security')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Preparedness</button>
         </div>
@@ -2598,7 +2598,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               <Phone size={24} />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-slate-800">Contacts</h2>
+              <h2 className="text-lg font-semibold text-slate-800">Emergancy Contact</h2>
               <p className="text-xs text-slate-500">
                 {profile.emergencyContactName ? `${profile.emergencyContactName} • ${profile.emergencyContactPhone || 'No phone'}` : 'Emergency contact not set'}
               </p>
