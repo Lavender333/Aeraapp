@@ -85,6 +85,7 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
   const lastUpdateAtRef = useRef<number>(0);
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [pinLocation, setPinLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [isSearchingMap, setIsSearchingMap] = useState(false);
   
   // Camera State
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -168,14 +169,74 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
       return;
     }
 
+    setIsSearchingMap(true);
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(raw)}&limit=1`,
-      );
-      const results = await response.json();
-      const first = Array.isArray(results) ? results[0] : null;
-      const lat = first ? Number(first.lat) : NaN;
-      const lng = first ? Number(first.lon) : NaN;
+      const geocodeProviders = [
+        async () => {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&q=${encodeURIComponent(raw)}&limit=1`,
+            {
+              headers: {
+                Accept: 'application/json',
+              },
+            },
+          );
+          if (!response.ok) throw new Error('nominatim_failed');
+          const results = await response.json();
+          const first = Array.isArray(results) ? results[0] : null;
+          return first
+            ? { lat: Number(first.lat), lng: Number(first.lon) }
+            : null;
+        },
+        async () => {
+          const response = await fetch(
+            `https://photon.komoot.io/api/?q=${encodeURIComponent(raw)}&limit=1`,
+            {
+              headers: {
+                Accept: 'application/json',
+              },
+            },
+          );
+          if (!response.ok) throw new Error('photon_failed');
+          const payload = await response.json();
+          const first = Array.isArray(payload?.features) ? payload.features[0] : null;
+          const coords = Array.isArray(first?.geometry?.coordinates) ? first.geometry.coordinates : null;
+          return coords && coords.length === 2
+            ? { lat: Number(coords[1]), lng: Number(coords[0]) }
+            : null;
+        },
+        async () => {
+          const response = await fetch(
+            `https://geocode.maps.co/search?q=${encodeURIComponent(raw)}&limit=1`,
+            {
+              headers: {
+                Accept: 'application/json',
+              },
+            },
+          );
+          if (!response.ok) throw new Error('mapsco_failed');
+          const results = await response.json();
+          const first = Array.isArray(results) ? results[0] : null;
+          return first
+            ? { lat: Number(first.lat), lng: Number(first.lon) }
+            : null;
+        },
+      ];
+
+      let lat = NaN;
+      let lng = NaN;
+      for (const geocode of geocodeProviders) {
+        try {
+          const match = await geocode();
+          if (match && Number.isFinite(match.lat) && Number.isFinite(match.lng)) {
+            lat = match.lat;
+            lng = match.lng;
+            break;
+          }
+        } catch {
+          // Try next provider.
+        }
+      }
 
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
         setLocationError('Address not found. Try a more specific address.');
@@ -192,6 +253,23 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
       setLastLocUpdate(new Date().toLocaleTimeString());
     } catch {
       setLocationError('Map search failed. Please try again.');
+    } finally {
+      setIsSearchingMap(false);
+    }
+  };
+
+  const triggerEmergencyCall = () => {
+    const telUrl = 'tel:911';
+    try {
+      window.location.href = telUrl;
+    } catch {
+      // continue to fallback
+    }
+
+    try {
+      window.open(telUrl, '_self');
+    } catch {
+      alert('Please dial 911 immediately from the nearest available phone.');
     }
   };
 
@@ -557,7 +635,7 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
                   fullWidth 
                   size="xl" 
                   className="bg-white text-red-700 hover:bg-red-50 font-black text-2xl shadow-lg"
-                  onClick={() => window.location.href = "tel:911"}
+                  onClick={triggerEmergencyCall}
                 >
                   CALL 911 NOW
                 </Button>
@@ -612,9 +690,10 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
                   onClick={() => {
                     void searchManualAddressOnMap();
                   }}
+                  disabled={isSearchingMap || !String(data.location || '').trim()}
                   className="inline-flex items-center gap-2 text-xs font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-full"
                 >
-                  <Navigation size={12} /> Search Map
+                  {isSearchingMap ? <RefreshCw size={12} className="animate-spin" /> : <Navigation size={12} />} {isSearchingMap ? 'Searching…' : 'Search Map'}
                 </button>
                 <button
                   type="button"

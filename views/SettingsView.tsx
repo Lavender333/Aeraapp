@@ -3119,13 +3119,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                    />
                    <p className="text-[11px] text-slate-500 mt-1">Format: CH-1234</p>
                 </div>
-                <Button 
-                  className={`mb-[1px] min-w-[50px] ${connectedOrg ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'}`}
-                  onClick={verifyCommunityId}
-                  disabled={isVerifying || !profile.communityId}
-                >
-                  {isVerifying ? <Loader2 className="animate-spin" size={20} /> : connectedOrg ? <Check size={20} /> : <LinkIcon size={20} />}
-                </Button>
+                <div className="flex flex-col items-center">
+                  <Button 
+                    className={`mb-[1px] min-w-[50px] ${connectedOrg ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'}`}
+                    onClick={verifyCommunityId}
+                    disabled={isVerifying || !profile.communityId}
+                  >
+                    {isVerifying ? <Loader2 className="animate-spin" size={20} /> : connectedOrg ? <Check size={20} /> : <LinkIcon size={20} />}
+                  </Button>
+                  <p className="text-[10px] font-semibold text-purple-600 mt-1">Click here</p>
+                </div>
              </div>
              {verifyError && (
                <div className="flex items-center gap-2 text-red-600 text-sm font-bold bg-red-50 p-2 rounded-lg animate-fade-in border border-red-100 relative z-10">
@@ -3149,13 +3152,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 />
                 <p className="text-[11px] text-slate-500 mt-1">Format: CH-1234</p>
               </div>
-              <Button 
-                className={`mb-[1px] min-w-[50px] ${connectedOrg ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'}`}
-                onClick={verifyCommunityId}
-                disabled={isVerifying || !profile.communityId}
-              >
-                {isVerifying ? <Loader2 className="animate-spin" size={20} /> : connectedOrg ? <Check size={20} /> : <LinkIcon size={20} />}
-              </Button>
+              <div className="flex flex-col items-center">
+                <Button 
+                  className={`mb-[1px] min-w-[50px] ${connectedOrg ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'}`}
+                  onClick={verifyCommunityId}
+                  disabled={isVerifying || !profile.communityId}
+                >
+                  {isVerifying ? <Loader2 className="animate-spin" size={20} /> : connectedOrg ? <Check size={20} /> : <LinkIcon size={20} />}
+                </Button>
+                <p className="text-[10px] font-semibold text-purple-600 mt-1">Click here</p>
+              </div>
             </div>
             {connectedOrg && (
               <p className="text-xs font-semibold text-emerald-700 relative z-10">Connected to {connectedOrg}.</p>

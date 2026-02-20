@@ -317,6 +317,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const totalMembers = orgMembers.length || orgMemberCount || orgPopulation;
   const evacuatedPercent = totalMembers ? Math.round((accountedCount / totalMembers) * 100) : null;
   const rescuedDisplay = totalMembers ? safeCount : null;
+  const depotCoverageBase = orgMemberCount || orgPopulation;
+  const toDepotPercent = (value: number) => {
+    if (!depotCoverageBase || depotCoverageBase <= 0) return 'N/A';
+    return `${Math.round((value / depotCoverageBase) * 100)}%`;
+  };
   const addressVerifiedDisplay = addressVerifiedAt
     ? new Date(addressVerifiedAt).toLocaleString()
     : null;
@@ -907,7 +912,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                <h3 className="font-bold text-amber-900 text-sm">{t('dash.resource_depot')}</h3>
                <p className="text-xs text-amber-800">
                  {orgInventory
-                   ? `${connectedOrg} hub inventory — Water ${orgInventory.water}, Food ${orgInventory.food}, Blankets ${orgInventory.blankets}, Med Kits ${orgInventory.medicalKits}.`
+                   ? `${connectedOrg} hub inventory — Water ${toDepotPercent(orgInventory.water)}, Food ${toDepotPercent(orgInventory.food)}, Blankets ${toDepotPercent(orgInventory.blankets)}, Med Kits ${toDepotPercent(orgInventory.medicalKits)}.`
                    : `${connectedOrg} hub inventory is not available yet.`}
                </p>
              </div>
