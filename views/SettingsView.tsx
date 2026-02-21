@@ -2884,32 +2884,68 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         {expandedSections.household && (
           <>
 
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between gap-3">
+        {/* 1. HOUSEHOLD MEMBERS - Primary Context First */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Who Lives in Your Home</label>
+          <p className="text-xs text-slate-500 mb-2">Each member requires DOB in MM/DD/YYYY. Young children and seniors are flagged automatically.</p>
+          <HouseholdManager 
+            members={profile.household}
+            onChange={(updated) => updateProfile('household', updated)}
+            readOnly={profile.householdRole !== 'OWNER'}
+            latestSafetyStatusByMember={latestSafetyStatusByMember}
+          />
+          <div className="mt-3">
+            <Input
+              label="Household Size"
+              type="text"
+              value={String(profile.householdMembers || 1)}
+              readOnly
+              className="bg-slate-50"
+            />
+            <p className="text-[11px] text-slate-500 mt-1">Includes you as the first household occupant.</p>
+          </div>
+        </div>
+
+        {/* 2. CURRENT HOUSEHOLD - State Before Action */}
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3">
           <div>
-            <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Household Code</p>
-            <p className="text-2xl font-mono font-black tracking-widest text-emerald-900">
+            <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Current Household</p>
+            <p className="text-2xl font-mono font-black tracking-widest text-emerald-900 mt-2">
               {profile.householdCode || '------'}
             </p>
-            <p className="text-xs text-emerald-700 mt-1">
+            <p className="text-xs text-emerald-700 mt-2">
               {profile.householdName || 'Your Home'} • {profile.householdRole || 'OWNER'}
             </p>
+            <p className="text-xs text-emerald-600 mt-2">You are currently active in this household.</p>
           </div>
-          {profile.householdRole === 'OWNER' && (
+
+          <div className="flex items-center gap-2">
+            {profile.householdRole === 'OWNER' && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => copyToClipboard(profile.householdCode || '')}
+                disabled={!profile.householdCode}
+                className="text-emerald-800 hover:bg-emerald-100"
+              >
+                <Copy size={16} className="mr-2" /> Copy Code
+              </Button>
+            )}
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => copyToClipboard(profile.householdCode || '')}
-              disabled={!profile.householdCode}
-              className="text-emerald-800 hover:bg-emerald-100"
+              className="text-red-600 hover:bg-red-50"
+              onClick={handleLeaveHousehold}
+              disabled={isLeavingHousehold}
             >
-              <Copy size={16} className="mr-2" /> Copy
+              {isLeavingHousehold ? 'Leaving...' : 'Leave Household'}
             </Button>
-          )}
+          </div>
         </div>
 
         {householdOptions.length > 1 && (
-          <div className="space-y-1">
-            <label className="block text-sm font-medium text-slate-700">Active Household</label>
+          <div className="space-y-1 bg-slate-50 rounded-lg p-3 border border-slate-200">
+            <label className="block text-sm font-medium text-slate-700">Switch Active Household</label>
             <select
               value={profile.householdId || ''}
               onChange={(e) => handleSwitchHousehold(e.target.value)}
@@ -2922,97 +2958,68 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 </option>
               ))}
             </select>
-            <p className="text-xs text-slate-500">Switch to another linked household context.</p>
+            <p className="text-xs text-slate-500">Switch between linked household contexts.</p>
           </div>
         )}
 
-        {showMoreSections.household && profile.householdRole === 'OWNER' && (
-        <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Notifications</p>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-indigo-700 hover:bg-indigo-100"
-              onClick={handleMarkAllNotificationsRead}
-              disabled={notificationsBusy || unreadNotificationCount === 0}
+        {/* 3. JOIN ANOTHER HOUSEHOLD - Action Section */}
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+          <div>
+            <p className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">Join Another Household</p>
+            <p className="text-xs text-blue-600 mt-2">Enter a valid household code to request access.</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
+            <Input
+              label="Household Code"
+              placeholder="e.g. A3K7Q2"
+              value={householdCodeInput}
+              onChange={(e) => setHouseholdCodeInput(e.target.value.toUpperCase())}
+              maxLength={6}
+            />
+            <Button 
+              onClick={handleJoinHousehold} 
+              disabled={isHouseholdCodeBusy || isLeavingHousehold || Boolean(profile.householdId) || householdCodeInput.trim().length < 6 || householdCodeInput.includes('-')}
+              className={profile.householdId ? 'bg-slate-400 hover:bg-slate-400 cursor-not-allowed' : ''}
             >
-              Mark Read ({unreadNotificationCount})
+              {isHouseholdCodeBusy ? 'Sending...' : 'Submit Request'}
             </Button>
           </div>
 
-          {notifications.length === 0 ? (
-            <p className="text-xs text-indigo-700">No notifications yet.</p>
-          ) : (
-            <div className="space-y-1">
-              {notifications.slice(0, 5).map((item) => (
-                <div
-                  key={item.id}
-                  className={`rounded-md border px-3 py-2 text-xs ${item.read ? 'border-indigo-100 bg-white text-slate-500' : 'border-indigo-300 bg-white text-slate-800 font-semibold'}`}
-                >
-                  <p>
-                    {item.type === 'household_join_request'
-                      ? 'New Household Join Request'
-                      : item.type === 'household_join_approved'
-                        ? 'Your request was approved.'
-                        : item.type === 'household_join_rejected'
-                          ? 'Your request was not approved.'
-                          : item.type === 'household_member_reported_danger'
-                            ? `${String((item.metadata as any)?.reporterName || 'A household member')} reported DANGER.`
-                            : item.type === 'household_member_reported_safe'
-                              ? `${String((item.metadata as any)?.reporterName || 'A household member')} reported SAFE.`
-                          : item.type}
-                  </p>
-                  <p className="text-[10px] mt-0.5 opacity-80">{new Date(item.createdAt).toLocaleString()}</p>
-                </div>
-              ))}
-            </div>
+          {profile.householdId && (
+            <p className="text-xs text-blue-700 font-medium">You must leave your current household before joining another.</p>
+          )}
+          {!profile.householdId && (
+            <p className="text-xs text-blue-600">Your request will be sent to the household administrator for approval.</p>
+          )}
+
+          {householdCodeError && (
+            <p className="text-xs text-red-600 font-semibold">{householdCodeError}</p>
+          )}
+          {householdCodeSuccess && (
+            <p className="text-xs text-green-600 font-semibold">{householdCodeSuccess}</p>
           )}
         </div>
-        )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
-          <Input
-            label="Request Home Join by Code"
-            placeholder="e.g. A3K7Q2"
-            value={householdCodeInput}
-            onChange={(e) => setHouseholdCodeInput(e.target.value.toUpperCase())}
-            maxLength={6}
-          />
-          <Button onClick={handleJoinHousehold} disabled={isHouseholdCodeBusy || isLeavingHousehold || Boolean(profile.householdId) || householdCodeInput.trim().length < 6 || householdCodeInput.includes('-')}>
-            {isHouseholdCodeBusy ? 'Sending...' : 'Click Here to Connect'}
-          </Button>
-        </div>
-        {profile.householdId ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
-            <p className="text-xs text-amber-800 font-semibold">Leave your current household before submitting a join request.</p>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-amber-800 hover:bg-amber-100"
-              onClick={handleLeaveHousehold}
-              disabled={isLeavingHousehold}
-            >
-              {isLeavingHousehold ? 'Leaving...' : 'Leave Current Household'}
-            </Button>
-          </div>
-        ) : (
-          <p className="text-xs text-slate-500">Your request has been sent to the household administrator and requires approval.</p>
-        )}
-
+        {/* 4. JOIN REQUEST HISTORY - Audit Trail Last */}
         {latestMyJoinRequest && (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <p className="text-[11px] uppercase tracking-wide font-bold text-slate-500">Latest Join Request</p>
-            <p className="text-sm font-semibold text-slate-900 mt-1">
-              Status: {latestMyJoinRequest.status === 'pending'
-                ? 'Pending Approval'
-                : latestMyJoinRequest.status === 'approved'
-                  ? 'Approved'
-                  : 'Rejected'}
-            </p>
-            <p className="text-[11px] text-slate-500 mt-0.5">Submitted {new Date(latestMyJoinRequest.createdAt).toLocaleString()}</p>
-            {latestMyJoinRequest.status === 'pending' && (
-              <div className="mt-2">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+            <p className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Join Request History</p>
+            
+            <div className="space-y-2">
+              <div>
+                <p className="text-xs text-slate-600">Latest Request</p>
+                <p className="text-sm font-semibold text-slate-900 mt-1">
+                  Status: {latestMyJoinRequest.status === 'pending'
+                    ? 'Pending Approval'
+                    : latestMyJoinRequest.status === 'approved'
+                      ? 'Approved'
+                      : 'Rejected'}
+                </p>
+                <p className="text-[11px] text-slate-500 mt-1">Submitted {new Date(latestMyJoinRequest.createdAt).toLocaleString()}</p>
+              </div>
+
+              {latestMyJoinRequest.status === 'pending' && (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -3022,151 +3029,161 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 >
                   {isCancellingJoinRequest ? 'Cancelling...' : 'Cancel Request'}
                 </Button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {householdCodeError && (
-          <p className="text-xs text-red-600 font-semibold">{householdCodeError}</p>
-        )}
-        {householdCodeSuccess && (
-          <p className="text-xs text-emerald-700 font-semibold">{householdCodeSuccess}</p>
-        )}
-
-        {showMoreSections.household && profile.householdRole === 'OWNER' && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
-            <p className="text-xs font-bold text-amber-700 uppercase tracking-wider">New Household Join Request{pendingOwnerRequests.length === 1 ? '' : 's'}</p>
-
-            {pendingOwnerRequests.length === 0 ? (
-              <p className="text-xs text-amber-700">No pending requests.</p>
-            ) : (
-              <div className="space-y-2">
-                {pendingOwnerRequests.map((request) => (
-                  <div key={request.id} className="rounded-lg border border-amber-200 bg-white p-3 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">{request.requestingUserName || 'AERA user'}</p>
-                      <p className="text-[11px] text-slate-500">{request.requestingUserPhone || request.requestingUserEmail || 'No contact preview available'}</p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">Requested {new Date(request.createdAt).toLocaleString()}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        className="bg-emerald-600 hover:bg-emerald-700"
-                        onClick={() => handleResolveJoinRequest(request, 'approved')}
-                        disabled={joinRequestBusyId === request.id}
-                      >
-                        {joinRequestBusyId === request.id ? 'Working...' : 'Approve'}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-red-600 hover:bg-red-50"
-                        onClick={() => handleResolveJoinRequest(request, 'rejected')}
-                        disabled={joinRequestBusyId === request.id}
-                      >
-                        Reject
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div>
-          <Input
-            label="Household Size"
-            type="text"
-            value={String(profile.householdMembers || 1)}
-            readOnly
-            className="bg-slate-50"
-          />
-          <p className="text-[11px] text-slate-500 mt-1">Includes you as the first household occupant.</p>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">Who lives in your home</label>
-          <p className="text-xs text-slate-500 mb-2">Each member requires DOB in MM/DD/YYYY. Young children and seniors are flagged automatically.</p>
-          <HouseholdManager 
-            members={profile.household}
-            onChange={(updated) => updateProfile('household', updated)}
-            readOnly={profile.householdRole !== 'OWNER'}
-            latestSafetyStatusByMember={latestSafetyStatusByMember}
-          />
-        </div>
-
-        {showMoreSections.household && profile.householdRole === 'OWNER' && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
-          <div>
-            <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Member Account Invites</p>
-          </div>
-
-          {inviteEnabledMembers.length === 0 ? (
-            <></>
-          ) : (
-            <div className="space-y-2">
-              {inviteEnabledMembers.map((member) => (
-                <div key={member.id} className="flex items-center justify-between rounded-lg border border-emerald-200 bg-white p-3 gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">{member.name}</p>
-                    <p className="text-xs text-slate-600">Invite Code: <span className="font-mono font-bold tracking-wider">{latestInviteByMember[member.id]?.invitationCode || buildMemberInviteCode(member)}</span></p>
-                    <p className="text-[11px] text-slate-500 mt-0.5">Bound phone: {maskPhoneNumber(latestInviteByMember[member.id]?.inviteePhone || member.loginPhone || '') || 'Not set'}</p>
-                    {!isValidPhoneForInvite(member.loginPhone || '') && (
-                      <p className="text-[11px] text-amber-700 mt-0.5">Add a valid member phone in Household Members before creating an invite.</p>
-                    )}
-                    {latestInviteByMember[member.id] && (
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        Status: {latestInviteByMember[member.id].status}
-                        {latestInviteByMember[member.id].expiresAt
-                          ? ` • Expires ${new Date(latestInviteByMember[member.id].expiresAt as string).toLocaleDateString()}`
-                          : ''}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-emerald-800 hover:bg-emerald-100"
-                      onClick={() => handleCopyMemberInvite(member)}
-                      disabled={inviteBusyMemberId === member.id || !isValidPhoneForInvite(member.loginPhone || '')}
-                    >
-                      <Copy size={14} className="mr-1" /> {inviteBusyMemberId === member.id ? 'Working...' : 'Share'}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-slate-700 hover:bg-slate-100"
-                      onClick={() => handleResendMemberInvite(member)}
-                      disabled={inviteBusyMemberId === member.id || !isValidPhoneForInvite(member.loginPhone || '')}
-                    >
-                      {inviteBusyMemberId === member.id ? 'Working...' : 'Resend'}
-                    </Button>
-                    {latestInviteByMember[member.id]?.status === 'PENDING' && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-red-600 hover:bg-red-50"
-                        onClick={() => handleRevokeMemberInvite(member)}
-                        disabled={inviteBusyMemberId === member.id}
-                      >
-                        Revoke
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
+              )}
             </div>
-          )}
-
-          {inviteStatusMessage && <p className="text-xs text-emerald-700 font-semibold">{inviteStatusMessage}</p>}
-          {inviteError && <p className="text-xs text-red-600 font-semibold">{inviteError}</p>}
-        </div>
+          </div>
         )}
 
-        <button
+        {/* OWNER-ONLY ADVANCED FEATURES */}
+        {showMoreSections.household && profile.householdRole === 'OWNER' && (
+          <>
+            {/* Pending Join Requests for Owner */}
+            {pendingOwnerRequests.length > 0 && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+                <p className="text-xs font-bold text-amber-700 uppercase tracking-wider">New Household Join Request{pendingOwnerRequests.length === 1 ? '' : 's'}</p>
+
+                <div className="space-y-2">
+                  {pendingOwnerRequests.map((request) => (
+                    <div key={request.id} className="rounded-lg border border-amber-200 bg-white p-3 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{request.requestingUserName || 'AERA user'}</p>
+                        <p className="text-[11px] text-slate-500">{request.requestingUserPhone || request.requestingUserEmail || 'No contact preview available'}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">Requested {new Date(request.createdAt).toLocaleString()}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          className="bg-emerald-600 hover:bg-emerald-700"
+                          onClick={() => handleResolveJoinRequest(request, 'approved')}
+                          disabled={joinRequestBusyId === request.id}
+                        >
+                          {joinRequestBusyId === request.id ? 'Working...' : 'Approve'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-red-600 hover:bg-red-50"
+                          onClick={() => handleResolveJoinRequest(request, 'rejected')}
+                          disabled={joinRequestBusyId === request.id}
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Member Account Invites */}
+            {inviteEnabledMembers.length > 0 && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
+                <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Member Account Invites</p>
+
+                <div className="space-y-2">
+                  {inviteEnabledMembers.map((member) => (
+                    <div key={member.id} className="flex items-center justify-between rounded-lg border border-emerald-200 bg-white p-3 gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{member.name}</p>
+                        <p className="text-xs text-slate-600">Invite Code: <span className="font-mono font-bold tracking-wider">{latestInviteByMember[member.id]?.invitationCode || buildMemberInviteCode(member)}</span></p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">Bound phone: {maskPhoneNumber(latestInviteByMember[member.id]?.inviteePhone || member.loginPhone || '') || 'Not set'}</p>
+                        {!isValidPhoneForInvite(member.loginPhone || '') && (
+                          <p className="text-[11px] text-amber-700 mt-0.5">Add a valid member phone in Household Members before creating an invite.</p>
+                        )}
+                        {latestInviteByMember[member.id] && (
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            Status: {latestInviteByMember[member.id].status}
+                            {latestInviteByMember[member.id].expiresAt
+                              ? ` • Expires ${new Date(latestInviteByMember[member.id].expiresAt as string).toLocaleDateString()}`
+                              : ''}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-emerald-800 hover:bg-emerald-100"
+                          onClick={() => handleCopyMemberInvite(member)}
+                          disabled={inviteBusyMemberId === member.id || !isValidPhoneForInvite(member.loginPhone || '')}
+                        >
+                          <Copy size={14} className="mr-1" /> {inviteBusyMemberId === member.id ? 'Working...' : 'Share'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-slate-700 hover:bg-slate-100"
+                          onClick={() => handleResendMemberInvite(member)}
+                          disabled={inviteBusyMemberId === member.id || !isValidPhoneForInvite(member.loginPhone || '')}
+                        >
+                          {inviteBusyMemberId === member.id ? 'Working...' : 'Resend'}
+                        </Button>
+                        {latestInviteByMember[member.id]?.status === 'PENDING' && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-600 hover:bg-red-50"
+                            onClick={() => handleRevokeMemberInvite(member)}
+                            disabled={inviteBusyMemberId === member.id}
+                          >
+                            Revoke
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {inviteStatusMessage && <p className="text-xs text-emerald-700 font-semibold">{inviteStatusMessage}</p>}
+                {inviteError && <p className="text-xs text-red-600 font-semibold">{inviteError}</p>}
+              </div>
+            )}
+
+            {/* Notifications */}
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Notifications</p>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-indigo-700 hover:bg-indigo-100"
+                  onClick={handleMarkAllNotificationsRead}
+                  disabled={notificationsBusy || unreadNotificationCount === 0}
+                >
+                  Mark Read ({unreadNotificationCount})
+                </Button>
+              </div>
+
+              {notifications.length === 0 ? (
+                <p className="text-xs text-indigo-700">No notifications yet.</p>
+              ) : (
+                <div className="space-y-1">
+                  {notifications.slice(0, 5).map((item) => (
+                    <div
+                      key={item.id}
+                      className={`rounded-md border px-3 py-2 text-xs ${item.read ? 'border-indigo-100 bg-white text-slate-500' : 'border-indigo-300 bg-white text-slate-800 font-semibold'}`}
+                    >
+                      <p>
+                        {item.type === 'household_join_request'
+                          ? 'New Household Join Request'
+                          : item.type === 'household_join_approved'
+                            ? 'Your request was approved.'
+                            : item.type === 'household_join_rejected'
+                              ? 'Your request was not approved.'
+                              : item.type === 'household_member_reported_danger'
+                                ? `${String((item.metadata as any)?.reporterName || 'A household member')} reported DANGER.`
+                                : item.type === 'household_member_reported_safe'
+                                  ? `${String((item.metadata as any)?.reporterName || 'A household member')} reported SAFE.`
+                              : item.type}
+                      </p>
+                      <p className="text-[10px] mt-0.5 opacity-80">{new Date(item.createdAt).toLocaleString()}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
           type="button"
           onClick={() => toggleShowMore('household')}
           className="text-xs font-semibold text-brand-600 hover:underline"
