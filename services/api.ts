@@ -1065,6 +1065,87 @@ export async function requestHouseholdJoinByCode(code: string): Promise<{
     throw new Error('Enter a valid household code.');
   }
 
+  const ensureOwnerJoinNotification = async (payload: {
+    householdId: string;
+    joinRequestId: string;
+    requestingUserId?: string;
+    ownerIdHint?: string;
+  }) => {
+    const householdId = String(payload.householdId || '');
+    const joinRequestId = String(payload.joinRequestId || '');
+    if (!householdId || !joinRequestId) return;
+
+    let requesterId = String(payload.requestingUserId || '');
+    if (!requesterId) {
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        requesterId = String(authData?.user?.id || '');
+      } catch {}
+    }
+
+    let ownerId = String(payload.ownerIdHint || '');
+    if (!ownerId) {
+      try {
+        const { data: ownerMembership } = await supabase
+          .from('household_memberships')
+          .select('profile_id')
+          .eq('household_id', householdId)
+          .eq('role', 'OWNER')
+          .maybeSingle();
+        ownerId = String((ownerMembership as any)?.profile_id || '');
+      } catch {}
+    }
+
+    if (!ownerId) {
+      try {
+        const { data: ownerByProfile } = await supabase
+          .from('households')
+          .select('owner_profile_id')
+          .eq('id', householdId)
+          .maybeSingle();
+        ownerId = String((ownerByProfile as any)?.owner_profile_id || '');
+      } catch {}
+    }
+
+    if (!ownerId) {
+      try {
+        const { data: ownerById } = await supabase
+          .from('households')
+          .select('owner_id')
+          .eq('id', householdId)
+          .maybeSingle();
+        ownerId = String((ownerById as any)?.owner_id || '');
+      } catch {}
+    }
+
+    if (!ownerId || (requesterId && ownerId === requesterId)) return;
+
+    try {
+      const { data: existingNotification } = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('user_id', ownerId)
+        .eq('type', 'household_join_request')
+        .eq('related_id', joinRequestId)
+        .limit(1)
+        .maybeSingle();
+
+      if (existingNotification?.id) return;
+
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: ownerId,
+          type: 'household_join_request',
+          related_id: joinRequestId,
+          metadata: {
+            household_id: householdId,
+            requesting_user_id: requesterId || null,
+          },
+        });
+    } catch {}
+  };
+
   const fallbackRequestJoinByCode = async () => {
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError || !authData?.user) throw new Error('Not authenticated');
@@ -1181,21 +1262,12 @@ export async function requestHouseholdJoinByCode(code: string): Promise<{
       };
     }
 
-    if (ownerId) {
-      try {
-        await supabase
-          .from('notifications')
-          .insert({
-            user_id: ownerId,
-            type: 'household_join_request',
-            related_id: inserted.id,
-            metadata: {
-              household_id: household.id,
-              requesting_user_id: userId,
-            },
-          });
-      } catch {}
-    }
+    await ensureOwnerJoinNotification({
+      householdId: String(household.id),
+      joinRequestId: String(inserted.id),
+      requestingUserId: userId,
+      ownerIdHint: ownerId,
+    });
 
     await safeLogActivity({
       action: 'UPDATE',
@@ -1235,6 +1307,11 @@ export async function requestHouseholdJoinByCode(code: string): Promise<{
 
   const row = Array.isArray(data) ? data[0] : data;
   if (!row?.join_request_id) throw new Error('Unable to create household join request.');
+
+  await ensureOwnerJoinNotification({
+    householdId: String(row.household_id || ''),
+    joinRequestId: String(row.join_request_id || ''),
+  });
 
   return {
     joinRequestId: row.join_request_id,
