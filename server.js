@@ -353,6 +353,10 @@ publicRouter.post(
     const accessToken = signAccessToken(user);
     const refreshToken = signRefreshToken(user);
 
+    sendRegistrationAlert({ fullName, email, phone, role }).catch((err) =>
+      logger.error('Failed to send registration alert', { error: err?.message || err })
+    );
+
     res.status(201).json({
       token: accessToken,
       accessToken,
@@ -607,6 +611,22 @@ const sendResetEmail = async ({ email, token }) => {
     to: email,
     subject: 'Password Reset',
     text: `Your password reset link: ${resetLink}`,
+  });
+};
+
+const adminEmail = process.env.ADMIN_EMAIL;
+
+const sendRegistrationAlert = async ({ fullName, email, phone, role }) => {
+  if (!mailTransport || !smtpFrom || !adminEmail) {
+    logger.warn('Registration alert not sent: SMTP or ADMIN_EMAIL not configured');
+    return;
+  }
+  const displayName = fullName || email || phone || 'Unknown';
+  await mailTransport.sendMail({
+    from: smtpFrom,
+    to: adminEmail,
+    subject: 'New User Registration',
+    text: `A new user has registered on Aera.\n\nName: ${displayName}\nEmail: ${email || 'N/A'}\nPhone: ${phone || 'N/A'}\nRole: ${role || 'N/A'}\n`,
   });
 };
 
