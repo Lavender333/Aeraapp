@@ -1065,11 +1065,144 @@ export async function requestHouseholdJoinByCode(code: string): Promise<{
     throw new Error('Enter a valid household code.');
   }
 
+  const fallbackRequestJoinByCode = async () => {
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData?.user) throw new Error('Not authenticated');
+
+    const userId = authData.user.id;
+
+    const { data: household, error: householdError } = await supabase
+      .from('households')
+      .select('id, household_code')
+      .eq('household_code', normalized)
+      .maybeSingle();
+
+    if (householdError || !household?.id) {
+      throw new Error('Household code not found.');
+    }
+
+    const currentMembership = await getCurrentHouseholdMembership(userId);
+    if (currentMembership?.household_id) {
+      throw new Error('Leave your current household before submitting a join request');
+    }
+
+    const { data: ownerMembership } = await supabase
+      .from('household_memberships')
+      .select('profile_id')
+      .eq('household_id', household.id)
+      .eq('role', 'OWNER')
+      .maybeSingle();
+
+    const ownerId = String((ownerMembership as any)?.profile_id || '');
+    if (!ownerId) {
+      throw new Error('Household owner is not configured');
+    }
+    if (ownerId === userId) {
+      throw new Error('Owner cannot request to join their own household');
+    }
+
+    const { data: existingPending } = await supabase
+      .from('household_join_requests')
+      .select('id, household_id, status')
+      .eq('household_id', household.id)
+      .eq('requesting_user_id', userId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existingPending?.id) {
+      return {
+        joinRequestId: String(existingPending.id),
+        householdId: String(existingPending.household_id || household.id),
+        status: 'pending' as HouseholdJoinRequestStatus,
+        message: 'Request already pending',
+      };
+    }
+
+    const { data: inserted, error: insertError } = await supabase
+      .from('household_join_requests')
+      .insert({
+        household_id: household.id,
+        requesting_user_id: userId,
+        status: 'pending',
+      })
+      .select('id, household_id, status')
+      .single();
+
+    if (insertError) {
+      const maybeDuplicatePending =
+        String((insertError as any)?.code || '') === '23505' ||
+        String(insertError.message || '').toLowerCase().includes('duplicate');
+
+      if (!maybeDuplicatePending) throw insertError;
+
+      const { data: pendingAfterConflict } = await supabase
+        .from('household_join_requests')
+        .select('id, household_id, status')
+        .eq('household_id', household.id)
+        .eq('requesting_user_id', userId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!pendingAfterConflict?.id) throw insertError;
+
+      return {
+        joinRequestId: String(pendingAfterConflict.id),
+        householdId: String(pendingAfterConflict.household_id || household.id),
+        status: 'pending' as HouseholdJoinRequestStatus,
+        message: 'Request already pending',
+      };
+    }
+
+    try {
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: ownerId,
+          type: 'household_join_request',
+          related_id: inserted.id,
+          metadata: {
+            household_id: household.id,
+            requesting_user_id: userId,
+          },
+        });
+    } catch {}
+
+    await safeLogActivity({
+      action: 'UPDATE',
+      entityType: 'household_join_requests',
+      entityId: inserted.id,
+      details: { householdId: household.id, requestingUserId: userId, source: 'fallback_direct_insert' },
+    });
+
+    return {
+      joinRequestId: String(inserted.id),
+      householdId: String(inserted.household_id || household.id),
+      status: 'pending' as HouseholdJoinRequestStatus,
+      message: 'Request sent. Waiting for approval.',
+    };
+  };
+
   const { data, error } = await supabase.rpc('request_household_join_by_code', {
     p_household_code: normalized,
   });
 
-  if (error) throw error;
+  if (error) {
+    const rpcErrorCode = String((error as any)?.code || '');
+    const rpcMessage = String((error as any)?.message || '').toLowerCase();
+    const rpcDetails = String((error as any)?.details || '').toLowerCase();
+    const missingRpc =
+      rpcErrorCode === 'PGRST202' ||
+      rpcMessage.includes('could not find the function public.request_household_join_by_code') ||
+      rpcDetails.includes('could not find the function public.request_household_join_by_code') ||
+      rpcMessage.includes('schema cache');
+
+    if (!missingRpc) throw error;
+    return fallbackRequestJoinByCode();
+  }
 
   const row = Array.isArray(data) ? data[0] : data;
   if (!row?.join_request_id) throw new Error('Unable to create household join request.');

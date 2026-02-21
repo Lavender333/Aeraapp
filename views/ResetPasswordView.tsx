@@ -17,33 +17,51 @@ export const ResetPasswordView: React.FC<{ setView: (v: ViewState) => void }> = 
   useEffect(() => {
     let active = true;
     const checkSession = async () => {
-      const hash = window.location.hash || '';
-      const search = window.location.search || '';
-      const hashParams = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
-      const searchParams = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
-      const accessToken = hashParams.get('access_token') || searchParams.get('access_token');
-      const refreshToken = hashParams.get('refresh_token') || searchParams.get('refresh_token');
-      const code = searchParams.get('code');
+      try {
+        const hash = window.location.hash || '';
+        const search = window.location.search || '';
+        const hashParams = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
+        const searchParams = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+        const accessToken = hashParams.get('access_token') || searchParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token') || searchParams.get('refresh_token');
+        const code = searchParams.get('code') || hashParams.get('code');
+        const tokenHash = searchParams.get('token_hash') || hashParams.get('token_hash');
+        const type = searchParams.get('type') || hashParams.get('type');
 
-      if (code) {
-        await supabase.auth.exchangeCodeForSession(code);
-      } else if (accessToken && refreshToken) {
-        await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-      }
+        if (code) {
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          if (exchangeError) throw exchangeError;
+        } else if (accessToken && refreshToken) {
+          const { error: setSessionError } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+          if (setSessionError) throw setSessionError;
+        } else if (tokenHash && type === 'recovery') {
+          const { error: verifyError } = await supabase.auth.verifyOtp({
+            type: 'recovery',
+            token_hash: tokenHash,
+          });
+          if (verifyError) throw verifyError;
+        }
 
-      const { data, error: sessionError } = await supabase.auth.getSession();
-      if (!active) return;
-      if (sessionError) {
-        setError('Unable to validate reset link. Please request a new one.');
+        const { data, error: sessionError } = await supabase.auth.getSession();
+        if (!active) return;
+        if (sessionError) {
+          setError('Unable to validate reset link. Please request a new one.');
+          setIsReady(true);
+          setHasSession(false);
+          return;
+        }
+
+        const session = data?.session;
+        setHasSession(!!session);
         setIsReady(true);
+        if (!session) {
+          setError('Reset link is invalid or expired. Please request a new one.');
+        }
+      } catch {
+        if (!active) return;
+        setError('Unable to validate reset link. Please request a new one.');
         setHasSession(false);
-        return;
-      }
-      const session = data?.session;
-      setHasSession(!!session);
-      setIsReady(true);
-      if (!session) {
-        setError('Reset link is invalid or expired. Please request a new one.');
+        setIsReady(true);
       }
     };
     checkSession();
@@ -63,6 +81,11 @@ export const ResetPasswordView: React.FC<{ setView: (v: ViewState) => void }> = 
       setError('Passwords do not match.');
       return;
     }
+    if (!hasSession) {
+      setError('Reset link is invalid or expired. Please request a new one.');
+      return;
+    }
+
     try {
       setIsSaving(true);
       const { error: updateError } = await supabase.auth.updateUser({ password });
@@ -98,6 +121,7 @@ export const ResetPasswordView: React.FC<{ setView: (v: ViewState) => void }> = 
           className="border-slate-300"
         />
         <Input
+          disabled={!isReady || !hasSession || isSaving}
           label="Confirm Password"
           type="password"
           placeholder="Confirm password"
@@ -124,7 +148,7 @@ export const ResetPasswordView: React.FC<{ setView: (v: ViewState) => void }> = 
           size="lg"
           onClick={handleUpdate}
           className="font-bold shadow-md"
-          disabled={!isReady || isSaving}
+          disabled={!isReady || !hasSession || isSaving}
         >
           {isSaving ? 'Saving…' : 'Update Password'}
         </Button>

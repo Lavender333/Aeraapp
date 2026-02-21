@@ -318,9 +318,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const evacuatedPercent = totalMembers ? Math.round((accountedCount / totalMembers) * 100) : null;
   const rescuedDisplay = totalMembers ? safeCount : null;
   const depotCoverageBase = orgMemberCount || orgPopulation;
-  const toDepotPercent = (value: number) => {
-    if (!depotCoverageBase || depotCoverageBase <= 0) return 'N/A';
-    return `${Math.round((value / depotCoverageBase) * 100)}%`;
+  const depotStatus = orgInventory
+    ? getInventoryStatuses(orgInventory, depotCoverageBase)
+    : null;
+  const toDepotAvailability = (level: 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN') => {
+    if (level === 'UNKNOWN') return 'N/A';
+    return level === 'LOW' ? 'Low' : 'Good';
   };
   const addressVerifiedDisplay = addressVerifiedAt
     ? new Date(addressVerifiedAt).toLocaleString()
@@ -901,22 +904,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         </>
       )}
 
-      {hasCommunity && userRole !== 'ADMIN' && !isOrgAdmin && !(canOpenOrgDashboard && connectedOrg && orgInventory) && (
+      {hasCommunity && isGeneralUser && (
         <>
           {/* Resource Alert System (Community Only) */}
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-3 shadow-sm cursor-pointer hover:bg-amber-100 transition-colors" onClick={() => setView('LOGISTICS')}>
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-3 shadow-sm">
              <div className="p-2 bg-amber-200 rounded-full text-amber-800">
                <Building2 size={18} />
              </div>
              <div className="flex-1">
-               <h3 className="font-bold text-amber-900 text-sm">{t('dash.resource_depot')}</h3>
+               <h3 className="font-bold text-amber-900 text-sm">Community Pod Availability</h3>
                <p className="text-xs text-amber-800">
                  {orgInventory
-                   ? `${connectedOrg} hub inventory — Water ${toDepotPercent(orgInventory.water)}, Food ${toDepotPercent(orgInventory.food)}, Blankets ${toDepotPercent(orgInventory.blankets)}, Med Kits ${toDepotPercent(orgInventory.medicalKits)}.`
+                   ? `${connectedOrg} hub inventory — Water ${toDepotAvailability(depotStatus?.water.level || 'UNKNOWN')}, Food ${toDepotAvailability(depotStatus?.food.level || 'UNKNOWN')}, Blankets ${toDepotAvailability(depotStatus?.blankets.level || 'UNKNOWN')}, Med Kits ${toDepotAvailability(depotStatus?.medicalKits.level || 'UNKNOWN')}.`
                    : `${connectedOrg} hub inventory is not available yet.`}
                </p>
              </div>
-             <ChevronRight size={16} className="text-amber-500 mt-2" />
           </div>
 
         </>
