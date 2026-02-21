@@ -23,6 +23,16 @@ const formatPhoneNumber = (value: string) => {
 };
 
 export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
+    // Defensive: fallback for missing or malformed profile
+    const safeGetProfile = () => {
+      try {
+        const profile = StorageService.getProfile();
+        if (!profile || typeof profile !== 'object') return {};
+        return profile;
+      } catch (e) {
+        return {};
+      }
+    };
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -59,12 +69,17 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
       }
       console.log('Attempting login with email:', normalizedEmail);
       await StorageService.loginWithCredentials(normalizedEmail, enteredPassword);
-      const profile = StorageService.getProfile();
+      const profile = safeGetProfile();
+      // Defensive: fallback values for missing fields
+      const id = profile.id || '';
+      const name = profile.fullName || '';
+      const role = profile.role || 'GENERAL_USER';
+      const onboardComplete = profile.onboardComplete || false;
       console.log('Login successful! Profile:', { 
-        id: profile.id, 
-        name: profile.fullName, 
-        role: profile.role, 
-        onboardComplete: profile.onboardComplete 
+        id, 
+        name, 
+        role, 
+        onboardComplete 
       });
       console.log('Redirecting to DASHBOARD');
       setView('DASHBOARD');
@@ -92,21 +107,25 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
       return;
     }
     
-    // Check role immediately for the direct action
-    const profile = StorageService.getProfile();
+    // Defensive: fallback for missing or malformed profile
+    const profile = safeGetProfile();
+    const id = profile.id || '';
+    const name = profile.fullName || '';
+    const role = profile.role || 'GENERAL_USER';
+    const onboardComplete = profile.onboardComplete || false;
     console.log('Demo login successful! Profile:', { 
-      id: profile.id, 
-      name: profile.fullName, 
-      role: profile.role, 
-      onboardComplete: profile.onboardComplete 
+      id, 
+      name, 
+      role, 
+      onboardComplete 
     });
-    const needsSetup = !profile.onboardComplete;
+    const needsSetup = !onboardComplete;
     
     if (needsSetup) {
       console.log('User needs setup, redirecting to ACCOUNT_SETUP');
       setView('ACCOUNT_SETUP');
     }
-    else if (profile.role === 'INSTITUTION_ADMIN' || profile.role === 'ORG_ADMIN') {
+    else if (role === 'INSTITUTION_ADMIN' || role === 'ORG_ADMIN') {
       console.log('Organization admin, redirecting to ORG_DASHBOARD');
       setView('ORG_DASHBOARD');
     }
