@@ -6,7 +6,7 @@ import { Button } from '../components/Button';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
-import { AppNotificationRecord, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdsForCurrentUser, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, switchActiveHousehold, updateProfileForUser, updateVitalsForUser } from '../services/api';
+import { AppNotificationRecord, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, leaveCurrentHousehold, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdsForCurrentUser, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, switchActiveHousehold, updateProfileForUser, updateVitalsForUser } from '../services/api';
 import { getOrgByCode } from '../services/supabase';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
 import { isValidPhoneForInvite, validateHouseholdMembers } from '../services/validation';
@@ -202,6 +202,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [myJoinRequests, setMyJoinRequests] = useState<HouseholdJoinRequestRecord[]>([]);
   const [householdOptions, setHouseholdOptions] = useState<HouseholdOption[]>([]);
   const [isSwitchingHousehold, setIsSwitchingHousehold] = useState(false);
+  const [isLeavingHousehold, setIsLeavingHousehold] = useState(false);
   const [notifications, setNotifications] = useState<AppNotificationRecord[]>([]);
   const [joinRequestBusyId, setJoinRequestBusyId] = useState<string | null>(null);
   const [notificationsBusy, setNotificationsBusy] = useState(false);
@@ -1181,6 +1182,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setHouseholdCodeError(null);
     setHouseholdCodeSuccess(null);
 
+    if (profile.householdId) {
+      setHouseholdCodeError('Leave your current household before submitting a join request.');
+      return;
+    }
+
     const normalized = householdCodeInput.trim().toUpperCase();
     if (normalized.length < 6 || normalized.includes('-')) {
       setHouseholdCodeError('Enter a valid 6-character household code.');
@@ -1208,6 +1214,61 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       setHouseholdCodeError(err?.message || 'Unable to submit join request.');
     } finally {
       setIsHouseholdCodeBusy(false);
+    }
+  };
+
+  const handleLeaveHousehold = async () => {
+    if (!profile.householdId || isLeavingHousehold) return;
+
+    setHouseholdCodeError(null);
+    setHouseholdCodeSuccess(null);
+    setIsLeavingHousehold(true);
+    try {
+      await leaveCurrentHousehold(profile.householdId);
+
+      const summary = await fetchHouseholdForCurrentUser();
+      if (summary) {
+        applyHouseholdSummary(summary);
+      } else {
+        setProfile((prev) => ({
+          ...prev,
+          householdId: undefined,
+          householdCode: undefined,
+          householdName: undefined,
+          householdRole: undefined,
+        }));
+
+        const current = StorageService.getProfile();
+        StorageService.saveProfile({
+          ...current,
+          householdId: undefined,
+          householdCode: undefined,
+          householdName: undefined,
+          householdRole: undefined,
+        });
+      }
+
+      try {
+        const [options, ownerRequests, myRequests, inbox] = await Promise.all([
+          listHouseholdsForCurrentUser(),
+          listHouseholdJoinRequestsForOwner(),
+          listMyHouseholdJoinRequests(),
+          listNotificationsForCurrentUser(50),
+        ]);
+        setHouseholdOptions(options);
+        setOwnerJoinRequests(ownerRequests);
+        setMyJoinRequests(myRequests);
+        setNotifications(inbox);
+      } catch {
+        setHouseholdOptions([]);
+        setOwnerJoinRequests([]);
+      }
+
+      setHouseholdCodeSuccess('You left your current household. You can now submit a join request.');
+    } catch (err: any) {
+      setHouseholdCodeError(err?.message || 'Unable to leave household right now.');
+    } finally {
+      setIsLeavingHousehold(false);
     }
   };
 
@@ -2761,11 +2822,26 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             onChange={(e) => setHouseholdCodeInput(e.target.value.toUpperCase())}
             maxLength={6}
           />
-          <Button onClick={handleJoinHousehold} disabled={isHouseholdCodeBusy || householdCodeInput.trim().length < 6 || householdCodeInput.includes('-')}>
+          <Button onClick={handleJoinHousehold} disabled={isHouseholdCodeBusy || isLeavingHousehold || Boolean(profile.householdId) || householdCodeInput.trim().length < 6 || householdCodeInput.includes('-')}>
             {isHouseholdCodeBusy ? 'Sending...' : 'Click Here to Connect'}
           </Button>
         </div>
-        <p className="text-xs text-slate-500">Your request has been sent to the household administrator and requires approval.</p>
+        {profile.householdId ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+            <p className="text-xs text-amber-800 font-semibold">Leave your current household before submitting a join request.</p>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-amber-800 hover:bg-amber-100"
+              onClick={handleLeaveHousehold}
+              disabled={isLeavingHousehold}
+            >
+              {isLeavingHousehold ? 'Leaving...' : 'Leave Current Household'}
+            </Button>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500">Your request has been sent to the household administrator and requires approval.</p>
+        )}
 
         {latestMyJoinRequest && (
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
