@@ -191,8 +191,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [workOrderForm, setWorkOrderForm] = useState<Record<string, string>>({});
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSavingVitals, setIsSavingVitals] = useState(false);
+  const [savingSection, setSavingSection] = useState<SettingsAccordionKey | null>(null);
   const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
   const [vitalsSaveError, setVitalsSaveError] = useState<string | null>(null);
+  const [autoSaveSuccess, setAutoSaveSuccess] = useState<string | null>(null);
   const [householdCodeInput, setHouseholdCodeInput] = useState('');
   const [householdCodeError, setHouseholdCodeError] = useState<string | null>(null);
   const [householdCodeSuccess, setHouseholdCodeSuccess] = useState<string | null>(null);
@@ -212,6 +214,17 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [notificationsBusy, setNotificationsBusy] = useState(false);
 
   const toggleSection = (section: SettingsAccordionKey) => {
+    const isClosing = expandedSections[section] === true;
+    
+    // Auto-save when closing a section
+    if (isClosing) {
+      if (section === 'profile' || section === 'contacts') {
+        handleProfileSave(section);
+      } else if (section === 'security' || section === 'household') {
+        handleVitalsSave(section);
+      }
+    }
+    
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
@@ -769,12 +782,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     }
   };
 
-  const handleProfileSave = async () => {
+  const handleProfileSave = async (section?: SettingsAccordionKey) => {
     const trimmedAddress = String(profile.address || '').trim();
 
     if (!validatePhone(profile.phone)) {
-      setExpandedSections((prev) => ({ ...prev, profile: true }));
-      alert("Please fix phone number errors before saving.");
+      if (section) {
+        setProfileSaveError('Please fix phone number errors before saving.');
+      } else {
+        setExpandedSections((prev) => ({ ...prev, profile: true }));
+        alert("Please fix phone number errors before saving.");
+      }
       return;
     }
     if (trimmedAddress.length > 0 && mapsApiKey && !profile.addressVerified) {
@@ -783,10 +800,15 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       return;
     }
     if (addressStatus === 'INVALID') {
-      setExpandedSections((prev) => ({ ...prev, profile: true }));
-      alert("Please verify your address.");
+      if (section) {
+        setProfileSaveError('Please verify your address.');
+      } else {
+        setExpandedSections((prev) => ({ ...prev, profile: true }));
+        alert("Please verify your address.");
+      }
       return;
     }
+    if (section) setSavingSection(section);
     setIsSavingProfile(true);
     setProfileSaveError(null);
     try {
@@ -812,33 +834,37 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         role: profile.role,
       });
       StorageService.saveProfile(profile);
-      setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 2000);
+      if (section) {
+        setAutoSaveSuccess('✓ Saved');
+        setTimeout(() => setAutoSaveSuccess(null), 2000);
+      } else {
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 2000);
+      }
     } catch (err: any) {
       setProfileSaveError(err?.message || 'Unable to update profile.');
     } finally {
       setIsSavingProfile(false);
+      if (section) setSavingSection(null);
     }
   };
 
-  const handleVitalsSave = async () => {
+  const handleVitalsSave = async (section?: SettingsAccordionKey) => {
     if (!profile.zipCode?.trim()) {
-      setExpandedSections((prev) => ({ ...prev, profile: true }));
       setVitalsSaveError('ZIP is pulled from your Home Address. Verify your address in Identity first.');
       return;
     }
     const memberValidation = validateHouseholdMembers(profile.household || []);
     if (!memberValidation.ok) {
-      setExpandedSections((prev) => ({ ...prev, household: true }));
       setVitalsSaveError(memberValidation.error);
       return;
     }
     if (!profile.consentPreparednessPlanning) {
-      setExpandedSections((prev) => ({ ...prev, security: true }));
       setVitalsSaveError('You must provide consent before saving Vital Intake.');
       return;
     }
 
+    if (section) setSavingSection(section);
     setIsSavingVitals(true);
     setVitalsSaveError(null);
     try {
@@ -862,12 +888,18 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       };
       setProfile(nextProfile);
       StorageService.saveProfile(nextProfile);
-      setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 2000);
+      if (section) {
+        setAutoSaveSuccess('✓ Saved');
+        setTimeout(() => setAutoSaveSuccess(null), 2000);
+      } else {
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 2000);
+      }
     } catch (err: any) {
       setVitalsSaveError(err?.message || 'Unable to update vitals.');
     } finally {
       setIsSavingVitals(false);
+      if (section) setSavingSection(null);
     }
   };
 
@@ -2651,11 +2683,17 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               <p className="text-xs text-slate-500">{profile.fullName || 'Name not set'} • {profile.phone || 'Phone not set'}</p>
             </div>
           </div>
-          <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.profile ? 'rotate-180' : ''}`} />
+          <div className="flex items-center gap-2">
+            {savingSection === 'profile' && <Loader2 size={18} className="text-brand-600 animate-spin" />}
+            <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.profile ? 'rotate-180' : ''}`} />
+          </div>
         </button>
 
         {!expandedSections.profile && (
           <p className="text-xs text-slate-500">{profile.address ? `Address set • ${profile.address}` : 'Address not set yet'}</p>
+        )}
+        {autoSaveSuccess && savingSection === 'profile' && (
+          <p className="text-xs text-green-600 font-medium">{autoSaveSuccess}</p>
         )}
 
         {expandedSections.profile && (
@@ -2771,8 +2809,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               </p>
             </div>
           </div>
-          <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.contacts ? 'rotate-180' : ''}`} />
+          <div className="flex items-center gap-2">
+            {savingSection === 'contacts' && <Loader2 size={18} className="text-brand-600 animate-spin" />}
+            <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.contacts ? 'rotate-180' : ''}`} />
+          </div>
         </button>
+        {autoSaveSuccess && savingSection === 'contacts' && (
+          <p className="text-xs text-green-600 font-medium">{autoSaveSuccess}</p>
+        )}
 
         {expandedSections.contacts && (
           <>
@@ -2824,11 +2868,17 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               <p className="text-xs text-slate-500">{profile.householdName || 'Your Home'} • {profile.householdCode || 'Code not set'}</p>
             </div>
           </div>
-          <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.household ? 'rotate-180' : ''}`} />
+          <div className="flex items-center gap-2">
+            {savingSection === 'household' && <Loader2 size={18} className="text-emerald-600 animate-spin" />}
+            <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.household ? 'rotate-180' : ''}`} />
+          </div>
         </button>
 
         {!expandedSections.household && (
           <p className="text-xs text-slate-500">{(profile.household || []).length} members • Role: {profile.householdRole || 'OWNER'}</p>
+        )}
+        {autoSaveSuccess && savingSection === 'household' && (
+          <p className="text-xs text-green-600 font-medium">{autoSaveSuccess}</p>
         )}
 
         {expandedSections.household && (
@@ -3146,13 +3196,19 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               <p className="text-xs text-slate-500">Health and mobility planning details.</p>
             </div>
           </div>
-          <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.security ? 'rotate-180' : ''}`} />
+          <div className="flex items-center gap-2">
+            {savingSection === 'security' && <Loader2 size={18} className="text-red-600 animate-spin" />}
+            <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.security ? 'rotate-180' : ''}`} />
+          </div>
         </button>
 
         {!expandedSections.security && (
           <p className="text-xs text-slate-500">
             Consent: {profile.consentPreparednessPlanning ? 'Provided' : 'Pending'} • ZIP: {profile.zipCode || 'Not detected'}
           </p>
+        )}
+        {autoSaveSuccess && savingSection === 'security' && (
+          <p className="text-xs text-green-600 font-medium">{autoSaveSuccess}</p>
         )}
 
         {expandedSections.security && (
@@ -3287,8 +3343,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               <p className="text-xs text-slate-500">{connectedOrg ? `Connected to ${connectedOrg}` : 'No community connected'}</p>
             </div>
           </div>
-          <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.community ? 'rotate-180' : ''}`} />
+          <div className="flex items-center gap-2">
+            {savingSection === 'community' && <Loader2 size={18} className="text-brand-600 animate-spin" />}
+            <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.community ? 'rotate-180' : ''}`} />
+          </div>
         </button>
+        {autoSaveSuccess && savingSection === 'community' && (
+          <p className="text-xs text-green-600 font-medium">{autoSaveSuccess}</p>
+        )}
 
         {expandedSections.community && (
           <>
@@ -3425,31 +3487,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           <FileText size={18} />
         </Button>
       </section>
-
-      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur px-4 py-3">
-        <div className="max-w-3xl mx-auto flex items-center gap-3">
-          <Button
-            variant="ghost"
-            className="flex-1"
-            onClick={discardLocalChanges}
-            disabled={isSavingProfile || isSavingVitals}
-          >
-            Reset
-          </Button>
-          <Button
-            className="flex-1"
-            onClick={saveVisibleSection}
-            disabled={isSavingProfile || isSavingVitals}
-          >
-            <Save size={16} className="mr-2" />
-            {isSavingProfile || isSavingVitals
-              ? 'Saving...'
-              : expandedSections.security || expandedSections.household
-                ? 'Save'
-                : 'Save'}
-          </Button>
-        </div>
-      </div>
 
       <div className="space-y-4 pt-4 border-t border-slate-200 order-60">
         <Button onClick={handleLogout} variant="ghost" fullWidth className="text-red-600 hover:bg-red-50 hover:text-red-700">
