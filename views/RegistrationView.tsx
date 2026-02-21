@@ -382,12 +382,14 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
               </div>
             </div>
 
-            <div className="pt-4 text-center">
-              <p className="text-sm text-slate-500 mb-2">Already have an account?</p>
-              <Button variant="ghost" onClick={() => setView('LOGIN')} className="text-brand-600 font-bold">
-                 Log In Here
-              </Button>
-            </div>
+            {mode !== 'SETUP' && (
+              <div className="pt-4 text-center">
+                <p className="text-sm text-slate-500 mb-2">Already have an account?</p>
+                <Button variant="ghost" onClick={() => setView('LOGIN')} className="text-brand-600 font-bold">
+                   Log In Here
+                </Button>
+              </div>
+            )}
 
             <Button 
               fullWidth 
@@ -407,8 +409,8 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600 border border-red-200">
                  <HeartPulse size={32} />
                </div>
-               <h2 className="text-2xl font-bold text-slate-900">Home & Safety Setup</h2>
-               <p className="text-slate-600 font-medium">Add who lives in your home with DOB (MM/DD/YYYY) and required mobility/medical flags.</p>
+               <h2 className="text-2xl font-bold text-slate-900">Preparedness</h2>
+               <p className="text-slate-600 font-medium">Health and mobility planning details.</p>
              </div>
 
              <div className="space-y-4">
