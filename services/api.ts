@@ -1225,8 +1225,11 @@ export async function requestHouseholdJoinByCode(code: string): Promise<{
       rpcMessage.includes('could not find the function public.request_household_join_by_code') ||
       rpcDetails.includes('could not find the function public.request_household_join_by_code') ||
       rpcMessage.includes('schema cache');
+    const ownerConfigRpcError =
+      rpcMessage.includes('household owner is not configured') ||
+      rpcDetails.includes('household owner is not configured');
 
-    if (!missingRpc) throw error;
+    if (!missingRpc && !ownerConfigRpcError) throw error;
     return fallbackRequestJoinByCode();
   }
 
