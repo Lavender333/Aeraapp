@@ -108,6 +108,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [isAddressVerified, setIsAddressVerified] = useState(false);
   const [addressVerifiedAt, setAddressVerifiedAt] = useState<string | null>(null);
   const hasCommunity = !!connectedOrg;
+  const isGeneralUser = userRole === 'GENERAL_USER';
   
   // Status Ping State
   const [pendingPing, setPendingPing] = useState<{ requesterName: string, timestamp: string } | undefined>(undefined);
@@ -314,7 +315,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const isOrgAdmin = userRole === 'INSTITUTION_ADMIN' || userRole === 'ORG_ADMIN';
   const canOpenOrgDashboard = isOrgAdmin || userRole === 'ADMIN' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN';
   const isContractor = userRole === 'CONTRACTOR';
-  const isGeneralUser = userRole === 'GENERAL_USER';
   const showCommunityBlocks = !isGeneralUser;
   const showCommunityAnnouncements = hasCommunity;
   const isProStatusViewer = userRole === 'ADMIN' || userRole === 'FIRST_RESPONDER' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN';
