@@ -100,7 +100,17 @@ serve(async (req) => {
       });
 
       if (legacyError) {
-        return new Response(JSON.stringify({ error: legacyError.message }), {
+        const legacyMessage = String(legacyError.message || "");
+        const legacyLower = legacyMessage.toLowerCase();
+        const legacyAmbiguousHouseholdId =
+          legacyLower.includes("household_id") &&
+          (legacyLower.includes("ambiguous") || legacyLower.includes("column reference"));
+
+        return new Response(JSON.stringify({
+          error: legacyAmbiguousHouseholdId
+            ? "Household approval backend needs the compatibility fix. Apply migration 2026218150000_confirmation.sql."
+            : legacyMessage,
+        }), {
           status: 400,
           headers: { "Content-Type": "application/json" },
         });

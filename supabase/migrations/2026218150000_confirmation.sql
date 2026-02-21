@@ -102,6 +102,84 @@ AS $$
   SELECT public.resolve_household_owner_id(p_household_id) = p_profile_id;
 $$;
 
+CREATE OR REPLACE FUNCTION public.approve_join_transaction(p_join_request_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_request public.household_join_requests%ROWTYPE;
+  v_actor_id uuid := auth.uid();
+BEGIN
+  IF v_actor_id IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  SELECT jr.*
+  INTO v_request
+  FROM public.household_join_requests AS jr
+  WHERE jr.id = p_join_request_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Join request not found';
+  END IF;
+
+  IF lower(COALESCE(v_request.status, 'pending')) <> 'pending' THEN
+    RAISE EXCEPTION 'Join request already resolved';
+  END IF;
+
+  IF NOT public.household_is_owner(v_request.household_id, v_actor_id) THEN
+    RAISE EXCEPTION 'Only the household owner can approve this request';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM public.household_memberships AS hm
+    WHERE hm.profile_id = v_request.requesting_user_id
+  ) THEN
+    RAISE EXCEPTION 'Requesting user is already in a household';
+  END IF;
+
+  INSERT INTO public.household_memberships AS hm (household_id, profile_id, role)
+  VALUES (v_request.household_id, v_request.requesting_user_id, 'MEMBER')
+  ON CONFLICT (household_id, profile_id) DO NOTHING;
+
+  UPDATE public.household_join_requests AS jr
+  SET
+    status = 'approved',
+    resolved_at = now(),
+    resolved_by = v_actor_id
+  WHERE jr.id = p_join_request_id;
+
+  INSERT INTO public.notifications (user_id, type, related_id, metadata)
+  VALUES (
+    v_request.requesting_user_id,
+    'household_join_approved',
+    p_join_request_id,
+    jsonb_build_object('household_id', v_request.household_id, 'resolved_by', v_actor_id)
+  );
+
+  INSERT INTO public.household_audit_log (household_id, action, performed_by, target_user, details)
+  VALUES (
+    v_request.household_id,
+    'member_added',
+    v_actor_id,
+    v_request.requesting_user_id,
+    jsonb_build_object('join_request_id', p_join_request_id, 'status', 'approved')
+  );
+
+  IF to_regprocedure('public.enqueue_household_model_updates(uuid,uuid,uuid)') IS NOT NULL THEN
+    PERFORM public.enqueue_household_model_updates(
+      v_request.household_id,
+      v_actor_id,
+      v_request.requesting_user_id
+    );
+  END IF;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.resolve_household_join_request(
   p_join_request_id uuid,
   p_action text,

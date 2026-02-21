@@ -1513,13 +1513,21 @@ export async function resolveHouseholdJoinRequest(
 
       const legacyCode = String((legacyError as any)?.code || '');
       const legacyMessage = String((legacyError as any)?.message || '');
+      const legacyLower = legacyMessage.toLowerCase();
       const legacyMissing =
         legacyCode === 'PGRST202' ||
-        legacyMessage.toLowerCase().includes('approve_join_transaction') && legacyMessage.toLowerCase().includes('does not exist') ||
-        legacyMessage.toLowerCase().includes('schema cache');
+        legacyLower.includes('approve_join_transaction') && legacyLower.includes('does not exist') ||
+        legacyLower.includes('schema cache');
+      const legacyAmbiguousHouseholdId =
+        legacyLower.includes('household_id') &&
+        (legacyLower.includes('ambiguous') || legacyLower.includes('column reference'));
 
       if (legacyMissing) {
         throw new Error('Household approval backend is not deployed. Apply migration 2026218150000_confirmation.sql (or 20260218150000_confirmation_based_household_join.sql) or deploy the approve-household-join function.');
+      }
+
+      if (legacyAmbiguousHouseholdId) {
+        throw new Error('Household approval backend needs the compatibility fix. Apply migration 2026218150000_confirmation.sql.');
       }
 
       throw new Error(legacyMessage || 'Unable to approve household join request.');
