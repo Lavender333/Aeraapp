@@ -1467,6 +1467,55 @@ export async function resolveHouseholdJoinRequest(
 ): Promise<{ joinRequestId: string; status: HouseholdJoinRequestStatus }> {
   const normalizedAction = action === 'rejected' ? 'rejected' : 'approved';
 
+  const resolveViaRpcFallback = async () => {
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData?.user?.id) {
+      throw new Error('Not authenticated');
+    }
+
+    const actorId = authData.user.id;
+
+    const { data: rpcData, error: rpcError } = await supabase.rpc('resolve_household_join_request', {
+      p_join_request_id: joinRequestId,
+      p_action: normalizedAction,
+      p_actor_id: actorId,
+    });
+
+    if (!rpcError) {
+      return {
+        joinRequestId,
+        status: normalizedAction,
+      };
+    }
+
+    const rpcCode = String((rpcError as any)?.code || '');
+    const rpcMessage = String((rpcError as any)?.message || '').toLowerCase();
+    const missingResolveRpc =
+      rpcCode === 'PGRST202' ||
+      rpcMessage.includes('resolve_household_join_request') && rpcMessage.includes('does not exist');
+
+    if (missingResolveRpc && normalizedAction === 'approved') {
+      const { error: legacyError } = await supabase.rpc('approve_join_transaction', {
+        p_join_request_id: joinRequestId,
+      });
+
+      if (!legacyError) {
+        return {
+          joinRequestId,
+          status: 'approved',
+        };
+      }
+
+      throw new Error(legacyError.message || 'Unable to approve household join request.');
+    }
+
+    if (missingResolveRpc && normalizedAction === 'rejected') {
+      throw new Error('Rejection requires migration 20260218150000_confirmation_based_household_join.sql');
+    }
+
+    throw new Error((rpcError as any)?.message || 'Unable to resolve household join request.');
+  };
+
   const { data, error } = await supabase.functions.invoke('approve-household-join', {
     body: {
       join_request_id: joinRequestId,
@@ -1475,11 +1524,31 @@ export async function resolveHouseholdJoinRequest(
   });
 
   if (error) {
-    throw new Error(error.message || 'Unable to resolve household join request.');
+    const errorMessage = String((error as any)?.message || '');
+    const isEdgeTransportFailure =
+      errorMessage.toLowerCase().includes('failed to send a request to the edge function') ||
+      errorMessage.toLowerCase().includes('failed to send request to edge function') ||
+      errorMessage.toLowerCase().includes('functionsfetcherror') ||
+      errorMessage.toLowerCase().includes('failed to fetch');
+
+    if (isEdgeTransportFailure) {
+      return resolveViaRpcFallback();
+    }
+
+    throw new Error(errorMessage || 'Unable to resolve household join request.');
   }
 
   if (!data?.success) {
-    throw new Error(data?.error || 'Unable to resolve household join request.');
+    const dataError = String(data?.error || '');
+    const missingResolveRpc =
+      dataError.toLowerCase().includes('resolve_household_join_request') &&
+      dataError.toLowerCase().includes('does not exist');
+
+    if (missingResolveRpc) {
+      return resolveViaRpcFallback();
+    }
+
+    throw new Error(dataError || 'Unable to resolve household join request.');
   }
 
   return {

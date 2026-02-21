@@ -2855,6 +2855,51 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           </div>
         )}
 
+        {showMoreSections.household && profile.householdRole === 'OWNER' && (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Notifications</p>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-indigo-700 hover:bg-indigo-100"
+              onClick={handleMarkAllNotificationsRead}
+              disabled={notificationsBusy || unreadNotificationCount === 0}
+            >
+              Mark Read ({unreadNotificationCount})
+            </Button>
+          </div>
+
+          {notifications.length === 0 ? (
+            <p className="text-xs text-indigo-700">No notifications yet.</p>
+          ) : (
+            <div className="space-y-1">
+              {notifications.slice(0, 5).map((item) => (
+                <div
+                  key={item.id}
+                  className={`rounded-md border px-3 py-2 text-xs ${item.read ? 'border-indigo-100 bg-white text-slate-500' : 'border-indigo-300 bg-white text-slate-800 font-semibold'}`}
+                >
+                  <p>
+                    {item.type === 'household_join_request'
+                      ? 'New Household Join Request'
+                      : item.type === 'household_join_approved'
+                        ? 'Your request was approved.'
+                        : item.type === 'household_join_rejected'
+                          ? 'Your request was not approved.'
+                          : item.type === 'household_member_reported_danger'
+                            ? `${String((item.metadata as any)?.reporterName || 'A household member')} reported DANGER.`
+                            : item.type === 'household_member_reported_safe'
+                              ? `${String((item.metadata as any)?.reporterName || 'A household member')} reported SAFE.`
+                          : item.type}
+                  </p>
+                  <p className="text-[10px] mt-0.5 opacity-80">{new Date(item.createdAt).toLocaleString()}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
           <Input
             label="Request Home Join by Code"
@@ -2957,51 +3002,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               </div>
             )}
           </div>
-        )}
-
-        {showMoreSections.household && profile.householdRole === 'OWNER' && (
-        <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Notifications</p>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-indigo-700 hover:bg-indigo-100"
-              onClick={handleMarkAllNotificationsRead}
-              disabled={notificationsBusy || unreadNotificationCount === 0}
-            >
-              Mark Read ({unreadNotificationCount})
-            </Button>
-          </div>
-
-          {notifications.length === 0 ? (
-            <p className="text-xs text-indigo-700">No notifications yet.</p>
-          ) : (
-            <div className="space-y-1">
-              {notifications.slice(0, 5).map((item) => (
-                <div
-                  key={item.id}
-                  className={`rounded-md border px-3 py-2 text-xs ${item.read ? 'border-indigo-100 bg-white text-slate-500' : 'border-indigo-300 bg-white text-slate-800 font-semibold'}`}
-                >
-                  <p>
-                    {item.type === 'household_join_request'
-                      ? 'New Household Join Request'
-                      : item.type === 'household_join_approved'
-                        ? 'Your request was approved.'
-                        : item.type === 'household_join_rejected'
-                          ? 'Your request was not approved.'
-                          : item.type === 'household_member_reported_danger'
-                            ? `${String((item.metadata as any)?.reporterName || 'A household member')} reported DANGER.`
-                            : item.type === 'household_member_reported_safe'
-                              ? `${String((item.metadata as any)?.reporterName || 'A household member')} reported SAFE.`
-                          : item.type}
-                  </p>
-                  <p className="text-[10px] mt-0.5 opacity-80">{new Date(item.createdAt).toLocaleString()}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
         )}
 
         <div>
