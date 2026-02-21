@@ -143,6 +143,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   const normalizedRole = String(profile.role || '').toUpperCase();
   const isAdmin = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(normalizedRole);
+  const isPlatformAdmin = normalizedRole === 'ADMIN';
   const hasAddressInput = String(profile.address || '').trim().length > 0;
   const isAddressVerificationRequired = hasAddressInput && Boolean(mapsApiKey) && !profile.addressVerified;
   const addressVerifiedLabel = profile.addressVerifiedAt
@@ -2570,6 +2571,15 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 <span>User Directory & Access Control</span>
                 <Users size={18} />
               </Button>
+              {isPlatformAdmin && (
+                <Button
+                  onClick={() => setView('NEW_SIGNUPS')}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white border-0 w-full justify-between"
+                >
+                  <span>New Signups</span>
+                  <Users size={18} />
+                </Button>
+              )}
               <Button 
                 onClick={openOrgDirectory} 
                 className="bg-purple-600 hover:bg-purple-500 text-white border-0 w-full justify-between"

@@ -47,6 +47,7 @@ const DroneView = lazyWithRetry(() => import('./views/DroneView').then((m) => ({
 const LogisticsView = lazyWithRetry(() => import('./views/LogisticsView').then((m) => ({ default: m.LogisticsView })));
 const RegistrationView = lazyWithRetry(() => import('./views/RegistrationView').then((m) => ({ default: m.RegistrationView })));
 const OrgDashboardView = lazyWithRetry(() => import('./views/OrgDashboardView').then((m) => ({ default: m.OrgDashboardView })));
+const NewSignupsView = lazyWithRetry(() => import('./views/NewSignupsView').then((m) => ({ default: m.NewSignupsView })));
 const LoginView = lazyWithRetry(() => import('./views/LoginView').then((m) => ({ default: m.LoginView })));
 const PresentationView = lazyWithRetry(() => import('./views/PresentationView').then((m) => ({ default: m.PresentationView })));
 const PrivacyPolicyView = lazyWithRetry(() => import('./views/PrivacyPolicyView').then((m) => ({ default: m.PrivacyPolicyView })));
@@ -105,6 +106,7 @@ export default function App() {
   const currentRole = String(StorageService.getProfile()?.role || 'GENERAL_USER').toUpperCase();
   const canAccessAdvancedViews = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN', 'FIRST_RESPONDER', 'LOCAL_AUTHORITY', 'CONTRACTOR'].includes(currentRole);
   const canAccessOrgDashboard = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(currentRole);
+  const canAccessNewSignups = currentRole === 'ADMIN';
 
   useEffect(() => {
     StorageService.startOfflineSyncListener();
@@ -210,6 +212,8 @@ export default function App() {
         return <HelpFormView setView={setView} />;
       case 'SETTINGS':
         return <SettingsView setView={setView} />;
+      case 'NEW_SIGNUPS':
+        return canAccessNewSignups ? <NewSignupsView setView={setView} /> : <DashboardView setView={setView} />;
       case 'MAP':
         return canAccessAdvancedViews ? <MapView setView={setView} /> : <DashboardView setView={setView} />;
       case 'ALERTS':
@@ -243,6 +247,7 @@ export default function App() {
                   currentView !== 'LOGIN' && 
                   currentView !== 'RESET_PASSWORD' &&
                   currentView !== 'BUILD_KIT' &&
+                  currentView !== 'NEW_SIGNUPS' &&
                   currentView !== 'READINESS' &&
                   currentView !== 'READINESS_GAP' &&
                   currentView !== 'ORG_DASHBOARD' &&

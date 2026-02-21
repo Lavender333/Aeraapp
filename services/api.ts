@@ -626,14 +626,44 @@ const mapInvitationRecord = (row: any): HouseholdInvitationRecord => ({
 });
 
 const getCurrentHouseholdMembership = async (profileId: string) => {
-  const { data: membership, error: membershipError } = await supabase
-    .from('household_memberships')
-    .select('household_id, role')
-    .eq('profile_id', profileId)
-    .maybeSingle();
+  const [{ data: memberships, error: membershipsError }, { data: profileRow }] = await Promise.all([
+    supabase
+      .from('household_memberships')
+      .select('household_id, role')
+      .eq('profile_id', profileId),
+    supabase
+      .from('profiles')
+      .select('active_household_id')
+      .eq('id', profileId)
+      .maybeSingle(),
+  ]);
 
-  if (membershipError) throw membershipError;
-  return membership as { household_id: string; role: 'OWNER' | 'MEMBER' } | null;
+  if (membershipsError) throw membershipsError;
+
+  const rows = Array.isArray(memberships)
+    ? memberships.filter((row: any) => row?.household_id)
+    : [];
+
+  if (rows.length === 0) return null;
+
+  const activeHouseholdId = String((profileRow as any)?.active_household_id || '');
+  if (activeHouseholdId) {
+    const activeMembership = rows.find((row: any) => String(row.household_id) === activeHouseholdId);
+    if (activeMembership) {
+      return {
+        household_id: String(activeMembership.household_id),
+        role: String(activeMembership.role || 'MEMBER').toUpperCase() === 'OWNER' ? 'OWNER' : 'MEMBER',
+      } as { household_id: string; role: 'OWNER' | 'MEMBER' };
+    }
+  }
+
+  const ownerMembership = rows.find((row: any) => String(row.role || '').toUpperCase() === 'OWNER');
+  const fallback = ownerMembership || rows[0];
+
+  return {
+    household_id: String(fallback.household_id),
+    role: String(fallback.role || 'MEMBER').toUpperCase() === 'OWNER' ? 'OWNER' : 'MEMBER',
+  } as { household_id: string; role: 'OWNER' | 'MEMBER' };
 };
 
 const getHouseholdSummaryForMembership = async (membership: {
