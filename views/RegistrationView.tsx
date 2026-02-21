@@ -40,6 +40,13 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     household: [],
     petDetails: '',
     medicalNeeds: '',
+    medicationDependency: false,
+    insulinDependency: false,
+    oxygenPoweredDevice: false,
+    mobilityLimitation: false,
+    transportationAccess: true,
+    financialStrain: false,
+    consentPreparednessPlanning: false,
     emergencyContactName: '',
     emergencyContactPhone: '',
     emergencyContactRelation: '',
@@ -168,6 +175,10 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     const memberValidation = validateHouseholdMembers(payload.household || []);
     if (!memberValidation.ok) {
       setAuthError(memberValidation.error);
+      return;
+    }
+    if (!payload.consentPreparednessPlanning) {
+      setAuthError('Please confirm preparedness consent before completing setup.');
       return;
     }
     try {
@@ -428,6 +439,66 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
                  value={formData.petDetails}
                  onChange={(e) => updateForm('petDetails', e.target.value)}
                />
+
+               <div className="space-y-3">
+                 <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">Medical</p>
+                 <div className="grid md:grid-cols-2 gap-3">
+                   <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+                     <span className="text-sm font-medium text-slate-700">Medication Dependency</span>
+                     <input
+                       type="checkbox"
+                       checked={Boolean(formData.medicationDependency)}
+                       onChange={(e) => updateForm('medicationDependency', e.target.checked)}
+                     />
+                   </label>
+                   <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+                     <span className="text-sm font-medium text-slate-700">Insulin Dependency</span>
+                     <input
+                       type="checkbox"
+                       checked={Boolean(formData.insulinDependency)}
+                       onChange={(e) => updateForm('insulinDependency', e.target.checked)}
+                     />
+                   </label>
+                   <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3 md:col-span-2">
+                     <span className="text-sm font-medium text-slate-700">Oxygen / Powered Medical Device</span>
+                     <input
+                       type="checkbox"
+                       checked={Boolean(formData.oxygenPoweredDevice)}
+                       onChange={(e) => updateForm('oxygenPoweredDevice', e.target.checked)}
+                     />
+                   </label>
+                 </div>
+               </div>
+
+               <div className="space-y-3">
+                 <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">Accessibility</p>
+                 <div className="grid md:grid-cols-2 gap-3">
+                   <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+                     <span className="text-sm font-medium text-slate-700">Mobility Limitation</span>
+                     <input
+                       type="checkbox"
+                       checked={Boolean(formData.mobilityLimitation)}
+                       onChange={(e) => updateForm('mobilityLimitation', e.target.checked)}
+                     />
+                   </label>
+                   <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+                     <span className="text-sm font-medium text-slate-700">Transportation Access</span>
+                     <input
+                       type="checkbox"
+                       checked={Boolean(formData.transportationAccess)}
+                       onChange={(e) => updateForm('transportationAccess', e.target.checked)}
+                     />
+                   </label>
+                   <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3 md:col-span-2">
+                     <span className="text-sm font-medium text-slate-700">Financial Strain</span>
+                     <input
+                       type="checkbox"
+                       checked={Boolean(formData.financialStrain)}
+                       onChange={(e) => updateForm('financialStrain', e.target.checked)}
+                     />
+                   </label>
+                 </div>
+               </div>
                
                <Textarea 
                  label="Medical Needs / Disabilities"
@@ -436,6 +507,22 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
                  onChange={(e) => updateForm('medicalNeeds', e.target.value)}
                  className="min-h-[120px]"
                />
+
+               <div className="border-t border-slate-200 pt-4">
+                 <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wide">Final Step</p>
+                 <p className="text-sm font-bold text-slate-800 mt-1">Confirm preparedness consent</p>
+               </div>
+               <label className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                 <input
+                   className="mt-1"
+                   type="checkbox"
+                   checked={Boolean(formData.consentPreparednessPlanning)}
+                   onChange={(e) => updateForm('consentPreparednessPlanning', e.target.checked)}
+                 />
+                 <span className="text-sm text-emerald-900 font-semibold">
+                   I understand this data is used only for preparedness planning and can be deleted anytime.
+                 </span>
+               </label>
                <p className="text-xs text-slate-500 italic">This information is only shared with responders during an emergency.</p>
              </div>
 

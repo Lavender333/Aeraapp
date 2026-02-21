@@ -235,11 +235,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   }, []);
 
   useEffect(() => {
-    if (isGeneralUser && !hasCommunity) {
-      setShowCommunityConnectModal(true);
-      return;
-    }
-    setShowCommunityConnectModal(false);
+    const shouldPrompt = sessionStorage.getItem('showCommunityConnectPromptOnLogin') === '1';
+    sessionStorage.removeItem('showCommunityConnectPromptOnLogin');
+    setShowCommunityConnectModal(Boolean(shouldPrompt && isGeneralUser && !hasCommunity));
   }, [isGeneralUser, hasCommunity]);
 
   const handleConnectCommunity = async () => {

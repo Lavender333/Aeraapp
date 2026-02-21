@@ -90,6 +90,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
         setView('ORG_DASHBOARD');
       } else {
         console.log('Redirecting to DASHBOARD');
+        sessionStorage.setItem('showCommunityConnectPromptOnLogin', '1');
         setView('DASHBOARD');
       }
     } catch (e: any) {
@@ -145,6 +146,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
     }
     else {
       console.log('Regular user, redirecting to DASHBOARD');
+      sessionStorage.setItem('showCommunityConnectPromptOnLogin', '1');
       setView('DASHBOARD');
     }
   };
