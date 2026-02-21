@@ -1470,9 +1470,9 @@ export async function resolveHouseholdJoinRequest(
   joinRequestId: string,
   action: HouseholdJoinResolutionAction,
 ): Promise<{ joinRequestId: string; status: HouseholdJoinRequestStatus }> {
-  const normalizedAction = action === 'rejected' ? 'rejected' : 'approved';
+  const normalizedAction: HouseholdJoinRequestStatus = action === 'rejected' ? 'rejected' : 'approved';
 
-  const resolveViaRpcFallback = async () => {
+  const resolveViaRpcFallback = async (): Promise<{ joinRequestId: string; status: HouseholdJoinRequestStatus }> => {
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError || !authData?.user?.id) {
       throw new Error('Not authenticated');
@@ -1558,9 +1558,12 @@ export async function resolveHouseholdJoinRequest(
       errorMessage.toLowerCase().includes('failed to send request to edge function') ||
       errorMessage.toLowerCase().includes('functionsfetcherror') ||
       errorMessage.toLowerCase().includes('failed to fetch');
+    const isAmbiguousHouseholdId =
+      errorMessage.toLowerCase().includes('household_id') &&
+      (errorMessage.toLowerCase().includes('ambiguous') || errorMessage.toLowerCase().includes('column reference'));
 
-    if (isEdgeTransportFailure) {
-      return resolveViaRpcFallback();
+    if (isEdgeTransportFailure || isAmbiguousHouseholdId) {
+      return (await resolveViaRpcFallback()) as { joinRequestId: string; status: HouseholdJoinRequestStatus };
     }
 
     throw new Error(errorMessage || 'Unable to resolve household join request.');
@@ -1574,9 +1577,16 @@ export async function resolveHouseholdJoinRequest(
     const missingLegacyApproveRpc =
       dataError.toLowerCase().includes('approve_join_transaction') &&
       dataError.toLowerCase().includes('does not exist');
+    const ambiguousHouseholdId =
+      dataError.toLowerCase().includes('household_id') &&
+      (dataError.toLowerCase().includes('ambiguous') || dataError.toLowerCase().includes('column reference'));
 
     if (missingResolveRpc || missingLegacyApproveRpc) {
-      return resolveViaRpcFallback();
+      return (await resolveViaRpcFallback()) as { joinRequestId: string; status: HouseholdJoinRequestStatus };
+    }
+
+    if (ambiguousHouseholdId) {
+      throw new Error('Household approval backend needs the compatibility fix. Apply migration 2026218150000_confirmation.sql.');
     }
 
     throw new Error(dataError || 'Unable to resolve household join request.');
@@ -1584,7 +1594,7 @@ export async function resolveHouseholdJoinRequest(
 
   return {
     joinRequestId,
-    status: normalizedAction,
+    status: normalizedAction as HouseholdJoinRequestStatus,
   };
 }
 
