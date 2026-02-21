@@ -81,11 +81,25 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
         role, 
         onboardComplete 
       });
-      console.log('Redirecting to DASHBOARD');
-      setView('DASHBOARD');
+      const needsSetup = !onboardComplete;
+      if (needsSetup) {
+        console.log('User needs setup, redirecting to ACCOUNT_SETUP');
+        setView('ACCOUNT_SETUP');
+      } else if (role === 'INSTITUTION_ADMIN' || role === 'ORG_ADMIN') {
+        console.log('Organization admin, redirecting to ORG_DASHBOARD');
+        setView('ORG_DASHBOARD');
+      } else {
+        console.log('Redirecting to DASHBOARD');
+        setView('DASHBOARD');
+      }
     } catch (e: any) {
       console.error('Login error:', e);
-      setError(e?.message || 'Login failed.');
+      const message = String(e?.message || 'Login failed.');
+      if (message.toLowerCase().includes('email not confirmed')) {
+        setError('Please verify your email first, then log in to continue setup.');
+      } else {
+        setError(message);
+      }
     } finally {
       setIsLoggingIn(false);
     }

@@ -87,6 +87,25 @@ const sanitizeInventory = (inventory: OrgInventory): OrgInventory => ({
   medicalKits: Math.max(0, Number(inventory.medicalKits) || 0),
 });
 
+const hasText = (value: unknown) => String(value || '').trim().length > 0;
+
+const inferOnboardingComplete = (
+  profile: Partial<UserProfile> | null | undefined,
+  hasVitalsRecord: boolean,
+) => {
+  if (!profile) return false;
+
+  const basicsComplete =
+    hasText(profile.fullName) &&
+    hasText(profile.phone) &&
+    hasText(profile.address) &&
+    hasText(profile.emergencyContactName) &&
+    hasText(profile.emergencyContactPhone) &&
+    hasText(profile.emergencyContactRelation);
+
+  return basicsComplete && hasVitalsRecord;
+};
+
 // --- Seed Data ---
 const SEED_ORGS: OrganizationProfile[] = [
   { 
@@ -443,48 +462,53 @@ export const StorageService = {
         };
         this.saveProfile(profile);
 
-        void (async () => {
-          try {
-            const [profileResult, vitalsResult, householdResult] = await Promise.allSettled([
-              fetchProfileForUser(),
-              fetchVitalsForUser(),
-              fetchHouseholdForCurrentUser(),
-            ]);
+        try {
+          const [profileResult, vitalsResult, householdResult] = await Promise.allSettled([
+            fetchProfileForUser(),
+            fetchVitalsForUser(),
+            fetchHouseholdForCurrentUser(),
+          ]);
 
-            const remoteProfile = profileResult.status === 'fulfilled' ? profileResult.value : null;
-            const remoteVitals = vitalsResult.status === 'fulfilled' ? vitalsResult.value : null;
+          const remoteProfile = profileResult.status === 'fulfilled' ? profileResult.value : null;
+          const remoteVitals = vitalsResult.status === 'fulfilled' ? vitalsResult.value : null;
 
-            let householdSummary = householdResult.status === 'fulfilled' ? householdResult.value : null;
-            if (!householdSummary) {
-              householdSummary = await ensureHouseholdForCurrentUser();
-            }
-
-            const latest = this.getProfile();
-            if (!latest?.id || latest.id !== resp.user.id) return;
-
-            this.saveProfile({
-              ...latest,
-              fullName: remoteProfile?.fullName || latest.fullName || resp.user.fullName || '',
-              email: remoteProfile?.email || latest.email || resp.user.email || '',
-              phone: remoteProfile?.phone || latest.phone || resp.user.phone || '',
-              address: remoteProfile?.address || latest.address || '',
-              householdMembers: remoteVitals?.householdMembers || latest.householdMembers || 1,
-              household: remoteVitals?.household || latest.household || [],
-              petDetails: remoteVitals?.petDetails || latest.petDetails || '',
-              medicalNeeds: remoteVitals?.medicalNeeds || latest.medicalNeeds || '',
-              emergencyContactName: remoteProfile?.emergencyContactName || latest.emergencyContactName || '',
-              emergencyContactPhone: remoteProfile?.emergencyContactPhone || latest.emergencyContactPhone || '',
-              emergencyContactRelation: remoteProfile?.emergencyContactRelation || latest.emergencyContactRelation || '',
-              householdId: householdSummary?.householdId,
-              householdName: householdSummary?.householdName,
-              householdCode: householdSummary?.householdCode,
-              householdRole: householdSummary?.householdRole,
-              communityId: remoteProfile?.communityId || latest.communityId || resp.user.orgId || '',
-            });
-          } catch (hydrateErr) {
-            console.warn('Post-login profile hydration failed', hydrateErr);
+          let householdSummary = householdResult.status === 'fulfilled' ? householdResult.value : null;
+          if (!householdSummary) {
+            householdSummary = await ensureHouseholdForCurrentUser();
           }
-        })();
+
+          const latest = this.getProfile();
+          if (!latest?.id || latest.id !== resp.user.id) return resp;
+
+          const mergedProfile: UserProfile = {
+            ...latest,
+            fullName: remoteProfile?.fullName || latest.fullName || resp.user.fullName || '',
+            email: remoteProfile?.email || latest.email || resp.user.email || '',
+            phone: remoteProfile?.phone || latest.phone || resp.user.phone || '',
+            address: remoteProfile?.address || latest.address || '',
+            householdMembers: remoteVitals?.householdMembers || latest.householdMembers || 1,
+            household: remoteVitals?.household || latest.household || [],
+            petDetails: remoteVitals?.petDetails || latest.petDetails || '',
+            medicalNeeds: remoteVitals?.medicalNeeds || latest.medicalNeeds || '',
+            emergencyContactName: remoteProfile?.emergencyContactName || latest.emergencyContactName || '',
+            emergencyContactPhone: remoteProfile?.emergencyContactPhone || latest.emergencyContactPhone || '',
+            emergencyContactRelation: remoteProfile?.emergencyContactRelation || latest.emergencyContactRelation || '',
+            householdId: householdSummary?.householdId,
+            householdName: householdSummary?.householdName,
+            householdCode: householdSummary?.householdCode,
+            householdRole: householdSummary?.householdRole,
+            communityId: remoteProfile?.communityId || latest.communityId || resp.user.orgId || '',
+            onboardComplete: inferOnboardingComplete({
+              ...latest,
+              ...remoteProfile,
+              ...remoteVitals,
+            }, Boolean(remoteVitals)),
+          };
+
+          this.saveProfile(mergedProfile);
+        } catch (hydrateErr) {
+          console.warn('Post-login profile hydration failed', hydrateErr);
+        }
       }
       return resp;
     } catch (err: any) {
