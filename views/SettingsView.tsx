@@ -6,7 +6,7 @@ import { Button } from '../components/Button';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
-import { AppNotificationRecord, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, leaveCurrentHousehold, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdsForCurrentUser, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, switchActiveHousehold, updateProfileForUser, updateVitalsForUser } from '../services/api';
+import { AppNotificationRecord, cancelMyHouseholdJoinRequest, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, leaveCurrentHousehold, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdsForCurrentUser, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, switchActiveHousehold, updateProfileForUser, updateVitalsForUser } from '../services/api';
 import { getOrgByCode } from '../services/supabase';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
 import { isValidPhoneForInvite, validateHouseholdMembers } from '../services/validation';
@@ -203,6 +203,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [householdOptions, setHouseholdOptions] = useState<HouseholdOption[]>([]);
   const [isSwitchingHousehold, setIsSwitchingHousehold] = useState(false);
   const [isLeavingHousehold, setIsLeavingHousehold] = useState(false);
+  const [isCancellingJoinRequest, setIsCancellingJoinRequest] = useState(false);
   const [notifications, setNotifications] = useState<AppNotificationRecord[]>([]);
   const [joinRequestBusyId, setJoinRequestBusyId] = useState<string | null>(null);
   const [notificationsBusy, setNotificationsBusy] = useState(false);
@@ -1269,6 +1270,36 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       setHouseholdCodeError(err?.message || 'Unable to leave household right now.');
     } finally {
       setIsLeavingHousehold(false);
+    }
+  };
+
+  const handleCancelMyJoinRequest = async () => {
+    if (!latestMyJoinRequest?.id || latestMyJoinRequest.status !== 'pending' || isCancellingJoinRequest) return;
+
+    setHouseholdCodeError(null);
+    setHouseholdCodeSuccess(null);
+    setIsCancellingJoinRequest(true);
+    try {
+      await cancelMyHouseholdJoinRequest(latestMyJoinRequest.id);
+
+      try {
+        const [ownerRequests, myRequests, inbox] = await Promise.all([
+          listHouseholdJoinRequestsForOwner(),
+          listMyHouseholdJoinRequests(),
+          listNotificationsForCurrentUser(50),
+        ]);
+        setOwnerJoinRequests(ownerRequests);
+        setMyJoinRequests(myRequests);
+        setNotifications(inbox);
+      } catch {
+        setMyJoinRequests((prev) => prev.filter((item) => item.id !== latestMyJoinRequest.id));
+      }
+
+      setHouseholdCodeSuccess('Join request cancelled.');
+    } catch (err: any) {
+      setHouseholdCodeError(err?.message || 'Unable to cancel join request right now.');
+    } finally {
+      setIsCancellingJoinRequest(false);
     }
   };
 
@@ -2854,6 +2885,19 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                   : 'Rejected'}
             </p>
             <p className="text-[11px] text-slate-500 mt-0.5">Submitted {new Date(latestMyJoinRequest.createdAt).toLocaleString()}</p>
+            {latestMyJoinRequest.status === 'pending' && (
+              <div className="mt-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-red-600 hover:bg-red-50"
+                  onClick={handleCancelMyJoinRequest}
+                  disabled={isCancellingJoinRequest}
+                >
+                  {isCancellingJoinRequest ? 'Cancelling...' : 'Cancel Request'}
+                </Button>
+              </div>
+            )}
           </div>
         )}
 

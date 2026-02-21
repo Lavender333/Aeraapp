@@ -1375,6 +1375,62 @@ export async function listHouseholdJoinRequestsForOwner(limit = 50): Promise<Hou
   return (data || []).map((row: any) => mapJoinRequestRecord(row, profileLookup));
 }
 
+export async function cancelMyHouseholdJoinRequest(joinRequestId: string): Promise<{ joinRequestId: string; status: 'rejected' }> {
+  const normalizedId = String(joinRequestId || '').trim();
+  if (!normalizedId) throw new Error('Join request id is required.');
+
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const userId = authData.user.id;
+
+  const { data: existing, error: existingError } = await supabase
+    .from('household_join_requests')
+    .select('id, status, household_id')
+    .eq('id', normalizedId)
+    .eq('requesting_user_id', userId)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+  if (!existing?.id) throw new Error('Join request not found.');
+  if (String(existing.status || '').toLowerCase() !== 'pending') {
+    throw new Error('Only pending join requests can be cancelled.');
+  }
+
+  const { error: deleteError } = await supabase
+    .from('household_join_requests')
+    .delete()
+    .eq('id', normalizedId)
+    .eq('requesting_user_id', userId)
+    .eq('status', 'pending');
+
+  if (deleteError) throw deleteError;
+
+  try {
+    await supabase
+      .from('notifications')
+      .delete()
+      .eq('type', 'household_join_request')
+      .eq('related_id', normalizedId);
+  } catch {}
+
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'household_join_requests',
+    entityId: normalizedId,
+    details: {
+      cancelledBy: userId,
+      householdId: String(existing.household_id || ''),
+      source: 'requester_cancel',
+    },
+  });
+
+  return {
+    joinRequestId: normalizedId,
+    status: 'rejected',
+  };
+}
+
 export async function resolveHouseholdJoinRequest(
   joinRequestId: string,
   action: HouseholdJoinResolutionAction,
