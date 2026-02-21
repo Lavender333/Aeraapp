@@ -1322,6 +1322,11 @@ export async function requestHouseholdJoinByCode(code: string): Promise<{
     const rpcErrorCode = String((error as any)?.code || '');
     const rpcMessage = String((error as any)?.message || '').toLowerCase();
     const rpcDetails = String((error as any)?.details || '').toLowerCase();
+    const isTransportFailure =
+      rpcMessage.includes('load failed') ||
+      rpcMessage.includes('failed to fetch') ||
+      rpcMessage.includes('fetch failed') ||
+      rpcMessage.includes('network');
     const missingRpc =
       rpcErrorCode === 'PGRST202' ||
       rpcMessage.includes('could not find the function public.request_household_join_by_code') ||
@@ -1331,7 +1336,7 @@ export async function requestHouseholdJoinByCode(code: string): Promise<{
       rpcMessage.includes('household owner is not configured') ||
       rpcDetails.includes('household owner is not configured');
 
-    if (!missingRpc && !ownerConfigRpcError) throw error;
+    if (!missingRpc && !ownerConfigRpcError && !isTransportFailure) throw error;
     return fallbackRequestJoinByCode();
   }
 
@@ -1506,7 +1511,18 @@ export async function resolveHouseholdJoinRequest(
         };
       }
 
-      throw new Error(legacyError.message || 'Unable to approve household join request.');
+      const legacyCode = String((legacyError as any)?.code || '');
+      const legacyMessage = String((legacyError as any)?.message || '');
+      const legacyMissing =
+        legacyCode === 'PGRST202' ||
+        legacyMessage.toLowerCase().includes('approve_join_transaction') && legacyMessage.toLowerCase().includes('does not exist') ||
+        legacyMessage.toLowerCase().includes('schema cache');
+
+      if (legacyMissing) {
+        throw new Error('Household approval backend is not deployed. Apply migration 20260218150000_confirmation_based_household_join.sql or deploy the approve-household-join function.');
+      }
+
+      throw new Error(legacyMessage || 'Unable to approve household join request.');
     }
 
     if (missingResolveRpc && normalizedAction === 'rejected') {
@@ -1543,8 +1559,11 @@ export async function resolveHouseholdJoinRequest(
     const missingResolveRpc =
       dataError.toLowerCase().includes('resolve_household_join_request') &&
       dataError.toLowerCase().includes('does not exist');
+    const missingLegacyApproveRpc =
+      dataError.toLowerCase().includes('approve_join_transaction') &&
+      dataError.toLowerCase().includes('does not exist');
 
-    if (missingResolveRpc) {
+    if (missingResolveRpc || missingLegacyApproveRpc) {
       return resolveViaRpcFallback();
     }
 

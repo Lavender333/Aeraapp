@@ -155,6 +155,12 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     member.name.toLowerCase().includes(memberSearch.trim().toLowerCase())
   );
 
+  const readinessTrackedCount = memberNeeds.length;
+  const fullyReadyCount = memberNeeds.filter((need) => Number(need.readiness_score || 0) >= 100).length;
+  const fullyReadyPercent = readinessTrackedCount > 0
+    ? Math.round((fullyReadyCount / readinessTrackedCount) * 1000) / 10
+    : 0;
+
   // Use member count for coverage; fallback to registeredPopulation if no linked members yet
   const coverageBase = stats.total || registeredPopulation;
 
@@ -708,7 +714,13 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
 
             {memberNeeds.length > 0 && (
               <div className="bg-white border border-slate-200 rounded-xl p-4">
-                <h3 className="text-sm font-bold text-slate-900 mb-2">{t('org.gaps.title')}</h3>
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <h3 className="text-sm font-bold text-slate-900">{t('org.gaps.title')}</h3>
+                  <div className="text-right">
+                    <p className="text-[11px] uppercase font-bold text-slate-500">100% Readiness</p>
+                    <p className="text-sm font-black text-emerald-700">{fullyReadyCount} / {readinessTrackedCount} ({fullyReadyPercent}%)</p>
+                  </div>
+                </div>
                 <div className="space-y-2">
                   {memberNeeds.slice(0, 20).map((need) => {
                     const score = Math.round(Number(need.readiness_score || 0));

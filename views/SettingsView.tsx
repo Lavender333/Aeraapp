@@ -144,6 +144,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const normalizedRole = String(profile.role || '').toUpperCase();
   const isAdmin = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(normalizedRole);
   const isPlatformAdmin = normalizedRole === 'ADMIN';
+  const isOrgScopedAdmin = normalizedRole === 'ORG_ADMIN';
+  const orgScopeId = String(profile.communityId || '').trim();
   const hasAddressInput = String(profile.address || '').trim().length > 0;
   const isAddressVerificationRequired = hasAddressInput && Boolean(mapsApiKey) && !profile.addressVerified;
   const addressVerifiedLabel = profile.addressVerifiedAt
@@ -1375,6 +1377,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   const openDbViewer = () => {
     if (!isAdmin) return;
+    if (isOrgScopedAdmin) return;
     const db = StorageService.getDB();
     setDbContent(db);
     setCurrentSection('DB_VIEWER');
@@ -1383,7 +1386,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const openOrgDirectory = () => {
     if (!isAdmin) return;
     const db = StorageService.getDB();
-    setOrgList(db.organizations);
+    const scopedOrgs = isOrgScopedAdmin
+      ? (db.organizations || []).filter((org) => String(org.id || '') === orgScopeId)
+      : db.organizations;
+    setOrgList(scopedOrgs);
     setCurrentSection('ORG_DIRECTORY');
     setSelectedOrgDetails(null);
   };
@@ -1396,7 +1402,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     }
     const db = StorageService.getDB();
     console.info('[AccessControl] loading users', { count: Array.isArray(db.users) ? db.users.length : 0 });
-    setUsers(Array.isArray(db.users) ? db.users : []);
+    const scopedUsers = Array.isArray(db.users)
+      ? (isOrgScopedAdmin ? db.users.filter((u) => String(u.communityId || '') === orgScopeId) : db.users)
+      : [];
+    setUsers(scopedUsers);
     setActiveTab('ALL_USERS');
     setCurrentSection('ACCESS_CONTROL');
     setSelectedUser(null);
@@ -1405,7 +1414,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const openBroadcastControl = () => {
     if (!isAdmin) return;
     const db = StorageService.getDB();
-    setOrgList(db.organizations);
+    const scopedOrgs = isOrgScopedAdmin
+      ? (db.organizations || []).filter((org) => String(org.id || '') === orgScopeId)
+      : db.organizations;
+    setOrgList(scopedOrgs);
     setSystemTicker(db.tickerMessage);
     setCurrentSection('BROADCAST_CONTROL');
   };
@@ -1413,12 +1425,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const openMasterInventory = () => {
     if (!isAdmin) return;
     const reqs = StorageService.getAllReplenishmentRequests();
-    setInventoryRequests(reqs);
+    const scopedReqs = isOrgScopedAdmin
+      ? reqs.filter((req) => String(req.orgId || '') === orgScopeId)
+      : reqs;
+    setInventoryRequests(scopedReqs);
     setCurrentSection('MASTER_INVENTORY');
   };
 
   // --- Access Control Handlers ---
   const togglePermission = (roleId: UserRole, perm: keyof RoleDefinition['permissions']) => {
+    if (isOrgScopedAdmin) return;
     setRoles(prev => {
       const updated = prev.map(r => {
         if (r.id === roleId) {
@@ -1436,6 +1452,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   const updateUserRole = (userId: string, newRole: UserRole) => {
     if (!isAdmin) return;
+    if (isOrgScopedAdmin) return;
     setUsers(prev => {
       const updated = prev.map(u => u.id === userId ? { ...u, role: newRole } : u);
       const changed = updated.find(u => u.id === userId);
@@ -2389,14 +2406,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           >
             All Users ({safeUsers.length})
           </button>
-          <button 
-            onClick={() => setActiveTab('ROLE_DEFINITIONS')}
-            className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${
-              activeTab === 'ROLE_DEFINITIONS' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            Role Definitions
-          </button>
+          {!isOrgScopedAdmin && (
+            <button 
+              onClick={() => setActiveTab('ROLE_DEFINITIONS')}
+              className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${
+                activeTab === 'ROLE_DEFINITIONS' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Role Definitions
+            </button>
+          )}
         </div>
 
         {activeTab === 'ROLE_DEFINITIONS' && (
@@ -2601,14 +2620,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 <span>Manage Broadcasts</span>
                 <Radio size={18} />
               </Button>
-              <Button 
-                onClick={openDbViewer}
-                variant="outline"
-                className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 w-full justify-between"
-              >
-                 <span>View Raw Database</span>
-                 <Database size={18} />
-              </Button>
+              {!isOrgScopedAdmin && (
+                <Button 
+                  onClick={openDbViewer}
+                  variant="outline"
+                  className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 w-full justify-between"
+                >
+                   <span>View Raw Database</span>
+                   <Database size={18} />
+                </Button>
+              )}
             </div>
           </div>
         </section>
