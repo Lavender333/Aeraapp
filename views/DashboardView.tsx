@@ -465,8 +465,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
       {showCommunityConnectModal && isGeneralUser && !hasCommunity && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-slide-up">
-            <div className="bg-slate-900 text-white p-4 border-b border-slate-800">
+            <div className="bg-slate-900 text-white p-4 border-b border-slate-800 flex items-center justify-between gap-3">
               <h3 className="font-bold">Connect to a Trusted Community Connection</h3>
+              <button
+                onClick={() => setShowCommunityConnectModal(false)}
+                className="text-slate-400 hover:text-white transition-colors"
+                aria-label="Close community connection modal"
+              >
+                <X size={22} />
+              </button>
             </div>
             <div className="p-5 space-y-3">
               <p className="text-sm font-semibold text-slate-900">No community connected</p>
