@@ -77,11 +77,16 @@ serve(async (req) => {
 
     if (error) {
       const errorMessage = String(error.message || "");
+      const errorLower = errorMessage.toLowerCase();
       const missingResolveRpc =
         String((error as any).code || "") === "PGRST202" ||
-        (errorMessage.includes("resolve_household_join_request") && errorMessage.toLowerCase().includes("does not exist"));
+        (errorMessage.includes("resolve_household_join_request") && errorLower.includes("does not exist"));
+      const ambiguousResolveHouseholdId =
+        errorLower.includes("household_id") &&
+        (errorLower.includes("ambiguous") || errorLower.includes("column reference"));
+      const resolveRpcUnavailableOrBroken = missingResolveRpc || ambiguousResolveHouseholdId;
 
-      if (!missingResolveRpc) {
+      if (!resolveRpcUnavailableOrBroken) {
         return new Response(JSON.stringify({ error: error.message }), {
           status: 400,
           headers: { "Content-Type": "application/json" },

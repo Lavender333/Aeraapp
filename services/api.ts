@@ -1498,8 +1498,12 @@ export async function resolveHouseholdJoinRequest(
     const missingResolveRpc =
       rpcCode === 'PGRST202' ||
       rpcMessage.includes('resolve_household_join_request') && rpcMessage.includes('does not exist');
+    const ambiguousResolveHouseholdId =
+      rpcMessage.includes('household_id') &&
+      (rpcMessage.includes('ambiguous') || rpcMessage.includes('column reference'));
+    const resolveRpcUnavailableOrBroken = missingResolveRpc || ambiguousResolveHouseholdId;
 
-    if (missingResolveRpc && normalizedAction === 'approved') {
+    if (resolveRpcUnavailableOrBroken && normalizedAction === 'approved') {
       const { error: legacyError } = await supabase.rpc('approve_join_transaction', {
         p_join_request_id: joinRequestId,
       });
@@ -1533,7 +1537,7 @@ export async function resolveHouseholdJoinRequest(
       throw new Error(legacyMessage || 'Unable to approve household join request.');
     }
 
-    if (missingResolveRpc && normalizedAction === 'rejected') {
+    if (resolveRpcUnavailableOrBroken && normalizedAction === 'rejected') {
       throw new Error('Rejection requires migration 2026218150000_confirmation.sql (or 20260218150000_confirmation_based_household_join.sql)');
     }
 
