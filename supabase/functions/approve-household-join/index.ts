@@ -89,7 +89,7 @@ serve(async (req) => {
       }
 
       if (normalizedAction === "rejected") {
-        return new Response(JSON.stringify({ error: "Rejection requires migration 20260218150000_confirmation_based_household_join.sql" }), {
+        return new Response(JSON.stringify({ error: "Rejection requires migration 2026218150000_confirmation.sql (or 20260218150000_confirmation_based_household_join.sql)" }), {
           status: 400,
           headers: { "Content-Type": "application/json" },
         });

@@ -1519,14 +1519,14 @@ export async function resolveHouseholdJoinRequest(
         legacyMessage.toLowerCase().includes('schema cache');
 
       if (legacyMissing) {
-        throw new Error('Household approval backend is not deployed. Apply migration 20260218150000_confirmation_based_household_join.sql or deploy the approve-household-join function.');
+        throw new Error('Household approval backend is not deployed. Apply migration 2026218150000_confirmation.sql (or 20260218150000_confirmation_based_household_join.sql) or deploy the approve-household-join function.');
       }
 
       throw new Error(legacyMessage || 'Unable to approve household join request.');
     }
 
     if (missingResolveRpc && normalizedAction === 'rejected') {
-      throw new Error('Rejection requires migration 20260218150000_confirmation_based_household_join.sql');
+      throw new Error('Rejection requires migration 2026218150000_confirmation.sql (or 20260218150000_confirmation_based_household_join.sql)');
     }
 
     throw new Error((rpcError as any)?.message || 'Unable to resolve household join request.');
