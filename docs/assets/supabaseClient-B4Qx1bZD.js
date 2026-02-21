@@ -1,0 +1,1 @@
+import{I as s}from"./index-CJzEU5Yr.js";const e="https://zghyxeieetqubodgplgo.supabase.co",I="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpnaHl4ZWllZXRxdWJvZGdwbGdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1MDkwNzcsImV4cCI6MjA4NjA4NTA3N30.4ML7Ce1VsVQfhbmuChWk6_tRdx_doRWIzxC9nS873B8",i=s(e,I,{auth:{persistSession:!0,autoRefreshToken:!0}});export{i as s};
