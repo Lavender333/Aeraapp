@@ -1093,10 +1093,34 @@ export async function requestHouseholdJoinByCode(code: string): Promise<{
       .eq('role', 'OWNER')
       .maybeSingle();
 
-    const ownerId = String((ownerMembership as any)?.profile_id || '');
+    let ownerId = String((ownerMembership as any)?.profile_id || '');
+
     if (!ownerId) {
-      throw new Error('Household owner is not configured');
+      try {
+        const { data: householdOwnerByProfile, error: ownerProfileError } = await supabase
+          .from('households')
+          .select('owner_profile_id')
+          .eq('id', household.id)
+          .maybeSingle();
+        if (!ownerProfileError) {
+          ownerId = String((householdOwnerByProfile as any)?.owner_profile_id || '');
+        }
+      } catch {}
     }
+
+    if (!ownerId) {
+      try {
+        const { data: householdOwnerById, error: ownerIdError } = await supabase
+          .from('households')
+          .select('owner_id')
+          .eq('id', household.id)
+          .maybeSingle();
+        if (!ownerIdError) {
+          ownerId = String((householdOwnerById as any)?.owner_id || '');
+        }
+      } catch {}
+    }
+
     if (ownerId === userId) {
       throw new Error('Owner cannot request to join their own household');
     }
@@ -1157,19 +1181,21 @@ export async function requestHouseholdJoinByCode(code: string): Promise<{
       };
     }
 
-    try {
-      await supabase
-        .from('notifications')
-        .insert({
-          user_id: ownerId,
-          type: 'household_join_request',
-          related_id: inserted.id,
-          metadata: {
-            household_id: household.id,
-            requesting_user_id: userId,
-          },
-        });
-    } catch {}
+    if (ownerId) {
+      try {
+        await supabase
+          .from('notifications')
+          .insert({
+            user_id: ownerId,
+            type: 'household_join_request',
+            related_id: inserted.id,
+            metadata: {
+              household_id: household.id,
+              requesting_user_id: userId,
+            },
+          });
+      } catch {}
+    }
 
     await safeLogActivity({
       action: 'UPDATE',
