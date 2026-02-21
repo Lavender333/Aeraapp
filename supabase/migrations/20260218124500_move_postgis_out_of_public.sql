@@ -11,7 +11,14 @@ BEGIN
     WHERE e.extname = 'postgis'
       AND n.nspname = 'public'
   ) THEN
-    ALTER EXTENSION postgis SET SCHEMA extensions;
+    BEGIN
+      ALTER EXTENSION postgis SET SCHEMA extensions;
+    EXCEPTION
+      WHEN feature_not_supported THEN
+        RAISE NOTICE 'Skipping PostGIS schema move: extension does not support SET SCHEMA in this environment.';
+      WHEN insufficient_privilege THEN
+        RAISE NOTICE 'Skipping PostGIS schema move: insufficient privilege to alter managed extension.';
+    END;
   END IF;
 END
 $$;
