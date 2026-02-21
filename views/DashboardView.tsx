@@ -114,6 +114,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
 
   // Broadcast Modal State
   const [showTickerModal, setShowTickerModal] = useState(false);
+  const [showCommunityConnectModal, setShowCommunityConnectModal] = useState(false);
 
   useEffect(() => {
     // Load Profile Data
@@ -231,6 +232,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
       window.removeEventListener('finance-open', openFinanceIfFlagged);
     };
   }, []);
+
+  useEffect(() => {
+    if (isGeneralUser && !hasCommunity) {
+      setShowCommunityConnectModal(true);
+      return;
+    }
+    setShowCommunityConnectModal(false);
+  }, [isGeneralUser, hasCommunity]);
 
   const handleConnectCommunity = async () => {
     const normalized = communityIdInput
@@ -449,6 +458,36 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                  Close Message
                </Button>
              </div>
+          </div>
+        </div>
+      )}
+
+      {showCommunityConnectModal && isGeneralUser && !hasCommunity && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-slide-up">
+            <div className="bg-slate-900 text-white p-4 border-b border-slate-800">
+              <h3 className="font-bold">Connect to a Trusted Community Connection</h3>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-sm font-semibold text-slate-900">No community connected</p>
+              <Input
+                label="Community ID"
+                placeholder="Community ID (e.g., CH-1234)"
+                value={communityIdInput}
+                onChange={(e) => setCommunityIdInput(formatCommunityIdInput(e.target.value))}
+              />
+              <p className="text-[11px] text-slate-500">Format: CH-1234</p>
+              {communityConnectError && (
+                <p className="text-xs text-red-600 font-semibold">{communityConnectError}</p>
+              )}
+              <Button
+                fullWidth
+                onClick={handleConnectCommunity}
+                disabled={isConnectingCommunity}
+              >
+                {isConnectingCommunity ? 'Connecting...' : 'Connect Community'}
+              </Button>
+            </div>
           </div>
         </div>
       )}
