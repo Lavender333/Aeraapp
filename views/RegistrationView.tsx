@@ -181,6 +181,8 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       setAuthError('Please confirm preparedness consent before completing setup.');
       return;
     }
+    setIsRegistering(true);
+    setAuthError(null);
     try {
       const currentProfile = StorageService.getProfile();
       const { data: authData } = await supabase.auth.getUser();
@@ -213,6 +215,8 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       StorageService.saveProfile({ ...payload, id: profileId });
       setAuthError('Profile saved locally. Sync will resume when available.');
       setView('DASHBOARD');
+    } finally {
+      setIsRegistering(false);
     }
   };
 
@@ -527,8 +531,8 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
              </div>
 
              <div className="flex gap-3 mt-6">
-               <Button variant="ghost" onClick={() => setStep(1)}>{t('btn.back')}</Button>
-               <Button fullWidth onClick={handleComplete} className="font-bold shadow-md">{t('reg.complete')}</Button>
+               <Button variant="ghost" onClick={() => setStep(1)} disabled={isRegistering}>{t('btn.back')}</Button>
+               <Button fullWidth onClick={handleComplete} disabled={isRegistering} className="font-bold shadow-md">{isRegistering ? 'Completing...' : t('reg.complete')}</Button>
              </div>
              {authError && <p className="text-xs text-red-600 font-semibold mt-1">{authError}</p>}
            </div>
