@@ -474,11 +474,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   useEffect(() => {
     const additionalMembers = Array.isArray(profile.household) ? profile.household.length : 0;
-    const derivedHouseholdSize = Math.max(1, additionalMembers + 1);
+    const connectedAccountCount = Array.isArray(connectedHouseholdMembers) ? connectedHouseholdMembers.length : 0;
+    const derivedHouseholdSize = Math.max(1, additionalMembers + 1, connectedAccountCount);
     if (profile.householdMembers !== derivedHouseholdSize) {
       setProfile((prev) => ({ ...prev, householdMembers: derivedHouseholdSize }));
     }
-  }, [profile.household, profile.householdMembers]);
+  }, [connectedHouseholdMembers, profile.household, profile.householdMembers]);
 
   useEffect(() => {
     let active = true;
@@ -3084,7 +3085,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         </button>
 
         {!expandedSections.household && (
-          <p className="text-xs text-slate-500">{(profile.household || []).length} members • Role: {profile.householdRole || 'OWNER'}</p>
+          <p className="text-xs text-slate-500">{Math.max(1, Number(profile.householdMembers) || 1)} members • Role: {profile.householdRole || 'OWNER'}</p>
         )}
         {autoSaveSuccess && savingSection === 'household' && (
           <p className="text-xs text-green-600 font-medium">{autoSaveSuccess}</p>
