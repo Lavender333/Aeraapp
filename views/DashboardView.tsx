@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card } from '../components/Card';
-import { ViewState, HelpRequestRecord, UserRole, OrgInventory, OrgMember, OrganizationProfile } from '../types';
+import { ViewState, HelpRequestRecord, UserProfile, UserRole, OrgInventory, OrgMember, OrganizationProfile } from '../types';
 import { StorageService } from '../services/storage';
 import { getInventoryStatuses } from '../services/inventoryStatus';
 import { getBroadcast } from '../services/api';
@@ -337,6 +337,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const depotStatus = orgInventory
     ? getInventoryStatuses(orgInventory, depotCoverageBase)
     : null;
+  const isCommunityPodReady = Boolean(orgInventory && depotCoverageBase);
   const toDepotAvailability = (level: 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN') => {
     if (level === 'UNKNOWN') return 'N/A';
     return level === 'LOW' ? 'Low' : 'Good';
@@ -955,7 +956,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         </>
       )}
 
-      {hasCommunity && isGeneralUser && orgInventory && (
+      {hasCommunity && isGeneralUser && isCommunityPodReady && (
         <>
           {/* Resource Alert System (Community Only) */}
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-3 shadow-sm">
