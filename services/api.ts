@@ -1673,18 +1673,16 @@ export async function transferHouseholdOwnership(householdId: string, newOwnerId
 }
 
 export async function leaveCurrentHousehold(householdId?: string): Promise<{ success: true }> {
-  const { data, error } = await supabase.functions.invoke('leave-household', {
-    body: {
-      household_id: householdId || null,
-    },
+  const { data, error } = await supabase.rpc('leave_household', {
+    p_household_id: householdId ?? null,
   });
 
   if (error) {
     throw new Error(error.message || 'Unable to leave household.');
   }
 
-  if (!data?.success) {
-    throw new Error(data?.error || 'Unable to leave household.');
+  if (data && typeof data === 'object' && data.success === false) {
+    throw new Error(data.error || 'Unable to leave household.');
   }
 
   return { success: true };
