@@ -5,7 +5,7 @@ import { Button } from '../components/Button';
 import { Input, Textarea } from '../components/Input';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { StorageService } from '../services/storage';
-import { ensureHouseholdForCurrentUser, syncHouseholdMembersForUser, updateProfile } from '../services/api';
+import { ensureHouseholdForCurrentUser, syncHouseholdMembersForUser, updateProfileForUser, updateVitalsForUser } from '../services/api';
 import { validateHouseholdMembers } from '../services/validation';
 import { supabase } from '../services/supabase';
 import { t } from '../services/translations';
@@ -188,14 +188,46 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       const { data: authData } = await supabase.auth.getUser();
       const authId = authData?.user?.id || null;
       const profileId = authId || (payload.id && payload.id !== 'guest' ? payload.id : currentProfile.id);
-      await updateProfile({
-        id: profileId,
-        email: payload.email,
-        phone: payload.phone,
+      
+      // Save complete profile (address, emergency contact, identity)
+      await updateProfileForUser({
         fullName: payload.fullName,
-        role: payload.role,
+        phone: payload.phone,
+        email: payload.email,
+        address: payload.address,
+        addressLine1: payload.addressLine1,
+        addressLine2: payload.addressLine2,
+        city: payload.city,
+        state: payload.state,
+        zip: payload.zipCode,
+        latitude: payload.latitude,
+        longitude: payload.longitude,
+        googlePlaceId: payload.googlePlaceId,
+        addressVerified: Boolean(payload.addressVerified),
+        addressVerifiedAt: payload.addressVerifiedAt,
+        emergencyContactName: payload.emergencyContactName,
+        emergencyContactPhone: payload.emergencyContactPhone,
+        emergencyContactRelation: payload.emergencyContactRelation,
         communityId: payload.communityId,
+        role: payload.role,
       });
+      
+      // Save preparedness/vitals data
+      await updateVitalsForUser({
+        household: payload.household || [],
+        householdMembers: payload.householdMembers,
+        petDetails: payload.petDetails,
+        medicalNeeds: payload.medicalNeeds,
+        zipCode: payload.zipCode,
+        medicationDependency: Boolean(payload.medicationDependency),
+        insulinDependency: Boolean(payload.insulinDependency),
+        oxygenPoweredDevice: Boolean(payload.oxygenPoweredDevice),
+        mobilityLimitation: Boolean(payload.mobilityLimitation),
+        transportationAccess: Boolean(payload.transportationAccess),
+        financialStrain: Boolean(payload.financialStrain),
+        consentPreparednessPlanning: Boolean(payload.consentPreparednessPlanning),
+      });
+      
       await syncHouseholdMembersForUser(payload.household || []);
       const household = await ensureHouseholdForCurrentUser();
       StorageService.saveProfile({
