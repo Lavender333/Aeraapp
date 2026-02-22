@@ -504,6 +504,7 @@ export const StorageService = {
           const latest = this.getProfile();
           if (!latest?.id || latest.id !== resp.user.id) return resp;
 
+          const hasRemoteVitals = !!remoteVitals;
           const mergedProfile: UserProfile = {
             ...latest,
             fullName: remoteProfile?.fullName || latest.fullName || resp.user.fullName || '',
@@ -522,11 +523,17 @@ export const StorageService = {
             householdCode: householdSummary?.householdCode,
             householdRole: householdSummary?.householdRole,
             communityId: remoteProfile?.communityId || latest.communityId || resp.user.orgId || '',
-            onboardComplete: latest.onboardComplete || inferOnboardingComplete({
-              ...latest,
-              ...remoteProfile,
-              ...remoteVitals,
-            }, Boolean(remoteVitals)),
+            onboardComplete:
+              latest.onboardComplete ||
+              hasRemoteVitals || // If vitals exist in Supabase, assume onboarding was finished.
+              inferOnboardingComplete(
+                {
+                  ...latest,
+                  ...remoteProfile,
+                  ...remoteVitals,
+                },
+                Boolean(remoteVitals),
+              ),
           };
 
           this.saveProfile(mergedProfile);
