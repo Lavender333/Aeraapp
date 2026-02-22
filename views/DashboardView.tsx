@@ -955,7 +955,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         </>
       )}
 
-      {hasCommunity && isGeneralUser && (
+      {hasCommunity && isGeneralUser && orgInventory && (
         <>
           {/* Resource Alert System (Community Only) */}
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-3 shadow-sm">
@@ -965,9 +965,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
              <div className="flex-1">
                <h3 className="font-bold text-amber-900 text-sm">Community Pod Availability</h3>
                <p className="text-xs text-amber-800">
-                 {orgInventory
-                   ? `${connectedOrg} hub inventory — Water ${toDepotAvailability(depotStatus?.water.level || 'UNKNOWN')}, Food ${toDepotAvailability(depotStatus?.food.level || 'UNKNOWN')}, Blankets ${toDepotAvailability(depotStatus?.blankets.level || 'UNKNOWN')}, Med Kits ${toDepotAvailability(depotStatus?.medicalKits.level || 'UNKNOWN')}.`
-                   : `${connectedOrg} hub inventory is not available yet.`}
+                 {`${connectedOrg} hub inventory — Water ${toDepotAvailability(depotStatus?.water.level || 'UNKNOWN')}, Food ${toDepotAvailability(depotStatus?.food.level || 'UNKNOWN')}, Blankets ${toDepotAvailability(depotStatus?.blankets.level || 'UNKNOWN')}, Med Kits ${toDepotAvailability(depotStatus?.medicalKits.level || 'UNKNOWN')}.`}
                </p>
              </div>
           </div>
