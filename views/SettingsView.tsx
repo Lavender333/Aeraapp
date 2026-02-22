@@ -144,6 +144,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     .map((value) => String(value || '').trim())
     .filter(Boolean)
     .join(', ');
+  const connectedOrgLabel = connectedOrg || String(profile.communityId || '').trim() || null;
   
   // UI States
   const [currentSection, setCurrentSection] = useState<'MAIN' | 'ACCESS_CONTROL' | 'DB_VIEWER' | 'ORG_DIRECTORY' | 'BROADCAST_CONTROL' | 'MASTER_INVENTORY'>('MAIN');
@@ -366,7 +367,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     
     if (loaded.communityId && loaded.role !== 'INSTITUTION_ADMIN') {
       const org = StorageService.getOrganization(loaded.communityId);
-      if (org) setConnectedOrg(org.name);
+      if (org) {
+        setConnectedOrg(org.name);
+      } else {
+        setConnectedOrg(loaded.communityId);
+      }
     }
   }, []);
 
@@ -3288,7 +3293,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             </div>
             <div>
               <h2 className="text-lg font-semibold text-slate-800">{t('settings.trusted_conn')}</h2>
-              <p className="text-xs text-slate-500">{connectedOrg ? `Connected to ${connectedOrg}` : 'No community connected'}</p>
+              <p className="text-xs text-slate-500">{connectedOrgLabel ? `Connected to ${connectedOrgLabel}` : 'No community connected'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -3377,8 +3382,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 <p className="text-[10px] font-semibold text-purple-600 mt-1">Click here</p>
               </div>
             </div>
-            {connectedOrg && (
-              <p className="text-xs font-semibold text-emerald-700 relative z-10">Connected to {connectedOrg}.</p>
+            {connectedOrgLabel && (
+              <p className="text-xs font-semibold text-emerald-700 relative z-10">Connected to {connectedOrgLabel}.</p>
             )}
             {verifyError && (
                <div className="flex items-center gap-2 text-red-600 text-sm font-bold bg-red-50 p-2 rounded-lg animate-fade-in border border-red-100 relative z-10">
