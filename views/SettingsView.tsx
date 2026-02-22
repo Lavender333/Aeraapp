@@ -851,7 +851,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   const handleVitalsSave = async (section?: SettingsAccordionKey) => {
     if (!profile.zipCode?.trim()) {
-      setVitalsSaveError('ZIP comes from Home Address. Open Profile, enter full address, then press Enter or tap Retry to verify (suggestions are optional).');
+      setVitalsSaveError('Please enter a ZIP Code in your Profile before saving.');
       return;
     }
     const memberValidation = validateHouseholdMembers(profile.household || []);
@@ -2758,7 +2758,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               {addressStatus === 'VERIFYING' && <p className="text-xs text-slate-500 font-semibold mt-1">Verifying with Google Maps...</p>}
               {addressStatus === 'VALID' && <p className="text-xs text-green-600 font-bold mt-1">Verified with Google Maps</p>}
               {addressStatus === 'INVALID' && <p className="text-xs text-red-600 font-bold mt-1">Address not found on Maps</p>}
-              <p className="text-xs text-slate-500 mt-1">If suggestions do not appear, enter the full address and press Enter or tap Retry to verify.</p>
+              <p className="text-xs text-slate-500 mt-1">If suggestions do not appear, enter the full address and press Enter or tap Retry to verify. You may also fill in city, state, and ZIP below.</p>
               {addressStatus === 'VALID' && addressVerifiedLabel && (
                 <p className="text-xs text-slate-500 mt-1">Verified on {addressVerifiedLabel}</p>
               )}
@@ -2777,6 +2777,29 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 </div>
               )}
             </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="City"
+                value={profile.city || ''}
+                onChange={(e) => updateProfile('city', e.target.value)}
+                placeholder="e.g. Los Angeles"
+              />
+              <Input
+                label="State"
+                value={profile.state || ''}
+                onChange={(e) => updateProfile('state', e.target.value.toUpperCase().slice(0, 2))}
+                placeholder="e.g. CA"
+                maxLength={2}
+              />
+            </div>
+            <Input
+              label="ZIP Code"
+              value={profile.zipCode || ''}
+              onChange={(e) => updateProfile('zipCode', e.target.value.replace(/[^\d-]/g, '').slice(0, 10))}
+              placeholder="e.g. 90001"
+              maxLength={10}
+            />
 
             <button
               type="button"
@@ -3237,7 +3260,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
           <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">ZIP Code</p>
           <p className="text-sm font-semibold text-slate-900 mt-1">{profile.zipCode || 'Not detected yet'}</p>
-          <p className="text-xs text-slate-500 mt-1">From your Home Address</p>
+          <p className="text-xs text-slate-500 mt-1">From your Profile</p>
         </div>
 
         <div className="space-y-3">
