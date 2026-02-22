@@ -3184,6 +3184,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             </div>
           </>
         )}
+
+        <button
           type="button"
           onClick={() => toggleShowMore('household')}
           className="text-xs font-semibold text-brand-600 hover:underline"
