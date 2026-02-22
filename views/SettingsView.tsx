@@ -2598,6 +2598,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
         {expandedSections.profile && (
           <>
+            <p className="text-[11px] text-slate-500 flex items-center gap-1">
+              <Save size={12} /> Auto-saves when you collapse this section.
+            </p>
             {showMoreSections.profile && <div className="text-xs text-slate-400 font-mono -mt-2 mb-1">ID: {profile.id}</div>}
 
             <Input 
@@ -2688,6 +2691,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
         {expandedSections.contacts && (
           <>
+            <p className="text-[11px] text-slate-500 flex items-center gap-1">
+              <Save size={12} /> Auto-saves when you collapse this section.
+            </p>
             <div className="space-y-3">
               <Input 
                 placeholder="Contact Name"
@@ -2751,6 +2757,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
         {expandedSections.household && (
           <>
+        <p className="text-[11px] text-slate-500 flex items-center gap-1">
+          <Save size={12} /> Auto-saves when you collapse this section.
+        </p>
 
         {/* 1. HOUSEHOLD MEMBERS - Primary Context First */}
         <div>
@@ -3102,8 +3111,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           onClick={() => toggleShowMore('household')}
           className="text-xs font-semibold text-brand-600 hover:underline"
         >
-          {showMoreSections.household ? 'Show less' : 'Show more'}
+          {showMoreSections.household
+            ? 'Show less'
+            : `Show more${profile.householdRole === 'OWNER' && pendingOwnerRequests.length > 0 ? ` (${pendingOwnerRequests.length} new request${pendingOwnerRequests.length === 1 ? '' : 's'})` : ''}`}
         </button>
+        {!showMoreSections.household && profile.householdRole === 'OWNER' && pendingOwnerRequests.length > 0 && (
+          <p className="text-[11px] text-amber-700 font-semibold mt-1">New join requests waiting — tap Show more to review.</p>
+        )}
         {vitalsSaveError && (
           <p className="text-xs text-red-600 font-semibold mt-2">{vitalsSaveError}</p>
         )}
@@ -3144,6 +3158,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
         {expandedSections.security && (
           <>
+        <p className="text-[11px] text-slate-500 flex items-center gap-1">
+          <Save size={12} /> Auto-saves when you collapse this section.
+        </p>
 
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
           <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">ZIP Code</p>
