@@ -144,7 +144,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     .map((value) => String(value || '').trim())
     .filter(Boolean)
     .join(', ');
-  const connectedOrgLabel = connectedOrg || String(profile.communityId || '').trim() || null;
   
   // UI States
   const [currentSection, setCurrentSection] = useState<'MAIN' | 'ACCESS_CONTROL' | 'DB_VIEWER' | 'ORG_DIRECTORY' | 'BROADCAST_CONTROL' | 'MASTER_INVENTORY'>('MAIN');
@@ -153,6 +152,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [connectedOrg, setConnectedOrg] = useState<string | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [isDisconnectingOrg, setIsDisconnectingOrg] = useState(false);
+  const connectedOrgLabel = connectedOrg || String(profile.communityId || '').trim() || null;
 
   // Validation States
   const [phoneError, setPhoneError] = useState<string | null>(null);
