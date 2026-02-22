@@ -320,6 +320,53 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     });
   };
 
+  const clearHouseholdSummary = () => {
+    setProfile((prev) => ({
+      ...prev,
+      householdId: undefined,
+      householdCode: undefined,
+      householdName: undefined,
+      householdRole: undefined,
+    }));
+
+    const current = StorageService.getProfile();
+    StorageService.saveProfile({
+      ...current,
+      householdId: undefined,
+      householdCode: undefined,
+      householdName: undefined,
+      householdRole: undefined,
+    });
+  };
+
+  const refreshHouseholdContext = async () => {
+    const summary = await fetchHouseholdForCurrentUser();
+
+    if (summary) {
+      applyHouseholdSummary(summary);
+    } else {
+      clearHouseholdSummary();
+    }
+
+    try {
+      const options = await listHouseholdsForCurrentUser();
+      setHouseholdOptions(options);
+    } catch {
+      setHouseholdOptions([]);
+    }
+
+    if (summary?.householdId) {
+      try {
+        const connected = await listConnectedHouseholdMembers(summary.householdId);
+        setConnectedHouseholdMembers(connected);
+      } catch {
+        setConnectedHouseholdMembers([]);
+      }
+    } else {
+      setConnectedHouseholdMembers([]);
+    }
+  };
+
   useEffect(() => {
     const loaded = StorageService.getProfile();
     // Ensure role exists for legacy profiles
@@ -573,6 +620,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             setNotifications(inbox);
             setOwnerJoinRequests(ownerRequests);
             setMyJoinRequests(myRequests);
+            await refreshHouseholdContext();
           } catch {
             // Ignore transient realtime refresh failures.
           }
@@ -1498,6 +1546,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       setOwnerJoinRequests(ownerRequests);
       setMyJoinRequests(myRequests);
       setNotifications(inbox);
+
+      if (action === 'approved') {
+        await refreshHouseholdContext();
+      }
+
       setHouseholdCodeSuccess(
         action === 'approved'
           ? 'Connection successful. This member has been added.'
