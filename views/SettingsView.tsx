@@ -3237,7 +3237,17 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
           <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">ZIP Code</p>
           <p className="text-sm font-semibold text-slate-900 mt-1">{profile.zipCode || 'Not detected yet'}</p>
-          <p className="text-xs text-slate-500 mt-1">From your Home Address</p>
+          {profile.zipCode ? (
+            <p className="text-xs text-slate-500 mt-1">From your Home Address</p>
+          ) : (
+            <button
+              type="button"
+              onClick={() => openSectionAndScroll('profile')}
+              className="text-xs text-brand-600 font-semibold mt-1 hover:underline text-left"
+            >
+              Enter your Home Address in Profile to detect ZIP
+            </button>
+          )}
         </div>
 
         <div className="space-y-3">
