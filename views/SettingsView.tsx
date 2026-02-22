@@ -6,7 +6,7 @@ import { Button } from '../components/Button';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
-import { AppNotificationRecord, cancelMyHouseholdJoinRequest, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, leaveCurrentHousehold, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdsForCurrentUser, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, switchActiveHousehold, updateProfileForUser, updateVitalsForUser } from '../services/api';
+import { AppNotificationRecord, cancelMyHouseholdJoinRequest, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, switchActiveHousehold, transferHouseholdOwnership, updateProfileForUser, updateVitalsForUser } from '../services/api';
 import { getOrgByCode } from '../services/supabase';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
 import { isValidPhoneForInvite, validateHouseholdMembers } from '../services/validation';
@@ -206,6 +206,15 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [ownerJoinRequests, setOwnerJoinRequests] = useState<HouseholdJoinRequestRecord[]>([]);
   const [myJoinRequests, setMyJoinRequests] = useState<HouseholdJoinRequestRecord[]>([]);
   const [householdOptions, setHouseholdOptions] = useState<HouseholdOption[]>([]);
+  const [transferCandidates, setTransferCandidates] = useState<HouseholdTransferCandidate[]>([]);
+  const [selectedTransferCandidateId, setSelectedTransferCandidateId] = useState('');
+  const [leaveConfirmation, setLeaveConfirmation] = useState<{
+    open: boolean;
+    transferCandidate: HouseholdTransferCandidate | null;
+  }>({
+    open: false,
+    transferCandidate: null,
+  });
   const [isSwitchingHousehold, setIsSwitchingHousehold] = useState(false);
   const [isLeavingHousehold, setIsLeavingHousehold] = useState(false);
   const [isCancellingJoinRequest, setIsCancellingJoinRequest] = useState(false);
@@ -450,6 +459,35 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     };
 
     loadHouseholds();
+    return () => {
+      active = false;
+    };
+  }, [profile.householdId, profile.householdRole]);
+
+  useEffect(() => {
+    let active = true;
+    const loadTransferCandidates = async () => {
+      if (!profile.householdId || profile.householdRole !== 'OWNER') {
+        setTransferCandidates([]);
+        setSelectedTransferCandidateId('');
+        return;
+      }
+
+      try {
+        const candidates = await listHouseholdTransferCandidates(profile.householdId);
+        if (!active) return;
+        setTransferCandidates(candidates);
+        setSelectedTransferCandidateId((prev) =>
+          candidates.some((candidate) => candidate.profileId === prev) ? prev : ''
+        );
+      } catch {
+        if (!active) return;
+        setTransferCandidates([]);
+        setSelectedTransferCandidateId('');
+      }
+    };
+
+    loadTransferCandidates();
     return () => {
       active = false;
     };
@@ -1258,8 +1296,61 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
     setHouseholdCodeError(null);
     setHouseholdCodeSuccess(null);
-    setIsLeavingHousehold(true);
+
+    let selectedTransferCandidate: HouseholdTransferCandidate | null = null;
+
     try {
+      if (profile.householdRole === 'OWNER') {
+        const candidates = transferCandidates.length > 0
+          ? transferCandidates
+          : await listHouseholdTransferCandidates(profile.householdId);
+
+        if (transferCandidates.length === 0) {
+          setTransferCandidates(candidates);
+        }
+
+        if (candidates.length > 0) {
+          if (!selectedTransferCandidateId) {
+            setHouseholdCodeError('Select a member to transfer ownership before leaving household.');
+            return;
+          }
+
+          selectedTransferCandidate = candidates.find((candidate) => candidate.profileId === selectedTransferCandidateId) || null;
+          if (!selectedTransferCandidate) {
+            setHouseholdCodeError('Selected member is no longer available. Please reselect and try again.');
+            return;
+          }
+        }
+      }
+    } catch (err: any) {
+      setHouseholdCodeError(err?.message || 'Unable to validate leave request right now.');
+      return;
+    }
+
+    setLeaveConfirmation({
+      open: true,
+      transferCandidate: selectedTransferCandidate,
+    });
+  };
+
+  const handleConfirmLeaveHousehold = async () => {
+    if (!profile.householdId || isLeavingHousehold) return;
+
+    const selectedTransferCandidate = leaveConfirmation.transferCandidate;
+    let transferCompletedTo: string | null = null;
+
+    setHouseholdCodeError(null);
+    setHouseholdCodeSuccess(null);
+    setLeaveConfirmation({ open: false, transferCandidate: null });
+
+    try {
+      setIsLeavingHousehold(true);
+
+      if (selectedTransferCandidate) {
+        await transferHouseholdOwnership(profile.householdId, selectedTransferCandidate.profileId);
+        transferCompletedTo = selectedTransferCandidate.displayName;
+      }
+
       await leaveCurrentHousehold(profile.householdId);
 
       const summary = await fetchHouseholdForCurrentUser();
@@ -1300,7 +1391,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         setOwnerJoinRequests([]);
       }
 
-      setHouseholdCodeSuccess('You left your current household. You can now submit a join request.');
+      setTransferCandidates([]);
+      setSelectedTransferCandidateId('');
+      setHouseholdCodeSuccess(
+        transferCompletedTo
+          ? `Ownership transferred to ${transferCompletedTo}. You left your current household and can now submit a join request.`
+          : 'You left your current household. You can now submit a join request.'
+      );
     } catch (err: any) {
       setHouseholdCodeError(err?.message || 'Unable to leave household right now.');
     } finally {
@@ -2920,6 +3017,26 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <p className="text-xs text-emerald-600 mt-2">You are currently active in this household.</p>
           </div>
 
+          {profile.householdRole === 'OWNER' && transferCandidates.length > 0 && (
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-emerald-800">Transfer ownership to</label>
+              <select
+                value={selectedTransferCandidateId}
+                onChange={(e) => setSelectedTransferCandidateId(e.target.value)}
+                disabled={isLeavingHousehold}
+                className="w-full rounded-lg border border-emerald-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+              >
+                <option value="">Select a member</option>
+                {transferCandidates.map((candidate) => (
+                  <option key={candidate.profileId} value={candidate.profileId}>
+                    {candidate.displayName}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-emerald-700">Required before leaving because this household has other members.</p>
+            </div>
+          )}
+
           <div className="flex items-center gap-2">
             {profile.householdRole === 'OWNER' && (
               <Button
@@ -2937,9 +3054,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               variant="ghost"
               className="text-red-600 hover:bg-red-50"
               onClick={handleLeaveHousehold}
-              disabled={isLeavingHousehold}
+              disabled={isLeavingHousehold || (profile.householdRole === 'OWNER' && transferCandidates.length > 0 && !selectedTransferCandidateId)}
             >
-              {isLeavingHousehold ? 'Leaving...' : 'Leave Household'}
+              {isLeavingHousehold
+                ? 'Leaving...'
+                : profile.householdRole === 'OWNER' && transferCandidates.length > 0
+                  ? 'Transfer & Leave'
+                  : 'Leave Household'}
             </Button>
           </div>
         </div>
@@ -3514,6 +3635,45 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           Log Out
         </Button>
       </div>
+
+      {leaveConfirmation.open && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/50 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 rounded-full bg-amber-100 p-2 text-amber-700">
+                <AlertTriangle size={18} />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-semibold text-slate-900">
+                  {leaveConfirmation.transferCandidate ? 'Transfer Ownership & Leave?' : 'Leave Household?'}
+                </h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  {leaveConfirmation.transferCandidate
+                    ? `Ownership will be transferred to ${leaveConfirmation.transferCandidate.displayName}, then you will leave this household.`
+                    : 'You are about to leave your current household.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => setLeaveConfirmation({ open: false, transferCandidate: null })}
+                disabled={isLeavingHousehold}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleConfirmLeaveHousehold}
+                disabled={isLeavingHousehold}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {leaveConfirmation.transferCandidate ? 'Transfer & Leave' : 'Leave Household'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

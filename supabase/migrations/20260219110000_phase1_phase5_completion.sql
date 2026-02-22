@@ -153,6 +153,8 @@ AS $$
 DECLARE
   v_membership record;
   v_owner_count integer := 0;
+  v_other_member_count integer := 0;
+  v_household_deleted boolean := false;
 BEGIN
   IF p_profile_id IS NULL THEN
     RAISE EXCEPTION 'Not authenticated';
@@ -177,14 +179,30 @@ BEGIN
       AND hm.role = 'OWNER'
       AND hm.profile_id <> p_profile_id;
 
+    SELECT COUNT(*)
+    INTO v_other_member_count
+    FROM public.household_memberships hm
+    WHERE hm.household_id = v_membership.household_id
+      AND hm.profile_id <> p_profile_id;
+
     IF v_owner_count = 0 THEN
-      RAISE EXCEPTION 'Owner must transfer ownership before leaving household';
+      IF v_other_member_count = 0 THEN
+        DELETE FROM public.households
+        WHERE id = v_membership.household_id
+          AND owner_profile_id = p_profile_id;
+
+        v_household_deleted := true;
+      ELSE
+        RAISE EXCEPTION 'Owner must transfer ownership before leaving household';
+      END IF;
     END IF;
   END IF;
 
-  DELETE FROM public.household_memberships
-  WHERE household_id = v_membership.household_id
-    AND profile_id = p_profile_id;
+  IF NOT v_household_deleted THEN
+    DELETE FROM public.household_memberships
+    WHERE household_id = v_membership.household_id
+      AND profile_id = p_profile_id;
+  END IF;
 
   UPDATE public.profiles
   SET active_household_id = NULL
@@ -212,7 +230,8 @@ BEGIN
     'success', true,
     'household_id', v_membership.household_id,
     'profile_id', p_profile_id,
-    'role', v_membership.role
+    'role', v_membership.role,
+    'household_deleted', v_household_deleted
   );
 END;
 $$;
@@ -391,7 +410,7 @@ BEGIN
       PERFORM cron.schedule(
         'aera-nightly-anomaly-snapshot',
         '15 3 * * *',
-        $$SELECT public.run_anomaly_detection_snapshot();$$
+        $cron$SELECT public.run_anomaly_detection_snapshot();$cron$
       );
     END IF;
   END IF;

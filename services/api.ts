@@ -509,6 +509,11 @@ export type HouseholdOption = {
   householdRole: 'OWNER' | 'MEMBER';
 };
 
+export type HouseholdTransferCandidate = {
+  profileId: string;
+  displayName: string;
+};
+
 export type HouseholdInvitationStatus = 'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED';
 
 export type HouseholdInvitationRecord = {
@@ -1636,6 +1641,51 @@ export async function listHouseholdsForCurrentUser(): Promise<HouseholdOption[]>
     .filter(Boolean) as HouseholdOption[];
 }
 
+export async function listHouseholdTransferCandidates(householdId?: string): Promise<HouseholdTransferCandidate[]> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user?.id) throw new Error('Not authenticated');
+
+  const profileId = authData.user.id;
+  const membership = await getCurrentHouseholdMembership(profileId);
+  const targetHouseholdId = householdId || membership?.household_id;
+  if (!targetHouseholdId) return [];
+
+  const { data: members, error: membersError } = await supabase
+    .from('household_memberships')
+    .select('profile_id')
+    .eq('household_id', targetHouseholdId)
+    .neq('profile_id', profileId);
+
+  if (membersError) throw membersError;
+
+  const candidateIds = Array.from(new Set((members || [])
+    .map((row: any) => String(row?.profile_id || ''))
+    .filter(Boolean)));
+
+  if (candidateIds.length === 0) return [];
+
+  const { data: profiles, error: profilesError } = await supabase
+    .from('profiles')
+    .select('id, full_name, email')
+    .in('id', candidateIds);
+
+  if (profilesError) throw profilesError;
+
+  const profileMap = new Map<string, { full_name?: string | null; email?: string | null }>(
+    (profiles || []).map((row: any) => [String(row.id), { full_name: row.full_name, email: row.email }])
+  );
+
+  return candidateIds
+    .map((id) => {
+      const row = profileMap.get(id);
+      return {
+        profileId: id,
+        displayName: String(row?.full_name || row?.email || `Member ${id.slice(0, 8)}`),
+      };
+    })
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
 export async function switchActiveHousehold(householdId: string): Promise<{ activeHouseholdId: string }> {
   const { data, error } = await supabase.rpc('switch_active_household', {
     p_household_id: householdId,
@@ -1673,8 +1723,14 @@ export async function transferHouseholdOwnership(householdId: string, newOwnerId
 }
 
 export async function leaveCurrentHousehold(householdId?: string): Promise<{ success: true }> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user?.id) {
+    throw new Error('You must be signed in to leave a household.');
+  }
+
   const { data, error } = await supabase.rpc('leave_household', {
     p_household_id: householdId ?? null,
+    p_profile_id: authData.user.id,
   });
 
   if (error) {
