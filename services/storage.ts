@@ -460,7 +460,31 @@ export const StorageService = {
           onboardComplete: false,
           notifications: { push: true, sms: true, email: true }
         };
-        this.saveProfile(profile);
+        // Preserve any previously saved profile details (e.g., completed onboarding)
+        // so a temporary network failure during hydration does not wipe local data.
+        const existing = db.users.find(u => u.id === resp.user.id);
+        const mergedLocalProfile: UserProfile = {
+          ...existing,
+          ...profile,
+          fullName: profile.fullName || existing?.fullName || '',
+          email: profile.email || existing?.email || '',
+          phone: profile.phone || existing?.phone || '',
+          address: profile.address || existing?.address || '',
+          householdMembers: existing?.householdMembers || profile.householdMembers,
+          household: existing?.household || profile.household || [],
+          petDetails: existing?.petDetails || profile.petDetails || '',
+          medicalNeeds: existing?.medicalNeeds || profile.medicalNeeds || '',
+          emergencyContactName: existing?.emergencyContactName || profile.emergencyContactName || '',
+          emergencyContactPhone: existing?.emergencyContactPhone || profile.emergencyContactPhone || '',
+          emergencyContactRelation: existing?.emergencyContactRelation || profile.emergencyContactRelation || '',
+          communityId: profile.communityId || existing?.communityId || '',
+          role: profile.role || existing?.role || 'GENERAL_USER',
+          language: profile.language || existing?.language || 'en',
+          active: existing?.active ?? profile.active,
+          onboardComplete: existing?.onboardComplete ?? profile.onboardComplete,
+          notifications: existing?.notifications || profile.notifications,
+        };
+        this.saveProfile(mergedLocalProfile);
 
         try {
           const [profileResult, vitalsResult, householdResult] = await Promise.allSettled([
@@ -498,7 +522,7 @@ export const StorageService = {
             householdCode: householdSummary?.householdCode,
             householdRole: householdSummary?.householdRole,
             communityId: remoteProfile?.communityId || latest.communityId || resp.user.orgId || '',
-            onboardComplete: inferOnboardingComplete({
+            onboardComplete: latest.onboardComplete || inferOnboardingComplete({
               ...latest,
               ...remoteProfile,
               ...remoteVitals,

@@ -851,7 +851,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   const handleVitalsSave = async (section?: SettingsAccordionKey) => {
     if (!profile.zipCode?.trim()) {
-      setVitalsSaveError('ZIP is pulled from your Home Address. Verify your address in Identity first.');
+      setVitalsSaveError('ZIP comes from Home Address. Open Profile, enter full address, then press Enter or tap Retry to verify (suggestions are optional).');
       return;
     }
     const memberValidation = validateHouseholdMembers(profile.household || []);
@@ -2758,6 +2758,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               {addressStatus === 'VERIFYING' && <p className="text-xs text-slate-500 font-semibold mt-1">Verifying with Google Maps...</p>}
               {addressStatus === 'VALID' && <p className="text-xs text-green-600 font-bold mt-1">Verified with Google Maps</p>}
               {addressStatus === 'INVALID' && <p className="text-xs text-red-600 font-bold mt-1">Address not found on Maps</p>}
+              <p className="text-xs text-slate-500 mt-1">If suggestions do not appear, enter the full address and press Enter or tap Retry to verify.</p>
               {addressStatus === 'VALID' && addressVerifiedLabel && (
                 <p className="text-xs text-slate-500 mt-1">Verified on {addressVerifiedLabel}</p>
               )}
