@@ -6,7 +6,7 @@ import { Button } from '../components/Button';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
-import { AppNotificationRecord, cancelMyHouseholdJoinRequest, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, leaveCurrentHousehold, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdsForCurrentUser, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, switchActiveHousehold, updateProfileForUser, updateVitalsForUser } from '../services/api';
+import { AppNotificationRecord, cancelMyHouseholdJoinRequest, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchHouseholdMembersForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, leaveCurrentHousehold, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdsForCurrentUser, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, switchActiveHousehold, updateProfileForUser, updateVitalsForUser } from '../services/api';
 import { getOrgByCode } from '../services/supabase';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
 import { isValidPhoneForInvite, validateHouseholdMembers } from '../services/validation';
@@ -367,6 +367,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
         if (householdSummary) {
           applyHouseholdSummary(householdSummary);
+          if (householdSummary.householdRole === 'MEMBER') {
+            try {
+              const householdFamilyMembers = await fetchHouseholdMembersForCurrentUser();
+              if (active && householdFamilyMembers.length > 0) {
+                setProfile((prev) => ({ ...prev, household: householdFamilyMembers }));
+              }
+            } catch {
+              // Non-critical: display remains empty if fetch fails
+            }
+          }
         } else {
           const created = await ensureHouseholdForCurrentUser();
           if (!active) return;

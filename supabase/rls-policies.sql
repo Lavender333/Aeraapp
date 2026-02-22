@@ -425,7 +425,15 @@ CREATE POLICY "Users can delete own ready kits"
 
 CREATE POLICY "Users can view own household members"
   ON household_members FOR SELECT
-  USING (profile_id = (select auth.uid()));
+  USING (
+    profile_id = (select auth.uid())
+    OR profile_id IN (
+      SELECT h.owner_profile_id
+      FROM public.households h
+      INNER JOIN public.household_memberships hm ON hm.household_id = h.id
+      WHERE hm.profile_id = (select auth.uid())
+    )
+  );
 
 CREATE POLICY "Users can insert own household members"
   ON household_members FOR INSERT

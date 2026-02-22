@@ -1673,21 +1673,44 @@ export async function transferHouseholdOwnership(householdId: string, newOwnerId
 }
 
 export async function leaveCurrentHousehold(householdId?: string): Promise<{ success: true }> {
-  const { data, error } = await supabase.functions.invoke('leave-household', {
-    body: {
-      household_id: householdId || null,
-    },
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase.rpc('leave_household', {
+    p_household_id: householdId || null,
+    p_profile_id: authData.user.id,
   });
 
   if (error) {
     throw new Error(error.message || 'Unable to leave household.');
   }
 
-  if (!data?.success) {
-    throw new Error(data?.error || 'Unable to leave household.');
+  if (data && typeof data === 'object' && (data as any).success === false) {
+    throw new Error((data as any).error || 'Unable to leave household.');
   }
 
   return { success: true };
+}
+
+export async function fetchHouseholdMembersForCurrentUser(): Promise<HouseholdMember[]> {
+  const { data, error } = await supabase.rpc('get_household_family_members');
+
+  if (error) {
+    throw new Error(error.message || 'Unable to fetch household members.');
+  }
+
+  const rows = Array.isArray(data) ? data : [];
+  return rows.map((row: any, index: number) => ({
+    id: row.id || `member-${index}`,
+    name: row.name || '',
+    age: row.age || '',
+    needs: row.needs || '',
+    ageGroup: row.ageGroup || row.age_group || undefined,
+    mobilityFlag: Boolean(row.mobilityFlag ?? row.mobility_flag),
+    medicalFlag: Boolean(row.medicalFlag ?? row.medical_flag),
+    loginEnabled: Boolean(row.loginEnabled ?? row.login_enabled),
+    loginPhone: row.loginPhone || row.login_phone || '',
+  }));
 }
 
 export async function listNotificationsForCurrentUser(limit = 50): Promise<AppNotificationRecord[]> {
