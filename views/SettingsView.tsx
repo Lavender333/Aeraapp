@@ -6,7 +6,7 @@ import { Button } from '../components/Button';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
-import { AppNotificationRecord, cancelMyHouseholdJoinRequest, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, switchActiveHousehold, transferHouseholdOwnership, updateProfileForUser, updateVitalsForUser } from '../services/api';
+import { AppNotificationRecord, cancelMyHouseholdJoinRequest, ConnectedHouseholdMember, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listConnectedHouseholdMembers, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, switchActiveHousehold, transferHouseholdOwnership, updateProfileForUser, updateVitalsForUser } from '../services/api';
 import { getOrgByCode } from '../services/supabase';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
 import { isValidPhoneForInvite, validateHouseholdMembers } from '../services/validation';
@@ -206,6 +206,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [ownerJoinRequests, setOwnerJoinRequests] = useState<HouseholdJoinRequestRecord[]>([]);
   const [myJoinRequests, setMyJoinRequests] = useState<HouseholdJoinRequestRecord[]>([]);
   const [householdOptions, setHouseholdOptions] = useState<HouseholdOption[]>([]);
+  const [connectedHouseholdMembers, setConnectedHouseholdMembers] = useState<ConnectedHouseholdMember[]>([]);
   const [transferCandidates, setTransferCandidates] = useState<HouseholdTransferCandidate[]>([]);
   const [selectedTransferCandidateId, setSelectedTransferCandidateId] = useState('');
   const [leaveConfirmation, setLeaveConfirmation] = useState<{
@@ -488,6 +489,30 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     };
 
     loadTransferCandidates();
+    return () => {
+      active = false;
+    };
+  }, [profile.householdId, profile.householdRole]);
+
+  useEffect(() => {
+    let active = true;
+    const loadConnectedMembers = async () => {
+      if (!profile.householdId) {
+        setConnectedHouseholdMembers([]);
+        return;
+      }
+
+      try {
+        const connected = await listConnectedHouseholdMembers(profile.householdId);
+        if (!active) return;
+        setConnectedHouseholdMembers(connected);
+      } catch {
+        if (!active) return;
+        setConnectedHouseholdMembers([]);
+      }
+    };
+
+    loadConnectedMembers();
     return () => {
       active = false;
     };
@@ -2992,6 +3017,26 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             readOnly={profile.householdRole !== 'OWNER'}
             latestSafetyStatusByMember={latestSafetyStatusByMember}
           />
+          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">Connected Household Accounts</p>
+            {connectedHouseholdMembers.length > 0 ? (
+              <div className="mt-2 space-y-1">
+                {connectedHouseholdMembers.map((member) => (
+                  <div key={member.profileId} className="flex items-center justify-between rounded-md bg-white border border-slate-200 px-3 py-2">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{member.fullName}</p>
+                      {member.email && <p className="text-xs text-slate-500">{member.email}</p>}
+                    </div>
+                    <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${member.role === 'OWNER' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}`}>
+                      {member.role}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-slate-500">No connected household accounts found.</p>
+            )}
+          </div>
           <div className="mt-3">
             <Input
               label="Household Size"

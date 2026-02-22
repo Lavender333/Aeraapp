@@ -509,6 +509,13 @@ export type HouseholdOption = {
   householdRole: 'OWNER' | 'MEMBER';
 };
 
+export type ConnectedHouseholdMember = {
+  profileId: string;
+  fullName: string;
+  email?: string;
+  role: 'OWNER' | 'MEMBER';
+};
+
 export type HouseholdTransferCandidate = {
   profileId: string;
   displayName: string;
@@ -1684,6 +1691,54 @@ export async function listHouseholdTransferCandidates(householdId?: string): Pro
       };
     })
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+export async function listConnectedHouseholdMembers(householdId?: string): Promise<ConnectedHouseholdMember[]> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user?.id) throw new Error('Not authenticated');
+
+  const membership = await getCurrentHouseholdMembership(authData.user.id);
+  const targetHouseholdId = householdId || membership?.household_id;
+  if (!targetHouseholdId) return [];
+
+  const { data: membershipRows, error: membershipError } = await supabase
+    .from('household_memberships')
+    .select('profile_id, role')
+    .eq('household_id', targetHouseholdId);
+
+  if (membershipError) throw membershipError;
+
+  const rows = (membershipRows || []) as Array<{ profile_id: string; role: string }>;
+  const profileIds = Array.from(new Set(rows.map((row) => String(row.profile_id || '')).filter(Boolean)));
+  if (profileIds.length === 0) return [];
+
+  const { data: profiles, error: profilesError } = await supabase
+    .from('profiles')
+    .select('id, full_name, email')
+    .in('id', profileIds);
+
+  if (profilesError) throw profilesError;
+
+  const profileMap = new Map<string, { full_name?: string | null; email?: string | null }>(
+    (profiles || []).map((profile: any) => [String(profile.id), { full_name: profile.full_name, email: profile.email }])
+  );
+
+  const connected = rows.map((row) => {
+    const profileId = String(row.profile_id || '');
+    const profile = profileMap.get(profileId);
+    const normalizedRole = String(row.role || '').toUpperCase() === 'OWNER' ? 'OWNER' : 'MEMBER';
+    return {
+      profileId,
+      fullName: String(profile?.full_name || profile?.email || `Member ${profileId.slice(0, 8)}`),
+      email: profile?.email || undefined,
+      role: normalizedRole as 'OWNER' | 'MEMBER',
+    };
+  });
+
+  return connected.sort((left, right) => {
+    if (left.role !== right.role) return left.role === 'OWNER' ? -1 : 1;
+    return left.fullName.localeCompare(right.fullName);
+  });
 }
 
 export async function switchActiveHousehold(householdId: string): Promise<{ activeHouseholdId: string }> {
