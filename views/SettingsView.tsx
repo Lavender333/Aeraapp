@@ -84,13 +84,7 @@ const INITIAL_ROLES: RoleDefinition[] = [
   }
 ];
 
-type PlaceSuggestion = {
-  placeId: string;
-  description: string;
-};
-
 export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
-  const mapsApiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined)?.trim();
   const trustedCommunityRef = useRef<HTMLElement | null>(null);
   const profileSectionRef = useRef<HTMLElement | null>(null);
   const contactsSectionRef = useRef<HTMLElement | null>(null);
@@ -146,17 +140,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const isPlatformAdmin = normalizedRole === 'ADMIN';
   const isOrgScopedAdmin = normalizedRole === 'ORG_ADMIN';
   const orgScopeId = String(profile.communityId || '').trim();
-  const hasAddressInput = String(profile.address || '').trim().length > 0;
-  const isAddressVerificationRequired = hasAddressInput && Boolean(mapsApiKey) && !profile.addressVerified;
-  const hasManualAddressFallback = Boolean(
-    String(profile.city || '').trim() &&
-    String(profile.state || '').trim() &&
-    String(profile.zipCode || '').trim()
-  );
-  const canSaveWithoutMapVerification = hasAddressInput && hasManualAddressFallback;
-  const addressVerifiedLabel = profile.addressVerifiedAt
-    ? new Date(profile.addressVerifiedAt).toLocaleString()
-    : null;
+  const addressSummary = [profile.address, profile.city, profile.state, profile.zipCode]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .join(', ');
   
   // UI States
   const [currentSection, setCurrentSection] = useState<'MAIN' | 'ACCESS_CONTROL' | 'DB_VIEWER' | 'ORG_DIRECTORY' | 'BROADCAST_CONTROL' | 'MASTER_INVENTORY'>('MAIN');
@@ -168,10 +155,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   // Validation States
   const [phoneError, setPhoneError] = useState<string | null>(null);
-  const [addressStatus, setAddressStatus] = useState<'IDLE' | 'VERIFYING' | 'VALID' | 'INVALID'>('IDLE');
-  const [addressSuggestions, setAddressSuggestions] = useState<PlaceSuggestion[]>([]);
-  const [isAddressSuggesting, setIsAddressSuggesting] = useState(false);
-  const [highlightedAddressIndex, setHighlightedAddressIndex] = useState(-1);
 
   // Access Control State
   type AccessTab = 'ALL_USERS' | 'ROLE_DEFINITIONS';
@@ -280,15 +263,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setInviteError(null);
     setInviteStatusMessage(null);
     setVerifyError(null);
-    if (loaded.addressVerified) {
-      setAddressStatus('VALID');
-    } else if (loaded.address && loaded.address.length > 5) {
-      setAddressStatus('IDLE');
-    } else {
-      setAddressStatus('IDLE');
-    }
-    setAddressSuggestions([]);
-    setHighlightedAddressIndex(-1);
   };
 
   const saveVisibleSection = async () => {
@@ -390,12 +364,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     if (typeof loaded.consentPreparednessPlanning !== 'boolean') loaded.consentPreparednessPlanning = false;
     setProfile(loaded);
     
-    if (loaded.addressVerified) {
-      setAddressStatus('VALID');
-    } else if (loaded.address && loaded.address.length > 5) {
-      setAddressStatus('IDLE');
-    }
-    
     if (loaded.communityId && loaded.role !== 'INSTITUTION_ADMIN') {
       const org = StorageService.getOrganization(loaded.communityId);
       if (org) setConnectedOrg(org.name);
@@ -422,7 +390,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           } as UserProfile;
           StorageService.saveProfile(merged);
           setProfile(merged);
-          setAddressStatus(merged.addressVerified ? 'VALID' : 'IDLE');
         }
 
         const householdSummary = await fetchHouseholdForCurrentUser();
@@ -668,240 +635,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     return true;
   };
 
-  const applyAddressResultToProfile = (result: any, fallbackAddress: string) => {
-    const components = Array.isArray(result?.address_components)
-      ? result.address_components
-      : Array.isArray(result?.addressComponents)
-        ? result.addressComponents
-        : [];
-    const findComponent = (kind: string, short = false) => {
-      const match = components.find((part: any) => Array.isArray(part.types) && part.types.includes(kind));
-      if (!match) return '';
-      return short
-        ? String(match.short_name || match.shortText || '')
-        : String(match.long_name || match.longText || '');
-    };
-
-    const streetNumber = findComponent('street_number');
-    const route = findComponent('route');
-    const city = findComponent('locality') || findComponent('sublocality') || findComponent('administrative_area_level_2');
-    const state = findComponent('administrative_area_level_1', true);
-    const zip = findComponent('postal_code');
-    const addressLine1 = [streetNumber, route].filter(Boolean).join(' ').trim();
-    const addressLine2 = findComponent('subpremise');
-
-    const lat = result?.geometry?.location?.lat ?? result?.location?.latitude;
-    const lng = result?.geometry?.location?.lng ?? result?.location?.longitude;
-    const formattedAddress = String(result?.formatted_address || result?.formattedAddress || fallbackAddress);
-    const placeId = String(result?.place_id || result?.id || '');
-
-    setProfile((prev) => ({
-      ...prev,
-      address: formattedAddress,
-      addressLine1: addressLine1 || undefined,
-      addressLine2: addressLine2 || undefined,
-      city: city || undefined,
-      state: state || undefined,
-      zipCode: zip || prev.zipCode,
-      latitude: Number.isFinite(lat) ? Number(lat) : undefined,
-      longitude: Number.isFinite(lng) ? Number(lng) : undefined,
-      googlePlaceId: placeId || undefined,
-      addressVerified: true,
-      addressVerifiedAt: new Date().toISOString(),
-    }));
-  };
-
-  const fetchAddressSuggestions = async (rawAddress: string) => {
-    const address = String(rawAddress || '').trim();
-    if (!mapsApiKey || address.length < 3 || addressStatus === 'VERIFYING') {
-      setAddressSuggestions([]);
-      return;
-    }
-
-    setIsAddressSuggesting(true);
-    try {
-      const response = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': mapsApiKey,
-          'X-Goog-FieldMask': 'suggestions.placePrediction.place,suggestions.placePrediction.placeId,suggestions.placePrediction.text',
-        },
-        body: JSON.stringify({
-          input: address,
-          includedRegionCodes: ['us'],
-        }),
-      });
-      const payload = await response.json();
-
-      if (!response.ok) {
-        setAddressSuggestions([]);
-        return;
-      }
-
-      const suggestions: PlaceSuggestion[] = Array.isArray(payload?.suggestions)
-        ? payload.suggestions
-            .map((item: any) => {
-              const prediction = item?.placePrediction;
-              const placeRef = String(prediction?.place || '');
-              const placeId = String(prediction?.placeId || (placeRef.startsWith('places/') ? placeRef.replace('places/', '') : placeRef));
-              const description = String(prediction?.text?.text || '').trim();
-              return { placeId, description };
-            })
-            .filter((item: PlaceSuggestion) => item.placeId && item.description)
-            .slice(0, 5)
-        : [];
-
-      setAddressSuggestions(suggestions);
-      setHighlightedAddressIndex(-1);
-    } catch {
-      setAddressSuggestions([]);
-      setHighlightedAddressIndex(-1);
-    } finally {
-      setIsAddressSuggesting(false);
-    }
-  };
-
-  const handleSelectAddressSuggestion = async (suggestion: PlaceSuggestion) => {
-    if (!mapsApiKey || !suggestion.placeId) return;
-    setAddressStatus('VERIFYING');
-
-    try {
-      const response = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(suggestion.placeId)}`, {
-        method: 'GET',
-        headers: {
-          'X-Goog-Api-Key': mapsApiKey,
-          'X-Goog-FieldMask': 'id,formattedAddress,addressComponents,location',
-        },
-      });
-      const place = await response.json();
-
-      if (!response.ok || !place) {
-        await verifyAddressWithGoogle(suggestion.description);
-        return;
-      }
-
-      applyAddressResultToProfile(place, suggestion.description);
-      setAddressStatus('VALID');
-      setAddressSuggestions([]);
-      setHighlightedAddressIndex(-1);
-      setProfileSaveError(null);
-    } catch {
-      await verifyAddressWithGoogle(suggestion.description);
-    }
-  };
-
-  const handleAddressInputBlur = () => {
-    setAddressSuggestions([]);
-    setHighlightedAddressIndex(-1);
-    verifyAddressWithGoogle(profile.address);
-  };
-
-  const handleAddressInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Escape') {
-      setAddressSuggestions([]);
-      setHighlightedAddressIndex(-1);
-      return;
-    }
-
-    if (addressSuggestions.length === 0) {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        verifyAddressWithGoogle(profile.address);
-      }
-      return;
-    }
-
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      setHighlightedAddressIndex((prev) => (prev + 1) % addressSuggestions.length);
-      return;
-    }
-
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      setHighlightedAddressIndex((prev) => {
-        if (prev <= 0) return addressSuggestions.length - 1;
-        return prev - 1;
-      });
-      return;
-    }
-
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      const selected = addressSuggestions[highlightedAddressIndex] || addressSuggestions[0];
-      if (selected) {
-        handleSelectAddressSuggestion(selected);
-      }
-    }
-  };
-
-  useEffect(() => {
-    const address = String(profile.address || '').trim();
-    if (!mapsApiKey || address.length < 3 || profile.addressVerified) {
-      setAddressSuggestions([]);
-      setHighlightedAddressIndex(-1);
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      fetchAddressSuggestions(address);
-    }, 300);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [profile.address, profile.addressVerified, mapsApiKey]);
-
-  const verifyAddressWithGoogle = async (rawAddress?: string) => {
-    const address = (rawAddress ?? profile.address ?? '').trim();
-    if (address.length < 5) {
-      setAddressStatus('IDLE');
-      return;
-    }
-    if (!mapsApiKey) {
-      setAddressStatus('IDLE');
-      return;
-    }
-
-    setAddressStatus('VERIFYING');
-
-    try {
-      const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${mapsApiKey}`);
-      const geocode = await response.json();
-      const topResult = geocode?.results?.[0];
-
-      if (!response.ok || geocode?.status !== 'OK' || !topResult) {
-        setAddressStatus('INVALID');
-        setAddressSuggestions([]);
-        setHighlightedAddressIndex(-1);
-        setProfile((prev) => ({
-          ...prev,
-          addressVerified: false,
-          addressVerifiedAt: undefined,
-          googlePlaceId: undefined,
-          latitude: undefined,
-          longitude: undefined,
-          addressLine1: undefined,
-          addressLine2: undefined,
-          city: undefined,
-          state: undefined,
-        }));
-        return;
-      }
-
-      applyAddressResultToProfile(topResult, address);
-      setAddressStatus('VALID');
-      setAddressSuggestions([]);
-      setHighlightedAddressIndex(-1);
-      setProfileSaveError(null);
-    } catch {
-      setAddressStatus('INVALID');
-    }
-  };
-
   const handleProfileSave = async (section?: SettingsAccordionKey) => {
     const trimmedAddress = String(profile.address || '').trim();
+    const trimmedCity = String(profile.city || '').trim();
+    const trimmedState = String(profile.state || '').trim();
+    const trimmedZip = String(profile.zipCode || '').trim();
 
     if (!validatePhone(profile.phone)) {
       if (section) {
@@ -912,18 +650,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       }
       return;
     }
-    if (trimmedAddress.length > 0 && mapsApiKey && !profile.addressVerified && !canSaveWithoutMapVerification) {
+    if (!trimmedAddress || !trimmedCity || !trimmedState || !trimmedZip) {
       setExpandedSections((prev) => ({ ...prev, profile: true }));
-      setProfileSaveError('Please select a verified address from suggestions or verify your address before saving.');
-      return;
-    }
-    if (addressStatus === 'INVALID' && !canSaveWithoutMapVerification) {
-      if (section) {
-        setProfileSaveError('Please verify your address.');
-      } else {
-        setExpandedSections((prev) => ({ ...prev, profile: true }));
-        alert("Please verify your address.");
-      }
+      setProfileSaveError('Address, City, State, and ZIP are required.');
       return;
     }
     if (section) setSavingSection(section);
@@ -969,7 +698,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   const handleVitalsSave = async (section?: SettingsAccordionKey) => {
     if (!profile.zipCode?.trim()) {
-      setVitalsSaveError('ZIP is required. Open Profile and verify address, or enter City/State/ZIP in manual fallback fields.');
+      setVitalsSaveError('ZIP is required. Add your Address, City, State, and ZIP in Profile.');
       return;
     }
     const memberValidation = validateHouseholdMembers(profile.household || []);
@@ -1025,15 +754,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setProfile((prev) => {
       const next = { ...prev, [key]: value };
       if (key === 'address') {
-        next.addressVerified = false;
-        next.addressVerifiedAt = undefined;
-        next.googlePlaceId = undefined;
-        next.latitude = undefined;
-        next.longitude = undefined;
-        next.addressLine1 = undefined;
-        next.addressLine2 = undefined;
-        next.city = undefined;
-        next.state = undefined;
+        next.addressLine1 = String(value || '').trim() || undefined;
       }
       return next;
     });
@@ -1042,9 +763,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       setVerifyError(null);
     }
     if (key === 'address') {
-      setAddressStatus('IDLE');
-      setAddressSuggestions([]);
-      setHighlightedAddressIndex(-1);
       setProfileSaveError(null);
     }
   };
@@ -2872,7 +2590,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         </button>
 
         {!expandedSections.profile && (
-          <p className="text-xs text-slate-500">{profile.address ? `Address set • ${profile.address}` : 'Address not set yet'}</p>
+          <p className="text-xs text-slate-500">{addressSummary ? `Address set • ${addressSummary}` : 'Address not set yet'}</p>
         )}
         {autoSaveSuccess && savingSection === 'profile' && (
           <p className="text-xs text-green-600 font-medium">{autoSaveSuccess}</p>
@@ -2898,93 +2616,33 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               error={phoneError || undefined}
             />
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Home Address</label>
-              <div className="relative">
-                <input 
-                  placeholder="123 Main St..."
-                  value={profile.address}
-                  onChange={(e) => {
-                    setHighlightedAddressIndex(-1);
-                    updateProfile('address', e.target.value);
-                  }}
-                  onBlur={handleAddressInputBlur}
-                  onKeyDown={handleAddressInputKeyDown}
-                  className={`w-full px-4 py-3 rounded-lg border focus:ring-2 outline-none transition-all font-medium ${
-                    addressStatus === 'VALID' ? 'border-green-500 bg-green-50 focus:ring-green-500' :
-                    addressStatus === 'INVALID' ? 'border-red-500 bg-red-50 focus:ring-red-500' :
-                    'border-slate-300 focus:ring-brand-500 focus:border-brand-500'
-                  }`}
+            <div className="space-y-3">
+              <Input
+                label="Address"
+                placeholder="123 Main St"
+                value={profile.address}
+                onChange={(e) => updateProfile('address', e.target.value)}
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <Input
+                  label="City"
+                  value={profile.city || ''}
+                  onChange={(e) => updateProfile('city', e.target.value)}
+                  placeholder="Cleveland"
                 />
-                {addressSuggestions.length > 0 && addressStatus !== 'VERIFYING' && (
-                  <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg max-h-56 overflow-auto">
-                    {addressSuggestions.map((result, index) => (
-                      <button
-                        key={`${result.placeId || 'addr'}-${index}`}
-                        type="button"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => handleSelectAddressSuggestion(result)}
-                        className={`w-full text-left px-3 py-2 text-sm border-b border-slate-100 last:border-b-0 ${
-                          index === highlightedAddressIndex
-                            ? 'bg-slate-100 text-slate-900'
-                            : 'text-slate-700 hover:bg-slate-50'
-                        }`}
-                      >
-                        {result.description || 'Suggested address'}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <Input
+                  label="State"
+                  value={profile.state || ''}
+                  onChange={(e) => updateProfile('state', e.target.value.toUpperCase().slice(0, 2))}
+                  placeholder="OH"
+                />
+                <Input
+                  label="ZIP"
+                  value={profile.zipCode || ''}
+                  onChange={(e) => updateProfile('zipCode', e.target.value.replace(/[^0-9-]/g, '').slice(0, 10))}
+                  placeholder="44110"
+                />
               </div>
-              {isAddressSuggesting && addressStatus !== 'VERIFYING' && <p className="text-xs text-slate-500 font-semibold mt-1">Finding address suggestions...</p>}
-              {addressStatus === 'VERIFYING' && <p className="text-xs text-slate-500 font-semibold mt-1">Verifying with Google Maps...</p>}
-              {addressStatus === 'VALID' && <p className="text-xs text-green-600 font-bold mt-1">Verified with Google Maps</p>}
-              {addressStatus === 'INVALID' && <p className="text-xs text-red-600 font-bold mt-1">Address not found on Maps</p>}
-              <p className="text-xs text-slate-500 mt-1">If suggestions do not appear, enter the full address and press Enter or tap Retry to verify.</p>
-              {addressStatus === 'VALID' && addressVerifiedLabel && (
-                <p className="text-xs text-slate-500 mt-1">Verified on {addressVerifiedLabel}</p>
-              )}
-              {isAddressVerificationRequired && (
-                <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                  <p className="text-xs font-semibold text-amber-800 flex items-center gap-1">
-                    <Lock size={13} /> Address verification required before saving.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => verifyAddressWithGoogle(profile.address)}
-                    className="text-xs font-bold text-amber-800 hover:text-amber-900 underline"
-                  >
-                    Retry
-                  </button>
-                </div>
-              )}
-
-              {(!profile.addressVerified || !profile.zipCode?.trim()) && (
-                <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
-                  <p className="text-xs font-semibold text-slate-700">Manual fallback (use when Maps verification fails)</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <Input
-                      label="City"
-                      value={profile.city || ''}
-                      onChange={(e) => updateProfile('city', e.target.value)}
-                      placeholder="Cleveland"
-                    />
-                    <Input
-                      label="State"
-                      value={profile.state || ''}
-                      onChange={(e) => updateProfile('state', e.target.value.toUpperCase().slice(0, 2))}
-                      placeholder="OH"
-                    />
-                    <Input
-                      label="ZIP"
-                      value={profile.zipCode || ''}
-                      onChange={(e) => updateProfile('zipCode', e.target.value.replace(/[^0-9-]/g, '').slice(0, 10))}
-                      placeholder="44110"
-                    />
-                  </div>
-                  <p className="text-[11px] text-slate-500">If City, State, and ZIP are provided, profile save can continue even without map verification.</p>
-                </div>
-              )}
             </div>
 
             <button

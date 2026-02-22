@@ -104,15 +104,9 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     setFormData(prev => ({ ...prev, [key]: value }));
     // Reset specific validation states on change
     if (key === 'phone') setPhoneError(null);
-    if (key === 'address') {
-      const trimmed = String(value || '').trim();
-      if (!trimmed) {
-        setAddressStatus('IDLE');
-        setAddressFeedback('');
-      } else {
-        setAddressStatus('VALID');
-        setAddressFeedback('');
-      }
+    if (key === 'address' || key === 'city' || key === 'state' || key === 'zipCode') {
+      setAddressStatus('IDLE');
+      setAddressFeedback('');
     }
   };
 
@@ -131,9 +125,13 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       const isPhoneValid = validatePhone(formData.phone);
       if (!isPhoneValid) return;
 
-      if (!formData.address?.trim()) {
+      const hasAddress = String(formData.address || '').trim();
+      const hasCity = String(formData.city || '').trim();
+      const hasState = String(formData.state || '').trim();
+      const hasZip = String(formData.zipCode || '').trim();
+      if (!hasAddress || !hasCity || !hasState || !hasZip) {
         setAddressStatus('INVALID');
-        setAddressFeedback("Address is required.");
+        setAddressFeedback('Address, City, State, and ZIP are required.');
         return;
       }
     }
@@ -185,8 +183,8 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       setAuthError('Please confirm preparedness consent before completing setup.');
       return;
     }
-    if (!String(payload.zipCode || '').trim()) {
-      setAuthError('ZIP is required. Verify address, or enter City/State/ZIP in manual fallback fields.');
+    if (!String(payload.address || '').trim() || !String(payload.city || '').trim() || !String(payload.state || '').trim() || !String(payload.zipCode || '').trim()) {
+      setAuthError('Address, City, State, and ZIP are required.');
       return;
     }
     setIsRegistering(true);
@@ -383,47 +381,39 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
                 error={phoneError || undefined}
               />
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Home Address</label>
-                <input 
-                  placeholder="123 Main St, City, State, Zip"
+              <div className="space-y-3">
+                <Input
+                  label="Address"
+                  placeholder="123 Main St"
                   value={formData.address}
                   onChange={(e) => updateForm('address', e.target.value)}
-                  className={`w-full px-4 py-3 rounded-lg border focus:ring-2 outline-none transition-all font-medium ${
-                    addressStatus === 'VALID' ? 'border-green-500 bg-green-50 focus:ring-green-500' :
-                    addressStatus === 'INVALID' ? 'border-red-500 bg-red-50 focus:ring-red-500' :
-                    'border-slate-300 focus:ring-brand-500 focus:border-brand-500'
-                  }`}
+                  className={`text-slate-900 placeholder:text-slate-400 font-medium ${addressStatus === 'INVALID' ? 'border-red-500 bg-red-50' : ''}`}
                 />
-                {addressStatus === 'INVALID' && <p className="text-xs text-red-600 font-bold mt-1">{addressFeedback || "Address is required"}</p>}
-              </div>
-
-              {(!formData.addressVerified || !String(formData.zipCode || '').trim()) && (
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-3">
-                  <p className="text-xs font-semibold text-slate-700">Manual fallback (use when Maps verification fails)</p>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <Input
-                      label="City"
-                      placeholder="City"
-                      value={formData.city || ''}
-                      onChange={(e) => updateForm('city', e.target.value)}
-                    />
-                    <Input
-                      label="State"
-                      placeholder="ST"
-                      value={formData.state || ''}
-                      onChange={(e) => updateForm('state', e.target.value.toUpperCase().slice(0, 2))}
-                    />
-                    <Input
-                      label="ZIP"
-                      placeholder="12345"
-                      value={formData.zipCode || ''}
-                      onChange={(e) => updateForm('zipCode', e.target.value.replace(/[^0-9-]/g, '').slice(0, 10))}
-                    />
-                  </div>
-                  <p className="text-[11px] text-slate-500">If City, State, and ZIP are provided, setup can continue even without map verification.</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <Input
+                    label="City"
+                    placeholder="City"
+                    value={formData.city || ''}
+                    onChange={(e) => updateForm('city', e.target.value)}
+                    className={`text-slate-900 placeholder:text-slate-400 font-medium ${addressStatus === 'INVALID' ? 'border-red-500 bg-red-50' : ''}`}
+                  />
+                  <Input
+                    label="State"
+                    placeholder="ST"
+                    value={formData.state || ''}
+                    onChange={(e) => updateForm('state', e.target.value.toUpperCase().slice(0, 2))}
+                    className={`text-slate-900 placeholder:text-slate-400 font-medium ${addressStatus === 'INVALID' ? 'border-red-500 bg-red-50' : ''}`}
+                  />
+                  <Input
+                    label="ZIP"
+                    placeholder="12345"
+                    value={formData.zipCode || ''}
+                    onChange={(e) => updateForm('zipCode', e.target.value.replace(/[^0-9-]/g, '').slice(0, 10))}
+                    className={`text-slate-900 placeholder:text-slate-400 font-medium ${addressStatus === 'INVALID' ? 'border-red-500 bg-red-50' : ''}`}
+                  />
                 </div>
-              )}
+                {addressStatus === 'INVALID' && <p className="text-xs text-red-600 font-bold">{addressFeedback || 'Address, City, State, and ZIP are required.'}</p>}
+              </div>
 
               <div className="border-t border-slate-200 pt-4">
                 <p className="text-xs font-bold text-slate-500 uppercase mb-2">Emergency Contact</p>
@@ -477,7 +467,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
               fullWidth 
               size="lg" 
               onClick={handleNext}
-              disabled={!formData.fullName || !formData.phone || !formData.address?.trim()}
+              disabled={!formData.fullName || !formData.phone || !formData.address?.trim() || !formData.city?.trim() || !formData.state?.trim() || !formData.zipCode?.trim()}
               className="mt-6 font-bold shadow-md"
             >
               Continue to Home Setup

@@ -105,10 +105,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [communityIdInput, setCommunityIdInput] = useState('');
   const [communityConnectError, setCommunityConnectError] = useState<string | null>(null);
   const [isConnectingCommunity, setIsConnectingCommunity] = useState(false);
-  const [isAddressVerified, setIsAddressVerified] = useState(false);
-  const [addressVerifiedAt, setAddressVerifiedAt] = useState<string | null>(null);
+  const [missingProfileFields, setMissingProfileFields] = useState<string[]>([]);
   const hasCommunity = !!connectedOrg;
   const isGeneralUser = userRole === 'GENERAL_USER';
+
+  const getMissingProfileFields = (profile: UserProfile) => {
+    const missing: string[] = [];
+    if (!String(profile.address || '').trim()) missing.push('Address');
+    if (!String(profile.city || '').trim()) missing.push('City');
+    if (!String(profile.state || '').trim()) missing.push('State');
+    if (!String(profile.zipCode || '').trim()) missing.push('ZIP');
+    if (!String(profile.emergencyContactName || '').trim() || !String(profile.emergencyContactPhone || '').trim()) {
+      missing.push('Emergency contact');
+    }
+    return missing;
+  };
   
   // Status Ping State
   const [pendingPing, setPendingPing] = useState<{ requesterName: string, timestamp: string } | undefined>(undefined);
@@ -122,8 +133,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     const profile = StorageService.getProfile();
     setUserRole(normalizeRole(profile.role));
     setUserName(profile.fullName);
-    setIsAddressVerified(Boolean(profile.addressVerified));
-    setAddressVerifiedAt(profile.addressVerifiedAt || null);
+    setMissingProfileFields(getMissingProfileFields(profile));
     setPendingPing(profile.pendingStatusRequest);
     setCommunityIdInput(profile.communityId || '');
     
@@ -166,8 +176,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     const handleStorageChange = () => {
        const updatedProfile = StorageService.getProfile();
        setUserRole(normalizeRole(updatedProfile.role));
-      setIsAddressVerified(Boolean(updatedProfile.addressVerified));
-      setAddressVerifiedAt(updatedProfile.addressVerifiedAt || null);
+      setMissingProfileFields(getMissingProfileFields(updatedProfile));
        setTickerMessage(StorageService.getTicker(updatedProfile));
        setPendingPing(updatedProfile.pendingStatusRequest);
        StorageService.getActiveRequest().then(setActiveRequest);
@@ -332,9 +341,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     if (level === 'UNKNOWN') return 'N/A';
     return level === 'LOW' ? 'Low' : 'Good';
   };
-  const addressVerifiedDisplay = addressVerifiedAt
-    ? new Date(addressVerifiedAt).toLocaleString()
-    : null;
+  const isProfileComplete = missingProfileFields.length === 0;
   const sheltersOpen = orgProfile?.currentBroadcast
     ? orgProfile.currentBroadcast.toLowerCase().includes('shelter') ? 1 : 0
     : null;
@@ -932,13 +939,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                   <h4 className="font-semibold text-slate-900 text-sm">Home & Profile</h4>
                 </div>
                 <p className="text-[11px] text-slate-500 mt-2">Household members, emergency contacts, and org connection.</p>
-                {isAddressVerified && addressVerifiedDisplay ? (
+                {isProfileComplete ? (
                   <p className="text-[11px] text-emerald-700 font-semibold mt-2 inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded px-2 py-1">
-                    <Check size={12} /> Last verified: {addressVerifiedDisplay}
+                    <Check size={12} /> Profile complete
                   </p>
                 ) : (
                   <p className="text-[11px] text-amber-700 font-semibold mt-2 inline-flex items-center gap-1 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                    <Shield size={12} /> Address verification needed
+                    <Shield size={12} /> Missing: {missingProfileFields.join(', ')}
                   </p>
                 )}
               </button>
