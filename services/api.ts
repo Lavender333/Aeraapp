@@ -1942,51 +1942,85 @@ export async function updateVitalsForUser(payload: {
 
   if (profileError) throw profileError;
 
+  const vitalsUpsertPayload: Record<string, unknown> = {
+    profile_id: authData.user.id,
+    medical_needs: payload.medicalNeeds || null,
+    household: payload.household || [],
+    pet_details: payload.petDetails || null,
+    household_size: Math.max(1, Number(payload.householdMembers) || (payload.household || []).length || 1),
+    consent_preparedness_planning: true,
+    consent_timestamp: new Date().toISOString(),
+  };
+
+  if (payload.medicationDependency !== undefined) {
+    vitalsUpsertPayload.medication_dependency = Boolean(payload.medicationDependency);
+  }
+  if (payload.insulinDependency !== undefined) {
+    vitalsUpsertPayload.insulin_dependency = Boolean(payload.insulinDependency);
+  }
+  if (payload.oxygenPoweredDevice !== undefined) {
+    vitalsUpsertPayload.oxygen_powered_device = Boolean(payload.oxygenPoweredDevice);
+  }
+  if (payload.mobilityLimitation !== undefined) {
+    vitalsUpsertPayload.mobility_limitation = Boolean(payload.mobilityLimitation);
+  }
+  if (payload.transportationAccess !== undefined) {
+    vitalsUpsertPayload.transportation_access = Boolean(payload.transportationAccess);
+  }
+  if (payload.financialStrain !== undefined) {
+    vitalsUpsertPayload.financial_strain = Boolean(payload.financialStrain);
+  }
+  if (payload.zipCode !== undefined) {
+    vitalsUpsertPayload.zip_code = payload.zipCode || null;
+  }
+
   const { error } = await supabase
     .from('vitals')
-    .upsert({
-      profile_id: authData.user.id,
-      medical_needs: payload.medicalNeeds || null,
-      household: payload.household || [],
-      pet_details: payload.petDetails || null,
-      household_size: Math.max(1, Number(payload.householdMembers) || (payload.household || []).length || 1),
-      medication_dependency: Boolean(payload.medicationDependency),
-      insulin_dependency: Boolean(payload.insulinDependency),
-      oxygen_powered_device: Boolean(payload.oxygenPoweredDevice),
-      mobility_limitation: Boolean(payload.mobilityLimitation),
-      transportation_access: Boolean(payload.transportationAccess),
-      financial_strain: Boolean(payload.financialStrain),
-      zip_code: payload.zipCode || null,
-      consent_preparedness_planning: true,
-      consent_timestamp: new Date().toISOString(),
-    }, { onConflict: 'profile_id' });
+    .upsert(vitalsUpsertPayload, { onConflict: 'profile_id' });
 
   if (error) throw error;
 
   const profile = await getProfileById(authData.user.id);
   const householdSize = Math.max(1, Number(payload.householdMembers) || (payload.household || []).length || 1);
 
+  const vulnerabilityUpsertPayload: Record<string, unknown> = {
+    profile_id: authData.user.id,
+    organization_id: profile?.org_id || null,
+    county_id: null,
+    state_id: null,
+    household_size: householdSize,
+    consent_preparedness_planning: true,
+    consent_timestamp: new Date().toISOString(),
+    intake_source: 'settings_vital_intake',
+    intake_version: 'v2-state-ready',
+    updated_by: authData.user.id,
+  };
+
+  if (payload.medicationDependency !== undefined) {
+    vulnerabilityUpsertPayload.medication_dependency = Boolean(payload.medicationDependency);
+  }
+  if (payload.insulinDependency !== undefined) {
+    vulnerabilityUpsertPayload.insulin_dependency = Boolean(payload.insulinDependency);
+  }
+  if (payload.oxygenPoweredDevice !== undefined) {
+    vulnerabilityUpsertPayload.oxygen_powered_device = Boolean(payload.oxygenPoweredDevice);
+  }
+  if (payload.mobilityLimitation !== undefined) {
+    vulnerabilityUpsertPayload.mobility_limitation = Boolean(payload.mobilityLimitation);
+  }
+  if (payload.transportationAccess !== undefined) {
+    vulnerabilityUpsertPayload.transportation_access = Boolean(payload.transportationAccess);
+  }
+  if (payload.financialStrain !== undefined) {
+    vulnerabilityUpsertPayload.financial_strain = Boolean(payload.financialStrain);
+  }
+  if (payload.zipCode !== undefined) {
+    vulnerabilityUpsertPayload.zip_code = payload.zipCode || null;
+  }
+
   const { error: vpError } = await supabase
     .from('vulnerability_profiles')
-    .upsert({
-      profile_id: authData.user.id,
-      organization_id: profile?.org_id || null,
-      county_id: null,
-      state_id: null,
-      household_size: householdSize,
-      medication_dependency: Boolean(payload.medicationDependency),
-      insulin_dependency: Boolean(payload.insulinDependency),
-      oxygen_powered_device: Boolean(payload.oxygenPoweredDevice),
-      mobility_limitation: Boolean(payload.mobilityLimitation),
-      transportation_access: Boolean(payload.transportationAccess),
-      financial_strain: Boolean(payload.financialStrain),
-      zip_code: payload.zipCode || null,
-      consent_preparedness_planning: true,
-      consent_timestamp: new Date().toISOString(),
-      intake_source: 'settings_vital_intake',
-      intake_version: 'v2-state-ready',
-      updated_by: authData.user.id,
-    }, { onConflict: 'profile_id' });
+    .upsert(vulnerabilityUpsertPayload, { onConflict: 'profile_id' });
 
   if (vpError) {
     throw vpError;
@@ -2292,12 +2326,11 @@ export async function fetchVitalsForUser(): Promise<Partial<UserProfile> | null>
 
   if (error || !data) return null;
 
-  return {
+  const result: Partial<UserProfile> = {
     household: (data.household || []) as UserProfile['household'],
     householdMembers: Number(data.household_size || (data.household || []).length || 1),
     petDetails: data.pet_details || '',
     medicalNeeds: data.medical_needs || '',
-    zipCode: data.zip_code || '',
     medicationDependency: Boolean(data.medication_dependency),
     insulinDependency: Boolean(data.insulin_dependency),
     oxygenPoweredDevice: Boolean(data.oxygen_powered_device),
@@ -2307,6 +2340,12 @@ export async function fetchVitalsForUser(): Promise<Partial<UserProfile> | null>
     consentPreparednessPlanning: Boolean(data.consent_preparedness_planning),
     consentTimestamp: data.consent_timestamp || undefined,
   };
+
+  if (data.zip_code) {
+    result.zipCode = String(data.zip_code);
+  }
+
+  return result;
 }
 
 // Inventory

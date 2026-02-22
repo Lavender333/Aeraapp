@@ -651,6 +651,14 @@ export const StorageService = {
             householdMembers: profile.householdMembers,
             petDetails: profile.petDetails || '',
             medicalNeeds: profile.medicalNeeds || '',
+            zipCode: profile.zipCode,
+            medicationDependency: profile.medicationDependency,
+            insulinDependency: profile.insulinDependency,
+            oxygenPoweredDevice: profile.oxygenPoweredDevice,
+            mobilityLimitation: profile.mobilityLimitation,
+            transportationAccess: profile.transportationAccess,
+            financialStrain: profile.financialStrain,
+            consentPreparednessPlanning: profile.consentPreparednessPlanning,
           });
           await syncHouseholdMembersForUser(profile.household || []);
           await syncPetsForUser(profile.petDetails || '');

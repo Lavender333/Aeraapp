@@ -148,6 +148,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const orgScopeId = String(profile.communityId || '').trim();
   const hasAddressInput = String(profile.address || '').trim().length > 0;
   const isAddressVerificationRequired = hasAddressInput && Boolean(mapsApiKey) && !profile.addressVerified;
+  const hasManualAddressFallback = Boolean(
+    String(profile.city || '').trim() &&
+    String(profile.state || '').trim() &&
+    String(profile.zipCode || '').trim()
+  );
+  const canSaveWithoutMapVerification = hasAddressInput && hasManualAddressFallback;
   const addressVerifiedLabel = profile.addressVerifiedAt
     ? new Date(profile.addressVerifiedAt).toLocaleString()
     : null;
@@ -905,12 +911,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       }
       return;
     }
-    if (trimmedAddress.length > 0 && mapsApiKey && !profile.addressVerified) {
+    if (trimmedAddress.length > 0 && mapsApiKey && !profile.addressVerified && !canSaveWithoutMapVerification) {
       setExpandedSections((prev) => ({ ...prev, profile: true }));
       setProfileSaveError('Please select a verified address from suggestions or verify your address before saving.');
       return;
     }
-    if (addressStatus === 'INVALID') {
+    if (addressStatus === 'INVALID' && !canSaveWithoutMapVerification) {
       if (section) {
         setProfileSaveError('Please verify your address.');
       } else {
@@ -962,7 +968,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   const handleVitalsSave = async (section?: SettingsAccordionKey) => {
     if (!profile.zipCode?.trim()) {
-      setVitalsSaveError('ZIP comes from Home Address. Open Profile, enter full address, then press Enter or tap Retry to verify (suggestions are optional).');
+      setVitalsSaveError('ZIP is required. Open Profile and verify address, or enter City/State/ZIP in manual fallback fields.');
       return;
     }
     const memberValidation = validateHouseholdMembers(profile.household || []);
@@ -2949,6 +2955,33 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                   >
                     Retry
                   </button>
+                </div>
+              )}
+
+              {(!profile.addressVerified || !profile.zipCode?.trim()) && (
+                <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+                  <p className="text-xs font-semibold text-slate-700">Manual fallback (use when Maps verification fails)</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <Input
+                      label="City"
+                      value={profile.city || ''}
+                      onChange={(e) => updateProfile('city', e.target.value)}
+                      placeholder="Cleveland"
+                    />
+                    <Input
+                      label="State"
+                      value={profile.state || ''}
+                      onChange={(e) => updateProfile('state', e.target.value.toUpperCase().slice(0, 2))}
+                      placeholder="OH"
+                    />
+                    <Input
+                      label="ZIP"
+                      value={profile.zipCode || ''}
+                      onChange={(e) => updateProfile('zipCode', e.target.value.replace(/[^0-9-]/g, '').slice(0, 10))}
+                      placeholder="44110"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-500">If City, State, and ZIP are provided, profile save can continue even without map verification.</p>
                 </div>
               )}
             </div>

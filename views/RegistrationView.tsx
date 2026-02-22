@@ -36,6 +36,10 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     email: '',
     phone: '',
     address: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    addressVerified: false,
     householdMembers: 1,
     household: [],
     petDetails: '',
@@ -179,6 +183,10 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     }
     if (!payload.consentPreparednessPlanning) {
       setAuthError('Please confirm preparedness consent before completing setup.');
+      return;
+    }
+    if (!String(payload.zipCode || '').trim()) {
+      setAuthError('ZIP is required. Verify address, or enter City/State/ZIP in manual fallback fields.');
       return;
     }
     setIsRegistering(true);
@@ -389,6 +397,33 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
                 />
                 {addressStatus === 'INVALID' && <p className="text-xs text-red-600 font-bold mt-1">{addressFeedback || "Address is required"}</p>}
               </div>
+
+              {(!formData.addressVerified || !String(formData.zipCode || '').trim()) && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-3">
+                  <p className="text-xs font-semibold text-slate-700">Manual fallback (use when Maps verification fails)</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <Input
+                      label="City"
+                      placeholder="City"
+                      value={formData.city || ''}
+                      onChange={(e) => updateForm('city', e.target.value)}
+                    />
+                    <Input
+                      label="State"
+                      placeholder="ST"
+                      value={formData.state || ''}
+                      onChange={(e) => updateForm('state', e.target.value.toUpperCase().slice(0, 2))}
+                    />
+                    <Input
+                      label="ZIP"
+                      placeholder="12345"
+                      value={formData.zipCode || ''}
+                      onChange={(e) => updateForm('zipCode', e.target.value.replace(/[^0-9-]/g, '').slice(0, 10))}
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-500">If City, State, and ZIP are provided, setup can continue even without map verification.</p>
+                </div>
+              )}
 
               <div className="border-t border-slate-200 pt-4">
                 <p className="text-xs font-bold text-slate-500 uppercase mb-2">Emergency Contact</p>
