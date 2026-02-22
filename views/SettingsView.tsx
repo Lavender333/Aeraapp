@@ -3049,7 +3049,45 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           </div>
         </div>
 
-        {/* 2. CURRENT HOUSEHOLD - State Before Action */}
+        {/* 2. OWNER JOIN REQUESTS */}
+        {showMoreSections.household && profile.householdRole === 'OWNER' && pendingOwnerRequests.length > 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+            <p className="text-xs font-bold text-amber-700 uppercase tracking-wider">New Household Join Request{pendingOwnerRequests.length === 1 ? '' : 's'}</p>
+
+            <div className="space-y-2">
+              {pendingOwnerRequests.map((request) => (
+                <div key={request.id} className="rounded-lg border border-amber-200 bg-white p-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{request.requestingUserName || 'AERA user'}</p>
+                    <p className="text-[11px] text-slate-500">{request.requestingUserPhone || request.requestingUserEmail || 'No contact preview available'}</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Requested {new Date(request.createdAt).toLocaleString()}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                      onClick={() => handleResolveJoinRequest(request, 'approved')}
+                      disabled={joinRequestBusyId === request.id}
+                    >
+                      {joinRequestBusyId === request.id ? 'Working...' : 'Approve'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-red-600 hover:bg-red-50"
+                      onClick={() => handleResolveJoinRequest(request, 'rejected')}
+                      disabled={joinRequestBusyId === request.id}
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 3. CURRENT HOUSEHOLD - State Before Action */}
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3">
           <div>
             <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Current Household</p>
@@ -3204,44 +3242,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         {/* OWNER-ONLY ADVANCED FEATURES */}
         {showMoreSections.household && profile.householdRole === 'OWNER' && (
           <>
-            {/* Pending Join Requests for Owner */}
-            {pendingOwnerRequests.length > 0 && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
-                <p className="text-xs font-bold text-amber-700 uppercase tracking-wider">New Household Join Request{pendingOwnerRequests.length === 1 ? '' : 's'}</p>
-
-                <div className="space-y-2">
-                  {pendingOwnerRequests.map((request) => (
-                    <div key={request.id} className="rounded-lg border border-amber-200 bg-white p-3 flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">{request.requestingUserName || 'AERA user'}</p>
-                        <p className="text-[11px] text-slate-500">{request.requestingUserPhone || request.requestingUserEmail || 'No contact preview available'}</p>
-                        <p className="text-[11px] text-slate-500 mt-0.5">Requested {new Date(request.createdAt).toLocaleString()}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          className="bg-emerald-600 hover:bg-emerald-700"
-                          onClick={() => handleResolveJoinRequest(request, 'approved')}
-                          disabled={joinRequestBusyId === request.id}
-                        >
-                          {joinRequestBusyId === request.id ? 'Working...' : 'Approve'}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-red-600 hover:bg-red-50"
-                          onClick={() => handleResolveJoinRequest(request, 'rejected')}
-                          disabled={joinRequestBusyId === request.id}
-                        >
-                          Reject
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Member Account Invites */}
             {inviteEnabledMembers.length > 0 && (
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
