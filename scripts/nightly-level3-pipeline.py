@@ -96,18 +96,31 @@ class SupabaseClient:
 
 
 def calculate_risk(df: pd.DataFrame) -> pd.Series:
-    household_component = np.clip(df["household_size"].fillna(1).astype(float), 1, None) * 0.4
-    household_component = np.minimum(household_component, 3.2)
+    household_component = np.clip(df["household_size"].fillna(1).astype(float), 1, 6) * 0.4
+    medication = df["medication_dependency"].fillna(False).astype(int)
+    insulin = df["insulin_dependency"].fillna(False).astype(int)
+    oxygen = df["oxygen_powered_device"].fillna(False).astype(int)
+    mobility = df["mobility_limitation"].fillna(False).astype(int)
+    no_transport = (~df["transportation_access"].fillna(True)).astype(int)
+    financial = df["financial_strain"].fillna(False).astype(int)
 
-    return (
+    medical_count = medication + insulin + oxygen
+    medical_combo = (medical_count >= 2).astype(int) * 0.8
+    access_combo = ((mobility == 1) & (no_transport == 1)).astype(int) * 0.6
+
+    score = (
         household_component
-        + df["medication_dependency"].fillna(False).astype(int) * 1.8
-        + df["insulin_dependency"].fillna(False).astype(int) * 2.2
-        + df["oxygen_powered_device"].fillna(False).astype(int) * 2.5
-        + df["mobility_limitation"].fillna(False).astype(int) * 1.5
-        + (~df["transportation_access"].fillna(True)).astype(int) * 1.2
-        + df["financial_strain"].fillna(False).astype(int) * 1.4
-    ).round(4)
+        + medication * 1.6
+        + insulin * 2.4
+        + oxygen * 2.8
+        + mobility * 1.7
+        + no_transport * 1.3
+        + financial * 1.2
+        + medical_combo
+        + access_combo
+    )
+    score = np.minimum(score, 10.0)
+    return score.round(4)
 
 
 def classify_drift(v: float) -> str:
@@ -232,8 +245,14 @@ def run() -> int:
             (r["county_id"], r["state_id"]): float(r.get("avg_risk_score", 0) or 0) for r in prev_snapshots
         }
 
+        df["updated_at"] = pd.to_datetime(df.get("updated_at"), errors="coerce")
+        cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=30)
+        recent_df = df[(df["updated_at"].isna()) | (df["updated_at"] >= cutoff)]
+        if recent_df.empty:
+            recent_df = df
+
         grouped = (
-            df.groupby(["county_id", "state_id", "organization_id"], dropna=False)
+            recent_df.groupby(["county_id", "state_id", "organization_id"], dropna=False)
             .agg(
                 profile_count=("id", "count"),
                 avg_risk_score=("risk_score", "mean"),
