@@ -133,12 +133,21 @@ const resolveOrgId = async (orgCode: string) => {
   return data.id as string;
 };
 
-export async function listOrganizations() {
-  const { data, error } = await supabase
+export async function listOrganizations(options?: { activeOnly?: boolean }) {
+  const activeOnly = options?.activeOnly ?? true;
+
+  let query = supabase
     .from('organizations')
-    .select('id, org_code, name, type, address, is_active')
-    .eq('is_active', true)
+    .select(
+      'id, org_code, name, type, address, is_active, contact_person, contact_phone, email, phone, replenishment_provider, replenishment_email, replenishment_phone, verified, registered_population, parent_org_id'
+    )
     .order('name');
+
+  if (activeOnly) {
+    query = query.eq('is_active', true);
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
   return data || [];
 }

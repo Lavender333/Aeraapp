@@ -8,6 +8,7 @@ import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
 import { AppNotificationRecord, cancelMyHouseholdJoinRequest, ConnectedHouseholdMember, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listConnectedHouseholdMembers, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateProfileForUser, updateVitalsForUser } from '../services/api';
 import { getOrgByCode } from '../services/supabase';
+import { listOrganizations as listOrganizationsSupabase } from '../services/supabaseApi';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
 import { isValidPhoneForInvite, validateHouseholdMembers } from '../services/validation';
 import { t } from '../services/translations';
@@ -1417,12 +1418,42 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const openOrgDirectory = () => {
     if (!isAdmin) return;
     const db = StorageService.getDB();
-    const scopedOrgs = isOrgScopedAdmin
+
+    const localScopedOrgs = isOrgScopedAdmin
       ? (db.organizations || []).filter((org) => String(org.id || '') === orgScopeId)
       : db.organizations;
-    setOrgList(scopedOrgs);
+    setOrgList(localScopedOrgs);
     setCurrentSection('ORG_DIRECTORY');
     setSelectedOrgDetails(null);
+
+    (async () => {
+      try {
+        const rows = await listOrganizationsSupabase({ activeOnly: false });
+        const mapped: OrganizationProfile[] = (rows || []).map((row: any) => ({
+          id: String(row.org_code || ''),
+          name: String(row.name || ''),
+          type: (String(row.type || 'NGO') as OrganizationProfile['type']),
+          address: String(row.address || ''),
+          adminContact: String(row.contact_person || ''),
+          adminPhone: String(row.contact_phone || ''),
+          replenishmentProvider: String(row.replenishment_provider || ''),
+          replenishmentEmail: String(row.replenishment_email || row.email || ''),
+          replenishmentPhone: String(row.replenishment_phone || row.phone || ''),
+          verified: Boolean(row.verified),
+          active: row.is_active !== false,
+          registeredPopulation: row.registered_population ?? undefined,
+          parentOrgId: row.parent_org_id ?? undefined,
+        }));
+
+        const remoteScoped = isOrgScopedAdmin
+          ? mapped.filter((org) => String(org.id || '') === orgScopeId)
+          : mapped;
+
+        setOrgList(remoteScoped);
+      } catch (err) {
+        console.warn('Supabase org directory fetch failed; using local cache', err);
+      }
+    })();
   };
 
   const openAccessControl = () => {

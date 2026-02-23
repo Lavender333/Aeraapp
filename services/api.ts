@@ -428,22 +428,48 @@ export async function createOrganization(payload: {
   adminPhone?: string | null;
   replenishmentEmail?: string | null;
   replenishmentPhone?: string | null;
+  replenishmentProvider?: string | null;
+  verified?: boolean | null;
+  registeredPopulation?: number | null;
   parentOrgId?: string | null;
 }) {
-  const { data, error } = await supabase
+  const baseInsert = {
+    name: payload.name,
+    type: payload.type || null,
+    address: payload.address || null,
+    contact_person: payload.adminContact || null,
+    contact_phone: payload.adminPhone || null,
+    // Keep legacy mapping for backwards compatibility
+    email: payload.replenishmentEmail || null,
+    phone: payload.replenishmentPhone || null,
+    parent_org_id: payload.parentOrgId || null,
+  } as Record<string, any>;
+
+  const extendedInsert = {
+    ...baseInsert,
+    replenishment_provider: payload.replenishmentProvider || null,
+    replenishment_email: payload.replenishmentEmail || null,
+    replenishment_phone: payload.replenishmentPhone || null,
+    verified: payload.verified == null ? false : Boolean(payload.verified),
+    registered_population: payload.registeredPopulation ?? null,
+  } as Record<string, any>;
+
+  let data: any = null;
+  let error: any = null;
+
+  ({ data, error } = await supabase
     .from('organizations')
-    .insert({
-      name: payload.name,
-      type: payload.type || null,
-      address: payload.address || null,
-      contact_person: payload.adminContact || null,
-      contact_phone: payload.adminPhone || null,
-      email: payload.replenishmentEmail || null,
-      phone: payload.replenishmentPhone || null,
-      parent_org_id: payload.parentOrgId || null,
-    })
+    .insert(extendedInsert)
     .select('id, org_code, name')
-    .single();
+    .single());
+
+  if (error && String(error?.message || '').toLowerCase().includes('column') && String(error?.message || '').toLowerCase().includes('does not exist')) {
+    ({ data, error } = await supabase
+      .from('organizations')
+      .insert(baseInsert)
+      .select('id, org_code, name')
+      .single());
+  }
 
   if (error || !data) throw new Error('Unable to register organization');
   await safeLogActivity({
