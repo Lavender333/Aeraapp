@@ -12,6 +12,16 @@ import { Textarea } from '../components/Input';
 import { GoogleGenAI } from "../services/mockGenAI";
 
 export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
+  const isUuid = (value: string) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
+
+  const normalizeOrgCode = (value: string) =>
+    String(value || '')
+      .trim()
+      .replace(/[–—−]/g, '-')
+      .replace(/\s+/g, '')
+      .toUpperCase();
+
   type OutreachFlagRow = {
     organization_id: string;
     state_id: string | null;
@@ -126,11 +136,17 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
   // whenever communityId changes, fetch child org list and compute aggregates
   useEffect(() => {
     if (!communityId) return;
+    // In local seed data, organization "id" is actually the org code (e.g. CH-9921).
+    // In Supabase, organization "id" is a UUID and org_code is a separate column.
+    // We support both by deriving a parent org code from either the local org record or the stored communityId.
     const parent = StorageService.getOrganization(communityId);
-    const code = parent?.orgCode || '';
-    if (!code) return;
+    const candidate = normalizeOrgCode((parent as any)?.orgCode || parent?.id || communityId);
+    if (!candidate || isUuid(candidate)) {
+      console.warn('Unable to resolve parent org code for child-org lookup', { communityId, candidate });
+      return;
+    }
 
-    listChildOrganizations(code)
+    listChildOrganizations(candidate)
       .then(async (rows) => {
         setChildOrgs(rows as any[]);
         if (rows && rows.length > 0) {
@@ -162,11 +178,15 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     if (!communityId) return;
     const id = viewOrgId === 'ALL' ? communityId : viewOrgId;
     // update orgName if viewing a specific child
-    if (id === 'ALL') {
+    if (viewOrgId === 'ALL') {
       setOrgName(parentOrgName);
     } else {
-      const org = StorageService.getOrganization(id);
-      if (org) setOrgName(org.name);
+      const selectedChild = childOrgs.find(o => o.id === viewOrgId);
+      if (selectedChild) setOrgName(selectedChild.name);
+      else {
+        const org = StorageService.getOrganization(id);
+        if (org) setOrgName(org.name);
+      }
     }
 
     // live data fetch same as before but using dynamic id
@@ -203,7 +223,16 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     fetchOrgMemberPreparednessNeeds(id)
       .then((rows) => setMemberNeeds(rows as MemberPreparednessNeedRow[]))
       .catch(() => setMemberNeeds([]));
-  }, [communityId, viewOrgId]);
+  }, [communityId, viewOrgId, childOrgs, parentOrgName]);
+
+  const displayOrgCode = (() => {
+    if (viewOrgId === 'ALL') {
+      const normalized = normalizeOrgCode(communityId);
+      return isUuid(normalized) ? communityId : normalized;
+    }
+    const selected = childOrgs.find(o => o.id === viewOrgId);
+    return selected?.org_code || viewOrgId;
+  })();
 
   const stats = isAggregateView && aggStats ? {
     total: aggStats.memberCounts.total,
@@ -586,7 +615,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
         <div className="bg-slate-900 text-white p-3 rounded-xl mb-4 flex items-center justify-between shadow-md">
            <div>
              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{t('org.code')}</p>
-             <p className="text-xl font-mono font-black tracking-widest text-brand-400">{viewOrgId === 'ALL' ? communityId : viewOrgId}</p>
+             <p className="text-xl font-mono font-black tracking-widest text-brand-400">{displayOrgCode}</p>
            </div>
            <Button 
              size="sm" 
