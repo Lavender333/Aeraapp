@@ -595,12 +595,12 @@ export const StorageService = {
 
   saveProfile(profile: UserProfile, options?: { skipRemoteSync?: boolean }): boolean {
     const db = this.getDB();
-    
+
     // Ensure ID
     if (!profile.id || profile.id === 'guest') {
       profile.id = 'u_' + Date.now();
     }
-    
+
     const existing = db.users.find(u => u.id === profile.id);
 
     if (!profile.createdAt && existing?.createdAt) {
@@ -612,7 +612,7 @@ export const StorageService = {
 
     // Sync legacy count
     profile.householdMembers = (profile.household?.length || 0) + 1; // +1 for self
-    
+
     // Default active to true if not specified
     if (profile.active === undefined) {
       profile.active = true;
@@ -627,7 +627,7 @@ export const StorageService = {
     } else {
       db.users.push(profile);
     }
-    
+
     // Set as current session
     db.currentUser = profile.id;
     this.saveDB(db);
@@ -644,83 +644,40 @@ export const StorageService = {
             emergencyContactPhone: profile.emergencyContactPhone,
             emergencyContactRelation: profile.emergencyContactRelation,
             communityId: profile.communityId,
-            const shouldBlockHydration = !mergedLocalProfile.onboardComplete;
-            const hydrateProfile = async () => {
-              try {
-                const [profileResult, vitalsResult] = await Promise.allSettled([
-                  fetchProfileForUser(),
-                  fetchVitalsForUser(),
-                ]);
-
-                const remoteProfile = profileResult.status === 'fulfilled' ? profileResult.value : null;
-                const remoteVitals = vitalsResult.status === 'fulfilled' ? vitalsResult.value : null;
-
-                const latest = this.getProfile();
-                if (!latest?.id || latest.id !== resp.user.id) return;
-
-                const hasRemoteVitals = !!remoteVitals;
-                const mergedProfile: UserProfile = {
-                  ...latest,
-                  fullName: remoteProfile?.fullName || latest.fullName || resp.user.fullName || '',
-                  email: remoteProfile?.email || latest.email || resp.user.email || '',
-                  phone: remoteProfile?.phone || latest.phone || resp.user.phone || '',
-                  address: remoteProfile?.address || latest.address || '',
-                  householdMembers: remoteVitals?.householdMembers || latest.householdMembers || 1,
-                  household: remoteVitals?.household || latest.household || [],
-                  petDetails: remoteVitals?.petDetails || latest.petDetails || '',
-                  medicalNeeds: remoteVitals?.medicalNeeds || latest.medicalNeeds || '',
-                  emergencyContactName: remoteProfile?.emergencyContactName || latest.emergencyContactName || '',
-                  emergencyContactPhone: remoteProfile?.emergencyContactPhone || latest.emergencyContactPhone || '',
-                  emergencyContactRelation: remoteProfile?.emergencyContactRelation || latest.emergencyContactRelation || '',
-                  householdId: latest.householdId,
-                  householdName: latest.householdName,
-                  householdCode: latest.householdCode,
-                  householdRole: latest.householdRole,
-                  communityId: remoteProfile?.communityId || latest.communityId || resp.user.orgId || '',
-                  onboardComplete:
-                    latest.onboardComplete ||
-                    hasRemoteVitals || // If vitals exist in Supabase, assume onboarding was finished.
-                    inferOnboardingComplete(
-                      {
-                        ...latest,
-                        ...remoteProfile,
-                        ...remoteVitals,
-                      },
-                      Boolean(remoteVitals),
-                    ),
-                };
-
-                this.saveProfile(mergedProfile, { skipRemoteSync: true });
-
-                try {
-                  let householdSummary = await fetchHouseholdForCurrentUser();
-                  if (!householdSummary) {
-                    householdSummary = await ensureHouseholdForCurrentUser();
-                  }
-
-                  const refreshed = this.getProfile();
-                  if (refreshed?.id !== resp.user.id || !householdSummary) return;
-
-                  this.saveProfile({
-                    ...refreshed,
-                    householdId: householdSummary.householdId,
-                    householdName: householdSummary.householdName,
-                    householdCode: householdSummary.householdCode,
-                    householdRole: householdSummary.householdRole,
-                  }, { skipRemoteSync: true });
-                } catch (householdErr) {
-                  console.warn('Post-login household hydration failed', householdErr);
-                }
-              } catch (hydrateErr) {
-                console.warn('Post-login profile hydration failed', hydrateErr);
-              }
-            };
-
-            if (shouldBlockHydration) {
-              await hydrateProfile();
-            } else {
-              void hydrateProfile();
-            }
+            role: profile.role,
+          });
+          await updateVitalsForUser({
+            household: profile.household || [],
+            householdMembers: profile.householdMembers,
+            petDetails: profile.petDetails || '',
+            medicalNeeds: profile.medicalNeeds || '',
+            zipCode: profile.zipCode,
+            medicationDependency: profile.medicationDependency,
+            insulinDependency: profile.insulinDependency,
+            oxygenPoweredDevice: profile.oxygenPoweredDevice,
+            mobilityLimitation: profile.mobilityLimitation,
+            transportationAccess: profile.transportationAccess,
+            financialStrain: profile.financialStrain,
+            consentPreparednessPlanning: profile.consentPreparednessPlanning,
+          });
+          await syncHouseholdMembersForUser(profile.household || []);
+          await syncPetsForUser(profile.petDetails || '');
+          await syncMemberDirectoryForUser({
+            communityId: profile.communityId,
+            fullName: profile.fullName,
+            phone: profile.phone,
+            address: profile.address,
+            emergencyContactName: profile.emergencyContactName,
+            emergencyContactPhone: profile.emergencyContactPhone,
+            emergencyContactRelation: profile.emergencyContactRelation,
+          });
+        } catch (err) {
+          console.warn('Supabase profile sync failed', err);
+        }
+      })();
+    }
+    return true;
+  },
 
   logoutUser() {
     const db = this.getDB();
