@@ -46,12 +46,30 @@ const maskPhoneNumber = (value: string) => {
 };
 
 // --- Mock Data for Access Control ---
-const INITIAL_ROLES: RoleDefinition[] = [
+const DEFAULT_ROLES: RoleDefinition[] = [
   {
     id: 'ADMIN',
     label: 'Administrator',
     description: 'Full system access and user management.',
     permissions: { canViewPII: true, canDispatchDrone: true, canApproveFunds: true, canManageInventory: true, canBroadcastAlerts: true }
+  },
+  {
+    id: 'STATE_ADMIN',
+    label: 'State Admin',
+    description: 'State-level oversight and reporting access.',
+    permissions: { canViewPII: true, canDispatchDrone: false, canApproveFunds: true, canManageInventory: false, canBroadcastAlerts: true }
+  },
+  {
+    id: 'COUNTY_ADMIN',
+    label: 'County Admin',
+    description: 'County-level oversight and reporting access.',
+    permissions: { canViewPII: true, canDispatchDrone: false, canApproveFunds: true, canManageInventory: false, canBroadcastAlerts: true }
+  },
+  {
+    id: 'ORG_ADMIN',
+    label: 'Organization Admin',
+    description: 'Manage multiple hubs within an organization.',
+    permissions: { canViewPII: false, canDispatchDrone: false, canApproveFunds: false, canManageInventory: true, canBroadcastAlerts: true }
   },
   {
     id: 'FIRST_RESPONDER',
@@ -82,8 +100,52 @@ const INITIAL_ROLES: RoleDefinition[] = [
     label: 'General User',
     description: 'Standard access to report emergencies.',
     permissions: { canViewPII: false, canDispatchDrone: false, canApproveFunds: false, canManageInventory: false, canBroadcastAlerts: false }
+  },
+  {
+    id: 'MEMBER',
+    label: 'Member',
+    description: 'Limited member access within a household/community.',
+    permissions: { canViewPII: false, canDispatchDrone: false, canApproveFunds: false, canManageInventory: false, canBroadcastAlerts: false }
   }
 ];
+
+const normalizeRolePermissions = (value?: Partial<RoleDefinition['permissions']>): RoleDefinition['permissions'] => ({
+  canViewPII: Boolean(value?.canViewPII),
+  canDispatchDrone: Boolean(value?.canDispatchDrone),
+  canApproveFunds: Boolean(value?.canApproveFunds),
+  canManageInventory: Boolean(value?.canManageInventory),
+  canBroadcastAlerts: Boolean(value?.canBroadcastAlerts),
+});
+
+const mergeRoleDefinitions = (stored: RoleDefinition[] | null | undefined): RoleDefinition[] => {
+  const byId = new Map<string, RoleDefinition>();
+  (stored || []).forEach((role) => {
+    if (role?.id) byId.set(String(role.id), role);
+  });
+
+  const merged = DEFAULT_ROLES.map((role) => {
+    const existing = byId.get(role.id);
+    return {
+      ...role,
+      // Keep latest copy for labels/descriptions, but preserve any stored permission toggles.
+      permissions: {
+        ...normalizeRolePermissions(role.permissions),
+        ...normalizeRolePermissions(existing?.permissions),
+      },
+    };
+  });
+
+  // Keep any extra roles that may exist in storage (forward compatibility).
+  const extra = (stored || []).filter((role) => role?.id && !DEFAULT_ROLES.some((d) => d.id === role.id));
+  extra.forEach((role) => {
+    merged.push({
+      ...role,
+      permissions: normalizeRolePermissions(role.permissions),
+    } as RoleDefinition);
+  });
+
+  return merged;
+};
 
 export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const trustedCommunityRef = useRef<HTMLElement | null>(null);
@@ -208,10 +270,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   // Access Control State
   type AccessTab = 'ALL_USERS' | 'ROLE_DEFINITIONS';
   const [activeTab, setActiveTab] = useState<AccessTab>('ALL_USERS');
-  const [roles, setRoles] = useState<RoleDefinition[]>(() => StorageService.getRoles() || INITIAL_ROLES);
+  const [roles, setRoles] = useState<RoleDefinition[]>(() => mergeRoleDefinitions(StorageService.getRoles()));
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [userSearch, setUserSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    // Ensure localStorage always contains a current role set (older caches may be missing roles).
+    StorageService.saveRoles(roles);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // DB Viewer State
   const [dbContent, setDbContent] = useState<DatabaseSchema | null>(null);
