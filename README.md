@@ -38,6 +38,72 @@ AERA (AI Emergency Response Assistant) is a **life-saving platform** that helps 
 
 ---
 
+## 📋 Features & Functions
+
+AERA provides the following functions for individuals, organizations, and emergency responders:
+
+### 🆘 Emergency Help & SOS
+- **Submit SOS / Help Request** – Users submit a geo-tagged emergency help request describing what they need (food, water, medical aid, shelter, etc.)
+- **AI-Assisted Triage** – Submitted requests are prioritized with AI-generated recommendations to direct responders to the most critical needs first
+
+### 📍 Real-Time Map & Location
+- **Live Resource Map** – First responders and admins view an interactive map showing open help requests, resource locations, and organization hubs
+- **Geo-tagged Requests** – Every SOS is pinned to the requester's location for rapid dispatch
+
+### 👥 Household & Member Safety Tracking
+- **Household Manager** – Track every member of a household and mark them as safe, unsafe, unknown, or needs help
+- **Population View** – Admins monitor community-wide member status across all registered households
+
+### 📢 Broadcasts & Alerts
+- **Broadcast Alerts** – Organization admins send emergency notifications to all members of their hub
+- **Alert Feed** – Users receive and view real-time broadcast messages from their organization
+
+### 📦 Inventory & Logistics
+- **Inventory Management** – Track quantities of food, water, medical supplies, shelter capacity, and other resources
+- **Supply Requests** – Organizations create replenishment requests when supplies run low
+- **Logistics View** – Admins manage and fulfill supply requests across hubs
+
+### 🏢 Organization & Hub Management
+- **Org Dashboard** – Church/NGO admins manage their hub: members, inventory, broadcasts, and requests
+- **New Signups Management** – Super-admins approve or reject new user registrations
+- **Role-Based Access Control** – Different capabilities for General Users, Org Admins, First Responders, County/State Admins, Contractors, and Super Admins
+
+### 📊 Assessment & Gap Analysis
+- **Disaster Assessment** – Document and assess disaster impact across an area
+- **Gap Analysis** – Identify unmet needs and resource shortfalls in relief operations
+- **Readiness Gap Analysis** – Pinpoint preparedness deficiencies before a disaster strikes
+
+### 🛠️ Preparedness & Readiness
+- **Emergency Readiness Checklist (Build Kit)** – Guide users through assembling a personal/family emergency kit
+- **Readiness Score** – Track how prepared a household or organization is based on completed checklist items
+
+### 🚁 Advanced Responder Tools
+- **Drone Operations View** – Manage and log drone deployment for search, rescue, and delivery operations
+- **Recovery Operations** – Coordinate post-disaster recovery tasks and resource allocation
+
+### 👤 User Account Management
+- **Registration & Onboarding** – New users register, select their organization by org code, and set up their profile
+- **Login / Logout** – Secure JWT-based authentication (Phase 1) or Supabase Auth (Phase 2)
+- **Password Reset** – Secure email-based password reset with SHA-256 hashed tokens
+- **Settings** – Update personal profile, language preferences, and notification settings
+
+### 🌐 Offline & Sync
+- **Offline Support** – Operations are queued locally when the device has no internet connection
+- **Auto-Sync** – Queued actions automatically sync to the server when connectivity is restored
+
+### 🔒 Security
+- **JWT Authentication** – All protected API routes require a valid JSON Web Token
+- **Rate Limiting** – Brute-force protection on auth (5 attempts / 15 min) and API (100 requests / 15 min) endpoints
+- **Input Validation & Sanitization** – Zod schemas + express-mongo-sanitize prevent injection attacks
+
+### 🌍 Accessibility & Internationalization
+- **Multi-Language Support** – Built-in i18n service for translations (English supported; Spanish and Haitian Creole planned)
+- **Mobile-First Design** – Responsive UI optimized for smartphones used in the field
+- **Presentation / Demo Mode** – Walkthrough presentation for stakeholders and onboarding sessions
+- **Privacy Policy & Proof of Consent** – In-app privacy policy screen accessible from every view
+
+---
+
 ## 🎉 Latest Updates (February 2026)
 
 ### ✅ Phase 1: Critical Security Fixes - COMPLETE
