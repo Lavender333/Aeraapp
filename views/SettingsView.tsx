@@ -6,7 +6,7 @@ import { Button } from '../components/Button';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
-import { AppNotificationRecord, cancelMyHouseholdJoinRequest, ConnectedHouseholdMember, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listConnectedHouseholdMembers, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, switchActiveHousehold, transferHouseholdOwnership, updateProfileForUser, updateVitalsForUser } from '../services/api';
+import { AppNotificationRecord, cancelMyHouseholdJoinRequest, ConnectedHouseholdMember, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listConnectedHouseholdMembers, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateProfileForUser, updateVitalsForUser } from '../services/api';
 import { getOrgByCode } from '../services/supabase';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
 import { isValidPhoneForInvite, validateHouseholdMembers } from '../services/validation';
@@ -195,6 +195,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [isDisconnectingOrg, setIsDisconnectingOrg] = useState(false);
   const connectedOrgLabel = connectedOrg || String(profile.communityId || '').trim() || null;
+
+  const [parentOrgCodeInput, setParentOrgCodeInput] = useState('');
+  const [isLinkingParentOrg, setIsLinkingParentOrg] = useState(false);
+  const [parentOrgLinkError, setParentOrgLinkError] = useState<string | null>(null);
+  const [parentOrgLinkSuccess, setParentOrgLinkSuccess] = useState<string | null>(null);
 
   // Validation States
   const [phoneError, setPhoneError] = useState<string | null>(null);
@@ -875,6 +880,53 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       setVerifyError('Unable to verify Community ID right now. Please try again.');
     } finally {
       setIsVerifying(false);
+    }
+  };
+
+  const linkParentOrganization = async () => {
+    const childOrgCode = String(profile.communityId || '')
+      .trim()
+      .replace(/[–—−]/g, '-')
+      .replace(/\s+/g, '')
+      .toUpperCase();
+    const parentOrgCode = String(parentOrgCodeInput || '')
+      .trim()
+      .replace(/[–—−]/g, '-')
+      .replace(/\s+/g, '')
+      .toUpperCase();
+
+    setParentOrgLinkError(null);
+    setParentOrgLinkSuccess(null);
+
+    if (!childOrgCode) {
+      setParentOrgLinkError('Set your Organization ID first.');
+      return;
+    }
+    if (!parentOrgCode) {
+      setParentOrgLinkError('Enter a parent organization code.');
+      return;
+    }
+
+    setIsLinkingParentOrg(true);
+    try {
+      const parent = await getOrgByCode(parentOrgCode);
+      if (!parent) {
+        setParentOrgLinkError('Parent organization not found.');
+        return;
+      }
+
+      const result = await setOrganizationParentByCode({
+        childOrgCode,
+        parentOrgCode,
+      });
+
+      setParentOrgLinkSuccess(
+        `Linked to ${result.parentOrgName || result.parentOrgCode}.`
+      );
+    } catch (err: any) {
+      setParentOrgLinkError(err?.message || 'Unable to link parent organization right now.');
+    } finally {
+      setIsLinkingParentOrg(false);
     }
   };
 
@@ -3432,6 +3484,42 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
              {verifyError && (
                <div className="flex items-center gap-2 text-red-600 text-sm font-bold bg-red-50 p-2 rounded-lg animate-fade-in border border-red-100 relative z-10">
                   <XCircle size={16} /> {verifyError}
+               </div>
+             )}
+
+             <div className="flex gap-3 items-end">
+               <div className="flex-1">
+                 <Input
+                   label="Parent Organization Code (optional)"
+                   placeholder="e.g. CH-9921"
+                   value={parentOrgCodeInput}
+                   onChange={(e) => {
+                     setParentOrgCodeInput(formatCommunityIdInput(e.target.value));
+                     setParentOrgLinkError(null);
+                     setParentOrgLinkSuccess(null);
+                   }}
+                 />
+                 <p className="text-[11px] text-slate-500 mt-1">
+                   If your organization is overseen by a parent organization, enter their Community Code.
+                 </p>
+               </div>
+               <div className="flex flex-col items-center">
+                 <Button
+                   className="mb-[1px] min-w-[90px] bg-purple-600 hover:bg-purple-700"
+                   onClick={linkParentOrganization}
+                   disabled={isLinkingParentOrg || !profile.communityId || !parentOrgCodeInput}
+                 >
+                   {isLinkingParentOrg ? <Loader2 className="animate-spin" size={18} /> : 'Link Parent'}
+                 </Button>
+                 <p className="text-[10px] font-semibold text-purple-600 mt-1">Optional</p>
+               </div>
+             </div>
+             {parentOrgLinkSuccess && (
+               <p className="text-xs font-semibold text-emerald-700 relative z-10">{parentOrgLinkSuccess}</p>
+             )}
+             {parentOrgLinkError && (
+               <div className="flex items-center gap-2 text-red-600 text-sm font-bold bg-red-50 p-2 rounded-lg animate-fade-in border border-red-100 relative z-10">
+                 <XCircle size={16} /> {parentOrgLinkError}
                </div>
              )}
           </div>

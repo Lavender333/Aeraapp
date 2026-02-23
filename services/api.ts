@@ -456,6 +456,48 @@ export async function createOrganization(payload: {
   return data;
 }
 
+export async function setOrganizationParentByCode(payload: {
+  childOrgCode: string;
+  parentOrgCode: string;
+}) {
+  const child = await getOrgByCode(payload.childOrgCode);
+  if (!child?.orgId) throw new Error('Organization not found');
+
+  const parent = await getOrgByCode(payload.parentOrgCode);
+  if (!parent?.orgId) throw new Error('Parent organization not found');
+
+  if (child.orgId === parent.orgId) {
+    throw new Error('Parent organization cannot be the same as the child');
+  }
+
+  const { data, error } = await supabase
+    .from('organizations')
+    .update({ parent_org_id: parent.orgId })
+    .eq('id', child.orgId)
+    .select('id, org_code, parent_org_id')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message || 'Unable to update parent organization');
+  }
+
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'organizations',
+    entityId: data.id,
+    orgCode: data.org_code || null,
+    details: { parent_org_id: parent.orgId },
+  });
+
+  return {
+    childOrgId: data.id,
+    childOrgCode: data.org_code,
+    parentOrgId: parent.orgId,
+    parentOrgCode: parent.orgCode,
+    parentOrgName: parent.orgName || null,
+  };
+}
+
 export async function updateProfile(profile: Partial<UserProfile> & { id: string }) {
   const orgId = profile.communityId ? await getOrgIdByCode(profile.communityId) : null;
 
