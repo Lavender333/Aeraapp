@@ -195,19 +195,25 @@ const SEED_REPLENISHMENT_REQUESTS: ReplenishmentRequest[] = [
 ];
 
 export const StorageService = {
+  _dbCache: null as DatabaseSchema | null,
+
   // --- Core Database Engine ---
   getDB(): DatabaseSchema {
+    if (this._dbCache) return this._dbCache;
     try {
       const stored = safeGetItem(DB_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (!parsed.orgMembers) parsed.orgMembers = {};
+        this._dbCache = parsed;
         return parsed;
       }
     } catch (e) {
       console.error("DB Load Error", e);
     }
-    return this.seedDB();
+    const seeded = this.seedDB();
+    this._dbCache = seeded;
+    return seeded;
   },
 
   saveDB(db: DatabaseSchema) {
@@ -219,11 +225,15 @@ export const StorageService = {
         if (!prunedSaved) {
           saveStorageState({ degraded: true, lastError: 'Unable to persist after pruning' });
           console.error('DB Save Error: Unable to persist even after pruning');
+          // Keep in-memory cache consistent with what we attempted to save.
+          this._dbCache = pruned;
         } else {
           saveStorageState({ degraded: true, lastError: 'Pruned database due to quota limits' });
+          this._dbCache = pruned;
         }
       } else {
         saveStorageState({ degraded: false });
+        this._dbCache = db;
       }
     } catch (e) {
       saveStorageState({ degraded: true, lastError: String(e) });
@@ -283,6 +293,7 @@ export const StorageService = {
     safeRemoveItem(DB_KEY);
     safeRemoveItem(AUTH_TOKEN_KEY);
     safeRemoveItem(AUTH_REFRESH_TOKEN_KEY);
+    this._dbCache = null;
     window.location.reload();
   },
 
@@ -486,60 +497,64 @@ export const StorageService = {
         };
         this.saveProfile(mergedLocalProfile, { skipRemoteSync: true });
 
-        try {
-          const [profileResult, vitalsResult, householdResult] = await Promise.allSettled([
-            fetchProfileForUser(),
-            fetchVitalsForUser(),
-            fetchHouseholdForCurrentUser(),
-          ]);
+        // Post-login hydration (profile/vitals/household) can be slow on some networks.
+        // Do it in the background so navigation after login is snappy.
+        (async () => {
+          try {
+            const [profileResult, vitalsResult, householdResult] = await Promise.allSettled([
+              fetchProfileForUser(),
+              fetchVitalsForUser(),
+              fetchHouseholdForCurrentUser(),
+            ]);
 
-          const remoteProfile = profileResult.status === 'fulfilled' ? profileResult.value : null;
-          const remoteVitals = vitalsResult.status === 'fulfilled' ? vitalsResult.value : null;
+            const remoteProfile = profileResult.status === 'fulfilled' ? profileResult.value : null;
+            const remoteVitals = vitalsResult.status === 'fulfilled' ? vitalsResult.value : null;
 
-          let householdSummary = householdResult.status === 'fulfilled' ? householdResult.value : null;
-          if (!householdSummary) {
-            householdSummary = await ensureHouseholdForCurrentUser();
+            let householdSummary = householdResult.status === 'fulfilled' ? householdResult.value : null;
+            if (!householdSummary) {
+              householdSummary = await ensureHouseholdForCurrentUser();
+            }
+
+            const latest = this.getProfile();
+            if (!latest?.id || latest.id !== resp.user.id) return;
+
+            const hasRemoteVitals = !!remoteVitals;
+            const mergedProfile: UserProfile = {
+              ...latest,
+              fullName: remoteProfile?.fullName || latest.fullName || resp.user.fullName || '',
+              email: remoteProfile?.email || latest.email || resp.user.email || '',
+              phone: remoteProfile?.phone || latest.phone || resp.user.phone || '',
+              address: remoteProfile?.address || latest.address || '',
+              householdMembers: remoteVitals?.householdMembers || latest.householdMembers || 1,
+              household: remoteVitals?.household || latest.household || [],
+              petDetails: remoteVitals?.petDetails || latest.petDetails || '',
+              medicalNeeds: remoteVitals?.medicalNeeds || latest.medicalNeeds || '',
+              emergencyContactName: remoteProfile?.emergencyContactName || latest.emergencyContactName || '',
+              emergencyContactPhone: remoteProfile?.emergencyContactPhone || latest.emergencyContactPhone || '',
+              emergencyContactRelation: remoteProfile?.emergencyContactRelation || latest.emergencyContactRelation || '',
+              householdId: householdSummary?.householdId,
+              householdName: householdSummary?.householdName,
+              householdCode: householdSummary?.householdCode,
+              householdRole: householdSummary?.householdRole,
+              communityId: remoteProfile?.communityId || latest.communityId || resp.user.orgId || '',
+              onboardComplete:
+                latest.onboardComplete ||
+                hasRemoteVitals || // If vitals exist in Supabase, assume onboarding was finished.
+                inferOnboardingComplete(
+                  {
+                    ...latest,
+                    ...remoteProfile,
+                    ...remoteVitals,
+                  },
+                  Boolean(remoteVitals),
+                ),
+            };
+
+            this.saveProfile(mergedProfile, { skipRemoteSync: true });
+          } catch (hydrateErr) {
+            console.warn('Post-login profile hydration failed', hydrateErr);
           }
-
-          const latest = this.getProfile();
-          if (!latest?.id || latest.id !== resp.user.id) return resp;
-
-          const hasRemoteVitals = !!remoteVitals;
-          const mergedProfile: UserProfile = {
-            ...latest,
-            fullName: remoteProfile?.fullName || latest.fullName || resp.user.fullName || '',
-            email: remoteProfile?.email || latest.email || resp.user.email || '',
-            phone: remoteProfile?.phone || latest.phone || resp.user.phone || '',
-            address: remoteProfile?.address || latest.address || '',
-            householdMembers: remoteVitals?.householdMembers || latest.householdMembers || 1,
-            household: remoteVitals?.household || latest.household || [],
-            petDetails: remoteVitals?.petDetails || latest.petDetails || '',
-            medicalNeeds: remoteVitals?.medicalNeeds || latest.medicalNeeds || '',
-            emergencyContactName: remoteProfile?.emergencyContactName || latest.emergencyContactName || '',
-            emergencyContactPhone: remoteProfile?.emergencyContactPhone || latest.emergencyContactPhone || '',
-            emergencyContactRelation: remoteProfile?.emergencyContactRelation || latest.emergencyContactRelation || '',
-            householdId: householdSummary?.householdId,
-            householdName: householdSummary?.householdName,
-            householdCode: householdSummary?.householdCode,
-            householdRole: householdSummary?.householdRole,
-            communityId: remoteProfile?.communityId || latest.communityId || resp.user.orgId || '',
-            onboardComplete:
-              latest.onboardComplete ||
-              hasRemoteVitals || // If vitals exist in Supabase, assume onboarding was finished.
-              inferOnboardingComplete(
-                {
-                  ...latest,
-                  ...remoteProfile,
-                  ...remoteVitals,
-                },
-                Boolean(remoteVitals),
-              ),
-          };
-
-          this.saveProfile(mergedProfile, { skipRemoteSync: true });
-        } catch (hydrateErr) {
-          console.warn('Post-login profile hydration failed', hydrateErr);
-        }
+        })();
       }
       return resp;
     } catch (err: any) {
