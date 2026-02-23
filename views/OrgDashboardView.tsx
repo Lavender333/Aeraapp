@@ -156,7 +156,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
             const agg = await aggregateOrgStats(codes);
             setAggStats(agg as any);
             setIsAggregateView(true);
-            setSelectedBroadcastTargets((rows as any[]).map(r => r.id));
+            setSelectedBroadcastTargets((rows as any[]).map(r => String(r.org_code || '').toUpperCase().trim()));
           } catch (e) {
             console.warn('aggregateOrgStats failed', e);
           }
@@ -173,15 +173,20 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
       });
   }, [communityId]);
 
+  // Active org code that the dashboard should display/edit (parent or selected child)
+  const activeOrgCode = viewOrgId === 'ALL'
+    ? normalizeOrgCode(communityId)
+    : normalizeOrgCode(String(viewOrgId));
+
   // load data for the currently viewed organization (or aggregate)
   useEffect(() => {
     if (!communityId) return;
-    const id = viewOrgId === 'ALL' ? communityId : viewOrgId;
+    const id = viewOrgId === 'ALL' ? normalizeOrgCode(communityId) : normalizeOrgCode(String(viewOrgId));
     // update orgName if viewing a specific child
     if (viewOrgId === 'ALL') {
       setOrgName(parentOrgName);
     } else {
-      const selectedChild = childOrgs.find(o => o.id === viewOrgId);
+      const selectedChild = childOrgs.find(o => normalizeOrgCode(o.org_code) === normalizeOrgCode(String(viewOrgId)));
       if (selectedChild) setOrgName(selectedChild.name);
       else {
         const org = StorageService.getOrganization(id);
@@ -226,12 +231,8 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
   }, [communityId, viewOrgId, childOrgs, parentOrgName]);
 
   const displayOrgCode = (() => {
-    if (viewOrgId === 'ALL') {
-      const normalized = normalizeOrgCode(communityId);
-      return isUuid(normalized) ? communityId : normalized;
-    }
-    const selected = childOrgs.find(o => o.id === viewOrgId);
-    return selected?.org_code || viewOrgId;
+    if (viewOrgId === 'ALL') return activeOrgCode || communityId;
+    return activeOrgCode;
   })();
 
   const stats = isAggregateView && aggStats ? {
@@ -268,22 +269,22 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
   const saveInventory = () => {
     const summary = `Water: ${inventory.water}\nFood: ${inventory.food}\nBlankets: ${inventory.blankets}\nMed Kits: ${inventory.medicalKits}\n\nSave these counts?`;
     if (!window.confirm(summary)) return;
-    StorageService.updateOrgInventory(communityId, inventory);
-    StorageService.saveOrgInventoryRemote(communityId, inventory);
+    StorageService.updateOrgInventory(activeOrgCode, inventory);
+    StorageService.saveOrgInventoryRemote(activeOrgCode, inventory);
     setHasChanges(false);
     alert("Inventory Updated in Central Database");
   };
 
   const copyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(communityId);
-      alert(`Copied Community ID: ${communityId}`);
+      await navigator.clipboard.writeText(displayOrgCode);
+      alert(`Copied Community ID: ${displayOrgCode}`);
       return;
     } catch {}
 
     try {
       const textArea = document.createElement('textarea');
-      textArea.value = communityId;
+      textArea.value = displayOrgCode;
       textArea.style.position = 'fixed';
       textArea.style.left = '-9999px';
       document.body.appendChild(textArea);
@@ -293,12 +294,12 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
       document.body.removeChild(textArea);
 
       if (copied) {
-        alert(`Copied Community ID: ${communityId}`);
+        alert(`Copied Community ID: ${displayOrgCode}`);
       } else {
-        alert(`Community ID: ${communityId}`);
+        alert(`Community ID: ${displayOrgCode}`);
       }
     } catch {
-      alert(`Community ID: ${communityId}`);
+      alert(`Community ID: ${displayOrgCode}`);
     }
   };
 
@@ -308,7 +309,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     setModerationError(null);
     if (isAggregateView) {
       // default to all child orgs when composing
-      setSelectedBroadcastTargets(childOrgs.map(o => o.id));
+      setSelectedBroadcastTargets(childOrgs.map(o => normalizeOrgCode(o.org_code)));
     }
     setShowBroadcastModal(true);
   };
@@ -363,8 +364,8 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     if (!broadcastDraft.trim()) return;
     if (isAggregateView) {
       // broadcast to selected child organizations
-      const targets = childOrgs.filter(o => selectedBroadcastTargets.includes(o.id));
-      const codes = targets.map(o => o.org_code);
+      const targets = childOrgs.filter(o => selectedBroadcastTargets.includes(normalizeOrgCode(o.org_code)));
+      const codes = targets.map(o => normalizeOrgCode(o.org_code));
       try {
         await broadcastToOrgs(codes, broadcastDraft);
         alert(`Broadcast sent to ${targets.length} organizations.`);
@@ -373,7 +374,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
         alert('Failed to send broadcast to child orgs.');
       }
     } else {
-      StorageService.updateOrgBroadcast(communityId, broadcastDraft);
+      StorageService.updateOrgBroadcast(activeOrgCode, broadcastDraft);
       alert(`Broadcast sent to all members linked to ${orgName}.`);
     }
     setShowBroadcastModal(false);
@@ -394,19 +395,19 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     try {
       // Try API first, but fall back to local storage
       try {
-        await createRequest(communityId, { item: selectedItem, quantity: requestAmount, provider: replenishmentProvider, orgName });
-        const refreshed = await listRequests(communityId);
+        await createRequest(activeOrgCode, { item: selectedItem, quantity: requestAmount, provider: replenishmentProvider, orgName });
+        const refreshed = await listRequests(activeOrgCode);
         setRequests(refreshed);
       } catch (apiError) {
         console.warn('API request failed, using local storage:', apiError);
         // Use local storage as fallback
-        StorageService.createReplenishmentRequest(communityId, {
+        StorageService.createReplenishmentRequest(activeOrgCode, {
           item: selectedItem,
           quantity: requestAmount,
           provider: replenishmentProvider,
           orgName
         });
-        const localRequests = StorageService.getOrgReplenishmentRequests(communityId);
+        const localRequests = StorageService.getOrgReplenishmentRequests(activeOrgCode);
         setRequests(localRequests);
       }
       setRequestSuccess(true);
@@ -436,9 +437,9 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     // Try API first, fall back to local storage
     updateRequestStatus(req.id, { status: 'STOCKED', deliveredQuantity: qty })
       .then(async () => {
-        const refreshedReqs = await listRequests(communityId);
+        const refreshedReqs = await listRequests(activeOrgCode);
         setRequests(refreshedReqs);
-        StorageService.fetchOrgInventoryRemote(communityId).then(setInventory);
+        StorageService.fetchOrgInventoryRemote(activeOrgCode).then(({ inventory }) => setInventory(inventory));
       })
       .catch(() => {
         // Use local storage as fallback
@@ -450,10 +451,10 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
         const delivered = { [itemKey]: qty };
         StorageService.stockReplenishment(req.id, delivered);
         
-        const localRequests = StorageService.getOrgReplenishmentRequests(communityId);
+        const localRequests = StorageService.getOrgReplenishmentRequests(activeOrgCode);
         setRequests(localRequests);
         
-        const updatedInv = StorageService.getOrgInventory(communityId);
+        const updatedInv = StorageService.getOrgInventory(activeOrgCode);
         setInventory(updatedInv);
       })
       .finally(() => setStockLoading(false));
@@ -512,12 +513,12 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
                           <label key={o.id} className="flex items-center gap-2 text-sm">
                             <input
                               type="checkbox"
-                              checked={selectedBroadcastTargets.includes(o.id)}
+                              checked={selectedBroadcastTargets.includes(normalizeOrgCode(o.org_code))}
                               onChange={e => {
                                 if (e.target.checked) {
-                                  setSelectedBroadcastTargets(prev => [...prev, o.id]);
+                                  setSelectedBroadcastTargets(prev => [...prev, normalizeOrgCode(o.org_code)]);
                                 } else {
-                                  setSelectedBroadcastTargets(prev => prev.filter(id => id !== o.id));
+                                  setSelectedBroadcastTargets(prev => prev.filter(code => code !== normalizeOrgCode(o.org_code)));
                                 }
                               }}
                             />
@@ -637,7 +638,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
             >
               <option value="ALL">All ({childOrgs.length})</option>
               {childOrgs.map(o => (
-                <option key={o.id} value={o.id}>{o.name}</option>
+                <option key={o.id} value={normalizeOrgCode(o.org_code)}>{o.name}</option>
               ))}
             </select>
           </div>
@@ -817,7 +818,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
                </div>
                {filteredMembers.length === 0 && (
                  <p className="text-center text-slate-500 mt-8">
-                   {members.length === 0 ? `No members linked to ${communityId} yet.` : 'No members match your search.'}
+                   {members.length === 0 ? `No members linked to ${displayOrgCode} yet.` : 'No members match your search.'}
                  </p>
                )}
                {filteredMembers.map(member => (
