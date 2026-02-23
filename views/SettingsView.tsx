@@ -144,6 +144,48 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     .map((value) => String(value || '').trim())
     .filter(Boolean)
     .join(', ');
+  const householdHealthSummary = useMemo(() => {
+    const members = Array.isArray(profile.household) ? profile.household : [];
+    const householdSize = Math.max(1, members.length + 1);
+    const hasMemberNeeds = (needs: any) => {
+      if (Array.isArray(needs)) return needs.length > 0;
+      return String(needs || '').trim().length > 0;
+    };
+
+    const memberMobilityCount = members.filter((member) => Boolean(member.mobilityFlag)).length;
+    const memberMedicationCount = members.filter((member) => Boolean(member.medicationDependency)).length;
+    const memberInsulinCount = members.filter((member) => Boolean(member.insulinDependency)).length;
+    const memberOxygenCount = members.filter((member) => Boolean(member.oxygenPoweredDevice)).length;
+    const memberTransportationCount = members.filter((member) => member.transportationAccess === false).length;
+    const memberMedicalCount = members.filter((member) => Boolean(member.medicalFlag) || hasMemberNeeds(member.needs) || Boolean(member.medicationDependency) || Boolean(member.insulinDependency) || Boolean(member.oxygenPoweredDevice)).length;
+
+    const selfMedical = Boolean(
+      profile.medicationDependency ||
+      profile.insulinDependency ||
+      profile.oxygenPoweredDevice ||
+      String(profile.medicalNeeds || '').trim().length > 0
+    );
+    const selfMobility = Boolean(profile.mobilityLimitation);
+    const selfTransportationLimited = profile.transportationAccess === false;
+
+    return {
+      householdSize,
+      mobilityCount: memberMobilityCount + (selfMobility ? 1 : 0),
+      medicalCount: memberMedicalCount + (selfMedical ? 1 : 0),
+      medicationCount: memberMedicationCount + (profile.medicationDependency ? 1 : 0),
+      insulinCount: memberInsulinCount + (profile.insulinDependency ? 1 : 0),
+      oxygenCount: memberOxygenCount + (profile.oxygenPoweredDevice ? 1 : 0),
+      transportationCount: memberTransportationCount + (selfTransportationLimited ? 1 : 0),
+    };
+  }, [
+    profile.household,
+    profile.medicationDependency,
+    profile.insulinDependency,
+    profile.oxygenPoweredDevice,
+    profile.medicalNeeds,
+    profile.mobilityLimitation,
+    profile.transportationAccess,
+  ]);
   
   // UI States
   const [currentSection, setCurrentSection] = useState<'MAIN' | 'ACCESS_CONTROL' | 'DB_VIEWER' | 'ORG_DIRECTORY' | 'BROADCAST_CONTROL' | 'MASTER_INVENTORY'>('MAIN');
@@ -2776,6 +2818,44 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             readOnly={profile.householdRole !== 'OWNER'}
             latestSafetyStatusByMember={latestSafetyStatusByMember}
           />
+          {profile.householdRole === 'OWNER' && (
+            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
+              <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Household Health Summary</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-emerald-100 bg-white p-3">
+                  <p className="text-[11px] font-semibold text-emerald-700 uppercase">Mobility limited</p>
+                  <p className="text-lg font-bold text-emerald-900">{householdHealthSummary.mobilityCount}</p>
+                  <p className="text-[11px] text-emerald-700">of {householdHealthSummary.householdSize} people</p>
+                </div>
+                <div className="rounded-lg border border-emerald-100 bg-white p-3">
+                  <p className="text-[11px] font-semibold text-emerald-700 uppercase">Medical needs</p>
+                  <p className="text-lg font-bold text-emerald-900">{householdHealthSummary.medicalCount}</p>
+                  <p className="text-[11px] text-emerald-700">of {householdHealthSummary.householdSize} people</p>
+                </div>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2">
+                  <p className="text-[11px] font-semibold text-emerald-700 uppercase">Medication dep</p>
+                  <p className="text-sm font-bold text-emerald-900">{householdHealthSummary.medicationCount}</p>
+                </div>
+                <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2">
+                  <p className="text-[11px] font-semibold text-emerald-700 uppercase">Insulin dep</p>
+                  <p className="text-sm font-bold text-emerald-900">{householdHealthSummary.insulinCount}</p>
+                </div>
+                <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2">
+                  <p className="text-[11px] font-semibold text-emerald-700 uppercase">Oxygen device</p>
+                  <p className="text-sm font-bold text-emerald-900">{householdHealthSummary.oxygenCount}</p>
+                </div>
+                <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2">
+                  <p className="text-[11px] font-semibold text-emerald-700 uppercase">Transport limited</p>
+                  <p className="text-sm font-bold text-emerald-900">{householdHealthSummary.transportationCount}</p>
+                </div>
+              </div>
+              <p className="text-[11px] text-emerald-700">
+                Counts include you plus listed household members.
+              </p>
+            </div>
+          )}
           <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
             <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">Connected Household Accounts</p>
             {connectedHouseholdMembers.length > 0 ? (

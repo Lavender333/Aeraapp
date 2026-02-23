@@ -23,6 +23,10 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
     needs: '',
     mobilityFlag: false,
     medicalFlag: false,
+    medicationDependency: false,
+    insulinDependency: false,
+    oxygenPoweredDevice: false,
+    transportationAccess: true,
     loginEnabled: false,
     loginPhone: '',
   });
@@ -38,7 +42,20 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
   };
 
   const startAdd = () => {
-    setCurrentMember({ id: Date.now().toString(), name: '', age: '', needs: '', mobilityFlag: false, medicalFlag: false, loginEnabled: false, loginPhone: '' });
+    setCurrentMember({
+      id: Date.now().toString(),
+      name: '',
+      age: '',
+      needs: '',
+      mobilityFlag: false,
+      medicalFlag: false,
+      medicationDependency: false,
+      insulinDependency: false,
+      oxygenPoweredDevice: false,
+      transportationAccess: true,
+      loginEnabled: false,
+      loginPhone: '',
+    });
     setFormError(null);
     setIsEditing(true);
   };
@@ -48,6 +65,10 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
       ...member,
       mobilityFlag: Boolean(member.mobilityFlag),
       medicalFlag: Boolean(member.medicalFlag),
+      medicationDependency: Boolean(member.medicationDependency),
+      insulinDependency: Boolean(member.insulinDependency),
+      oxygenPoweredDevice: Boolean(member.oxygenPoweredDevice),
+      transportationAccess: member.transportationAccess !== false,
       loginEnabled: Boolean(member.loginEnabled),
       loginPhone: member.loginPhone || '',
     });
@@ -176,6 +197,49 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
             </div>
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+              <span className="text-sm font-medium text-slate-700">Medication Dependency</span>
+              <input
+                type="checkbox"
+                checked={Boolean(currentMember.medicationDependency)}
+                onChange={(e) => setCurrentMember({ ...currentMember, medicationDependency: e.target.checked })}
+              />
+            </label>
+            <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+              <span className="text-sm font-medium text-slate-700">Insulin Dependency</span>
+              <input
+                type="checkbox"
+                checked={Boolean(currentMember.insulinDependency)}
+                onChange={(e) => setCurrentMember({ ...currentMember, insulinDependency: e.target.checked })}
+              />
+            </label>
+            <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3 sm:col-span-2">
+              <span className="text-sm font-medium text-slate-700">Oxygen / Powered Medical Device</span>
+              <input
+                type="checkbox"
+                checked={Boolean(currentMember.oxygenPoweredDevice)}
+                onChange={(e) => setCurrentMember({ ...currentMember, oxygenPoweredDevice: e.target.checked })}
+              />
+            </label>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Transportation Access</label>
+              <select
+                value={String(currentMember.transportationAccess !== false)}
+                onChange={(e) =>
+                  setCurrentMember({
+                    ...currentMember,
+                    transportationAccess: e.target.value === 'true',
+                  })
+                }
+                className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all text-slate-900"
+              >
+                <option value="true">Has access</option>
+                <option value="false">Limited access</option>
+              </select>
+            </div>
+          </div>
+
           <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
             <span className="text-sm font-medium text-slate-700">Allow account invite (optional)</span>
             <input
@@ -223,6 +287,10 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
                     DOB: {member.age || 'N/A'}
                     {typeof member.mobilityFlag === 'boolean' && ` • Mobility: ${member.mobilityFlag ? 'Yes' : 'No'}`}
                     {typeof member.medicalFlag === 'boolean' && ` • Medical: ${member.medicalFlag ? 'Yes' : 'No'}`}
+                    {member.medicationDependency && ' • Med dep'}
+                    {member.insulinDependency && ' • Insulin dep'}
+                    {member.oxygenPoweredDevice && ' • Oxygen device'}
+                    {member.transportationAccess === false && ' • Transport limited'}
                     {` • Account Invite: ${member.loginEnabled ? 'Enabled' : 'Not enabled'}`}
                     {member.loginEnabled && member.loginPhone && ` • ${member.loginPhone}`}
                     {member.needs && ` • ${member.needs}`}

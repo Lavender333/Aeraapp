@@ -67,6 +67,10 @@ export interface HouseholdMember {
   ageGroup?: 'ADULT' | 'TEEN' | 'CHILD' | 'SENIOR' | 'INFANT';
   mobilityFlag?: boolean;
   medicalFlag?: boolean;
+  medicationDependency?: boolean;
+  insulinDependency?: boolean;
+  oxygenPoweredDevice?: boolean;
+  transportationAccess?: boolean;
   loginEnabled?: boolean;
   loginPhone?: string;
 }
@@ -144,6 +148,7 @@ export interface OrganizationProfile {
   currentBroadcast?: string; // Scoped message for members only
   lastBroadcastTime?: string;
   registeredPopulation?: number; // People served
+  parentOrgId?: string; // reference to a supervising organization
 }
 
 export interface ReplenishmentRequest {

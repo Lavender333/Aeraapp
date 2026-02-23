@@ -1,7 +1,7 @@
 
 import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, RoleDefinition } from '../types';
 import { REQUEST_ITEM_MAP } from './validation';
-import { ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, fetchProfileForUser, fetchVitalsForUser, createHouseholdSafetyNotificationsForCurrentUser } from './api';
+import { ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, fetchProfileForUser, fetchVitalsForUser, createHouseholdSafetyNotificationsForCurrentUser, listChildOrganizations } from './api';
 import { getMemberStatus, setMemberStatus } from './api';
 
 const DB_KEY = 'aera_backend_db_v4'; // Force fresh database
@@ -484,7 +484,7 @@ export const StorageService = {
           onboardComplete: existing?.onboardComplete ?? profile.onboardComplete,
           notifications: existing?.notifications || profile.notifications,
         };
-        this.saveProfile(mergedLocalProfile);
+        this.saveProfile(mergedLocalProfile, { skipRemoteSync: true });
 
         try {
           const [profileResult, vitalsResult, householdResult] = await Promise.allSettled([
@@ -536,7 +536,7 @@ export const StorageService = {
               ),
           };
 
-          this.saveProfile(mergedProfile);
+          this.saveProfile(mergedProfile, { skipRemoteSync: true });
         } catch (hydrateErr) {
           console.warn('Post-login profile hydration failed', hydrateErr);
         }
@@ -593,7 +593,7 @@ export const StorageService = {
     };
   },
 
-  saveProfile(profile: UserProfile): boolean {
+  saveProfile(profile: UserProfile, options?: { skipRemoteSync?: boolean }): boolean {
     const db = this.getDB();
     
     // Ensure ID
@@ -632,7 +632,7 @@ export const StorageService = {
     db.currentUser = profile.id;
     this.saveDB(db);
 
-    if (profile.id && profile.id !== 'guest') {
+    if (profile.id && profile.id !== 'guest' && !options?.skipRemoteSync) {
       (async () => {
         try {
           await updateProfileForUser({
@@ -644,60 +644,83 @@ export const StorageService = {
             emergencyContactPhone: profile.emergencyContactPhone,
             emergencyContactRelation: profile.emergencyContactRelation,
             communityId: profile.communityId,
-            role: profile.role,
-          });
-          await updateVitalsForUser({
-            household: profile.household || [],
-            householdMembers: profile.householdMembers,
-            petDetails: profile.petDetails || '',
-            medicalNeeds: profile.medicalNeeds || '',
-            zipCode: profile.zipCode,
-            medicationDependency: profile.medicationDependency,
-            insulinDependency: profile.insulinDependency,
-            oxygenPoweredDevice: profile.oxygenPoweredDevice,
-            mobilityLimitation: profile.mobilityLimitation,
-            transportationAccess: profile.transportationAccess,
-            financialStrain: profile.financialStrain,
-            consentPreparednessPlanning: profile.consentPreparednessPlanning,
-          });
-          await syncHouseholdMembersForUser(profile.household || []);
-          await syncPetsForUser(profile.petDetails || '');
-          await syncMemberDirectoryForUser({
-            communityId: profile.communityId,
-            fullName: profile.fullName,
-            phone: profile.phone,
-            address: profile.address,
-            emergencyContactName: profile.emergencyContactName,
-            emergencyContactPhone: profile.emergencyContactPhone,
-            emergencyContactRelation: profile.emergencyContactRelation,
-          });
-        } catch (err) {
-          console.warn('Supabase profile sync failed', err);
-        }
-      })();
-    }
-    return true;
-  },
+            const shouldBlockHydration = !mergedLocalProfile.onboardComplete;
+            const hydrateProfile = async () => {
+              try {
+                const [profileResult, vitalsResult] = await Promise.allSettled([
+                  fetchProfileForUser(),
+                  fetchVitalsForUser(),
+                ]);
 
-  loginUser(phone: string): { success: boolean, message?: string } {
-    const db = this.getDB();
-    // Simple matching by phone number
-    const user = db.users.find(u => u.phone === phone);
-    
-    console.log('loginUser called with phone:', phone);
-    console.log('Found user:', user ? { id: user.id, name: user.fullName, onboardComplete: user.onboardComplete } : 'NOT FOUND');
-    
-    if (user) {
-      if (user.active === false) {
-        return { success: false, message: 'Account deactivated. Contact Admin.' };
-      }
-      db.currentUser = user.id;
-      this.saveDB(db);
-      console.log('User logged in, currentUser set to:', user.id);
-      return { success: true };
-    }
-    return { success: false, message: 'User not found. Please check number or register.' };
-  },
+                const remoteProfile = profileResult.status === 'fulfilled' ? profileResult.value : null;
+                const remoteVitals = vitalsResult.status === 'fulfilled' ? vitalsResult.value : null;
+
+                const latest = this.getProfile();
+                if (!latest?.id || latest.id !== resp.user.id) return;
+
+                const hasRemoteVitals = !!remoteVitals;
+                const mergedProfile: UserProfile = {
+                  ...latest,
+                  fullName: remoteProfile?.fullName || latest.fullName || resp.user.fullName || '',
+                  email: remoteProfile?.email || latest.email || resp.user.email || '',
+                  phone: remoteProfile?.phone || latest.phone || resp.user.phone || '',
+                  address: remoteProfile?.address || latest.address || '',
+                  householdMembers: remoteVitals?.householdMembers || latest.householdMembers || 1,
+                  household: remoteVitals?.household || latest.household || [],
+                  petDetails: remoteVitals?.petDetails || latest.petDetails || '',
+                  medicalNeeds: remoteVitals?.medicalNeeds || latest.medicalNeeds || '',
+                  emergencyContactName: remoteProfile?.emergencyContactName || latest.emergencyContactName || '',
+                  emergencyContactPhone: remoteProfile?.emergencyContactPhone || latest.emergencyContactPhone || '',
+                  emergencyContactRelation: remoteProfile?.emergencyContactRelation || latest.emergencyContactRelation || '',
+                  householdId: latest.householdId,
+                  householdName: latest.householdName,
+                  householdCode: latest.householdCode,
+                  householdRole: latest.householdRole,
+                  communityId: remoteProfile?.communityId || latest.communityId || resp.user.orgId || '',
+                  onboardComplete:
+                    latest.onboardComplete ||
+                    hasRemoteVitals || // If vitals exist in Supabase, assume onboarding was finished.
+                    inferOnboardingComplete(
+                      {
+                        ...latest,
+                        ...remoteProfile,
+                        ...remoteVitals,
+                      },
+                      Boolean(remoteVitals),
+                    ),
+                };
+
+                this.saveProfile(mergedProfile, { skipRemoteSync: true });
+
+                try {
+                  let householdSummary = await fetchHouseholdForCurrentUser();
+                  if (!householdSummary) {
+                    householdSummary = await ensureHouseholdForCurrentUser();
+                  }
+
+                  const refreshed = this.getProfile();
+                  if (refreshed?.id !== resp.user.id || !householdSummary) return;
+
+                  this.saveProfile({
+                    ...refreshed,
+                    householdId: householdSummary.householdId,
+                    householdName: householdSummary.householdName,
+                    householdCode: householdSummary.householdCode,
+                    householdRole: householdSummary.householdRole,
+                  }, { skipRemoteSync: true });
+                } catch (householdErr) {
+                  console.warn('Post-login household hydration failed', householdErr);
+                }
+              } catch (hydrateErr) {
+                console.warn('Post-login profile hydration failed', hydrateErr);
+              }
+            };
+
+            if (shouldBlockHydration) {
+              await hydrateProfile();
+            } else {
+              void hydrateProfile();
+            }
 
   logoutUser() {
     const db = this.getDB();
@@ -775,6 +798,44 @@ export const StorageService = {
   getAllOrganizations(): OrganizationProfile[] {
     const db = this.getDB();
     return db.organizations;
+  },
+
+  getChildOrganizations(parentOrgId: string): OrganizationProfile[] {
+    const db = this.getDB();
+    return db.organizations.filter(o => o.parentOrgId === parentOrgId);
+  },
+
+  async fetchChildOrganizationsRemote(parentOrgId: string): Promise<{ orgs: OrganizationProfile[]; fromCache: boolean }> {
+    try {
+      const parent = this.getOrganization(parentOrgId);
+      if (!parent) throw new Error('Parent org not found');
+      const code = parent.orgCode;
+      const res = await listChildOrganizations(code);
+      // normalize into OrganizationProfile shape
+      const mapped: OrganizationProfile[] = (res || []).map((o: any) => ({
+        id: o.id,
+        orgCode: o.org_code,
+        name: o.name,
+        type: o.type || '',
+        address: o.address || '',
+        city: o.city || '',
+        state: o.state || '',
+        parentOrgId: parentOrgId,
+        isActive: true,
+        registeredPopulation: 0,
+      }));
+      const db = this.getDB();
+      // cache them locally under parent key
+      if (!db.childOrgs) db.childOrgs = {} as any;
+      db.childOrgs[parentOrgId] = mapped;
+      this.saveDB(db);
+      return { orgs: mapped, fromCache: false };
+    } catch (e) {
+      console.warn('API child org fetch failed, falling back to local', e);
+      const db = this.getDB();
+      const list = (db.childOrgs && db.childOrgs[parentOrgId]) || [];
+      return { orgs: list, fromCache: true };
+    }
   },
 
   getOrgInventory(orgId: string): OrgInventory {

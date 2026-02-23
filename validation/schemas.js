@@ -182,6 +182,7 @@ export const createOrganizationSchema = z.object({
   replenishmentPhone: z.string().optional(),
   verified: z.boolean().optional(),
   active: z.boolean().optional(),
+  parentOrgId: z.string().optional(),
   settings: z
     .object({
       allowPublicMembership: z.boolean().optional(),

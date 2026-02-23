@@ -329,6 +329,79 @@ export async function fetchOrgMemberPreparednessNeeds(orgCode: string) {
   });
 }
 
+// --- Parent/child organization helpers ---
+
+export async function listChildOrganizations(parentOrgCode: string) {
+  const parentOrgId = await getOrgIdByCode(parentOrgCode);
+  if (!parentOrgId) throw new Error('Organization not found');
+
+  const { data, error } = await supabase
+    .from('organizations')
+    .select('id, org_code, name, type, state, city')
+    .eq('parent_org_id', parentOrgId)
+    .order('name', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function aggregateOrgStats(orgCodes: string[]) {
+  const ids: string[] = [];
+  for (const code of orgCodes) {
+    const id = await getOrgIdByCode(code);
+    if (id) ids.push(id);
+  }
+  if (ids.length === 0) return {
+    memberCounts: { total: 0, safe: 0, danger: 0, unknown: 0 },
+    inventory: { water: 0, food: 0, blankets: 0, medicalKits: 0 }
+  };
+
+  // members
+  const { data: memRows, error: memErr } = await supabase
+    .from('members')
+    .select('status')
+    .in('org_id', ids);
+  if (memErr) throw memErr;
+  const counts = { total: 0, safe: 0, danger: 0, unknown: 0 };
+  (memRows || []).forEach((r: any) => {
+    counts.total += 1;
+    if (r.status === 'SAFE') counts.safe += 1;
+    else if (r.status === 'DANGER') counts.danger += 1;
+    else counts.unknown += 1;
+  });
+
+  // inventory
+  const { data: invRows, error: invErr } = await supabase
+    .from('inventory')
+    .select('water,food,blankets,medical_kits')
+    .in('org_id', ids);
+  if (invErr) throw invErr;
+  const inventory = { water: 0, food: 0, blankets: 0, medicalKits: 0 };
+  (invRows || []).forEach((r: any) => {
+    inventory.water += r.water || 0;
+    inventory.food += r.food || 0;
+    inventory.blankets += r.blankets || 0;
+    inventory.medicalKits += r.medical_kits || 0;
+  });
+
+  return { memberCounts: counts, inventory };
+}
+
+export async function broadcastToOrgs(orgCodes: string[], message: string) {
+  if (!message) return;
+  // fetch org ids in bulk
+  const { data: orgs, error: orgErr } = await supabase
+    .from('organizations')
+    .select('id, org_code')
+    .in('org_code', orgCodes.map(c => c.toUpperCase().trim()));
+  if (orgErr) throw orgErr;
+  if (!orgs || orgs.length === 0) return;
+
+  for (const o of orgs) {
+    await supabase.from('broadcasts').upsert({ org_id: o.id, message });
+  }
+}
+
 export async function getOrganizationByCode(orgCode: string) {
   return getOrgByCode(orgCode);
 }
@@ -355,6 +428,7 @@ export async function createOrganization(payload: {
   adminPhone?: string | null;
   replenishmentEmail?: string | null;
   replenishmentPhone?: string | null;
+  parentOrgId?: string | null;
 }) {
   const { data, error } = await supabase
     .from('organizations')
@@ -366,6 +440,7 @@ export async function createOrganization(payload: {
       contact_phone: payload.adminPhone || null,
       email: payload.replenishmentEmail || null,
       phone: payload.replenishmentPhone || null,
+      parent_org_id: payload.parentOrgId || null,
     })
     .select('id, org_code, name')
     .single();
@@ -2283,13 +2358,16 @@ export async function fetchProfileForUser(): Promise<Partial<UserProfile> | null
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('full_name, phone, mobile_phone, email, role, org_id, home_address, address_line_1, address_line_2, city, state, zip, latitude, longitude, google_place_id, address_verified, address_verified_at, emergency_contact')
+    .select('full_name, phone, mobile_phone, email, role, org_id, home_address, address_line_1, address_line_2, city, state, zip, latitude, longitude, google_place_id, address_verified, address_verified_at, emergency_contact, organizations(org_code)')
     .eq('id', authData.user.id)
     .single();
 
   if (error || !data) return null;
 
-  const orgCode = data.org_id ? await getOrgCodeById(data.org_id) : null;
+  const orgCode =
+    (data as any)?.organizations?.org_code ||
+    (Array.isArray((data as any)?.organizations) ? (data as any).organizations[0]?.org_code : null) ||
+    (data.org_id ? await getOrgCodeById(data.org_id) : null);
 
   return {
     fullName: data.full_name || '',

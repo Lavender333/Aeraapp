@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { ViewState, OrgMember, OrgInventory, ReplenishmentRequest } from '../types';
 import { Button } from '../components/Button';
 import { StorageService } from '../services/storage';
-import { listRequests, createRequest, updateRequestStatus, fetchOrgOutreachFlags, fetchOrgMemberPreparednessNeeds } from '../services/api';
+import { listRequests, createRequest, updateRequestStatus, fetchOrgOutreachFlags, fetchOrgMemberPreparednessNeeds, listChildOrganizations, aggregateOrgStats, broadcastToOrgs } from '../services/api';
 import { REQUEST_ITEM_MAP } from '../services/validation';
 import { getInventoryStatuses, getRecommendedResupply } from '../services/inventoryStatus';
 import { t } from '../services/translations';
@@ -54,7 +54,14 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
   const [inventory, setInventory] = useState<OrgInventory>({ water: 0, food: 0, blankets: 0, medicalKits: 0 });
   const [activeTab, setActiveTab] = useState<'MEMBERS' | 'PREPAREDNESS' | 'INVENTORY'>('MEMBERS');
   const [orgName, setOrgName] = useState('Community Organization');
+  const [parentOrgName, setParentOrgName] = useState('Community Organization');
   const [communityId, setCommunityId] = useState('');
+  // viewOrgId === 'ALL' means show aggregated stats for all child organizations
+  const [viewOrgId, setViewOrgId] = useState<string | 'ALL'>('ALL');
+  const [childOrgs, setChildOrgs] = useState<Array<{id:string;org_code:string;name:string}>>([]);
+  const [isAggregateView, setIsAggregateView] = useState(false);
+  const [aggStats, setAggStats] = useState<{memberCounts:{total:number;safe:number;danger:number;unknown:number}; inventory:OrgInventory} | null>(null);
+  const [selectedBroadcastTargets, setSelectedBroadcastTargets] = useState<string[]>([]);
   const [registeredPopulation, setRegisteredPopulation] = useState<number>(0);
   const [requests, setRequests] = useState<ReplenishmentRequest[]>([]);
   const [inventoryFallback, setInventoryFallback] = useState(false);
@@ -94,45 +101,17 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     const profile = StorageService.getProfile();
     const id = profile.communityId || 'CH-9921';
     setCommunityId(id);
-    
-    // Load Org Data
+    setParentOrgName(profile.communityName || 'Community Organization');
+
+    // Load Org Data (parent only)
     const org = StorageService.getOrganization(id);
     if (org) {
       setOrgName(org.name);
+      setParentOrgName(org.name);
       setReplenishmentProvider(org.replenishmentProvider || 'General Aid Pool');
       setReplenishmentEmail(org.replenishmentEmail || '');
       setRegisteredPopulation(org.registeredPopulation || 0);
     }
-    
-    // Load Live Data from Backend
-    setMembers(normalizeMembers(StorageService.getOrgMembers(id) as any[]));
-    StorageService.fetchOrgMembersRemote(id).then(({ members, fromCache }) => {
-      setMembers(normalizeMembers(members as any[]));
-      setMembersFallback(fromCache);
-    }).catch(() => setMembersFallback(true));
-    StorageService.fetchOrgInventoryRemote(id).then(({ inventory, fromCache }) => {
-      setInventory(inventory);
-      setInventoryFallback(fromCache);
-    });
-    listRequests(id)
-      .then((data) => {
-        setRequestsFallback(false);
-        setRequests(data);
-      })
-      .catch(() => {
-        setRequestsFallback(true);
-        setRequests(StorageService.getOrgReplenishmentRequests(id));
-      });
-    StorageService.fetchMemberStatus(id).then((resp) => {
-      if (resp?.counts) setStatusCounts(resp.counts);
-      if (resp?.members?.length) setMembers(normalizeMembers(resp.members as any[]));
-    });
-    fetchOrgOutreachFlags(id)
-      .then((rows) => setOutreachFlags(rows as OutreachFlagRow[]))
-      .catch(() => setOutreachFlags([]));
-    fetchOrgMemberPreparednessNeeds(id)
-      .then((rows) => setMemberNeeds(rows as MemberPreparednessNeedRow[]))
-      .catch(() => setMemberNeeds([]));
 
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
@@ -144,7 +123,94 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     };
   }, []);
 
-  const stats = {
+  // whenever communityId changes, fetch child org list and compute aggregates
+  useEffect(() => {
+    if (!communityId) return;
+    const parent = StorageService.getOrganization(communityId);
+    const code = parent?.orgCode || '';
+    if (!code) return;
+
+    listChildOrganizations(code)
+      .then(async (rows) => {
+        setChildOrgs(rows as any[]);
+        if (rows && rows.length > 0) {
+          // compute aggregates
+          const codes = (rows as any[]).map(r => r.org_code as string);
+          try {
+            const agg = await aggregateOrgStats(codes);
+            setAggStats(agg as any);
+            setIsAggregateView(true);
+            setSelectedBroadcastTargets((rows as any[]).map(r => r.id));
+          } catch (e) {
+            console.warn('aggregateOrgStats failed', e);
+          }
+        } else {
+          setIsAggregateView(false);
+          setAggStats(null);
+        }
+      })
+      .catch((e) => {
+        console.warn('failed to list child organizations', e);
+        setChildOrgs([]);
+        setIsAggregateView(false);
+        setAggStats(null);
+      });
+  }, [communityId]);
+
+  // load data for the currently viewed organization (or aggregate)
+  useEffect(() => {
+    if (!communityId) return;
+    const id = viewOrgId === 'ALL' ? communityId : viewOrgId;
+    // update orgName if viewing a specific child
+    if (id === 'ALL') {
+      setOrgName(parentOrgName);
+    } else {
+      const org = StorageService.getOrganization(id);
+      if (org) setOrgName(org.name);
+    }
+
+    // live data fetch same as before but using dynamic id
+    setMembers(normalizeMembers(StorageService.getOrgMembers(id) as any[]));
+    StorageService.fetchOrgMembersRemote(id).then(({ members, fromCache }) => {
+      setMembers(normalizeMembers(members as any[]));
+      setMembersFallback(fromCache);
+    }).catch(() => setMembersFallback(true));
+
+    StorageService.fetchOrgInventoryRemote(id).then(({ inventory, fromCache }) => {
+      setInventory(inventory);
+      setInventoryFallback(fromCache);
+    });
+
+    listRequests(id)
+      .then((data) => {
+        setRequestsFallback(false);
+        setRequests(data);
+      })
+      .catch(() => {
+        setRequestsFallback(true);
+        setRequests(StorageService.getOrgReplenishmentRequests(id));
+      });
+
+    StorageService.fetchMemberStatus(id).then((resp) => {
+      if (resp?.counts) setStatusCounts(resp.counts);
+      if (resp?.members?.length) setMembers(normalizeMembers(resp.members as any[]));
+    });
+
+    fetchOrgOutreachFlags(id)
+      .then((rows) => setOutreachFlags(rows as OutreachFlagRow[]))
+      .catch(() => setOutreachFlags([]));
+
+    fetchOrgMemberPreparednessNeeds(id)
+      .then((rows) => setMemberNeeds(rows as MemberPreparednessNeedRow[]))
+      .catch(() => setMemberNeeds([]));
+  }, [communityId, viewOrgId]);
+
+  const stats = isAggregateView && aggStats ? {
+    total: aggStats.memberCounts.total,
+    safe: aggStats.memberCounts.safe,
+    danger: aggStats.memberCounts.danger,
+    unknown: aggStats.memberCounts.unknown,
+  } : {
     total: members.length,
     safe: statusCounts.safe || members.filter(m => m.status === 'SAFE').length,
     danger: statusCounts.danger || members.filter(m => m.status === 'DANGER').length,
@@ -211,6 +277,10 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     setBroadcastDraft('');
     setBroadcastStep('COMPOSE');
     setModerationError(null);
+    if (isAggregateView) {
+      // default to all child orgs when composing
+      setSelectedBroadcastTargets(childOrgs.map(o => o.id));
+    }
     setShowBroadcastModal(true);
   };
 
@@ -260,13 +330,24 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     }
   };
 
-  const confirmBroadcast = () => {
-    if (broadcastDraft.trim()) {
-      // Scoped Update: Only updates for this Org
+  const confirmBroadcast = async () => {
+    if (!broadcastDraft.trim()) return;
+    if (isAggregateView) {
+      // broadcast to selected child organizations
+      const targets = childOrgs.filter(o => selectedBroadcastTargets.includes(o.id));
+      const codes = targets.map(o => o.org_code);
+      try {
+        await broadcastToOrgs(codes, broadcastDraft);
+        alert(`Broadcast sent to ${targets.length} organizations.`);
+      } catch (e) {
+        console.error('broadcastToOrgs failed', e);
+        alert('Failed to send broadcast to child orgs.');
+      }
+    } else {
       StorageService.updateOrgBroadcast(communityId, broadcastDraft);
-      setShowBroadcastModal(false);
       alert(`Broadcast sent to all members linked to ${orgName}.`);
     }
+    setShowBroadcastModal(false);
   };
 
   const handlePingMember = () => {
@@ -386,8 +467,38 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 text-sm text-brand-600 font-medium bg-brand-50 p-2 rounded-lg">
                     <Building2 size={16} />
-                    <span>Sending to members of <strong>{orgName}</strong></span>
+                    {isAggregateView ? (
+                      <span>
+                        Sending to <strong>{selectedBroadcastTargets.length} orgs</strong>
+                      </span>
+                    ) : (
+                      <span>Sending to members of <strong>{orgName}</strong></span>
+                    )}
                   </div>
+                  {isAggregateView && (
+                    <div className="mb-2">
+                      <p className="text-xs font-semibold">Select target organizations:</p>
+                      <div className="max-h-32 overflow-y-auto border border-slate-200 rounded p-2">
+                        {childOrgs.map(o => (
+                          <label key={o.id} className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={selectedBroadcastTargets.includes(o.id)}
+                              onChange={e => {
+                                if (e.target.checked) {
+                                  setSelectedBroadcastTargets(prev => [...prev, o.id]);
+                                } else {
+                                  setSelectedBroadcastTargets(prev => prev.filter(id => id !== o.id));
+                                }
+                              }}
+                            />
+                            {o.name}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <Textarea 
                     label="Message Content"
                     placeholder="e.g., Food distribution starts at 2PM in the main hall..."
@@ -435,6 +546,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
                       fullWidth 
                       className="bg-brand-600 hover:bg-brand-700 text-white font-bold"
                       onClick={confirmBroadcast}
+                      disabled={isAggregateView && selectedBroadcastTargets.length === 0}
                     >
                       SEND NOW
                     </Button>
@@ -474,7 +586,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
         <div className="bg-slate-900 text-white p-3 rounded-xl mb-4 flex items-center justify-between shadow-md">
            <div>
              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{t('org.code')}</p>
-             <p className="text-xl font-mono font-black tracking-widest text-brand-400">{communityId}</p>
+             <p className="text-xl font-mono font-black tracking-widest text-brand-400">{viewOrgId === 'ALL' ? communityId : viewOrgId}</p>
            </div>
            <Button 
              size="sm" 
@@ -484,6 +596,37 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
              <Copy size={16} className="mr-2" /> {t('org.copy')}
            </Button>
         </div>
+
+        {/* child organization selector */}
+        {childOrgs.length > 0 && (
+          <div className="mb-2 flex items-center gap-2">
+            <label className="text-xs font-semibold">View:</label>
+            <select
+              value={viewOrgId}
+              onChange={e => setViewOrgId(e.target.value as string)}
+              className="text-sm border border-slate-300 rounded px-2 py-1"
+            >
+              <option value="ALL">All ({childOrgs.length})</option>
+              {childOrgs.map(o => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* aggregated stats (parent only) */}
+        {isAggregateView && aggStats && (
+          <div className="mb-2 p-2 bg-blue-50 border border-blue-100 rounded text-sm">
+            <div className="flex justify-between">
+              <span className="font-bold">Combined Members:</span>
+              <span>{aggStats.memberCounts.total} (safe {aggStats.memberCounts.safe}, danger {aggStats.memberCounts.danger})</span>
+            </div>
+            <div className="flex justify-between mt-1">
+              <span className="font-bold">Inventory Totals:</span>
+              <span>W:{aggStats.inventory.water} F:{aggStats.inventory.food} B:{aggStats.inventory.blankets} M:{aggStats.inventory.medicalKits}</span>
+            </div>
+          </div>
+        )}
 
         {/* Quick Stats */}
         <div className="grid grid-cols-3 gap-2">
