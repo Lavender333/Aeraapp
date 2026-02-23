@@ -1,0 +1,1 @@
+System.register(["./index-legacy-DcYQpct2.js"],function(e,s){"use strict";var t;return{setters:[e=>{t=e.N}],execute:function(){e("s",t("https://placeholder.supabase.co","placeholder",{auth:{persistSession:!0,autoRefreshToken:!0}}))}}});
