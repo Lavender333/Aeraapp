@@ -82,6 +82,27 @@ AS $$
   );
 $$;
 
+-- Is a target org either the user's org or a child of it?
+-- Used to support parent organizations overseeing child organizations.
+CREATE OR REPLACE FUNCTION public.org_in_scope(target_org_id uuid)
+RETURNS BOOLEAN
+LANGUAGE SQL
+STABLE
+SECURITY DEFINER
+SET search_path = public
+SET row_security = off
+AS $$
+  SELECT (
+    target_org_id = public.user_org_id()
+    OR EXISTS (
+      SELECT 1
+      FROM organizations o
+      WHERE o.id = target_org_id
+        AND o.parent_org_id = public.user_org_id()
+    )
+  );
+$$;
+
 -- =====================================================
 -- DROP LEGACY POLICIES (cleanup for lint)
 -- =====================================================
@@ -306,17 +327,20 @@ DROP POLICY IF EXISTS "Admins can update any inventory" ON inventory;
 
 CREATE POLICY "Inventory can view"
   ON inventory FOR SELECT
-  USING (org_id = public.user_org_id() OR public.is_admin());
+  USING (
+    public.is_admin()
+    OR (public.is_institution_admin() AND public.org_in_scope(org_id))
+  );
 
 CREATE POLICY "Inventory can update"
   ON inventory FOR UPDATE
   USING (
     public.is_admin()
-    OR (org_id = public.user_org_id() AND public.is_institution_admin())
+    OR (public.is_institution_admin() AND public.org_in_scope(org_id))
   )
   WITH CHECK (
     public.is_admin()
-    OR (org_id = public.user_org_id() AND public.is_institution_admin())
+    OR (public.is_institution_admin() AND public.org_in_scope(org_id))
   );
 
 -- Auto-insert is handled by trigger, but allow admins to insert
@@ -339,20 +363,24 @@ DROP POLICY IF EXISTS "Contractors can update requests" ON replenishment_request
 CREATE POLICY "Replenishment requests can view"
   ON replenishment_requests FOR SELECT
   USING (
-    org_id = public.user_org_id()
-    OR public.is_admin()
+    public.is_admin()
+    OR (public.is_institution_admin() AND public.org_in_scope(org_id))
     OR public.user_role() IN ('CONTRACTOR', 'LOCAL_AUTHORITY')
   );
 
 CREATE POLICY "Replenishment requests can insert"
   ON replenishment_requests FOR INSERT
-  WITH CHECK (org_id = public.user_org_id() OR public.is_admin());
+  WITH CHECK (
+    public.is_admin()
+    OR (public.is_institution_admin() AND public.org_in_scope(org_id))
+  );
 
 CREATE POLICY "Replenishment requests can update"
   ON replenishment_requests FOR UPDATE
   USING (
-    org_id = public.user_org_id()
-    OR public.user_role() IN ('CONTRACTOR', 'LOCAL_AUTHORITY', 'ADMIN')
+    public.is_admin()
+    OR (public.is_institution_admin() AND public.org_in_scope(org_id))
+    OR public.user_role() IN ('CONTRACTOR', 'LOCAL_AUTHORITY')
   );
 
 -- =====================================================
@@ -368,18 +396,27 @@ DROP POLICY IF EXISTS "Admins can insert any member status" ON member_statuses;
 CREATE POLICY "Member statuses can view"
   ON member_statuses FOR SELECT
   USING (
-    org_id = public.user_org_id()
-    OR public.user_role() IN ('ADMIN', 'FIRST_RESPONDER', 'LOCAL_AUTHORITY')
+    public.user_role() IN ('ADMIN', 'FIRST_RESPONDER', 'LOCAL_AUTHORITY')
+    OR (public.is_institution_admin() AND public.org_in_scope(org_id))
   );
 
 CREATE POLICY "Member statuses can update"
   ON member_statuses FOR UPDATE
-  USING (org_id = public.user_org_id())
-  WITH CHECK (org_id = public.user_org_id());
+  USING (
+    public.is_admin()
+    OR (public.is_institution_admin() AND public.org_in_scope(org_id))
+  )
+  WITH CHECK (
+    public.is_admin()
+    OR (public.is_institution_admin() AND public.org_in_scope(org_id))
+  );
 
 CREATE POLICY "Member statuses can insert"
   ON member_statuses FOR INSERT
-  WITH CHECK (org_id = public.user_org_id() OR public.is_admin());
+  WITH CHECK (
+    public.is_admin()
+    OR (public.is_institution_admin() AND public.org_in_scope(org_id))
+  );
 
 -- =====================================================
 -- VITALS TABLE RLS
@@ -494,22 +531,28 @@ DROP POLICY IF EXISTS "Admins can insert broadcasts" ON broadcasts;
 
 CREATE POLICY "Broadcasts can view"
   ON broadcasts FOR SELECT
-  USING (org_id = public.user_org_id() OR public.is_admin());
+  USING (
+    public.is_admin()
+    OR (public.is_institution_admin() AND public.org_in_scope(org_id))
+  );
 
 CREATE POLICY "Broadcasts can update"
   ON broadcasts FOR UPDATE
   USING (
     public.is_admin()
-    OR (org_id = public.user_org_id() AND public.is_institution_admin())
+    OR (public.is_institution_admin() AND public.org_in_scope(org_id))
   )
   WITH CHECK (
     public.is_admin()
-    OR (org_id = public.user_org_id() AND public.is_institution_admin())
+    OR (public.is_institution_admin() AND public.org_in_scope(org_id))
   );
 
 CREATE POLICY "Broadcasts can insert"
   ON broadcasts FOR INSERT
-  WITH CHECK (public.is_admin());
+  WITH CHECK (
+    public.is_admin()
+    OR (public.is_institution_admin() AND public.org_in_scope(org_id))
+  );
 
 -- =====================================================
 -- HELP_REQUESTS TABLE RLS
@@ -567,8 +610,8 @@ DROP POLICY IF EXISTS "Admins can delete members" ON members;
 CREATE POLICY "Members can view"
   ON members FOR SELECT
   USING (
-    org_id = public.user_org_id()
-    OR public.is_admin()
+    public.is_admin()
+    OR (public.is_institution_admin() AND public.org_in_scope(org_id))
     OR (select auth.role()) = 'dashboard_user'
   );
 
@@ -576,25 +619,25 @@ CREATE POLICY "Members can insert"
   ON members FOR INSERT
   WITH CHECK (
     public.is_admin()
-    OR (org_id = public.user_org_id() AND public.is_institution_admin())
+    OR (public.is_institution_admin() AND public.org_in_scope(org_id))
   );
 
 CREATE POLICY "Members can update"
   ON members FOR UPDATE
   USING (
     public.is_admin()
-    OR (org_id = public.user_org_id() AND public.is_institution_admin())
+    OR (public.is_institution_admin() AND public.org_in_scope(org_id))
   )
   WITH CHECK (
     public.is_admin()
-    OR (org_id = public.user_org_id() AND public.is_institution_admin())
+    OR (public.is_institution_admin() AND public.org_in_scope(org_id))
   );
 
 CREATE POLICY "Members can delete"
   ON members FOR DELETE
   USING (
     public.is_admin()
-    OR (org_id = public.user_org_id() AND public.is_institution_admin())
+    OR (public.is_institution_admin() AND public.org_in_scope(org_id))
   );
 
 -- =====================================================
