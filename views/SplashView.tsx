@@ -1,10 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { Button } from '../components/Button';
-import { ShieldAlert, Globe, Presentation, Download } from 'lucide-react';
+import { Presentation, Download } from 'lucide-react';
+import splashLogo from '../IMG_5373-2.png';
 import { t, LanguageCode } from '../services/translations';
 import { StorageService } from '../services/storage';
 import { downloadAdminPresentationPptx } from '../services/presentationExport';
+import { normalizeUserRole } from '../services/roles';
 
 interface SplashViewProps {
   onEnter: () => void;
@@ -15,7 +17,7 @@ interface SplashViewProps {
 // NOTE: We need to update the prop signature in App.tsx to pass the presentation handler
 export const SplashView: React.FC<SplashViewProps & { onPresentation?: () => void; onFinance?: () => void }> = ({ onEnter, onPresentation, onFinance }) => {
   const profile = StorageService.getProfile();
-  const isAdmin = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(String(profile?.role || '').toUpperCase());
+  const isAdmin = normalizeUserRole(profile?.role) !== 'GENERAL_USER';
   const [lang, setLang] = useState<LanguageCode>('en');
 
   useEffect(() => {
@@ -54,7 +56,7 @@ export const SplashView: React.FC<SplashViewProps & { onPresentation?: () => voi
       <div className="relative z-10 flex flex-col items-center animate-fade-in space-y-8 max-w-sm w-full">
         
         <div className="bg-white p-6 rounded-3xl shadow-xl shadow-brand-500/10 mb-4 animate-slide-up">
-          <ShieldAlert size={64} className="text-brand-600" />
+          <img src={splashLogo} alt="AERA splash logo" className="w-24 h-24 object-cover rounded-2xl mx-auto" />
         </div>
 
         <div className="space-y-2 animate-slide-up" style={{ animationDelay: '100ms' }}>
