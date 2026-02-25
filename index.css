@@ -1,6 +1,26 @@
-/* Base styles placeholder to avoid 404 in production */
 :root {
   color-scheme: light;
+  --bg-app: #F6F8F7;
+  --card-bg: #FFFFFF;
+  --border-default: #E5ECEA;
+  --text-primary: #1F2937;
+  --text-secondary: #374151;
+  --emerald-primary: #2F7A64;
+  --red-critical: #B91C1C;
+  --amber-warning: #FCD34D;
+  --focus-ring: #94A3B8;
+}
+
+html,
+body,
+#root {
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+}
+
+[class*="bg-gradient"] {
+  background-image: none !important;
 }
 
 @keyframes aeraFadeIn {

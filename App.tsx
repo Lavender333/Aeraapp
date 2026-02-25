@@ -76,7 +76,7 @@ class ViewErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <div className="min-h-screen flex items-center justify-center p-6" style={{ backgroundColor: 'var(--bg-app)' }}>
           <div className="max-w-sm w-full bg-white border border-red-200 rounded-2xl p-5 shadow-sm">
             <h2 className="text-lg font-bold text-red-700 mb-2">Screen failed to load</h2>
             <p className="text-sm text-slate-600 mb-4">{this.state.message || 'An unexpected error occurred in this view.'}</p>
@@ -252,7 +252,7 @@ export default function App() {
                   currentView !== 'PRIVACY_POLICY';
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-slate-50 shadow-2xl relative overflow-hidden md:border-x md:border-slate-200 print:max-w-none print:w-full print:h-auto print:overflow-visible print:shadow-none print:border-0">
+    <div className="max-w-md mx-auto min-h-screen shadow-2xl relative overflow-hidden md:border-x md:border-slate-200 print:max-w-none print:w-full print:h-auto print:overflow-visible print:shadow-none print:border-0" style={{ backgroundColor: 'var(--bg-app)' }}>
       {showSetupNotice && (
         <div className="absolute top-0 inset-x-0 z-50">
           <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2 text-xs text-center">
@@ -263,7 +263,7 @@ export default function App() {
       <ViewErrorBoundary onRecover={() => setView('DASHBOARD')}>
         <Suspense
           fallback={
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+            <div className="min-h-screen flex items-center justify-center p-6" style={{ backgroundColor: 'var(--bg-app)' }}>
               <p className="text-sm font-medium text-slate-500">Loading…</p>
             </div>
           }
