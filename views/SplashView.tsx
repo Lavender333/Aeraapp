@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Button } from '../components/Button';
-import splashLogo from '../c77ca1eb-bbca-4161-878c-0c47f2e96128_removalai_preview.png';
+import splashLogo from '../logo4.png';
 
 interface SplashViewProps {
   onEnter: () => void;
@@ -17,31 +17,31 @@ export const SplashView: React.FC<SplashViewProps> = ({ onEnter, onPrivacy }) =>
         </div>
 
         <div className="aera-fade aera-delay-1 space-y-2">
-          <h1 className="text-[36px] leading-tight tracking-[-0.01em] font-semibold text-[#0B3D2E]">AERA</h1>
-          <p className="text-[12px] tracking-[0.14em] uppercase font-medium text-[#355E54]">
+          <h1 className="text-[36px] leading-tight tracking-[-0.01em] font-semibold text-[#1F2937]">AERA</h1>
+          <p className="text-[12px] tracking-[0.14em] uppercase font-medium text-[#4B5563]">
             Accelerated Emergency Response
           </p>
         </div>
 
-        <p className="aera-fade aera-delay-2 mt-6 text-[20px] leading-[1.35] tracking-[-0.01em] font-normal text-[#355E54]">
+        <p className="aera-fade aera-delay-2 mt-6 text-[20px] leading-[1.35] tracking-[-0.01em] font-normal text-[#4B5563]">
           Preparedness, organized.
         </p>
 
-        <div className="aera-fade aera-delay-3 w-full mt-8 max-w-[320px]">
+        <div className="aera-fade aera-delay-3 w-full mt-10 max-w-[320px]">
           <Button
             onClick={onEnter}
             size="xl"
             fullWidth
-            className="h-[56px] rounded-xl bg-[#107A5D] hover:bg-[#0E6A52] text-white font-semibold text-[17px] leading-none tracking-[0.01em] shadow-[0_4px_10px_rgba(16,122,93,0.14)] focus:ring-[#107A5D]"
+            className="h-[56px] rounded-xl bg-[#2F7A64] hover:bg-[#296A57] text-white font-semibold text-[17px] leading-none tracking-[0.01em] shadow-[0_6px_16px_rgba(47,122,100,0.10)] focus:ring-[#2F7A64]"
           >
             Continue
           </Button>
 
-          <p className="mt-4 text-[12px] leading-snug text-[#4B5D58]">Not a substitute for 911</p>
+          <p className="mt-4 text-[12px] leading-snug text-[#6B7280]">Not a substitute for 911</p>
           <button
             type="button"
             onClick={() => onPrivacy?.()}
-            className="mt-2 text-[11px] text-[#355E54] underline underline-offset-2 hover:text-[#0B3D2E] focus:outline-none focus:ring-2 focus:ring-[#107A5D] focus:ring-offset-2 rounded"
+            className="mt-2 text-[12px] text-[#6B7280] hover:underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-[#2F7A64] focus:ring-offset-2 rounded"
           >
             Privacy &amp; Consent
           </button>
