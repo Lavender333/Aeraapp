@@ -6,12 +6,9 @@ import splashLogo from '../Logo2.png';
 interface SplashViewProps {
   onEnter: () => void;
   onPrivacy?: () => void;
-  onPresentation?: () => void; // Optional if not passed by App yet
-  onFinance?: () => void;
 }
 
-// NOTE: We need to update the prop signature in App.tsx to pass the presentation handler
-export const SplashView: React.FC<SplashViewProps & { onPresentation?: () => void; onFinance?: () => void }> = ({ onEnter, onPrivacy }) => {
+export const SplashView: React.FC<SplashViewProps> = ({ onEnter, onPrivacy }) => {
   return (
     <div className="min-h-screen bg-[#F6F8F7] flex items-center justify-center px-6 py-10">
       <div className="w-full max-w-[420px] text-center flex flex-col items-center">
