@@ -1492,6 +1492,24 @@ export async function requestHouseholdJoinByCode(code: string): Promise<{
     const ownerConfigRpcError =
       rpcMessage.includes('household owner is not configured') ||
       rpcDetails.includes('household owner is not configured');
+    const membershipConflictError =
+      rpcMessage.includes('leave your current household before submitting a join request') ||
+      rpcMessage.includes('already in a household') ||
+      rpcDetails.includes('already in a household');
+
+    if (membershipConflictError) {
+      try {
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (!authError && authData?.user?.id) {
+          const latestMembership = await getCurrentHouseholdMembership(authData.user.id);
+          if (!latestMembership?.household_id) {
+            return fallbackRequestJoinByCode();
+          }
+        }
+      } catch {
+        // fall through to existing error handling
+      }
+    }
 
     if (!missingRpc && !ownerConfigRpcError && !isTransportFailure) throw error;
     return fallbackRequestJoinByCode();

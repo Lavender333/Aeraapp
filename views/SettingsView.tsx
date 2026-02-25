@@ -1229,8 +1229,17 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setHouseholdCodeSuccess(null);
 
     if (profile.householdId) {
-      setHouseholdCodeError('Leave your current household before submitting a join request.');
-      return;
+      try {
+        const latestSummary = await fetchHouseholdForCurrentUser();
+        if (latestSummary?.householdId) {
+          setHouseholdCodeError('Leave your current household before submitting a join request.');
+          return;
+        }
+        clearHouseholdSummary();
+      } catch {
+        setHouseholdCodeError('Unable to verify household status right now. Please try again.');
+        return;
+      }
     }
 
     const normalized = householdCodeInput.trim().toUpperCase();
