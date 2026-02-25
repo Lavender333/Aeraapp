@@ -24,7 +24,7 @@ export const PrivacyPolicyView: React.FC<PrivacyPolicyViewProps> = ({ setView })
             <p className="text-xs text-slate-500">Last updated: February 8, 2026</p>
           </div>
         </div>
-        <div className="p-2 rounded-full bg-emerald-50 text-emerald-700">
+        <div className="p-2 rounded-full border border-slate-200 text-slate-700 bg-white">
           <ShieldCheck size={20} />
         </div>
       </div>

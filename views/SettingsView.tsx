@@ -318,6 +318,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [vitalsSaveError, setVitalsSaveError] = useState<string | null>(null);
   const [savedSection, setSavedSection] = useState<SettingsAccordionKey | null>(null);
   const saveIndicatorTimeoutRef = useRef<number | null>(null);
+  const [languageUpdatedMessage, setLanguageUpdatedMessage] = useState<string | null>(null);
+  const languageUpdatedTimeoutRef = useRef<number | null>(null);
   const [householdCodeInput, setHouseholdCodeInput] = useState('');
   const [householdCodeError, setHouseholdCodeError] = useState<string | null>(null);
   const [householdCodeSuccess, setHouseholdCodeSuccess] = useState<string | null>(null);
@@ -419,6 +421,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     return () => {
       if (saveIndicatorTimeoutRef.current) {
         window.clearTimeout(saveIndicatorTimeoutRef.current);
+      }
+      if (languageUpdatedTimeoutRef.current) {
+        window.clearTimeout(languageUpdatedTimeoutRef.current);
       }
     };
   }, []);
@@ -1746,8 +1751,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       StorageService.saveProfile(updated);
       return updated;
     });
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 1000);
+    setLanguageUpdatedMessage('Language updated');
+    if (languageUpdatedTimeoutRef.current) {
+      window.clearTimeout(languageUpdatedTimeoutRef.current);
+    }
+    languageUpdatedTimeoutRef.current = window.setTimeout(() => {
+      setLanguageUpdatedMessage(null);
+      languageUpdatedTimeoutRef.current = null;
+    }, 1500);
   };
 
   const handleMarkFulfilled = (requestId: string) => {
@@ -2818,38 +2829,50 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           <h2 className="text-lg font-semibold text-slate-800">{t('settings.language')}</h2>
         </div>
         
-        <div className="flex gap-2">
+        <div role="radiogroup" aria-label="Language" className="flex gap-2">
           <button 
             onClick={() => changeLanguage('en')}
-            className={`language-row flex-1 py-3 px-4 rounded-xl border-2 font-bold transition-all ${
+            role="radio"
+            aria-checked={profile.language === 'en'}
+            className={`language-row flex-1 min-h-[48px] px-4 rounded-xl border font-bold transition-all flex items-center justify-between ${
               profile.language === 'en' 
-                ? 'border-indigo-600 bg-indigo-50 text-indigo-800' 
+                ? 'border-[#2F7A64] bg-white text-slate-900' 
                 : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
             }`}
           >
-            English
+            <span>English</span>
+            {profile.language === 'en' && <Check size={16} className="text-[#2F7A64]" />}
           </button>
           <button 
             onClick={() => changeLanguage('es')}
-            className={`language-row flex-1 py-3 px-4 rounded-xl border-2 font-bold transition-all ${
+            role="radio"
+            aria-checked={profile.language === 'es'}
+            className={`language-row flex-1 min-h-[48px] px-4 rounded-xl border font-bold transition-all flex items-center justify-between ${
               profile.language === 'es' 
-                ? 'border-indigo-600 bg-indigo-50 text-indigo-800' 
+                ? 'border-[#2F7A64] bg-white text-slate-900' 
                 : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
             }`}
           >
-            Español
+            <span>Español</span>
+            {profile.language === 'es' && <Check size={16} className="text-[#2F7A64]" />}
           </button>
           <button 
             onClick={() => changeLanguage('fr')}
-            className={`language-row flex-1 py-3 px-4 rounded-xl border-2 font-bold transition-all ${
+            role="radio"
+            aria-checked={profile.language === 'fr'}
+            className={`language-row flex-1 min-h-[48px] px-4 rounded-xl border font-bold transition-all flex items-center justify-between ${
               profile.language === 'fr' 
-                ? 'border-indigo-600 bg-indigo-50 text-indigo-800' 
+                ? 'border-[#2F7A64] bg-white text-slate-900' 
                 : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
             }`}
           >
-            Français
+            <span>Français</span>
+            {profile.language === 'fr' && <Check size={16} className="text-[#2F7A64]" />}
           </button>
         </div>
+        {languageUpdatedMessage && (
+          <p className="font-medium" style={{ color: '#2F7A64', fontSize: '14px' }}>{languageUpdatedMessage}</p>
+        )}
       </section>
 
       {isAdmin && (
@@ -3957,20 +3980,32 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           </div>
           <div>
             <h2 className="text-lg font-semibold text-slate-800">Legal &amp; Privacy</h2>
-            <p className="text-xs text-slate-500">Privacy & consent</p>
           </div>
         </div>
-        <Button
-          onClick={() => {
-            sessionStorage.setItem('privacyReturnView', 'SETTINGS');
-            setView('PRIVACY_POLICY');
-          }}
-          variant="outline"
-          className="w-full justify-between border-slate-300 hover:bg-slate-50"
-        >
-          <span>View Privacy & Consent</span>
-          <FileText size={18} />
-        </Button>
+        <div className="border border-slate-200 rounded-xl overflow-hidden">
+          <button
+            type="button"
+            onClick={() => {
+              sessionStorage.setItem('privacyReturnView', 'SETTINGS');
+              setView('PRIVACY_POLICY');
+            }}
+            className="w-full px-4 py-3 flex justify-between items-center border-b border-[#E5ECEA] text-left hover:bg-slate-50"
+          >
+            <span className="text-sm font-medium text-slate-800">Privacy Notice</span>
+            <FileText size={16} className="text-slate-500" />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              sessionStorage.setItem('privacyReturnView', 'SETTINGS');
+              setView('PRIVACY_POLICY');
+            }}
+            className="w-full px-4 py-3 flex justify-between items-center border-b border-[#E5ECEA] text-left hover:bg-slate-50"
+          >
+            <span className="text-sm font-medium text-slate-800">Preparedness Data Consent</span>
+            <FileText size={16} className="text-slate-500" />
+          </button>
+        </div>
       </section>
 
       <div ref={logoutSectionRef} className="space-y-4 pt-4 border-t border-slate-200 order-80">
