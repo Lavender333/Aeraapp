@@ -209,7 +209,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     .join(', ');
   const householdHealthSummary = useMemo(() => {
     const members = Array.isArray(profile.household) ? profile.household : [];
-    const householdSize = Math.max(1, members.length + 1);
+    const householdSize = Math.max(1, Number(profile.householdMembers) || members.length + 1);
     const hasMemberNeeds = (needs: any) => {
       if (Array.isArray(needs)) return needs.length > 0;
       return String(needs || '').trim().length > 0;
@@ -242,6 +242,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     };
   }, [
     profile.household,
+    profile.householdMembers,
     profile.medicationDependency,
     profile.insulinDependency,
     profile.oxygenPoweredDevice,
@@ -2971,7 +2972,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         </button>
 
         {!expandedSections.household && (
-          <p className="text-xs text-slate-500">{Math.max(1, Number(profile.householdMembers) || 1)} members • Role: {profile.householdRole || 'OWNER'}</p>
+          <div className="space-y-2">
+            <p className="text-xs text-slate-500">{Math.max(1, Number(profile.householdMembers) || 1)} members (including dependents) • Role: {profile.householdRole || 'OWNER'}</p>
+            {profile.householdRole === 'OWNER' && pendingOwnerRequests.length > 0 && (
+              <p className="text-xs font-semibold text-amber-700">
+                New join requests waiting — tap Show more to review.
+              </p>
+            )}
+          </div>
         )}
         {autoSaveSuccess && savingSection === 'household' && (
           <p className="text-xs text-green-600 font-medium">{autoSaveSuccess}</p>
@@ -3040,6 +3048,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                     <div>
                       <p className="text-sm font-semibold text-slate-900">{member.fullName}</p>
                       {member.email && <p className="text-xs text-slate-500">{member.email}</p>}
+                      {Number(member.dependentCount || 0) > 0 && (
+                        <p className="text-[11px] text-slate-500">+{member.dependentCount} dependent{member.dependentCount === 1 ? '' : 's'}</p>
+                      )}
                     </div>
                     <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${member.role === 'OWNER' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}`}>
                       {member.role}
@@ -3059,7 +3070,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               readOnly
               className="bg-slate-50"
             />
-            <p className="text-[11px] text-slate-500 mt-1">Includes you as the first household occupant.</p>
+            <p className="text-[11px] text-slate-500 mt-1">Includes connected accounts and their dependents.</p>
           </div>
         </div>
 
