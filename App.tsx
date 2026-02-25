@@ -271,7 +271,7 @@ export default function App() {
           {renderView()}
         </Suspense>
       </ViewErrorBoundary>
-      {!showNav && currentView !== 'HELP_WIZARD' && currentView !== 'REGISTRATION' && currentView !== 'ACCOUNT_SETUP' && (
+      {!showNav && currentView !== 'SPLASH' && currentView !== 'HELP_WIZARD' && currentView !== 'REGISTRATION' && currentView !== 'ACCOUNT_SETUP' && (
         <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center print:hidden">
           <button
             onClick={() => {
