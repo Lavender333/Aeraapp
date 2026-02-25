@@ -3616,7 +3616,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {/* Security */}
-      <section ref={securitySectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 order-40">
+      <section ref={securitySectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 border-l-4 border-l-[#B91C1C] order-40">
         <button
           id={accordionButtonIds.security}
           type="button"
@@ -3635,7 +3635,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {savingSection === 'security' && <Loader2 size={18} className="text-red-600 animate-spin" />}
+            {savingSection === 'security' && <Loader2 size={18} className="text-slate-600 animate-spin" />}
             <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.security ? 'rotate-180' : ''}`} />
           </div>
         </button>
@@ -3663,7 +3663,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             }}
           >
 
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+        <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
           <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">ZIP Code</p>
           <p className="text-sm font-semibold text-slate-900 mt-1">{profile.zipCode || 'Not detected yet'}</p>
           <p className="text-xs text-slate-500 mt-1">From your Home Address</p>
@@ -3672,7 +3672,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         <div className="space-y-3">
           <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">Medical</p>
           <div className="grid md:grid-cols-2 gap-3">
-            <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+            <label className="flex items-center justify-between rounded-lg border border-[#E5ECEA] p-4 min-h-[48px] cursor-pointer">
               <span className="text-sm font-medium text-slate-700">Medication Dependency</span>
               <input
                 type="checkbox"
@@ -3680,7 +3680,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 onChange={(e) => updateProfile('medicationDependency', e.target.checked)}
               />
             </label>
-            <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+            <label className="flex items-center justify-between rounded-lg border border-[#E5ECEA] p-4 min-h-[48px] cursor-pointer">
               <span className="text-sm font-medium text-slate-700">Insulin Dependency</span>
               <input
                 type="checkbox"
@@ -3688,7 +3688,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 onChange={(e) => updateProfile('insulinDependency', e.target.checked)}
               />
             </label>
-            <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3 md:col-span-2">
+            <label className="flex items-center justify-between rounded-lg border border-[#E5ECEA] p-4 min-h-[48px] cursor-pointer md:col-span-2">
               <span className="text-sm font-medium text-slate-700">Oxygen / Powered Medical Device</span>
               <input
                 type="checkbox"
@@ -3697,12 +3697,19 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               />
             </label>
           </div>
+          {showMoreSections.security && (
+            <Textarea 
+              label="Anything else not listed above" 
+              value={profile.medicalNeeds}
+              onChange={(e) => updateProfile('medicalNeeds', e.target.value)}
+            />
+          )}
         </div>
 
         <div className="space-y-3">
           <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">Accessibility</p>
           <div className="grid md:grid-cols-2 gap-3">
-            <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+            <label className="flex items-center justify-between rounded-lg border border-[#E5ECEA] p-4 min-h-[48px] cursor-pointer">
               <span className="text-sm font-medium text-slate-700">Mobility Limitation</span>
               <input
                 type="checkbox"
@@ -3710,7 +3717,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 onChange={(e) => updateProfile('mobilityLimitation', e.target.checked)}
               />
             </label>
-            <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+            <label className="flex items-center justify-between rounded-lg border border-[#E5ECEA] p-4 min-h-[48px] cursor-pointer">
               <span className="text-sm font-medium text-slate-700">Transportation Access</span>
               <input
                 type="checkbox"
@@ -3718,7 +3725,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 onChange={(e) => updateProfile('transportationAccess', e.target.checked)}
               />
             </label>
-            <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3 md:col-span-2">
+            <label className="flex items-center justify-between rounded-lg border border-[#E5ECEA] p-4 min-h-[48px] cursor-pointer md:col-span-2">
               <span className="text-sm font-medium text-slate-700">Financial Strain</span>
               <input
                 type="checkbox"
@@ -3735,21 +3742,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           value={profile.petDetails}
           onChange={(e) => updateProfile('petDetails', e.target.value)}
         />
-        {showMoreSections.security && (
-          <Textarea 
-            label="Anything else not listed above" 
-            value={profile.medicalNeeds}
-            onChange={(e) => updateProfile('medicalNeeds', e.target.value)}
-          />
-        )}
 
         <div className="border-t border-slate-200 pt-4">
           <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wide">Final Step</p>
           <p className="text-sm font-bold text-slate-800 mt-1">Confirm preparedness consent</p>
         </div>
-        <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3">
+        <label className="flex items-start gap-3 rounded-lg border border-[#D6E0DD] bg-white p-3">
           <input
-            className="mt-1"
+            className="mt-1 accent-[#2F7A64]"
             type="checkbox"
             checked={Boolean(profile.consentPreparednessPlanning)}
             onChange={(e) => updateProfile('consentPreparednessPlanning', e.target.checked)}
