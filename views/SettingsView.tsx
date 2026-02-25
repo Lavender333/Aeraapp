@@ -12,7 +12,7 @@ import { listOrganizations as listOrganizationsSupabase } from '../services/supa
 import { subscribeToNotifications } from '../services/supabaseRealtime';
 import { isValidPhoneForInvite, validateHouseholdMembers } from '../services/validation';
 import { t } from '../services/translations';
-import { User, Bell, Lock, LogOut, Check, Save, Building2, ArrowLeft, ArrowRight, Link as LinkIcon, Loader2, HeartPulse, ShieldCheck, Users, ToggleLeft, ToggleRight, MoreVertical, Copy, CheckCircle, Database, X, XCircle, Globe, Search, Truck, Phone, Mail, MapPin, Power, Ban, Activity, Radio, AlertTriangle, HelpCircle, FileText, Printer, CheckSquare, Download, RefreshCcw, Clipboard, PenTool, ChevronDown } from 'lucide-react';
+import { User, Bell, Lock, LogOut, Check, Building2, ArrowLeft, ArrowRight, Link as LinkIcon, Loader2, HeartPulse, ShieldCheck, Users, ToggleLeft, ToggleRight, MoreVertical, Copy, CheckCircle, Database, X, XCircle, Globe, Search, Truck, Phone, Mail, MapPin, Power, Ban, Activity, Radio, AlertTriangle, HelpCircle, FileText, Printer, CheckSquare, Download, RefreshCcw, Clipboard, PenTool, ChevronDown } from 'lucide-react';
 
 // Phone Formatter Utility
 const formatPhoneNumber = (value: string) => {
@@ -304,7 +304,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [savingSection, setSavingSection] = useState<SettingsAccordionKey | null>(null);
   const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
   const [vitalsSaveError, setVitalsSaveError] = useState<string | null>(null);
-  const [autoSaveSuccess, setAutoSaveSuccess] = useState<string | null>(null);
+  const [savedSection, setSavedSection] = useState<SettingsAccordionKey | null>(null);
+  const saveIndicatorTimeoutRef = useRef<number | null>(null);
   const [householdCodeInput, setHouseholdCodeInput] = useState('');
   const [householdCodeError, setHouseholdCodeError] = useState<string | null>(null);
   const [householdCodeSuccess, setHouseholdCodeSuccess] = useState<string | null>(null);
@@ -350,18 +351,18 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const toggleSection = (section: SettingsAccordionKey) => {
-    const isClosing = expandedSections[section] === true;
-    
-    // Auto-save when closing a section
-    if (isClosing) {
-      if (section === 'profile' || section === 'contacts') {
-        handleProfileSave(section);
-      } else if (section === 'security' || section === 'household') {
-        handleVitalsSave(section);
-      }
-    }
-    
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const showSavedIndicator = (section: SettingsAccordionKey) => {
+    setSavedSection(section);
+    if (saveIndicatorTimeoutRef.current) {
+      window.clearTimeout(saveIndicatorTimeoutRef.current);
+    }
+    saveIndicatorTimeoutRef.current = window.setTimeout(() => {
+      setSavedSection((current) => (current === section ? null : current));
+      saveIndicatorTimeoutRef.current = null;
+    }, 1500);
   };
 
   const toggleShowMore = (section: SettingsAccordionKey) => {
@@ -401,6 +402,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setInviteStatusMessage(null);
     setVerifyError(null);
   };
+
+  useEffect(() => {
+    return () => {
+      if (saveIndicatorTimeoutRef.current) {
+        window.clearTimeout(saveIndicatorTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const saveVisibleSection = async () => {
     if (expandedSections.security || expandedSections.household) {
@@ -851,8 +860,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       });
       StorageService.saveProfile(profile);
       if (section) {
-        setAutoSaveSuccess('✓ Saved');
-        setTimeout(() => setAutoSaveSuccess(null), 2000);
+        showSavedIndicator(section);
       } else {
         setIsSaved(true);
         setTimeout(() => setIsSaved(false), 2000);
@@ -905,8 +913,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       setProfile(nextProfile);
       StorageService.saveProfile(nextProfile);
       if (section) {
-        setAutoSaveSuccess('✓ Saved');
-        setTimeout(() => setAutoSaveSuccess(null), 2000);
+        showSavedIndicator(section);
       } else {
         setIsSaved(true);
         setTimeout(() => setIsSaved(false), 2000);
@@ -2914,15 +2921,23 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         {!expandedSections.profile && (
           <p className="text-xs text-slate-500">{addressSummary ? `Address set • ${addressSummary}` : 'Address not set yet'}</p>
         )}
-        {autoSaveSuccess && savingSection === 'profile' && (
-          <p className="text-xs text-green-600 font-medium">{autoSaveSuccess}</p>
+        {savedSection === 'profile' && (
+          <p className="font-medium" style={{ color: '#2F7A64', fontSize: '14px' }}>✓ Saved</p>
         )}
 
         {expandedSections.profile && (
-          <div id={accordionPanelIds.profile} role="region" aria-labelledby={accordionButtonIds.profile}>
-            <p className="text-[11px] text-slate-500 flex items-center gap-1">
-              <Save size={12} /> Auto-saves when you collapse this section.
-            </p>
+          <div
+            id={accordionPanelIds.profile}
+            role="region"
+            aria-labelledby={accordionButtonIds.profile}
+            onBlurCapture={(event) => {
+              const target = event.target as HTMLElement;
+              const tag = target?.tagName;
+              if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+                void handleProfileSave('profile');
+              }
+            }}
+          >
             {showMoreSections.profile && <div className="text-xs text-slate-400 font-mono -mt-2 mb-1">ID: {profile.id}</div>}
 
             <Input 
@@ -3010,15 +3025,23 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.contacts ? 'rotate-180' : ''}`} />
           </div>
         </button>
-        {autoSaveSuccess && savingSection === 'contacts' && (
-          <p className="text-xs text-green-600 font-medium">{autoSaveSuccess}</p>
+        {savedSection === 'contacts' && (
+          <p className="font-medium" style={{ color: '#2F7A64', fontSize: '14px' }}>✓ Saved</p>
         )}
 
         {expandedSections.contacts && (
-          <div id={accordionPanelIds.contacts} role="region" aria-labelledby={accordionButtonIds.contacts}>
-            <p className="text-[11px] text-slate-500 flex items-center gap-1">
-              <Save size={12} /> Auto-saves when you collapse this section.
-            </p>
+          <div
+            id={accordionPanelIds.contacts}
+            role="region"
+            aria-labelledby={accordionButtonIds.contacts}
+            onBlurCapture={(event) => {
+              const target = event.target as HTMLElement;
+              const tag = target?.tagName;
+              if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+                void handleProfileSave('contacts');
+              }
+            }}
+          >
             <div className="space-y-3">
               <Input 
                 placeholder="Contact Name"
@@ -3086,15 +3109,23 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             )}
           </div>
         )}
-        {autoSaveSuccess && savingSection === 'household' && (
-          <p className="text-xs text-green-600 font-medium">{autoSaveSuccess}</p>
+        {savedSection === 'household' && (
+          <p className="font-medium" style={{ color: '#2F7A64', fontSize: '14px' }}>✓ Saved</p>
         )}
 
         {expandedSections.household && (
-          <div id={accordionPanelIds.household} role="region" aria-labelledby={accordionButtonIds.household}>
-        <p className="text-[11px] text-slate-500 flex items-center gap-1">
-          <Save size={12} /> Auto-saves when you collapse this section.
-        </p>
+          <div
+            id={accordionPanelIds.household}
+            role="region"
+            aria-labelledby={accordionButtonIds.household}
+            onBlurCapture={(event) => {
+              const target = event.target as HTMLElement;
+              const tag = target?.tagName;
+              if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+                void handleVitalsSave('household');
+              }
+            }}
+          >
 
         {/* 1. HOUSEHOLD MEMBERS - Primary Context First */}
         <div>
@@ -3540,15 +3571,23 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             Consent: {profile.consentPreparednessPlanning ? 'Provided' : 'Pending'} • ZIP: {profile.zipCode || 'Not detected'}
           </p>
         )}
-        {autoSaveSuccess && savingSection === 'security' && (
-          <p className="text-xs text-green-600 font-medium">{autoSaveSuccess}</p>
+        {savedSection === 'security' && (
+          <p className="font-medium" style={{ color: '#2F7A64', fontSize: '14px' }}>✓ Saved</p>
         )}
 
         {expandedSections.security && (
-          <div id={accordionPanelIds.security} role="region" aria-labelledby={accordionButtonIds.security}>
-        <p className="text-[11px] text-slate-500 flex items-center gap-1">
-          <Save size={12} /> Auto-saves when you collapse this section.
-        </p>
+          <div
+            id={accordionPanelIds.security}
+            role="region"
+            aria-labelledby={accordionButtonIds.security}
+            onBlurCapture={(event) => {
+              const target = event.target as HTMLElement;
+              const tag = target?.tagName;
+              if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+                void handleVitalsSave('security');
+              }
+            }}
+          >
 
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
           <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">ZIP Code</p>
