@@ -3058,7 +3058,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {/* Contacts */}
-      <section ref={contactsSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 order-30">
+      <section ref={contactsSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 border-l-4 border-l-[#B91C1C] order-30">
         <button
           id={accordionButtonIds.contacts}
           type="button"
@@ -3074,7 +3074,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <div>
               <h2 className="text-lg font-semibold text-slate-800">Emergancy Contact</h2>
               <p className="text-xs text-slate-500">
-                {profile.emergencyContactName ? `${profile.emergencyContactName} • ${profile.emergencyContactPhone || 'No phone'}` : 'Emergency contact not set'}
+                {profile.emergencyContactName ? (
+                  `${profile.emergencyContactName} • ${profile.emergencyContactPhone || 'No phone'}`
+                ) : (
+                  <span role="alert" className="inline-flex items-center gap-1 text-[#B91C1C]">
+                    <AlertTriangle size={12} />
+                    Emergency contact required
+                  </span>
+                )}
               </p>
             </div>
           </div>
