@@ -59,8 +59,8 @@ export const SplashView: React.FC<SplashViewProps & { onPresentation?: () => voi
 
       <div className="relative z-10 flex flex-col items-center animate-fade-in space-y-8 max-w-sm w-full">
         
-        <div className="bg-white p-6 rounded-3xl shadow-xl shadow-brand-500/10 mb-4 animate-slide-up">
-          <img src={splashLogo} alt="AERA splash logo" className="w-24 h-24 object-cover rounded-2xl mx-auto animate-float" />
+        <div className="mb-2 animate-slide-up">
+          <img src={splashLogo} alt="AERA splash logo" className="w-40 h-40 object-contain mx-auto animate-float" />
         </div>
 
         <div className="space-y-2 animate-slide-up" style={{ animationDelay: '100ms' }}>
