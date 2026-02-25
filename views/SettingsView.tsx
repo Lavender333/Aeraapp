@@ -3140,7 +3140,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {/* Household */}
-      <section ref={householdSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 order-20">
+      <section ref={householdSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 border-l-4 border-l-[#2F7A64] order-20">
         <button
           id={accordionButtonIds.household}
           type="button"
@@ -3194,7 +3194,18 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
         {/* 1. HOUSEHOLD MEMBERS - Primary Context First */}
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">Who Lives in Your Home</label>
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <label className="block text-sm font-medium text-slate-700">Who Lives in Your Home</label>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => toggleShowMore('household')}
+              className="h-12 border border-[#2F7A64] bg-white text-[#2F7A64] hover:bg-white font-semibold"
+            >
+              Add Member
+            </Button>
+          </div>
           <p className="text-xs text-slate-500 mb-2">Each member requires DOB in MM/DD/YYYY. Young children and seniors are flagged automatically.</p>
           <HouseholdManager 
             members={profile.household}
@@ -3205,7 +3216,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           {profile.householdRole === 'OWNER' && (
             <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 space-y-3">
               <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Household Health Summary</p>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
                 <div className="rounded-lg border border-slate-200 bg-white p-3">
                   <p className="text-[11px] font-semibold text-slate-700 uppercase">Mobility limited</p>
                   <p className="text-lg font-bold text-slate-900">{householdHealthSummary.mobilityCount}</p>
@@ -3216,8 +3227,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                   <p className="text-lg font-bold text-slate-900">{householdHealthSummary.medicalCount}</p>
                   <p className="text-[11px] text-slate-600">of {householdHealthSummary.householdSize} people</p>
                 </div>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
                   <p className="text-[11px] font-semibold text-slate-700 uppercase">Medication dep</p>
                   <p className="text-sm font-bold text-slate-900">{householdHealthSummary.medicationCount}</p>
@@ -3361,7 +3370,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <Button
               size="sm"
               variant="ghost"
-              className="text-red-600 hover:bg-red-50"
+              className="text-[#B91C1C] font-semibold hover:bg-red-50 hover:text-[#B91C1C]"
               onClick={handleLeaveHousehold}
               disabled={isLeavingHousehold || (profile.householdRole === 'OWNER' && transferCandidates.length > 0 && !selectedTransferCandidateId)}
             >
