@@ -2,3 +2,39 @@
 :root {
   color-scheme: light;
 }
+
+@keyframes aeraFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.aera-fade {
+  opacity: 0;
+  animation: aeraFadeIn 480ms ease-out forwards;
+}
+
+.aera-delay-1 {
+  animation-delay: 90ms;
+}
+
+.aera-delay-2 {
+  animation-delay: 180ms;
+}
+
+.aera-delay-3 {
+  animation-delay: 270ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aera-fade,
+  .aera-delay-1,
+  .aera-delay-2,
+  .aera-delay-3 {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+}

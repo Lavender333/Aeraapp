@@ -1,127 +1,53 @@
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Button } from '../components/Button';
-import { Presentation, Download } from 'lucide-react';
-import splashLogo from '../IMG_5373-2.png';
-import { t, LanguageCode } from '../services/translations';
-import { StorageService } from '../services/storage';
-import { downloadAdminPresentationPptx } from '../services/presentationExport';
-import { normalizeUserRole } from '../services/roles';
+import splashLogo from '../Logo2.png';
 
 interface SplashViewProps {
   onEnter: () => void;
+  onPrivacy?: () => void;
   onPresentation?: () => void; // Optional if not passed by App yet
   onFinance?: () => void;
 }
 
 // NOTE: We need to update the prop signature in App.tsx to pass the presentation handler
-export const SplashView: React.FC<SplashViewProps & { onPresentation?: () => void; onFinance?: () => void }> = ({ onEnter, onPresentation, onFinance }) => {
-  const profile = StorageService.getProfile();
-  const isAdmin = normalizeUserRole(profile?.role) !== 'GENERAL_USER';
-  const [lang, setLang] = useState<LanguageCode>('en');
-
-  useEffect(() => {
-    const loaded = StorageService.getProfile().language || 'en';
-    setLang(loaded);
-  }, []);
-
-  const changeLanguage = (l: LanguageCode) => {
-    const profile = StorageService.getProfile();
-    StorageService.saveProfile({ ...profile, language: l });
-    setLang(l);
-  };
-
-  const languageNames: Record<LanguageCode, string> = { en: 'English', es: 'Spanish', fr: 'French' };
-
+export const SplashView: React.FC<SplashViewProps & { onPresentation?: () => void; onFinance?: () => void }> = ({ onEnter, onPrivacy }) => {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-50 to-teal-100 flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
-      
-      {/* Abstract Background Shapes */}
-      <div className="absolute top-[-10%] left-[-10%] w-64 h-64 bg-brand-200/30 rounded-full blur-3xl animate-pulse" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-80 h-80 bg-blue-200/30 rounded-full blur-3xl animate-pulse delay-700" />
-
-      {/* Language Selector */}
-      <div className="absolute top-6 right-6 z-20 flex gap-2 bg-white/50 backdrop-blur-sm p-1 rounded-lg shadow-sm border border-white/50" role="group" aria-label="Language selector">
-         {(['en', 'es', 'fr'] as LanguageCode[]).map(l => (
-           <button
-             key={l}
-             onClick={() => changeLanguage(l)}
-             aria-label={`Switch to ${languageNames[l]}`}
-             aria-pressed={lang === l}
-             className={`px-3 py-1 rounded-md text-xs font-bold uppercase transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 ${
-               lang === l ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-white/50'
-             }`}
-           >
-             {l}
-           </button>
-         ))}
-      </div>
-
-      <div className="relative z-10 flex flex-col items-center animate-fade-in space-y-8 max-w-sm w-full">
-        
-        <div className="mb-2 animate-slide-up">
-          <img src={splashLogo} alt="AERA splash logo" className="w-40 h-40 object-contain mx-auto animate-float" />
+    <div className="min-h-screen bg-[#F6F8F7] flex items-center justify-center px-6 py-10">
+      <div className="w-full max-w-[420px] text-center flex flex-col items-center">
+        <div className="aera-fade mb-8">
+          <img src={splashLogo} alt="AERA logo" className="w-40 h-40 object-contain mx-auto" />
         </div>
 
-        <div className="space-y-2 animate-slide-up" style={{ animationDelay: '100ms' }}>
-          <h1 className="text-5xl font-extrabold text-slate-900 tracking-tight">AERA</h1>
-          <p className="text-slate-600 font-medium tracking-wide text-xs uppercase opacity-80">
+        <div className="aera-fade aera-delay-1 space-y-2">
+          <h1 className="text-[36px] leading-tight tracking-[-0.01em] font-semibold text-[#0B3D2E]">AERA</h1>
+          <p className="text-[12px] tracking-[0.14em] uppercase font-medium text-[#355E54]">
             Accelerated Emergency Response
           </p>
         </div>
 
-        <div className="space-y-1 text-slate-700 text-sm font-medium animate-slide-up whitespace-pre-wrap" style={{ animationDelay: '200ms' }}>
-          <p>{t('splash.motto').split('•').slice(0,2).join(' • ')}</p>
-          <p>{t('splash.motto').split('•').slice(2).join(' • ')}</p>
-        </div>
-
-        <p className="text-slate-500 text-base leading-relaxed animate-slide-up" style={{ animationDelay: '300ms' }}>
-          {t('splash.desc')}
+        <p className="aera-fade aera-delay-2 mt-6 text-[20px] leading-[1.35] tracking-[-0.01em] font-normal text-[#355E54]">
+          Preparedness, organized.
         </p>
 
-        <div className="w-full pt-4 animate-slide-up space-y-3" style={{ animationDelay: '400ms' }}>
-          <Button 
-            onClick={onEnter} 
-            size="xl" 
-            fullWidth 
-            className="shadow-lg shadow-brand-500/30 font-bold tracking-wide bg-gradient-to-r from-brand-600 via-emerald-500 to-brand-600 animate-gradient-x"
-            style={{ backgroundSize: '200% 200%' }}
+        <div className="aera-fade aera-delay-3 w-full mt-8 max-w-[320px]">
+          <Button
+            onClick={onEnter}
+            size="xl"
+            fullWidth
+            className="h-[56px] rounded-xl bg-[#107A5D] hover:bg-[#0E6A52] text-white font-semibold text-[17px] leading-none tracking-[0.01em] shadow-[0_4px_10px_rgba(16,122,93,0.14)] focus:ring-[#107A5D]"
           >
-            {t('splash.enter')}
+            Continue
           </Button>
-          
-          {onPresentation && isAdmin && (
-            <Button
-              onClick={onPresentation}
-              variant="secondary"
-              fullWidth
-              className="bg-white/70 hover:bg-white border-white/60 text-slate-700 font-bold tracking-wide shadow-sm"
-            >
-              <Presentation size={17} className="mr-2 text-brand-600" /> View Presentation
-            </Button>
-          )}
-          {isAdmin && (
-            <Button
-              onClick={() => { void downloadAdminPresentationPptx(); }}
-              variant="outline"
-              fullWidth
-              className="border-brand-200 text-brand-700 hover:bg-brand-50 font-bold tracking-wide shadow-sm"
-            >
-              <Download size={17} className="mr-2" /> Download .pptx
-            </Button>
-          )}
-          {onFinance && isAdmin && (
-            <Button 
-              onClick={onFinance} 
-              variant="outline"
-              fullWidth 
-              className="border-slate-300 text-slate-700 font-semibold"
-            >
-              <Presentation size={18} className="mr-2" /> Financial Dashboard
-            </Button>
-          )}
 
-          <p className="mt-4 text-xs text-slate-400">{t('splash.disclaimer')}</p>
+          <p className="mt-4 text-[12px] leading-snug text-[#4B5D58]">Not a substitute for 911</p>
+          <button
+            type="button"
+            onClick={() => onPrivacy?.()}
+            className="mt-2 text-[11px] text-[#355E54] underline underline-offset-2 hover:text-[#0B3D2E] focus:outline-none focus:ring-2 focus:ring-[#107A5D] focus:ring-offset-2 rounded"
+          >
+            Privacy &amp; Consent
+          </button>
         </div>
       </div>
     </div>

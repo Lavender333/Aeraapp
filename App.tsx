@@ -176,6 +176,7 @@ export default function App() {
       return (
         <SplashView
           onEnter={handleSplashComplete}
+          onPrivacy={() => setView('PRIVACY_POLICY')}
           onPresentation={() => setView('PRESENTATION')}
           onFinance={handleFinanceFromSplash}
         />
@@ -186,6 +187,7 @@ export default function App() {
         return (
           <SplashView
             onEnter={handleSplashComplete}
+            onPrivacy={() => setView('PRIVACY_POLICY')}
             onPresentation={() => setView('PRESENTATION')}
             onFinance={handleFinanceFromSplash}
           />
