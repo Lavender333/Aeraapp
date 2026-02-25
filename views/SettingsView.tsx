@@ -155,9 +155,6 @@ const US_STATE_CODES = [
 
 export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const trustedCommunityRef = useRef<HTMLElement | null>(null);
-  const languageSectionRef = useRef<HTMLElement | null>(null);
-  const legalSectionRef = useRef<HTMLElement | null>(null);
-  const logoutSectionRef = useRef<HTMLDivElement | null>(null);
   const profileSectionRef = useRef<HTMLElement | null>(null);
   const contactsSectionRef = useRef<HTMLElement | null>(null);
   const householdSectionRef = useRef<HTMLElement | null>(null);
@@ -381,23 +378,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   const toggleShowMore = (section: SettingsAccordionKey) => {
     setShowMoreSections((prev) => ({ ...prev, [section]: !prev[section] }));
-  };
-
-  const openSectionAndScroll = (section: SettingsAccordionKey) => {
-    setExpandedSections((prev) => ({ ...prev, [section]: true }));
-    const targetRef = section === 'profile'
-      ? profileSectionRef
-      : section === 'contacts'
-        ? contactsSectionRef
-        : section === 'household'
-          ? householdSectionRef
-          : section === 'community'
-            ? trustedCommunityRef
-            : securitySectionRef;
-
-    window.setTimeout(() => {
-      targetRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 50);
   };
 
   const discardLocalChanges = () => {
@@ -2754,74 +2734,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         )}
       </div>
 
-      <section className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
-        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Quick Jump</p>
-        <div className="space-y-3">
-          <div>
-            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2">Tier 1</p>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => openSectionAndScroll('profile')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg px-3 py-2">Profile</button>
-              <button type="button" onClick={() => openSectionAndScroll('household')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg px-3 py-2">Household</button>
-              <button type="button" onClick={() => { openSectionAndScroll('household'); setShowMoreSections((prev) => ({ ...prev, household: true })); }} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg px-3 py-2">Connected Accounts</button>
-              <button type="button" onClick={() => { openSectionAndScroll('household'); setShowMoreSections((prev) => ({ ...prev, household: true })); }} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg px-3 py-2">Ownership Transfer</button>
-            </div>
-          </div>
-
-          <div>
-            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2">Tier 2</p>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => openSectionAndScroll('contacts')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg px-3 py-2">Emergency Contact</button>
-              <button type="button" onClick={() => openSectionAndScroll('security')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg px-3 py-2">Preparedness</button>
-            </div>
-          </div>
-
-          <div>
-            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2">Tier 3</p>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => openSectionAndScroll('community')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg px-3 py-2">Trusted Community</button>
-              <button type="button" onClick={() => openSectionAndScroll('household')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg px-3 py-2">Join Another Household</button>
-              <button type="button" onClick={() => { openSectionAndScroll('household'); setShowMoreSections((prev) => ({ ...prev, household: true })); }} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg px-3 py-2">Join Requests</button>
-            </div>
-          </div>
-
-          <div>
-            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2">Tier 4</p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  languageSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }}
-                className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg px-3 py-2"
-              >
-                Language
-              </button>
-              <button type="button" onClick={() => { openSectionAndScroll('household'); setShowMoreSections((prev) => ({ ...prev, household: true })); }} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg px-3 py-2">Notifications</button>
-              <button
-                type="button"
-                onClick={() => {
-                  legalSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }}
-                className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg px-3 py-2"
-              >
-                Legal &amp; Privacy
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  logoutSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }}
-                className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-[#B91C1C] bg-white border border-slate-200 hover:bg-slate-50 rounded-lg px-3 py-2"
-              >
-                Log Out
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* Language Selector */}
-      <section ref={languageSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 order-60 border border-slate-200">
+      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 order-60 border border-slate-200">
         <div className="flex items-center gap-4 mb-2">
           <div className="p-3 bg-white border border-slate-200 rounded-full text-slate-700">
             <Globe size={24} />
@@ -3973,7 +3887,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         )}
       </section>
 
-      <section ref={legalSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 order-70 border border-slate-200">
+      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 order-70 border border-slate-200">
         <div className="flex items-center gap-4">
           <div className="p-3 bg-white border border-slate-200 rounded-full text-slate-700">
             <ShieldCheck size={24} />
@@ -4008,7 +3922,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         </div>
       </section>
 
-      <div ref={logoutSectionRef} className="space-y-4 pt-4 border-t border-slate-200 order-80">
+      <div className="space-y-4 pt-4 border-t border-slate-200 order-80">
         <Button onClick={handleLogout} variant="ghost" fullWidth className="text-[#B91C1C] font-semibold hover:text-[#B91C1C]">
           <LogOut className="mr-2" size={18} />
           Log Out
