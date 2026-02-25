@@ -657,6 +657,8 @@ export type ConnectedHouseholdMember = {
   fullName: string;
   email?: string;
   role: 'OWNER' | 'MEMBER';
+  householdSize?: number;
+  dependentCount?: number;
 };
 
 export type HouseholdTransferCandidate = {
@@ -1862,6 +1864,28 @@ export async function listConnectedHouseholdMembers(householdId?: string): Promi
 
   if (profilesError) throw profilesError;
 
+  let vitalsSizeMap = new Map<string, number>();
+  try {
+    const { data: vitalsRows, error: vitalsError } = await supabase
+      .from('vitals')
+      .select('profile_id, household_size, household')
+      .in('profile_id', profileIds);
+
+    if (vitalsError) {
+      throw vitalsError;
+    }
+
+    vitalsSizeMap = new Map(
+      (vitalsRows || []).map((row: any) => {
+        const derivedFromList = Array.isArray(row?.household) ? row.household.length + 1 : 1;
+        const size = Math.max(1, Number(row?.household_size) || derivedFromList || 1);
+        return [String(row.profile_id), size];
+      })
+    );
+  } catch {
+    vitalsSizeMap = new Map();
+  }
+
   const profileMap = new Map<string, { full_name?: string | null; email?: string | null }>(
     (profiles || []).map((profile: any) => [String(profile.id), { full_name: profile.full_name, email: profile.email }])
   );
@@ -1870,11 +1894,14 @@ export async function listConnectedHouseholdMembers(householdId?: string): Promi
     const profileId = String(row.profile_id || '');
     const profile = profileMap.get(profileId);
     const normalizedRole = String(row.role || '').toUpperCase() === 'OWNER' ? 'OWNER' : 'MEMBER';
+    const householdSize = Math.max(1, Number(vitalsSizeMap.get(profileId) || 1));
     return {
       profileId,
       fullName: String(profile?.full_name || profile?.email || `Member ${profileId.slice(0, 8)}`),
       email: profile?.email || undefined,
       role: normalizedRole as 'OWNER' | 'MEMBER',
+      householdSize,
+      dependentCount: Math.max(0, householdSize - 1),
     };
   });
 
@@ -2563,6 +2590,47 @@ export async function listRequests(orgCode: string) {
   }));
 }
 
+export async function listAllRequests() {
+  const { data, error } = await supabase
+    .from('replenishment_requests')
+    .select('id, org_id, org_name, item, quantity, status, provider, created_at, delivered_quantity')
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error('Failed to load requests');
+
+  const rows = data || [];
+  const orgIds = Array.from(new Set(rows.map((row: any) => row.org_id).filter(Boolean)));
+
+  let orgCodeMap = new Map<string, { orgCode: string; orgName: string }>();
+  if (orgIds.length) {
+    const { data: orgRows, error: orgError } = await supabase
+      .from('organizations')
+      .select('id, org_code, name')
+      .in('id', orgIds);
+
+    if (orgError) throw new Error('Failed to resolve organization codes');
+    orgCodeMap = new Map(
+      (orgRows || []).map((org: any) => [org.id, { orgCode: org.org_code, orgName: org.name || '' }])
+    );
+  }
+
+  return rows.map((row: any) => {
+    const orgMeta = row.org_id ? orgCodeMap.get(row.org_id) : null;
+    return {
+      id: row.id,
+      orgId: orgMeta?.orgCode || '',
+      orgName: row.org_name || orgMeta?.orgName || '',
+      item: row.item,
+      quantity: row.quantity,
+      status: normalizeRequestStatus(row.status),
+      timestamp: row.created_at,
+      provider: row.provider || '',
+      deliveredQuantity: row.delivered_quantity || 0,
+      synced: true,
+    };
+  });
+}
+
 export async function createRequest(orgCode: string, payload: { item: string; quantity: number; provider?: string; orgName?: string }) {
   const org = await getOrgByCode(orgCode);
   if (!org) throw new Error('Organization not found');
@@ -2693,6 +2761,68 @@ export async function setMemberStatus(orgCode: string, payload: { memberId: stri
     details: { status: payload.status },
   });
   return { ok: true };
+}
+
+export async function sendMemberPing(orgCode: string, payload: { memberId: string; name?: string }) {
+  const orgId = await getOrgIdByCode(orgCode);
+  if (!orgId) throw new Error('Organization not found');
+
+  const { data: authData } = await supabase.auth.getUser();
+  const requesterId = authData?.user?.id || null;
+
+  const { error } = await supabase
+    .from('member_statuses')
+    .upsert({
+      org_id: orgId,
+      member_id: payload.memberId,
+      name: payload.name || 'Unknown',
+      status: 'UNKNOWN',
+      checked_by: requesterId,
+      last_check_in: new Date().toISOString(),
+    }, { onConflict: 'org_id,member_id' });
+
+  if (error) throw new Error('Failed to send ping');
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'member_statuses',
+    entityId: payload.memberId,
+    orgCode,
+    details: { pingRequested: true },
+  });
+  return { ok: true };
+}
+
+export async function getPendingPingForCurrentUser() {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const userId = authData.user.id;
+  const profile = await getProfileById(userId);
+  if (!profile?.org_id) return null;
+
+  const { data, error } = await supabase
+    .from('member_statuses')
+    .select('member_id, status, last_check_in, checked_by')
+    .eq('org_id', profile.org_id)
+    .eq('member_id', userId)
+    .eq('status', 'UNKNOWN')
+    .order('last_check_in', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error('Failed to load pending ping');
+  if (!data) return null;
+
+  let requesterName = 'Organization Admin';
+  if (data.checked_by) {
+    const requester = await getProfileById(data.checked_by);
+    requesterName = requester?.full_name || requesterName;
+  }
+
+  return {
+    requesterName,
+    timestamp: data.last_check_in || new Date().toISOString(),
+  };
 }
 
 // Broadcasts

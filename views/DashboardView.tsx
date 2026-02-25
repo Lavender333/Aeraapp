@@ -128,6 +128,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [showTickerModal, setShowTickerModal] = useState(false);
   const [showCommunityConnectModal, setShowCommunityConnectModal] = useState(false);
 
+  const refreshPendingPing = async () => {
+    const pending = await StorageService.getPendingPingForCurrentUser();
+    setPendingPing(pending);
+  };
+
   useEffect(() => {
     // Load Profile Data
     const profile = StorageService.getProfile();
@@ -135,6 +140,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     setUserName(profile.fullName);
     setMissingProfileFields(getMissingProfileFields(profile));
     setPendingPing(profile.pendingStatusRequest);
+    refreshPendingPing().catch(() => {});
     setCommunityIdInput(profile.communityId || '');
     
     if (profile.communityId) {
@@ -178,7 +184,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
        setUserRole(normalizeRole(updatedProfile.role));
       setMissingProfileFields(getMissingProfileFields(updatedProfile));
        setTickerMessage(StorageService.getTicker(updatedProfile));
-       setPendingPing(updatedProfile.pendingStatusRequest);
+      setPendingPing(updatedProfile.pendingStatusRequest);
+      refreshPendingPing().catch(() => {});
        StorageService.getActiveRequest().then(setActiveRequest);
        if (updatedProfile.communityId) {
          const org = StorageService.getOrganization(updatedProfile.communityId);

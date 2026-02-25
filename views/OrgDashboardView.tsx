@@ -380,9 +380,9 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
     setShowBroadcastModal(false);
   };
 
-  const handlePingMember = () => {
+  const handlePingMember = async () => {
     if (selectedMember) {
-      const success = StorageService.sendPing(selectedMember.id);
+      const success = await StorageService.sendPing(selectedMember.id, selectedMember.name, activeOrgCode);
       if (success) {
         alert(`Ping sent to ${selectedMember.name}. They will see a status check prompt on their dashboard.`);
       } else {

@@ -6,7 +6,7 @@ import { Button } from '../components/Button';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
-import { AppNotificationRecord, cancelMyHouseholdJoinRequest, ConnectedHouseholdMember, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listConnectedHouseholdMembers, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateProfileForUser, updateVitalsForUser } from '../services/api';
+import { AppNotificationRecord, cancelMyHouseholdJoinRequest, ConnectedHouseholdMember, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateProfileForUser, updateVitalsForUser } from '../services/api';
 import { getOrgByCode } from '../services/supabase';
 import { listOrganizations as listOrganizationsSupabase } from '../services/supabaseApi';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
@@ -563,7 +563,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   useEffect(() => {
     const additionalMembers = Array.isArray(profile.household) ? profile.household.length : 0;
     const connectedAccountCount = Array.isArray(connectedHouseholdMembers) ? connectedHouseholdMembers.length : 0;
-    const derivedHouseholdSize = Math.max(1, additionalMembers + 1, connectedAccountCount);
+    const connectedPeopleCount = Array.isArray(connectedHouseholdMembers)
+      ? connectedHouseholdMembers.reduce((sum, member) => {
+          const memberSize = Math.max(1, Number(member.householdSize || 1));
+          return sum + memberSize;
+        }, 0)
+      : 0;
+    const derivedHouseholdSize = Math.max(1, additionalMembers + 1, connectedAccountCount, connectedPeopleCount);
     if (profile.householdMembers !== derivedHouseholdSize) {
       setProfile((prev) => ({ ...prev, householdMembers: derivedHouseholdSize }));
     }
@@ -1552,13 +1558,22 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setCurrentSection('BROADCAST_CONTROL');
   };
 
-  const openMasterInventory = () => {
+  const openMasterInventory = async () => {
     if (!isAdmin) return;
-    const reqs = StorageService.getAllReplenishmentRequests();
-    const scopedReqs = isOrgScopedAdmin
-      ? reqs.filter((req) => String(req.orgId || '') === orgScopeId)
-      : reqs;
-    setInventoryRequests(scopedReqs);
+    try {
+      const remoteReqs = await listAllRequests();
+      const scopedRemoteReqs = isOrgScopedAdmin
+        ? remoteReqs.filter((req) => String(req.orgId || '') === orgScopeId)
+        : remoteReqs;
+      setInventoryRequests(scopedRemoteReqs);
+    } catch (err) {
+      console.warn('Failed to load master inventory requests from Supabase; using local cache', err);
+      const reqs = StorageService.getAllReplenishmentRequests();
+      const scopedReqs = isOrgScopedAdmin
+        ? reqs.filter((req) => String(req.orgId || '') === orgScopeId)
+        : reqs;
+      setInventoryRequests(scopedReqs);
+    }
     setCurrentSection('MASTER_INVENTORY');
   };
 

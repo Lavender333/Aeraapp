@@ -1,7 +1,7 @@
 
 import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, RoleDefinition } from '../types';
 import { REQUEST_ITEM_MAP } from './validation';
-import { ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, fetchProfileForUser, fetchVitalsForUser, createHouseholdSafetyNotificationsForCurrentUser, listChildOrganizations } from './api';
+import { ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, fetchProfileForUser, fetchVitalsForUser, createHouseholdSafetyNotificationsForCurrentUser, listChildOrganizations, sendMemberPing, getPendingPingForCurrentUser as getPendingPingForCurrentUserApi } from './api';
 import { getMemberStatus, setMemberStatus } from './api';
 
 const DB_KEY = 'aera_backend_db_v4'; // Force fresh database
@@ -1341,10 +1341,21 @@ export const StorageService = {
   },
 
   // --- Ping / Status Checks ---
-  sendPing(targetUserId: string): boolean {
+  async sendPing(targetUserId: string, targetName?: string, orgId?: string): Promise<boolean> {
     const db = this.getDB();
     const currentUser = db.users.find(u => u.id === db.currentUser);
     const targetIdx = db.users.findIndex(u => u.id === targetUserId);
+
+    let remoteSent = false;
+    const orgCode = orgId || currentUser?.communityId || '';
+    if (navigator.onLine && orgCode) {
+      try {
+        await sendMemberPing(orgCode, { memberId: targetUserId, name: targetName || '' });
+        remoteSent = true;
+      } catch (e) {
+        console.warn('Remote ping failed, using local fallback', e);
+      }
+    }
     
     if (targetIdx >= 0 && currentUser) {
       db.users[targetIdx].pendingStatusRequest = {
@@ -1354,7 +1365,33 @@ export const StorageService = {
       this.saveDB(db);
       return true;
     }
-    return false;
+    return remoteSent;
+  },
+
+  async getPendingPingForCurrentUser(): Promise<{ requesterName: string; timestamp: string } | undefined> {
+    const db = this.getDB();
+    const currentUserId = db.currentUser;
+    if (!currentUserId) return undefined;
+
+    const localProfile = db.users.find(u => u.id === currentUserId);
+    if (localProfile?.pendingStatusRequest) return localProfile.pendingStatusRequest;
+
+    if (!navigator.onLine) return undefined;
+
+    try {
+      const pending = await getPendingPingForCurrentUserApi();
+      if (!pending) return undefined;
+
+      const userIdx = db.users.findIndex(u => u.id === currentUserId);
+      if (userIdx >= 0) {
+        db.users[userIdx].pendingStatusRequest = pending;
+        this.saveDB(db);
+      }
+      return pending;
+    } catch (e) {
+      console.warn('Failed to fetch pending ping remotely', e);
+      return undefined;
+    }
   },
 
   respondToPing(isSafe: boolean) {
