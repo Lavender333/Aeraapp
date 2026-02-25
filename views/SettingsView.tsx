@@ -147,6 +147,12 @@ const mergeRoleDefinitions = (stored: RoleDefinition[] | null | undefined): Role
   return merged;
 };
 
+const US_STATE_CODES = [
+  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD',
+  'MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC',
+  'SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
+];
+
 export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const trustedCommunityRef = useRef<HTMLElement | null>(null);
   const languageSectionRef = useRef<HTMLElement | null>(null);
@@ -303,6 +309,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [isSavingVitals, setIsSavingVitals] = useState(false);
   const [savingSection, setSavingSection] = useState<SettingsAccordionKey | null>(null);
   const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
+  const [profileRequiredErrors, setProfileRequiredErrors] = useState<Record<'address' | 'city' | 'state' | 'zipCode', boolean>>({
+    address: false,
+    city: false,
+    state: false,
+    zipCode: false,
+  });
   const [vitalsSaveError, setVitalsSaveError] = useState<string | null>(null);
   const [savedSection, setSavedSection] = useState<SettingsAccordionKey | null>(null);
   const saveIndicatorTimeoutRef = useRef<number | null>(null);
@@ -828,9 +840,15 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       }
       return;
     }
-    if (!trimmedAddress || !trimmedCity || !trimmedState || !trimmedZip) {
+    const nextRequiredErrors = {
+      address: !trimmedAddress,
+      city: !trimmedCity,
+      state: !trimmedState,
+      zipCode: !trimmedZip,
+    };
+    setProfileRequiredErrors(nextRequiredErrors);
+    if (nextRequiredErrors.address || nextRequiredErrors.city || nextRequiredErrors.state || nextRequiredErrors.zipCode) {
       setExpandedSections((prev) => ({ ...prev, profile: true }));
-      setProfileSaveError('Address, City, State, and ZIP are required.');
       return;
     }
     if (section) setSavingSection(section);
@@ -940,6 +958,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     }
     if (key === 'address') {
       setProfileSaveError(null);
+    }
+    if (key === 'address' || key === 'city' || key === 'state' || key === 'zipCode') {
+      const normalized = String(value || '').trim();
+      setProfileRequiredErrors((prev) => ({ ...prev, [key]: normalized.length === 0 }));
     }
   };
 
@@ -2962,26 +2984,65 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 placeholder="123 Main St"
                 value={profile.address}
                 onChange={(e) => updateProfile('address', e.target.value)}
+                onBlur={(e) => setProfileRequiredErrors((prev) => ({ ...prev, address: String(e.target.value || '').trim().length === 0 }))}
               />
+              {profileRequiredErrors.address && (
+                <span role="alert" style={{ color: '#B91C1C', fontSize: '14px' }}>
+                  Field is required.
+                </span>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <Input
                   label="City"
                   value={profile.city || ''}
                   onChange={(e) => updateProfile('city', e.target.value)}
                   placeholder="Cleveland"
+                  onBlur={(e) => setProfileRequiredErrors((prev) => ({ ...prev, city: String(e.target.value || '').trim().length === 0 }))}
                 />
-                <Input
-                  label="State"
-                  value={profile.state || ''}
-                  onChange={(e) => updateProfile('state', e.target.value.toUpperCase().slice(0, 2))}
-                  placeholder="OH"
-                />
+                <div className="w-full">
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">State</label>
+                  <select
+                    value={profile.state || ''}
+                    onChange={(e) => updateProfile('state', e.target.value)}
+                    onBlur={(e) => setProfileRequiredErrors((prev) => ({ ...prev, state: String(e.target.value || '').trim().length === 0 }))}
+                    className="w-full min-h-[48px] px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all text-slate-900 bg-white"
+                  >
+                    <option value="">Select state</option>
+                    {US_STATE_CODES.map((stateCode) => (
+                      <option key={stateCode} value={stateCode}>{stateCode}</option>
+                    ))}
+                  </select>
+                </div>
                 <Input
                   label="ZIP"
                   value={profile.zipCode || ''}
                   onChange={(e) => updateProfile('zipCode', e.target.value.replace(/[^0-9-]/g, '').slice(0, 10))}
                   placeholder="44110"
+                  onBlur={(e) => setProfileRequiredErrors((prev) => ({ ...prev, zipCode: String(e.target.value || '').trim().length === 0 }))}
                 />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div>
+                  {profileRequiredErrors.city && (
+                    <span role="alert" style={{ color: '#B91C1C', fontSize: '14px' }}>
+                      Field is required.
+                    </span>
+                  )}
+                </div>
+                <div>
+                  {profileRequiredErrors.state && (
+                    <span role="alert" style={{ color: '#B91C1C', fontSize: '14px' }}>
+                      Field is required.
+                    </span>
+                  )}
+                </div>
+                <div>
+                  {profileRequiredErrors.zipCode && (
+                    <span role="alert" style={{ color: '#B91C1C', fontSize: '14px' }}>
+                      Field is required.
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -2992,9 +3053,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             >
               {showMoreSections.profile ? 'Show less' : 'Show more'}
             </button>
-            {profileSaveError && (
-              <p className="text-xs text-red-600 font-semibold mt-2">{profileSaveError}</p>
-            )}
           </div>
         )}
       </section>
