@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Button } from '../components/Button';
-import splashLogo from '../Logo2.png';
+import splashLogo from '../c77ca1eb-bbca-4161-878c-0c47f2e96128_removalai_preview.png';
 
 interface SplashViewProps {
   onEnter: () => void;
