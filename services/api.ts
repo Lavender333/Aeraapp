@@ -1884,13 +1884,24 @@ export async function listConnectedHouseholdMembers(householdId?: string): Promi
 
   let vitalsSizeMap = new Map<string, number>();
   try {
-    const { data: vitalsRows, error: vitalsError } = await supabase
+    let vitalsRows: any[] | null = null;
+
+    const withHouseholdSize = await supabase
       .from('vitals')
       .select('profile_id, household_size, household')
       .in('profile_id', profileIds);
 
-    if (vitalsError) {
-      throw vitalsError;
+    if (!withHouseholdSize.error) {
+      vitalsRows = withHouseholdSize.data || [];
+    } else {
+      const withoutHouseholdSize = await supabase
+        .from('vitals')
+        .select('profile_id, household')
+        .in('profile_id', profileIds);
+
+      if (!withoutHouseholdSize.error) {
+        vitalsRows = withoutHouseholdSize.data || [];
+      }
     }
 
     vitalsSizeMap = new Map(
@@ -1904,6 +1915,29 @@ export async function listConnectedHouseholdMembers(householdId?: string): Promi
     vitalsSizeMap = new Map();
   }
 
+  let householdMembersSizeMap = new Map<string, number>();
+  try {
+    const { data: householdMemberRows, error: householdMembersError } = await supabase
+      .from('household_members')
+      .select('profile_id')
+      .in('profile_id', profileIds);
+
+    if (!householdMembersError) {
+      const counts = new Map<string, number>();
+      for (const row of householdMemberRows || []) {
+        const profileId = String((row as any)?.profile_id || '');
+        if (!profileId) continue;
+        counts.set(profileId, (counts.get(profileId) || 0) + 1);
+      }
+
+      householdMembersSizeMap = new Map(
+        Array.from(counts.entries()).map(([profileId, memberCount]) => [profileId, Math.max(1, memberCount + 1)])
+      );
+    }
+  } catch {
+    householdMembersSizeMap = new Map();
+  }
+
   const profileMap = new Map<string, { full_name?: string | null; email?: string | null }>(
     (profiles || []).map((profile: any) => [String(profile.id), { full_name: profile.full_name, email: profile.email }])
   );
@@ -1912,7 +1946,9 @@ export async function listConnectedHouseholdMembers(householdId?: string): Promi
     const profileId = String(row.profile_id || '');
     const profile = profileMap.get(profileId);
     const normalizedRole = String(row.role || '').toUpperCase() === 'OWNER' ? 'OWNER' : 'MEMBER';
-    const householdSize = Math.max(1, Number(vitalsSizeMap.get(profileId) || 1));
+    const vitalsSize = Number(vitalsSizeMap.get(profileId) || 0);
+    const membersTableSize = Number(householdMembersSizeMap.get(profileId) || 0);
+    const householdSize = Math.max(1, vitalsSize, membersTableSize);
     return {
       profileId,
       fullName: String(profile?.full_name || profile?.email || `Member ${profileId.slice(0, 8)}`),

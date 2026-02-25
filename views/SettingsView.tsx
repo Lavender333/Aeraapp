@@ -329,6 +329,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [notifications, setNotifications] = useState<AppNotificationRecord[]>([]);
   const [joinRequestBusyId, setJoinRequestBusyId] = useState<string | null>(null);
   const [notificationsBusy, setNotificationsBusy] = useState(false);
+  const latestApprovedJoinRequestRef = useRef<string | null>(null);
 
   const toggleSection = (section: SettingsAccordionKey) => {
     const isClosing = expandedSections[section] === true;
@@ -462,6 +463,19 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       }
     } else {
       setConnectedHouseholdMembers([]);
+    }
+
+    try {
+      const remoteVitals = await fetchVitalsForUser();
+      if (remoteVitals) {
+        setProfile((prev) => {
+          const merged = { ...prev, ...remoteVitals };
+          StorageService.saveProfile(merged);
+          return merged;
+        });
+      }
+    } catch {
+      // Ignore vitals refresh failures; household context is still refreshed above.
     }
   };
 
@@ -738,6 +752,15 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       if (unsub) unsub();
     };
   }, []);
+
+  useEffect(() => {
+    const approvedRequest = myJoinRequests.find((request) => request.status === 'approved');
+    if (!approvedRequest?.id) return;
+    if (latestApprovedJoinRequestRef.current === approvedRequest.id) return;
+
+    latestApprovedJoinRequestRef.current = approvedRequest.id;
+    void refreshHouseholdContext();
+  }, [myJoinRequests]);
 
   // Fetch members when an org is selected in directory
   useEffect(() => {
