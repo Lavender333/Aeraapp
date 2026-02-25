@@ -24,11 +24,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentView, setView }) =>
             <button
               key={item.id}
               onClick={() => setView(item.id)}
-              className={`flex flex-col items-center gap-1 min-w-[64px] transition-colors ${
-                isActive ? 'text-brand-600' : 'text-slate-400 hover:text-slate-600'
+              aria-current={isActive ? 'page' : undefined}
+              aria-label={item.label}
+              className={`flex flex-col items-center justify-center gap-1 min-w-[64px] min-h-[48px] transition-colors ${
+                isActive ? 'text-[#2F7A64]' : 'text-[#6B7280] hover:text-[#374151]'
               }`}
             >
-              <div className={`p-1 rounded-full ${isActive ? 'bg-brand-50' : ''}`}>
+              <div className="p-1">
                 {item.icon}
               </div>
               <span className="text-[10px] font-medium">{item.label}</span>

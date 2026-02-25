@@ -329,7 +329,22 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [notifications, setNotifications] = useState<AppNotificationRecord[]>([]);
   const [joinRequestBusyId, setJoinRequestBusyId] = useState<string | null>(null);
   const [notificationsBusy, setNotificationsBusy] = useState(false);
+  const [showAllNotifications, setShowAllNotifications] = useState(false);
   const latestApprovedJoinRequestRef = useRef<string | null>(null);
+  const accordionButtonIds: Record<SettingsAccordionKey, string> = {
+    profile: 'settings-accordion-button-profile',
+    household: 'settings-accordion-button-household',
+    contacts: 'settings-accordion-button-contacts',
+    community: 'settings-accordion-button-community',
+    security: 'settings-accordion-button-security',
+  };
+  const accordionPanelIds: Record<SettingsAccordionKey, string> = {
+    profile: 'settings-accordion-panel-profile',
+    household: 'settings-accordion-panel-household',
+    contacts: 'settings-accordion-panel-contacts',
+    community: 'settings-accordion-panel-community',
+    security: 'settings-accordion-panel-security',
+  };
 
   const toggleSection = (section: SettingsAccordionKey) => {
     const isClosing = expandedSections[section] === true;
@@ -2699,11 +2714,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       <section className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Quick Jump</p>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => openSectionAndScroll('profile')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Profile</button>
-          <button type="button" onClick={() => openSectionAndScroll('household')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Household</button>
-          <button type="button" onClick={() => openSectionAndScroll('contacts')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Emergancy Contact</button>
-          <button type="button" onClick={() => openSectionAndScroll('community')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Community</button>
-          <button type="button" onClick={() => openSectionAndScroll('security')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Preparedness</button>
+          <button type="button" onClick={() => openSectionAndScroll('contacts')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Emergency Contact Status</button>
+          <button type="button" onClick={() => openSectionAndScroll('household')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Household Summary</button>
+          <button type="button" onClick={() => openSectionAndScroll('security')} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Readiness Checklist</button>
+          <button type="button" onClick={() => { openSectionAndScroll('profile'); setExpandedSections((prev) => ({ ...prev, community: true })); }} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Profile &amp; Connections</button>
+          <button type="button" onClick={() => { openSectionAndScroll('household'); setShowMoreSections((prev) => ({ ...prev, household: true })); }} className="min-w-[92px] flex-1 text-[11px] sm:text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2">Notifications</button>
         </div>
       </section>
 
@@ -2719,7 +2734,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         <div className="flex gap-2">
           <button 
             onClick={() => changeLanguage('en')}
-            className={`flex-1 py-3 px-4 rounded-xl border-2 font-bold transition-all ${
+            className={`language-row flex-1 py-3 px-4 rounded-xl border-2 font-bold transition-all ${
               profile.language === 'en' 
                 ? 'border-indigo-600 bg-indigo-50 text-indigo-800' 
                 : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
@@ -2729,7 +2744,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           </button>
           <button 
             onClick={() => changeLanguage('es')}
-            className={`flex-1 py-3 px-4 rounded-xl border-2 font-bold transition-all ${
+            className={`language-row flex-1 py-3 px-4 rounded-xl border-2 font-bold transition-all ${
               profile.language === 'es' 
                 ? 'border-indigo-600 bg-indigo-50 text-indigo-800' 
                 : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
@@ -2739,7 +2754,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           </button>
           <button 
             onClick={() => changeLanguage('fr')}
-            className={`flex-1 py-3 px-4 rounded-xl border-2 font-bold transition-all ${
+            className={`language-row flex-1 py-3 px-4 rounded-xl border-2 font-bold transition-all ${
               profile.language === 'fr' 
                 ? 'border-indigo-600 bg-indigo-50 text-indigo-800' 
                 : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
@@ -2816,8 +2831,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       {/* Profile */}
       <section ref={profileSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4">
         <button
+          id={accordionButtonIds.profile}
           type="button"
           onClick={() => toggleSection('profile')}
+          aria-expanded={expandedSections.profile}
+          aria-controls={accordionPanelIds.profile}
           className="w-full flex items-center justify-between gap-4"
         >
           <div className="flex items-center gap-4 text-left">
@@ -2843,7 +2861,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         )}
 
         {expandedSections.profile && (
-          <>
+          <div id={accordionPanelIds.profile} role="region" aria-labelledby={accordionButtonIds.profile}>
             <p className="text-[11px] text-slate-500 flex items-center gap-1">
               <Save size={12} /> Auto-saves when you collapse this section.
             </p>
@@ -2904,15 +2922,18 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             {profileSaveError && (
               <p className="text-xs text-red-600 font-semibold mt-2">{profileSaveError}</p>
             )}
-          </>
+          </div>
         )}
       </section>
 
       {/* Contacts */}
       <section ref={contactsSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200">
         <button
+          id={accordionButtonIds.contacts}
           type="button"
           onClick={() => toggleSection('contacts')}
+          aria-expanded={expandedSections.contacts}
+          aria-controls={accordionPanelIds.contacts}
           className="w-full flex items-center justify-between gap-4"
         >
           <div className="flex items-center gap-4 text-left">
@@ -2936,7 +2957,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         )}
 
         {expandedSections.contacts && (
-          <>
+          <div id={accordionPanelIds.contacts} role="region" aria-labelledby={accordionButtonIds.contacts}>
             <p className="text-[11px] text-slate-500 flex items-center gap-1">
               <Save size={12} /> Auto-saves when you collapse this section.
             </p>
@@ -2968,15 +2989,18 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             >
               {showMoreSections.contacts ? 'Show less' : 'Show more'}
             </button>
-          </>
+          </div>
         )}
       </section>
 
       {/* Household */}
       <section ref={householdSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 order-30">
         <button
+          id={accordionButtonIds.household}
           type="button"
           onClick={() => toggleSection('household')}
+          aria-expanded={expandedSections.household}
+          aria-controls={accordionPanelIds.household}
           className="w-full flex items-center justify-between gap-4"
         >
           <div className="flex items-center gap-4 text-left">
@@ -3009,7 +3033,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         )}
 
         {expandedSections.household && (
-          <>
+          <div id={accordionPanelIds.household} role="region" aria-labelledby={accordionButtonIds.household}>
         <p className="text-[11px] text-slate-500 flex items-center gap-1">
           <Save size={12} /> Auto-saves when you collapse this section.
         </p>
@@ -3355,13 +3379,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             )}
 
             {/* Notifications */}
-            <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-2">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Notifications</p>
+                <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Notifications</p>
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="text-indigo-700 hover:bg-indigo-100"
+                  className="text-slate-700 hover:bg-slate-100"
                   onClick={handleMarkAllNotificationsRead}
                   disabled={notificationsBusy || unreadNotificationCount === 0}
                 >
@@ -3370,13 +3394,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               </div>
 
               {notifications.length === 0 ? (
-                <p className="text-xs text-indigo-700">No notifications yet.</p>
+                <p className="text-xs text-slate-600">No notifications yet.</p>
               ) : (
                 <div className="space-y-1">
-                  {notifications.slice(0, 5).map((item) => (
+                  {(showAllNotifications ? notifications : notifications.slice(0, 2)).map((item) => (
                     <div
                       key={item.id}
-                      className={`rounded-md border px-3 py-2 text-xs ${item.read ? 'border-indigo-100 bg-white text-slate-500' : 'border-indigo-300 bg-white text-slate-800 font-semibold'}`}
+                      className={`rounded-md border px-3 py-2 text-xs ${item.read ? 'border-slate-200 bg-white text-slate-500' : 'border-slate-300 bg-white text-slate-800 font-semibold'}`}
                     >
                       <p>
                         {item.type === 'household_join_request'
@@ -3394,6 +3418,15 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                       <p className="text-[10px] mt-0.5 opacity-80">{new Date(item.createdAt).toLocaleString()}</p>
                     </div>
                   ))}
+                  {notifications.length > 2 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllNotifications((prev) => !prev)}
+                      className="text-xs font-semibold text-slate-600 hover:underline"
+                    >
+                      {showAllNotifications ? 'Show Less' : 'View All'}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -3415,15 +3448,18 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         {vitalsSaveError && (
           <p className="text-xs text-red-600 font-semibold mt-2">{vitalsSaveError}</p>
         )}
-        </>
+        </div>
         )}
       </section>
 
       {/* Security */}
       <section ref={securitySectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 order-20">
         <button
+          id={accordionButtonIds.security}
           type="button"
           onClick={() => toggleSection('security')}
+          aria-expanded={expandedSections.security}
+          aria-controls={accordionPanelIds.security}
           className="w-full flex items-center justify-between gap-4"
         >
           <div className="flex items-center gap-4 text-left">
@@ -3451,7 +3487,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         )}
 
         {expandedSections.security && (
-          <>
+          <div id={accordionPanelIds.security} role="region" aria-labelledby={accordionButtonIds.security}>
         <p className="text-[11px] text-slate-500 flex items-center gap-1">
           <Save size={12} /> Auto-saves when you collapse this section.
         </p>
@@ -3562,7 +3598,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         {vitalsSaveError && (
           <p className="text-xs text-red-600 font-semibold mt-2">{vitalsSaveError}</p>
         )}
-        </>
+        </div>
         )}
       </section>
 
@@ -3572,8 +3608,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           <Building2 size={64} className="text-purple-600" />
         </div>
         <button
+          id={accordionButtonIds.community}
           type="button"
           onClick={() => toggleSection('community')}
+          aria-expanded={expandedSections.community}
+          aria-controls={accordionPanelIds.community}
           className="w-full flex items-center justify-between gap-4 relative z-10"
         >
           <div className="flex items-center gap-4 mb-2 text-left">
@@ -3595,7 +3634,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         )}
 
         {expandedSections.community && (
-          <>
+          <div id={accordionPanelIds.community} role="region" aria-labelledby={accordionButtonIds.community}>
         
         {profile.role === 'INSTITUTION_ADMIN' ? (
           <div className="relative z-10 space-y-3">
@@ -3739,7 +3778,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         >
           {showMoreSections.community ? 'Show less' : 'Show more'}
         </button>
-        </>
+        </div>
         )}
       </section>
 
