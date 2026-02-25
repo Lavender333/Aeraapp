@@ -3820,8 +3820,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.community ? 'rotate-180' : ''}`} />
           </div>
         </button>
-        {autoSaveSuccess && savingSection === 'community' && (
-          <p className="text-xs text-green-600 font-medium">{autoSaveSuccess}</p>
+        {savedSection === 'community' && (
+          <p className="font-medium" style={{ color: '#2F7A64', fontSize: '14px' }}>✓ Saved</p>
         )}
 
         {expandedSections.community && (
