@@ -31,6 +31,8 @@ export const SplashView: React.FC<SplashViewProps & { onPresentation?: () => voi
     setLang(l);
   };
 
+  const languageNames: Record<LanguageCode, string> = { en: 'English', es: 'Spanish', fr: 'French' };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-50 to-teal-100 flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
       
@@ -39,12 +41,14 @@ export const SplashView: React.FC<SplashViewProps & { onPresentation?: () => voi
       <div className="absolute bottom-[-10%] right-[-10%] w-80 h-80 bg-blue-200/30 rounded-full blur-3xl animate-pulse delay-700" />
 
       {/* Language Selector */}
-      <div className="absolute top-6 right-6 z-20 flex gap-2 bg-white/50 backdrop-blur-sm p-1 rounded-lg shadow-sm border border-white/50">
+      <div className="absolute top-6 right-6 z-20 flex gap-2 bg-white/50 backdrop-blur-sm p-1 rounded-lg shadow-sm border border-white/50" role="group" aria-label="Language selector">
          {(['en', 'es', 'fr'] as LanguageCode[]).map(l => (
            <button
              key={l}
              onClick={() => changeLanguage(l)}
-             className={`px-3 py-1 rounded-md text-xs font-bold uppercase transition-colors ${
+             aria-label={`Switch to ${languageNames[l]}`}
+             aria-pressed={lang === l}
+             className={`px-3 py-1 rounded-md text-xs font-bold uppercase transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 ${
                lang === l ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-white/50'
              }`}
            >
@@ -56,7 +60,7 @@ export const SplashView: React.FC<SplashViewProps & { onPresentation?: () => voi
       <div className="relative z-10 flex flex-col items-center animate-fade-in space-y-8 max-w-sm w-full">
         
         <div className="bg-white p-6 rounded-3xl shadow-xl shadow-brand-500/10 mb-4 animate-slide-up">
-          <img src={splashLogo} alt="AERA splash logo" className="w-24 h-24 object-cover rounded-2xl mx-auto" />
+          <img src={splashLogo} alt="AERA splash logo" className="w-24 h-24 object-cover rounded-2xl mx-auto animate-float" />
         </div>
 
         <div className="space-y-2 animate-slide-up" style={{ animationDelay: '100ms' }}>
@@ -80,7 +84,8 @@ export const SplashView: React.FC<SplashViewProps & { onPresentation?: () => voi
             onClick={onEnter} 
             size="xl" 
             fullWidth 
-            className="shadow-lg shadow-brand-500/30 font-bold tracking-wide"
+            className="shadow-lg shadow-brand-500/30 font-bold tracking-wide bg-gradient-to-r from-brand-600 via-emerald-500 to-brand-600 animate-gradient-x"
+            style={{ backgroundSize: '200% 200%' }}
           >
             {t('splash.enter')}
           </Button>

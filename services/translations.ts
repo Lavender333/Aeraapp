@@ -21,7 +21,7 @@ const DICTIONARY: Record<LanguageCode, Record<string, string>> = {
     
     // Splash
     "splash.motto": "Mitigate • Communicate • Respond • Recover",
-    "splash.desc": "An innovative tool for real-time emergency response and community aid.",
+    "splash.desc": "Clarity before crisis.",
     "splash.enter": "Enter App",
     "splash.disclaimer": "Not a substitute for 911",
     
@@ -166,7 +166,7 @@ const DICTIONARY: Record<LanguageCode, Record<string, string>> = {
 
     // Splash
     "splash.motto": "Mitigar • Comunicar • Responder • Recuperar",
-    "splash.desc": "Una herramienta innovadora para respuesta a emergencias en tiempo real y ayuda comunitaria.",
+    "splash.desc": "Claridad antes de la crisis.",
     "splash.enter": "Entrar a la App",
     "splash.disclaimer": "No sustituye al 911",
 
@@ -311,7 +311,7 @@ const DICTIONARY: Record<LanguageCode, Record<string, string>> = {
 
     // Splash
     "splash.motto": "Atténuer • Communiquer • Répondre • Récupérer",
-    "splash.desc": "Un outil innovant pour la réponse d'urgence en temps réel et l'aide communautaire.",
+    "splash.desc": "Clarté avant la crise.",
     "splash.enter": "Entrer dans l'App",
     "splash.disclaimer": "Ne remplace pas le 911",
 
