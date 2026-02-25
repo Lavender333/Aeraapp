@@ -948,7 +948,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                 </div>
                 <p className="text-[11px] text-slate-500 mt-2">Household members, emergency contacts, and org connection.</p>
                 {isProfileComplete ? (
-                  <p className="text-[11px] text-emerald-700 font-semibold mt-2 inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded px-2 py-1">
+                  <p className="text-[11px] text-slate-700 font-semibold mt-2 inline-flex items-center gap-1 bg-white border border-slate-200 rounded px-2 py-1">
                     <Check size={12} /> Profile complete
                   </p>
                 ) : (
@@ -996,7 +996,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
             onClick={() => setView('GAP')}
           >
             <div className="flex flex-col items-start gap-3">
-              <div className="p-2 bg-green-100 rounded-lg text-green-700">
+              <div className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700">
                 <DollarSign size={24} />
               </div>
               <div>
@@ -1027,28 +1027,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         
         {showLogisticsHome && (
           <Card 
-            className="col-span-2 bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-100 hover:border-emerald-200"
+            className="col-span-2"
             onClick={() => setView('LOGISTICS')}
           >
             <div className="flex items-start gap-4">
               <div className="p-3 bg-white rounded-xl shadow-sm">
-                <MapPin size={24} className="text-emerald-700" />
+                <MapPin size={24} className="text-slate-700" />
               </div>
               <div className="flex-1">
                 <h3 className="text-xl font-bold text-slate-900">{t('dash.logistics')}</h3>
                 <p className="text-sm text-slate-600">{t('dash.logistics.desc')}</p>
                 <div className="flex items-center gap-3 mt-3 flex-wrap">
-                  <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 shadow-sm">
+                  <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-slate-200">
                     <Droplets size={16} className="text-blue-600" />
                     <span className="text-sm font-semibold text-slate-800">Water</span>
                   </div>
-                  <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 shadow-sm">
-                    <Package size={16} className="text-emerald-600" />
+                  <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-slate-200">
+                    <Package size={16} className="text-slate-600" />
                     <span className="text-sm font-semibold text-slate-800">Food</span>
                   </div>
                 </div>
               </div>
-              <ChevronRight className="w-5 h-5 text-emerald-400 group-hover:translate-x-1 transition-transform flex-shrink-0" />
+              <ChevronRight className="w-5 h-5 text-slate-400 group-hover:translate-x-1 transition-transform flex-shrink-0" />
             </div>
           </Card>
         )}

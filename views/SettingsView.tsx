@@ -2909,14 +2909,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {/* Contacts */}
-      <section ref={contactsSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4">
+      <section ref={contactsSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200">
         <button
           type="button"
           onClick={() => toggleSection('contacts')}
           className="w-full flex items-center justify-between gap-4"
         >
           <div className="flex items-center gap-4 text-left">
-            <div className="p-3 bg-cyan-50 rounded-full text-cyan-700">
+            <div className="p-3 bg-white border border-slate-200 rounded-full text-slate-700">
               <Phone size={24} />
             </div>
             <div>
@@ -2973,14 +2973,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {/* Household */}
-      <section ref={householdSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-emerald-100 order-30">
+      <section ref={householdSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 order-30">
         <button
           type="button"
           onClick={() => toggleSection('household')}
           className="w-full flex items-center justify-between gap-4"
         >
           <div className="flex items-center gap-4 text-left">
-            <div className="p-3 bg-emerald-50 rounded-full text-emerald-700">
+            <div className="p-3 bg-white border border-slate-200 rounded-full text-slate-700">
               <Users size={24} />
             </div>
             <div>
@@ -3025,39 +3025,39 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             latestSafetyStatusByMember={latestSafetyStatusByMember}
           />
           {profile.householdRole === 'OWNER' && (
-            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
-              <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Household Health Summary</p>
+            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+              <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Household Health Summary</p>
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border border-emerald-100 bg-white p-3">
-                  <p className="text-[11px] font-semibold text-emerald-700 uppercase">Mobility limited</p>
-                  <p className="text-lg font-bold text-emerald-900">{householdHealthSummary.mobilityCount}</p>
-                  <p className="text-[11px] text-emerald-700">of {householdHealthSummary.householdSize} people</p>
+                <div className="rounded-lg border border-slate-200 bg-white p-3">
+                  <p className="text-[11px] font-semibold text-slate-700 uppercase">Mobility limited</p>
+                  <p className="text-lg font-bold text-slate-900">{householdHealthSummary.mobilityCount}</p>
+                  <p className="text-[11px] text-slate-600">of {householdHealthSummary.householdSize} people</p>
                 </div>
-                <div className="rounded-lg border border-emerald-100 bg-white p-3">
-                  <p className="text-[11px] font-semibold text-emerald-700 uppercase">Medical needs</p>
-                  <p className="text-lg font-bold text-emerald-900">{householdHealthSummary.medicalCount}</p>
-                  <p className="text-[11px] text-emerald-700">of {householdHealthSummary.householdSize} people</p>
+                <div className="rounded-lg border border-slate-200 bg-white p-3">
+                  <p className="text-[11px] font-semibold text-slate-700 uppercase">Medical needs</p>
+                  <p className="text-lg font-bold text-slate-900">{householdHealthSummary.medicalCount}</p>
+                  <p className="text-[11px] text-slate-600">of {householdHealthSummary.householdSize} people</p>
                 </div>
               </div>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2">
-                  <p className="text-[11px] font-semibold text-emerald-700 uppercase">Medication dep</p>
-                  <p className="text-sm font-bold text-emerald-900">{householdHealthSummary.medicationCount}</p>
+                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                  <p className="text-[11px] font-semibold text-slate-700 uppercase">Medication dep</p>
+                  <p className="text-sm font-bold text-slate-900">{householdHealthSummary.medicationCount}</p>
                 </div>
-                <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2">
-                  <p className="text-[11px] font-semibold text-emerald-700 uppercase">Insulin dep</p>
-                  <p className="text-sm font-bold text-emerald-900">{householdHealthSummary.insulinCount}</p>
+                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                  <p className="text-[11px] font-semibold text-slate-700 uppercase">Insulin dep</p>
+                  <p className="text-sm font-bold text-slate-900">{householdHealthSummary.insulinCount}</p>
                 </div>
-                <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2">
-                  <p className="text-[11px] font-semibold text-emerald-700 uppercase">Oxygen device</p>
-                  <p className="text-sm font-bold text-emerald-900">{householdHealthSummary.oxygenCount}</p>
+                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                  <p className="text-[11px] font-semibold text-slate-700 uppercase">Oxygen device</p>
+                  <p className="text-sm font-bold text-slate-900">{householdHealthSummary.oxygenCount}</p>
                 </div>
-                <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2">
-                  <p className="text-[11px] font-semibold text-emerald-700 uppercase">Transport limited</p>
-                  <p className="text-sm font-bold text-emerald-900">{householdHealthSummary.transportationCount}</p>
+                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                  <p className="text-[11px] font-semibold text-slate-700 uppercase">Transport limited</p>
+                  <p className="text-sm font-bold text-slate-900">{householdHealthSummary.transportationCount}</p>
                 </div>
               </div>
-              <p className="text-[11px] text-emerald-700">
+              <p className="text-[11px] text-slate-600">
                 Counts include you plus listed household members.
               </p>
             </div>
@@ -3075,7 +3075,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                         <p className="text-[11px] text-slate-500">+{member.dependentCount} dependent{member.dependentCount === 1 ? '' : 's'}</p>
                       )}
                     </div>
-                    <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${member.role === 'OWNER' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}`}>
+                    <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${member.role === 'OWNER' ? 'bg-slate-200 text-slate-700' : 'bg-slate-200 text-slate-700'}`}>
                       {member.role}
                     </span>
                   </div>
@@ -3099,12 +3099,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
         {/* 2. OWNER JOIN REQUESTS */}
         {showMoreSections.household && profile.householdRole === 'OWNER' && pendingOwnerRequests.length > 0 && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
-            <p className="text-xs font-bold text-amber-700 uppercase tracking-wider">New Household Join Request{pendingOwnerRequests.length === 1 ? '' : 's'}</p>
+          <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+            <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">New Household Join Request{pendingOwnerRequests.length === 1 ? '' : 's'}</p>
 
             <div className="space-y-2">
               {pendingOwnerRequests.map((request) => (
-                <div key={request.id} className="rounded-lg border border-amber-200 bg-white p-3 flex items-center justify-between gap-3">
+                <div key={request.id} className="rounded-lg border border-slate-200 bg-white p-3 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-slate-900">{request.requestingUserName || 'AERA user'}</p>
                     <p className="text-[11px] text-slate-500">{request.requestingUserPhone || request.requestingUserEmail || 'No contact preview available'}</p>
@@ -3136,26 +3136,26 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         )}
 
         {/* 3. CURRENT HOUSEHOLD - State Before Action */}
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
           <div>
-            <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Current Household</p>
-            <p className="text-2xl font-mono font-black tracking-widest text-emerald-900 mt-2">
+            <p className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Current Household</p>
+            <p className="text-2xl font-mono font-black tracking-widest text-slate-900 mt-2">
               {profile.householdCode || '------'}
             </p>
-            <p className="text-xs text-emerald-700 mt-2">
+            <p className="text-xs text-slate-700 mt-2">
               {profile.householdName || 'Your Home'} • {profile.householdRole || 'OWNER'}
             </p>
-            <p className="text-xs text-emerald-600 mt-2">You are currently active in this household.</p>
+            <p className="text-xs text-slate-600 mt-2">You are currently active in this household.</p>
           </div>
 
           {profile.householdRole === 'OWNER' && transferCandidates.length > 0 && (
             <div className="space-y-1">
-              <label className="block text-xs font-semibold text-emerald-800">Transfer ownership to</label>
+              <label className="block text-xs font-semibold text-slate-700">Transfer ownership to</label>
               <select
                 value={selectedTransferCandidateId}
                 onChange={(e) => setSelectedTransferCandidateId(e.target.value)}
                 disabled={isLeavingHousehold}
-                className="w-full rounded-lg border border-emerald-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 bg-white"
               >
                 <option value="">Select a member</option>
                 {transferCandidates.map((candidate) => (
@@ -3164,7 +3164,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-emerald-700">Required before leaving because this household has other members.</p>
+              <p className="text-xs text-slate-600">Required before leaving because this household has other members.</p>
             </div>
           )}
 
@@ -3175,7 +3175,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 variant="ghost"
                 onClick={() => copyToClipboard(profile.householdCode || '')}
                 disabled={!profile.householdCode}
-                className="text-emerald-800 hover:bg-emerald-100"
+                className="text-slate-700 hover:bg-slate-100"
               >
                 <Copy size={16} className="mr-2" /> Copy Code
               </Button>
@@ -3216,10 +3216,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         )}
 
         {/* 3. JOIN ANOTHER HOUSEHOLD - Action Section */}
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
           <div>
-            <p className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">Join Another Household</p>
-            <p className="text-xs text-blue-600 mt-2">Enter a valid household code to request access.</p>
+            <p className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Join Another Household</p>
+            <p className="text-xs text-slate-600 mt-2">Enter a valid household code to request access.</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
@@ -3240,10 +3240,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           </div>
 
           {profile.householdId && (
-            <p className="text-xs text-blue-700 font-medium">You must leave your current household before joining another.</p>
+            <p className="text-xs text-slate-700 font-medium">You must leave your current household before joining another.</p>
           )}
           {!profile.householdId && (
-            <p className="text-xs text-blue-600">Your request will be sent to the household administrator for approval.</p>
+            <p className="text-xs text-slate-600">Your request will be sent to the household administrator for approval.</p>
           )}
 
           {householdCodeError && (
@@ -3292,12 +3292,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           <>
             {/* Member Account Invites */}
             {inviteEnabledMembers.length > 0 && (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
-                <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Member Account Invites</p>
+              <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Member Account Invites</p>
 
                 <div className="space-y-2">
                   {inviteEnabledMembers.map((member) => (
-                    <div key={member.id} className="flex items-center justify-between rounded-lg border border-emerald-200 bg-white p-3 gap-3">
+                    <div key={member.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-3 gap-3">
                       <div>
                         <p className="text-sm font-semibold text-slate-900">{member.name}</p>
                         <p className="text-xs text-slate-600">Invite Code: <span className="font-mono font-bold tracking-wider">{latestInviteByMember[member.id]?.invitationCode || buildMemberInviteCode(member)}</span></p>
@@ -3318,7 +3318,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="text-emerald-800 hover:bg-emerald-100"
+                          className="text-slate-700 hover:bg-slate-100"
                           onClick={() => handleCopyMemberInvite(member)}
                           disabled={inviteBusyMemberId === member.id || !isValidPhoneForInvite(member.loginPhone || '')}
                         >
@@ -3420,14 +3420,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {/* Security */}
-      <section ref={securitySectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-red-100 order-20">
+      <section ref={securitySectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 order-20">
         <button
           type="button"
           onClick={() => toggleSection('security')}
           className="w-full flex items-center justify-between gap-4"
         >
           <div className="flex items-center gap-4 text-left">
-            <div className="p-3 bg-red-50 rounded-full text-red-600">
+            <div className="p-3 bg-white border border-slate-200 rounded-full text-slate-700">
               <HeartPulse size={24} />
             </div>
             <div>
@@ -3540,14 +3540,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wide">Final Step</p>
           <p className="text-sm font-bold text-slate-800 mt-1">Confirm preparedness consent</p>
         </div>
-        <label className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+        <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3">
           <input
             className="mt-1"
             type="checkbox"
             checked={Boolean(profile.consentPreparednessPlanning)}
             onChange={(e) => updateProfile('consentPreparednessPlanning', e.target.checked)}
           />
-          <span className="text-sm text-emerald-900 font-semibold">
+          <span className="text-sm text-slate-700 font-semibold">
             I understand this data is used only for preparedness planning and can be deleted anytime.
           </span>
         </label>

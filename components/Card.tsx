@@ -13,8 +13,8 @@ export const Card: React.FC<CardProps> = ({ children, className = '', onClick, t
   return (
     <div 
       onClick={onClick}
-      className={`bg-white rounded-xl border border-slate-200 shadow-sm p-4 transition-all ${
-        onClick ? 'active:scale-95 cursor-pointer hover:shadow-md hover:border-brand-200' : ''
+      className={`bg-[#FFFFFF] rounded-[16px] border border-[#E5ECEA] shadow-[0_6px_18px_rgba(15,23,42,0.06)] p-6 transition-all ${
+        onClick ? 'active:scale-95 cursor-pointer hover:shadow-[0_8px_20px_rgba(15,23,42,0.08)]' : ''
       } ${className}`}
     >
       {(title || icon) && (
