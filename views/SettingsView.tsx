@@ -300,6 +300,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   // Master Inventory State
   const [inventoryRequests, setInventoryRequests] = useState<ReplenishmentRequest[]>([]);
   const [printingRequest, setPrintingRequest] = useState<ReplenishmentRequest | null>(null);
+  const [autoPrintOnOpen, setAutoPrintOnOpen] = useState(false);
   const [workOrderForm, setWorkOrderForm] = useState<Record<string, string>>({});
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSavingVitals, setIsSavingVitals] = useState(false);
@@ -1788,10 +1789,20 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     }
   };
 
-  const handlePrintOrder = (req: ReplenishmentRequest) => {
+  const handlePrintOrder = (req: ReplenishmentRequest, autoPrint = false) => {
     setWorkOrderForm({}); // Reset form for new order
+    setAutoPrintOnOpen(autoPrint);
     setPrintingRequest(req);
   };
+
+  useEffect(() => {
+    if (!printingRequest || !autoPrintOnOpen) return;
+    const timeoutId = window.setTimeout(() => {
+      window.print();
+      setAutoPrintOnOpen(false);
+    }, 250);
+    return () => window.clearTimeout(timeoutId);
+  }, [printingRequest, autoPrintOnOpen]);
 
   const updateWorkOrderForm = (key: string, value: string) => {
     setWorkOrderForm(prev => ({ ...prev, [key]: value }));
@@ -1873,7 +1884,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       <div className="fixed inset-0 z-[100] overflow-y-auto bg-white p-8 font-serif text-black animate-fade-in print:p-0 print:bg-white print:text-black print:static print:overflow-visible">
         {/* Navigation (Hidden in Print) */}
         <div className="fixed top-0 left-0 right-0 p-4 bg-slate-900 text-white flex justify-between items-center print:hidden shadow-lg z-50">
-           <span className="font-bold">Work Order Preview</span>
+           <span className="font-bold">Receipt Preview</span>
            <div className="flex gap-2">
              <Button size="sm" className="bg-brand-600 text-white" onClick={() => window.print()}>
                <Printer size={16} className="mr-2" /> Print Now
@@ -2135,10 +2146,19 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                                size="sm"
                                variant="outline"
                                onClick={() => handlePrintOrder(req)}
-                               className="text-xs py-1 h-8 px-2 border-slate-300 mr-2"
-                               title="View Signed Order"
+                               className="text-xs py-1 h-8 px-2 border-slate-300"
+                               title="Preview Receipt"
                              >
-                               {req.signature && req.receivedSignature ? <CheckCircle size={14} className="text-green-600" /> : <Printer size={14} />}
+                               <FileText size={14} className="mr-1" /> Receipt
+                             </Button>
+                             <Button
+                               size="sm"
+                               variant="outline"
+                               onClick={() => handlePrintOrder(req, true)}
+                               className="text-xs py-1 h-8 px-2 border-slate-300"
+                               title="Print Receipt"
+                             >
+                               <Printer size={14} className="mr-1" /> Print
                              </Button>
                              <button 
                                onClick={() => handleReopenRequest(req.id)}

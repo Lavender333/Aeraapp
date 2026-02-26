@@ -7,7 +7,7 @@ import { listRequests, createRequest, updateRequestStatus, fetchOrgOutreachFlags
 import { REQUEST_ITEM_MAP } from '../services/validation';
 import { getInventoryStatuses, getRecommendedResupply } from '../services/inventoryStatus';
 import { t } from '../services/translations';
-import { Building2, CheckCircle, AlertTriangle, HelpCircle, Package, ArrowLeft, Send, Truck, Copy, Save, Phone, MapPin, User, HeartPulse, BellRing, X, AlertOctagon, Loader2, Wand2, ShieldCheck, WifiOff } from 'lucide-react';
+import { Building2, CheckCircle, AlertTriangle, HelpCircle, Package, ArrowLeft, Send, Truck, Copy, Save, Phone, MapPin, User, HeartPulse, BellRing, X, AlertOctagon, Loader2, Wand2, ShieldCheck, WifiOff, FileText, Printer } from 'lucide-react';
 import { Textarea } from '../components/Input';
 import { GoogleGenAI } from "../services/mockGenAI";
 
@@ -520,6 +520,84 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
         setInventory(updatedInv);
       })
       .finally(() => setStockLoading(false));
+  };
+
+  const escapeHtml = (value: string) =>
+    String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+  const openReceipt = (req: ReplenishmentRequest, autoPrint = false) => {
+    const receiptWindow = window.open('', '_blank', 'noopener,noreferrer,width=900,height=1100');
+    if (!receiptWindow) {
+      alert('Please allow pop-ups to preview and print receipts.');
+      return;
+    }
+
+    const stockedQty = req.stockedQuantity ?? req.quantity;
+    const statusTime = req.stockedAt || req.receivedAt || req.signedAt || req.timestamp;
+    const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>AERA Receipt ${escapeHtml(req.id)}</title>
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #0f172a; margin: 24px; }
+      .card { border: 1px solid #cbd5e1; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+      .title { font-size: 24px; font-weight: 700; margin: 0 0 6px; }
+      .sub { color: #475569; margin: 0 0 16px; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: left; }
+      th { background: #f1f5f9; width: 220px; }
+      .sign { max-height: 70px; border: 1px solid #cbd5e1; padding: 6px; border-radius: 8px; background: #fff; }
+      .row { margin-top: 10px; }
+      @media print { .no-print { display: none; } body { margin: 0; } }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1 class="title">Fulfillment Receipt</h1>
+      <p class="sub">AERA Replenishment Confirmation</p>
+      <table>
+        <tr><th>Receipt / Order ID</th><td>${escapeHtml(req.id)}</td></tr>
+        <tr><th>Organization</th><td>${escapeHtml(req.orgName)} (${escapeHtml(req.orgId)})</td></tr>
+        <tr><th>Item</th><td>${escapeHtml(req.item)}</td></tr>
+        <tr><th>Requested Qty</th><td>${escapeHtml(String(req.quantity))}</td></tr>
+        <tr><th>Delivered / Stocked Qty</th><td>${escapeHtml(String(stockedQty))}</td></tr>
+        <tr><th>Status</th><td>${escapeHtml(req.status)}</td></tr>
+        <tr><th>Request Date</th><td>${escapeHtml(new Date(req.timestamp).toLocaleString())}</td></tr>
+        <tr><th>Fulfillment Date</th><td>${escapeHtml(new Date(statusTime).toLocaleString())}</td></tr>
+        <tr><th>Provider</th><td>${escapeHtml(req.provider || 'Central Warehouse')}</td></tr>
+      </table>
+
+      <div class="row">
+        <strong>Released By Signature:</strong><br/>
+        ${req.signature ? `<img class="sign" src="${req.signature}" alt="Released signature" />` : 'Not provided'}
+      </div>
+      <div class="row">
+        <strong>Received By Signature:</strong><br/>
+        ${req.receivedSignature ? `<img class="sign" src="${req.receivedSignature}" alt="Received signature" />` : 'Not provided'}
+      </div>
+    </div>
+    <div class="no-print">
+      <button onclick="window.print()">Print Receipt</button>
+    </div>
+  </body>
+</html>`;
+
+    receiptWindow.document.open();
+    receiptWindow.document.write(html);
+    receiptWindow.document.close();
+    receiptWindow.focus();
+
+    if (autoPrint) {
+      window.setTimeout(() => {
+        receiptWindow.print();
+      }, 250);
+    }
   };
 
   const status = getInventoryStatuses(inventory, coverageBase);
@@ -1187,7 +1265,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                     )}
 
                     {req.status === 'FULFILLED' && (
-                      <div className="mt-3 flex items-center gap-2">
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
                         <Button 
                           size="sm" 
                           variant={req.stocked ? "ghost" : "outline"} 
@@ -1203,6 +1281,12 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                             </>
                           )}
                         </Button>
+                        <Button size="sm" variant="outline" onClick={() => openReceipt(req)}>
+                          <FileText size={14} className="mr-1" /> Receipt
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => openReceipt(req, true)}>
+                          <Printer size={14} className="mr-1" /> Print
+                        </Button>
                         {req.stocked && req.stockedAt && (
                           <span className="text-[11px] text-slate-500 font-bold">
                             Stocked at {new Date(req.stockedAt).toLocaleTimeString()}
@@ -1212,8 +1296,16 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                     )}
 
                     {req.status === 'STOCKED' && (
-                      <div className="mt-2 text-[11px] text-emerald-700 font-bold">
-                        Stocked at {req.stockedAt ? new Date(req.stockedAt).toLocaleTimeString() : '—'}
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="text-[11px] text-emerald-700 font-bold">
+                          Stocked at {req.stockedAt ? new Date(req.stockedAt).toLocaleTimeString() : '—'}
+                        </span>
+                        <Button size="sm" variant="outline" onClick={() => openReceipt(req)}>
+                          <FileText size={14} className="mr-1" /> Receipt
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => openReceipt(req, true)}>
+                          <Printer size={14} className="mr-1" /> Print
+                        </Button>
                       </div>
                     )}
                   </div>
