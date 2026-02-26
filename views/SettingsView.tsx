@@ -3950,14 +3950,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <h2 className="text-lg font-semibold text-slate-800">Legal &amp; Privacy</h2>
           </div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 space-y-2">
+        <div className="space-y-1">
           <button
             type="button"
             onClick={() => {
               sessionStorage.setItem('privacyReturnView', 'SETTINGS');
               setView('PRIVACY_POLICY');
             }}
-            className="block w-full text-left text-[12px] text-slate-600 hover:underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 rounded"
+            className="block w-full text-left text-xs text-slate-500 hover:text-slate-700 hover:underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 rounded"
           >
             Privacy Notice
           </button>
@@ -3967,7 +3967,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               sessionStorage.setItem('privacyReturnView', 'SETTINGS');
               setView('PRIVACY_POLICY');
             }}
-            className="block w-full text-left text-[12px] text-slate-600 hover:underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 rounded"
+            className="block w-full text-left text-xs text-slate-500 hover:text-slate-700 hover:underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 rounded"
           >
             Preparedness Data Consent
           </button>
