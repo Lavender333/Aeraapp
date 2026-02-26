@@ -526,13 +526,13 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         <div className="flex items-center gap-3 mb-4">
           <button
             onClick={() => setView('DASHBOARD')}
-            className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center hover:bg-white/30"
+            className="w-9 h-9 rounded-xl bg-white/60 flex items-center justify-center hover:bg-white/80"
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft size={18} className="text-slate-800" />
           </button>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold">Build Your Ready Kit</h1>
-            <p className="text-sm text-blue-50">Gather helpful items to have on hand when you need them</p>
+            <h1 className="text-2xl font-bold text-slate-800">Build Your Ready Kit</h1>
+            <p className="text-sm text-slate-600">Gather helpful items to have on hand when you need them</p>
           </div>
         </div>
       </div>
