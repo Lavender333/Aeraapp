@@ -236,6 +236,48 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
       .catch(() => setMemberNeeds([]));
   }, [communityId, viewOrgId, childOrgs, parentOrgName]);
 
+  useEffect(() => {
+    if (!activeOrgCode) return;
+
+    let cancelled = false;
+
+    const refreshRequests = () => {
+      listRequests(activeOrgCode)
+        .then((data) => {
+          if (cancelled) return;
+          setRequestsFallback(false);
+          setRequests(data);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setRequestsFallback(true);
+          setRequests(StorageService.getOrgReplenishmentRequests(activeOrgCode));
+        });
+    };
+
+    refreshRequests();
+    const interval = window.setInterval(refreshRequests, 15000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') refreshRequests();
+    };
+
+    const handleFocus = () => refreshRequests();
+    const handleInventoryUpdate = () => refreshRequests();
+
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('inventory-update', handleInventoryUpdate);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('inventory-update', handleInventoryUpdate);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [activeOrgCode]);
+
   const displayOrgCode = (() => {
     if (viewOrgId === 'ALL') return activeOrgCode || communityId;
     return activeOrgCode;

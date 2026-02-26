@@ -6,7 +6,7 @@ import { Button } from '../components/Button';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
-import { AppNotificationRecord, cancelMyHouseholdJoinRequest, ConnectedHouseholdMember, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateProfileForUser, updateVitalsForUser } from '../services/api';
+import { AppNotificationRecord, cancelMyHouseholdJoinRequest, ConnectedHouseholdMember, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateProfileForUser, updateRequestStatus, updateVitalsForUser } from '../services/api';
 import { getOrgByCode } from '../services/supabase';
 import { listOrganizations as listOrganizationsSupabase } from '../services/supabaseApi';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
@@ -1740,20 +1740,52 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     }, 1500);
   };
 
-  const handleMarkFulfilled = (requestId: string) => {
-    StorageService.updateReplenishmentRequestStatus(requestId, 'FULFILLED');
-    // Refresh list
+  const handleMarkFulfilled = async (requestId: string) => {
     setInventoryRequests(prev => prev.map(req => 
       req.id === requestId ? { ...req, status: 'FULFILLED' } : req
     ));
+
+    try {
+      await updateRequestStatus(requestId, { status: 'FULFILLED' });
+      const remoteReqs = await listAllRequests();
+      const scopedRemoteReqs = isOrgScopedAdmin
+        ? remoteReqs.filter((req) => String(req.orgId || '') === orgScopeId)
+        : remoteReqs;
+      setInventoryRequests(scopedRemoteReqs);
+    } catch {
+      StorageService.updateReplenishmentRequestStatus(requestId, 'FULFILLED');
+      setInventoryRequests(prev => prev.map(req => 
+        req.id === requestId ? { ...req, status: 'FULFILLED' } : req
+      ));
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('inventory-update'));
+    }
   };
 
-  const handleReopenRequest = (requestId: string) => {
-    StorageService.updateReplenishmentRequestStatus(requestId, 'PENDING');
-    // Refresh list
+  const handleReopenRequest = async (requestId: string) => {
     setInventoryRequests(prev => prev.map(req => 
       req.id === requestId ? { ...req, status: 'PENDING' } : req
     ));
+
+    try {
+      await updateRequestStatus(requestId, { status: 'PENDING' });
+      const remoteReqs = await listAllRequests();
+      const scopedRemoteReqs = isOrgScopedAdmin
+        ? remoteReqs.filter((req) => String(req.orgId || '') === orgScopeId)
+        : remoteReqs;
+      setInventoryRequests(scopedRemoteReqs);
+    } catch {
+      StorageService.updateReplenishmentRequestStatus(requestId, 'PENDING');
+      setInventoryRequests(prev => prev.map(req => 
+        req.id === requestId ? { ...req, status: 'PENDING' } : req
+      ));
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('inventory-update'));
+    }
   };
 
   const handlePrintOrder = (req: ReplenishmentRequest) => {
