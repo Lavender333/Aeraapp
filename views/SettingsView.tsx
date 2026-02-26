@@ -315,6 +315,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [vitalsSaveError, setVitalsSaveError] = useState<string | null>(null);
   const [savedSection, setSavedSection] = useState<SettingsAccordionKey | null>(null);
   const saveIndicatorTimeoutRef = useRef<number | null>(null);
+  const profileAutosaveTimeoutRef = useRef<number | null>(null);
+  const vitalsAutosaveTimeoutRef = useRef<number | null>(null);
   const [languageUpdatedMessage, setLanguageUpdatedMessage] = useState<string | null>(null);
   const languageUpdatedTimeoutRef = useRef<number | null>(null);
   const [householdCodeInput, setHouseholdCodeInput] = useState('');
@@ -404,6 +406,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       }
       if (languageUpdatedTimeoutRef.current) {
         window.clearTimeout(languageUpdatedTimeoutRef.current);
+      }
+      if (profileAutosaveTimeoutRef.current) {
+        window.clearTimeout(profileAutosaveTimeoutRef.current);
+      }
+      if (vitalsAutosaveTimeoutRef.current) {
+        window.clearTimeout(vitalsAutosaveTimeoutRef.current);
       }
     };
   }, []);
@@ -825,16 +833,18 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       }
       return;
     }
-    const nextRequiredErrors = {
-      address: !trimmedAddress,
-      city: !trimmedCity,
-      state: !trimmedState,
-      zipCode: !trimmedZip,
-    };
-    setProfileRequiredErrors(nextRequiredErrors);
-    if (nextRequiredErrors.address || nextRequiredErrors.city || nextRequiredErrors.state || nextRequiredErrors.zipCode) {
-      setExpandedSections((prev) => ({ ...prev, profile: true }));
-      return;
+    if (section !== 'contacts') {
+      const nextRequiredErrors = {
+        address: !trimmedAddress,
+        city: !trimmedCity,
+        state: !trimmedState,
+        zipCode: !trimmedZip,
+      };
+      setProfileRequiredErrors(nextRequiredErrors);
+      if (nextRequiredErrors.address || nextRequiredErrors.city || nextRequiredErrors.state || nextRequiredErrors.zipCode) {
+        setExpandedSections((prev) => ({ ...prev, profile: true }));
+        return;
+      }
     }
     if (section) setSavingSection(section);
     setIsSavingProfile(true);
@@ -930,11 +940,125 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const updateProfile = (key: keyof UserProfile, value: any) => {
+    const profileAutosaveKeys = new Set<keyof UserProfile>([
+      'fullName',
+      'phone',
+      'email',
+      'address',
+      'addressLine1',
+      'addressLine2',
+      'city',
+      'state',
+      'zipCode',
+      'emergencyContactName',
+      'emergencyContactPhone',
+      'emergencyContactRelation',
+    ]);
+
+    const vitalsAutosaveKeys = new Set<keyof UserProfile>([
+      'household',
+      'householdMembers',
+      'petDetails',
+      'medicalNeeds',
+      'medicationDependency',
+      'insulinDependency',
+      'oxygenPoweredDevice',
+      'mobilityLimitation',
+      'transportationAccess',
+      'financialStrain',
+      'consentPreparednessPlanning',
+    ]);
+
     setProfile((prev) => {
       const next = { ...prev, [key]: value };
       if (key === 'address') {
         next.addressLine1 = String(value || '').trim() || undefined;
       }
+
+      StorageService.saveProfile(next);
+
+      if (profileAutosaveKeys.has(key)) {
+        if (profileAutosaveTimeoutRef.current) {
+          window.clearTimeout(profileAutosaveTimeoutRef.current);
+        }
+        const snapshot = { ...next };
+        const targetSection: SettingsAccordionKey =
+          key === 'emergencyContactName' || key === 'emergencyContactPhone' || key === 'emergencyContactRelation'
+            ? 'contacts'
+            : 'profile';
+        profileAutosaveTimeoutRef.current = window.setTimeout(async () => {
+          try {
+            await updateProfileForUser({
+              fullName: snapshot.fullName,
+              phone: snapshot.phone,
+              email: snapshot.email,
+              address: snapshot.address,
+              addressLine1: snapshot.addressLine1,
+              addressLine2: snapshot.addressLine2,
+              city: snapshot.city,
+              state: snapshot.state,
+              zip: snapshot.zipCode,
+              latitude: snapshot.latitude,
+              longitude: snapshot.longitude,
+              googlePlaceId: snapshot.googlePlaceId,
+              addressVerified: Boolean(snapshot.addressVerified),
+              addressVerifiedAt: snapshot.addressVerifiedAt,
+              emergencyContactName: snapshot.emergencyContactName,
+              emergencyContactPhone: snapshot.emergencyContactPhone,
+              emergencyContactRelation: snapshot.emergencyContactRelation,
+              communityId: snapshot.communityId,
+              role: snapshot.role,
+            });
+            showSavedIndicator(targetSection);
+            setProfileSaveError(null);
+          } catch {
+          } finally {
+            profileAutosaveTimeoutRef.current = null;
+          }
+        }, 700);
+      }
+
+      if (vitalsAutosaveKeys.has(key)) {
+        if (vitalsAutosaveTimeoutRef.current) {
+          window.clearTimeout(vitalsAutosaveTimeoutRef.current);
+        }
+        const snapshot = { ...next };
+        vitalsAutosaveTimeoutRef.current = window.setTimeout(async () => {
+          const memberValidation = validateHouseholdMembers(snapshot.household || []);
+          if (!snapshot.zipCode?.trim() || !snapshot.consentPreparednessPlanning || !memberValidation.ok) {
+            vitalsAutosaveTimeoutRef.current = null;
+            return;
+          }
+          try {
+            await updateVitalsForUser({
+              household: snapshot.household,
+              householdMembers: snapshot.householdMembers,
+              petDetails: snapshot.petDetails,
+              medicalNeeds: snapshot.medicalNeeds,
+              zipCode: snapshot.zipCode,
+              medicationDependency: Boolean(snapshot.medicationDependency),
+              insulinDependency: Boolean(snapshot.insulinDependency),
+              oxygenPoweredDevice: Boolean(snapshot.oxygenPoweredDevice),
+              mobilityLimitation: Boolean(snapshot.mobilityLimitation),
+              transportationAccess: Boolean(snapshot.transportationAccess),
+              financialStrain: Boolean(snapshot.financialStrain),
+              consentPreparednessPlanning: Boolean(snapshot.consentPreparednessPlanning),
+            });
+            const consentTimestamp = new Date().toISOString();
+            setProfile((current) => {
+              const updated = { ...current, consentTimestamp };
+              StorageService.saveProfile(updated);
+              return updated;
+            });
+            showSavedIndicator('security');
+            setVitalsSaveError(null);
+          } catch {
+          } finally {
+            vitalsAutosaveTimeoutRef.current = null;
+          }
+        }, 900);
+      }
+
       return next;
     });
     if (key === 'communityId') {
