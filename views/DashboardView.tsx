@@ -981,7 +981,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         </>
       )}
 
-      {hasCommunity && showCommunityBlocks && (
+      {(isGeneralUser || (hasCommunity && showCommunityBlocks)) && (
         /* Modular Card Layout - DYNAMIC BASED ON ROLE */
         <>
           <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-2">Recovery & Resources</h3>
