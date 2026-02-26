@@ -3085,11 +3085,88 @@ export async function submitDamageAssessment(payload: {
   description: string;
   imageDataUrl?: string | null;
 }) {
+  const ASSESSMENT_WINDOW_MINUTES = 10;
+  const ASSESSMENT_LOCATION_LIMIT = 3;
+  const ASSESSMENT_HOURLY_LIMIT = 10;
+  const DUPLICATE_WINDOW_MINUTES = 5;
+
+  const normalizeText = (value: string) =>
+    String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/[^a-z0-9 ]/g, '');
+
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData?.user) throw new Error('Not authenticated');
 
   const profile = await getProfileById(authData.user.id);
   const orgId = profile?.org_id || null;
+
+  const { data: profileLocation } = await supabase
+    .from('profiles')
+    .select('home_address, city, state, zip_code')
+    .eq('id', authData.user.id)
+    .maybeSingle();
+
+  const locationParts = [
+    String((profileLocation as any)?.home_address || '').trim(),
+    String((profileLocation as any)?.city || '').trim(),
+    String((profileLocation as any)?.state || '').trim(),
+    String((profileLocation as any)?.zip_code || '').trim(),
+  ].filter(Boolean);
+
+  const locationText = locationParts.join(', ');
+  const locationBucket = normalizeText(locationText || (orgId ? `org:${orgId}` : authData.user.id));
+
+  const now = new Date();
+  const windowStart = new Date(now.getTime() - ASSESSMENT_WINDOW_MINUTES * 60 * 1000).toISOString();
+  const hourStart = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
+  const dupStart = new Date(now.getTime() - DUPLICATE_WINDOW_MINUTES * 60 * 1000).toISOString();
+
+  const normalizedDescription = normalizeText(payload.description || '');
+  const typeKey = String(payload.damageType || '').trim().toUpperCase();
+
+  const [{ count: recentAtLocationCount }, { count: recentHourlyCount }, { data: possibleDuplicates }] = await Promise.all([
+    supabase
+      .from('damage_assessments')
+      .select('id', { count: 'exact', head: true })
+      .eq('profile_id', authData.user.id)
+      .eq('damage_type', typeKey)
+      .eq('location', locationBucket)
+      .gte('created_at', windowStart),
+    supabase
+      .from('damage_assessments')
+      .select('id', { count: 'exact', head: true })
+      .eq('profile_id', authData.user.id)
+      .gte('created_at', hourStart),
+    supabase
+      .from('damage_assessments')
+      .select('id, description, severity, damage_type')
+      .eq('profile_id', authData.user.id)
+      .gte('created_at', dupStart)
+      .order('created_at', { ascending: false })
+      .limit(20),
+  ]);
+
+  if (Number(recentHourlyCount || 0) >= ASSESSMENT_HOURLY_LIMIT) {
+    throw new Error('Too many reports submitted in the last hour. Please wait a bit before submitting another report.');
+  }
+
+  if (Number(recentAtLocationCount || 0) >= ASSESSMENT_LOCATION_LIMIT) {
+    throw new Error('Too many reports from this location in a short time. Please update an existing report or wait a few minutes.');
+  }
+
+  const isDuplicate = (possibleDuplicates || []).some((row: any) => {
+    const sameType = String(row.damage_type || '').toUpperCase() === typeKey;
+    const sameSeverity = Number(row.severity || 0) === Number(payload.severity || 0);
+    const sameDescription = normalizeText(String(row.description || '')) === normalizedDescription;
+    return sameType && sameSeverity && sameDescription && normalizedDescription.length > 0;
+  });
+
+  if (isDuplicate) {
+    throw new Error('This report looks like a recent duplicate. Please update your existing report instead of submitting the same details again.');
+  }
 
   let photoPath: string | null = null;
 
@@ -3110,10 +3187,11 @@ export async function submitDamageAssessment(payload: {
     .insert({
       profile_id: authData.user.id,
       org_id: orgId,
-      damage_type: payload.damageType,
+      damage_type: typeKey,
       severity: payload.severity,
       description: payload.description || null,
       photo_path: photoPath,
+      location: locationBucket,
     })
     .select('id, photo_path')
     .single();
