@@ -206,11 +206,13 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     setIsSubmitting(true);
     setSubmitError(null);
     try {
+      const profile = StorageService.getProfile();
       const result = await submitDamageAssessment({
         damageType,
         severity,
         description,
         imageDataUrl: capturedImage || null,
+        communityId: profile.communityId || null,
       });
       if (result?.photo_path) {
         try {

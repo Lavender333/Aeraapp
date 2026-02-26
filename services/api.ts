@@ -3084,6 +3084,7 @@ export async function submitDamageAssessment(payload: {
   severity: number;
   description: string;
   imageDataUrl?: string | null;
+  communityId?: string | null;
 }) {
   const ASSESSMENT_WINDOW_MINUTES = 10;
   const ASSESSMENT_LOCATION_LIMIT = 3;
@@ -3101,7 +3102,20 @@ export async function submitDamageAssessment(payload: {
   if (authError || !authData?.user) throw new Error('Not authenticated');
 
   const profile = await getProfileById(authData.user.id);
-  const orgId = profile?.org_id || null;
+  const normalizedCommunityId = String(payload.communityId || '')
+    .trim()
+    .replace(/[–—−]/g, '-')
+    .replace(/\s+/g, '')
+    .toUpperCase();
+  const communityOrgId = normalizedCommunityId ? await getOrgIdByCode(normalizedCommunityId) : null;
+  const orgId = profile?.org_id || communityOrgId || null;
+
+  if (!profile?.org_id && orgId) {
+    await supabase
+      .from('profiles')
+      .update({ org_id: orgId })
+      .eq('id', authData.user.id);
+  }
 
   const { data: profileLocation } = await supabase
     .from('profiles')
@@ -3245,18 +3259,59 @@ export async function listDamageAssessmentsForCurrentUser(limit = 75): Promise<D
 
   if (!canViewAll && !canViewOrg) return [];
 
-  let query = supabase
-    .from('damage_assessments')
-    .select('id, profile_id, org_id, damage_type, severity, description, photo_path, location, created_at')
-    .order('created_at', { ascending: false })
-    .limit(Math.max(1, Math.min(limit, 200)));
+  const safeLimit = Math.max(1, Math.min(limit, 200));
+  let rows: any[] = [];
+  let error: any = null;
 
   if (canViewOrg) {
     if (!profile?.org_id) return [];
-    query = query.eq('org_id', profile.org_id);
+
+    const [{ data: directRows, error: directError }, { data: orgProfiles, error: orgProfilesError }] = await Promise.all([
+      supabase
+        .from('damage_assessments')
+        .select('id, profile_id, org_id, damage_type, severity, description, photo_path, location, created_at')
+        .eq('org_id', profile.org_id)
+        .order('created_at', { ascending: false })
+        .limit(safeLimit),
+      supabase
+        .from('profiles')
+        .select('id')
+        .eq('org_id', profile.org_id),
+    ]);
+
+    if (directError) error = directError;
+    if (orgProfilesError) error = orgProfilesError;
+
+    const orgProfileIds = Array.from(new Set((orgProfiles || []).map((p: any) => String(p.id)).filter(Boolean)));
+
+    let legacyRows: any[] = [];
+    if (orgProfileIds.length > 0) {
+      const { data: legacyData, error: legacyError } = await supabase
+        .from('damage_assessments')
+        .select('id, profile_id, org_id, damage_type, severity, description, photo_path, location, created_at')
+        .is('org_id', null)
+        .in('profile_id', orgProfileIds)
+        .order('created_at', { ascending: false })
+        .limit(safeLimit);
+      if (legacyError) error = legacyError;
+      legacyRows = legacyData || [];
+    }
+
+    const merged = [...(directRows || []), ...legacyRows];
+    const deduped = Array.from(new Map(merged.map((row: any) => [String(row.id), row])).values());
+    rows = deduped
+      .sort((a: any, b: any) => Date.parse(String(b.created_at || 0)) - Date.parse(String(a.created_at || 0)))
+      .slice(0, safeLimit);
+  } else {
+    const response = await supabase
+      .from('damage_assessments')
+      .select('id, profile_id, org_id, damage_type, severity, description, photo_path, location, created_at')
+      .order('created_at', { ascending: false })
+      .limit(safeLimit);
+    rows = response.data || [];
+    error = response.error;
   }
 
-  const { data: rows, error } = await query;
   if (error) throw new Error('Failed to load assessment results');
 
   const profileIds = Array.from(new Set((rows || []).map((r: any) => r.profile_id).filter(Boolean)));
