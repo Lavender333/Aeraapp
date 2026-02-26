@@ -1606,7 +1606,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     const scopedUsers = Array.isArray(db.users)
       ? (isOrgScopedAdmin ? db.users.filter((u) => String(u.communityId || '') === orgScopeId) : db.users)
       : [];
-    setUsers(scopedUsers);
+    setUsers(scopedUsers.map((u) => ({ ...u, active: u.active !== false })));
     setActiveTab('ALL_USERS');
     setCurrentSection('ACCESS_CONTROL');
     setSelectedUser(null);
@@ -1688,7 +1688,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       `"${u.fullName.replace(/"/g, '""')}"`,
       u.phone,
       u.role,
-      u.active ? 'Active' : 'Inactive',
+      u.active !== false ? 'Active' : 'Inactive',
       `"${u.address.replace(/"/g, '""')}"`,
       u.communityId || 'N/A',
       u.householdMembers
@@ -2490,8 +2490,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                    <h2 className="text-2xl font-bold">{selectedUser.fullName || 'Unnamed User'}</h2>
                    <div className="flex gap-2 mt-1">
                      <span className="px-2 py-0.5 bg-white/20 rounded text-xs font-bold uppercase">{(selectedUser.role || 'UNKNOWN').replace('_', ' ')}</span>
-                     <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${selectedUser.active ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
-                       {selectedUser.active ? 'Active' : 'Suspended'}
+                     <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${selectedUser.active !== false ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
+                       {selectedUser.active !== false ? 'Active' : 'Suspended'}
                      </span>
                    </div>
                  </div>
@@ -2566,8 +2566,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                       <select 
                         value={selectedUser.role}
                         onChange={(e) => updateUserRole(selectedUser.id, e.target.value as UserRole)}
-                        className={`text-sm p-2 rounded border bg-white font-medium ${!selectedUser.active ? 'opacity-50 cursor-not-allowed' : 'border-slate-300'}`}
-                        disabled={!selectedUser.active}
+                        className={`text-sm p-2 rounded border bg-white font-medium ${selectedUser.active === false ? 'opacity-50 cursor-not-allowed' : 'border-slate-300'}`}
+                        disabled={selectedUser.active === false}
                       >
                         {roles.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
                       </select>
@@ -2578,9 +2578,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                       <Button 
                         size="sm"
                         onClick={() => toggleUserStatus(selectedUser.id, selectedUser.active !== false)}
-                        className={selectedUser.active ? "bg-red-100 text-red-700 hover:bg-red-200 border-red-200" : "bg-green-600 text-white"}
+                        className={selectedUser.active !== false ? "bg-red-100 text-red-700 hover:bg-red-200 border-red-200" : "bg-green-600 text-white"}
                       >
-                        {selectedUser.active ? "Suspend Account" : "Activate Account"}
+                        {selectedUser.active !== false ? "Suspend Account" : "Activate Account"}
                       </Button>
                    </div>
                 </div>
@@ -2681,15 +2681,15 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                <div 
                  key={user.id} 
                  onClick={() => setSelectedUser(user)}
-                 className={`bg-white p-4 rounded-xl border shadow-sm flex flex-col gap-3 cursor-pointer hover:border-brand-400 hover:shadow-md transition-all group ${user.active ? 'border-slate-200' : 'border-red-200 bg-red-50/10'}`}
+                 className={`bg-white p-4 rounded-xl border shadow-sm flex flex-col gap-3 cursor-pointer hover:border-brand-400 hover:shadow-md transition-all group ${user.active !== false ? 'border-slate-200' : 'border-red-200 bg-red-50/10'}`}
                >
                  <div className="flex items-center justify-between">
                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-full ${user.active ? 'bg-slate-100 text-slate-600' : 'bg-red-100 text-red-500'}`}>
+                      <div className={`p-2 rounded-full ${user.active !== false ? 'bg-slate-100 text-slate-600' : 'bg-red-100 text-red-500'}`}>
                          <User size={18} />
                       </div>
                       <div>
-                        <h3 className={`font-bold group-hover:text-brand-700 transition-colors ${user.active ? 'text-slate-900' : 'text-slate-500 line-through'}`}>{user.fullName || 'Unnamed User'}</h3>
+                        <h3 className={`font-bold group-hover:text-brand-700 transition-colors ${user.active !== false ? 'text-slate-900' : 'text-slate-500 line-through'}`}>{user.fullName || 'Unnamed User'}</h3>
                         <p className="text-xs text-slate-500">{user.phone || 'No phone'} {user.role === 'ADMIN' && <span className="text-brand-600 font-bold ml-1">(Admin)</span>}</p>
                         <p className="text-[11px] text-slate-400">Created: {createdLabel}</p>
                       </div>
@@ -2698,8 +2698,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                  </div>
                  
                  <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
-                    <span className={`text-[10px] font-bold uppercase ${user.active ? 'text-green-600' : 'text-red-600'}`}>
-                      Status: {user.active ? 'Active' : 'Deactivated'}
+                    <span className={`text-[10px] font-bold uppercase ${user.active !== false ? 'text-green-600' : 'text-red-600'}`}>
+                      Status: {user.active !== false ? 'Active' : 'Deactivated'}
                     </span>
                     <span className="text-xs px-2 py-1 bg-slate-100 rounded text-slate-600 font-medium">
                       {(user.role || 'UNKNOWN').replace('_', ' ')}
