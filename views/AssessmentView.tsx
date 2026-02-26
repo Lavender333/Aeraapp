@@ -34,6 +34,7 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
   const [flash, setFlash] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Analysis State
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -130,6 +131,29 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     }
   };
 
+  const compressImageDataUrl = async (dataUrl: string, maxDimension = 1600, quality = 0.78): Promise<string> => {
+    const image = new Image();
+    image.src = dataUrl;
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error('Unable to load image.'));
+    });
+
+    const originalWidth = image.width || 1;
+    const originalHeight = image.height || 1;
+    const scale = Math.min(1, maxDimension / Math.max(originalWidth, originalHeight));
+    const width = Math.max(1, Math.round(originalWidth * scale));
+    const height = Math.max(1, Math.round(originalHeight * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return dataUrl;
+    ctx.drawImage(image, 0, 0, width, height);
+    return canvas.toDataURL('image/jpeg', quality);
+  };
+
   const startCamera = async () => {
     setCapturedImage(null);
     setAiAnalysis(null);
@@ -150,7 +174,7 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     }
   };
 
-  const capturePhoto = () => {
+  const capturePhoto = async () => {
     if (videoRef.current && canvasRef.current) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
@@ -171,16 +195,45 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         
         // Convert to image
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.84);
+        const compressed = await compressImageDataUrl(dataUrl);
         
         // Small delay to let flash animation finish before showing static image
         setTimeout(() => {
-          setCapturedImage(dataUrl);
+          setCapturedImage(compressed);
           stopCameraStream();
           setIsCameraOpen(false);
-          analyzeImage(dataUrl);
+          analyzeImage(compressed);
         }, 150);
       }
+    }
+  };
+
+  const handleUploadPhoto: React.ChangeEventHandler<HTMLInputElement> = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setSubmitError('Please select an image file.');
+      return;
+    }
+
+    try {
+      const reader = new FileReader();
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Unable to read image file.'));
+        reader.readAsDataURL(file);
+      });
+      const compressed = await compressImageDataUrl(dataUrl);
+      setCapturedImage(compressed);
+      setAiAnalysis(null);
+      analyzeImage(compressed);
+      setSubmitError(null);
+    } catch {
+      setSubmitError('Unable to process selected photo. Please try a different image.');
+    } finally {
+      event.target.value = '';
     }
   };
 
@@ -456,9 +509,21 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                      <Camera size={48} className="mb-3 opacity-50" />
                      <p className="font-bold text-slate-600">No Evidence Added</p>
                      <p className="text-xs mb-4">Photos help prioritize your claim</p>
-                     <Button onClick={startCamera} className="font-bold bg-slate-800 text-white hover:bg-slate-700">
-                       <Aperture size={18} className="mr-2" /> Open Camera
-                     </Button>
+                     <div className="flex flex-wrap gap-2 justify-center">
+                       <Button onClick={startCamera} className="font-bold bg-slate-800 text-white hover:bg-slate-700">
+                         <Aperture size={18} className="mr-2" /> Open Camera
+                       </Button>
+                       <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="font-bold">
+                         Upload Photo
+                       </Button>
+                     </div>
+                     <input
+                       ref={fileInputRef}
+                       type="file"
+                       accept="image/*"
+                       className="hidden"
+                       onChange={handleUploadPhoto}
+                     />
                    </div>
                  )}
                </div>

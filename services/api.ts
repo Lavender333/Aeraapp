@@ -3192,7 +3192,19 @@ export async function submitDamageAssessment(payload: {
       .from('assessment_photos')
       .upload(path, blob, { contentType: 'image/jpeg' });
 
-    if (uploadError) throw uploadError;
+    if (uploadError) {
+      const msg = String(uploadError.message || '').toLowerCase();
+      if (msg.includes('bucket') || msg.includes('not found')) {
+        throw new Error('Photo upload failed: storage bucket is not configured. Ensure `assessment_photos` exists.');
+      }
+      if (msg.includes('row-level security') || msg.includes('permission') || msg.includes('not allowed')) {
+        throw new Error('Photo upload failed: storage permissions denied for this user.');
+      }
+      if (msg.includes('payload') || msg.includes('too large') || msg.includes('413')) {
+        throw new Error('Photo upload failed: image is too large. Try a smaller photo.');
+      }
+      throw new Error(`Photo upload failed: ${uploadError.message || 'unknown error'}`);
+    }
     photoPath = path;
   }
 
