@@ -2734,7 +2734,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </div>
 
       {/* Language Selector */}
-      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 order-60 border border-slate-200">
+      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 order-6 border border-slate-200">
         <div className="flex items-center gap-4 mb-2">
           <div className="p-3 bg-white border border-slate-200 rounded-full text-slate-700">
             <Globe size={24} />
@@ -2852,7 +2852,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       )}
 
       {/* Profile */}
-      <section ref={profileSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 order-10">
+      <section ref={profileSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 order-1">
         <button
           id={accordionButtonIds.profile}
           type="button"
@@ -2994,7 +2994,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {/* Contacts */}
-      <section ref={contactsSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 border-l-4 border-l-[#B91C1C] order-30">
+      <section ref={contactsSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 border-l-4 border-l-[#B91C1C] order-3">
         <button
           id={accordionButtonIds.contacts}
           type="button"
@@ -3076,7 +3076,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {/* Household */}
-      <section ref={householdSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 border-l-4 border-l-[#2F7A64] order-20">
+      <section ref={householdSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 border-l-4 border-l-[#2F7A64] order-2">
         <button
           id={accordionButtonIds.household}
           type="button"
@@ -3555,7 +3555,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {/* Security */}
-      <section ref={securitySectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 border-l-4 border-l-[#B91C1C] order-40">
+      <section ref={securitySectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 border-l-4 border-l-[#B91C1C] order-4">
         <button
           id={accordionButtonIds.security}
           type="button"
@@ -3713,7 +3713,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {/* Community Onboarding */}
-      <section ref={trustedCommunityRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 order-50">
+      <section ref={trustedCommunityRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 order-5">
         <button
           id={accordionButtonIds.community}
           type="button"
@@ -3889,7 +3889,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         )}
       </section>
 
-      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 order-70 border border-slate-200">
+      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 order-7 border border-slate-200">
         <div className="flex items-center gap-4">
           <div className="p-3 bg-white border border-slate-200 rounded-full text-slate-700">
             <ShieldCheck size={24} />
@@ -3898,17 +3898,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <h2 className="text-lg font-semibold text-slate-800">Legal &amp; Privacy</h2>
           </div>
         </div>
-        <div className="border border-slate-200 rounded-xl overflow-hidden">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 space-y-2">
           <button
             type="button"
             onClick={() => {
               sessionStorage.setItem('privacyReturnView', 'SETTINGS');
               setView('PRIVACY_POLICY');
             }}
-            className="w-full px-4 py-3 flex justify-between items-center border-b border-[#E5ECEA] text-left hover:bg-slate-50"
+            className="block w-full text-left text-[12px] text-slate-600 hover:underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 rounded"
           >
-            <span className="text-sm font-medium text-slate-800">Privacy Notice</span>
-            <FileText size={16} className="text-slate-500" />
+            Privacy Notice
           </button>
           <button
             type="button"
@@ -3916,15 +3915,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               sessionStorage.setItem('privacyReturnView', 'SETTINGS');
               setView('PRIVACY_POLICY');
             }}
-            className="w-full px-4 py-3 flex justify-between items-center border-b border-[#E5ECEA] text-left hover:bg-slate-50"
+            className="block w-full text-left text-[12px] text-slate-600 hover:underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 rounded"
           >
-            <span className="text-sm font-medium text-slate-800">Preparedness Data Consent</span>
-            <FileText size={16} className="text-slate-500" />
+            Preparedness Data Consent
           </button>
         </div>
       </section>
 
-      <div className="space-y-4 pt-4 border-t border-slate-200 order-80">
+      <div className="space-y-4 pt-4 border-t border-slate-200 order-8">
         <Button onClick={handleLogout} variant="ghost" fullWidth className="text-[#B91C1C] font-semibold hover:text-[#B91C1C]">
           <LogOut className="mr-2" size={18} />
           Log Out
