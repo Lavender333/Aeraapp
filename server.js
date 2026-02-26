@@ -20,6 +20,7 @@ import { RevokedToken } from './models/revokedToken.js';
 import { User } from './models/user.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { GoogleGenAI } from '@google/genai';
 import { auth, requireOrgAccess, requireRole, requirePermission } from './middleware/auth.js';
 import { validate } from './middleware/validate.js';
 import { logger } from './utils/logger.js';
@@ -162,7 +163,7 @@ app.use((req, res, next) => {
   return next();
 });
 
-app.use(express.json({ limit: '10kb' }));
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '2mb' }));
 
 // Request logging
 app.use(
@@ -298,6 +299,110 @@ const publicRouter = express.Router();
 // Health check
 publicRouter.get('/health', (_req, res) => {
   res.json({ ok: true, timestamp: new Date().toISOString() });
+});
+
+publicRouter.post('/vision/analyze-damage', async (req, res) => {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    if (!apiKey) {
+      return res.status(503).json({ error: 'Vision model unavailable: missing GEMINI_API_KEY.' });
+    }
+
+    const damageType = String(req.body?.damageType || 'ACCESS').trim().toUpperCase();
+    const imageDataUrl = String(req.body?.imageDataUrl || '').trim();
+    if (!imageDataUrl || !imageDataUrl.startsWith('data:image/')) {
+      return res.status(400).json({ error: 'imageDataUrl is required and must be a data:image URL.' });
+    }
+
+    if (imageDataUrl.length > 1_600_000) {
+      return res.status(413).json({ error: 'Image payload too large. Please upload a smaller image.' });
+    }
+
+    const dataMatch = imageDataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([\s\S]+)$/);
+    if (!dataMatch) {
+      return res.status(400).json({ error: 'Unsupported image format. Use a base64 image data URL.' });
+    }
+
+    const mimeType = dataMatch[1];
+    const imageBase64 = dataMatch[2];
+    const modelName = process.env.GEMINI_VISION_MODEL || 'gemini-2.0-flash';
+
+    const ai = new GoogleGenAI({ apiKey });
+    const prompt = `You are an emergency damage assessment computer vision system.
+Return STRICT JSON only (no markdown, no prose) with this shape:
+{
+  "summary": string,
+  "suggestedSeverity": 1|2|3,
+  "confidence": number,
+  "findings": string[],
+  "riskSignals": string[],
+  "damageRegions": [{"x": number, "y": number, "width": number, "height": number, "score": number, "label": string}],
+  "model": string
+}
+Rules:
+- damageType is ${damageType}
+- x/y/width/height are normalized from 0 to 1
+- score must be 0 to 1
+- include 1-4 most important regions only
+- suggestedSeverity mapping: 1 minor, 2 moderate, 3 critical
+- confidence range: 40 to 99`;
+
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType,
+                data: imageBase64,
+              },
+            },
+          ],
+        },
+      ],
+      config: {
+        temperature: 0.1,
+        responseMimeType: 'application/json',
+      },
+    });
+
+    const rawText =
+      (typeof response?.text === 'function' ? response.text() : '') ||
+      (typeof response?.response?.text === 'function' ? response.response.text() : '') ||
+      '';
+
+    const jsonBlockMatch = rawText.match(/\{[\s\S]*\}/);
+    const parsed = JSON.parse(jsonBlockMatch ? jsonBlockMatch[0] : rawText);
+
+    const safeRegions = Array.isArray(parsed?.damageRegions)
+      ? parsed.damageRegions
+          .slice(0, 4)
+          .map((region) => ({
+            x: Math.max(0, Math.min(1, Number(region?.x || 0))),
+            y: Math.max(0, Math.min(1, Number(region?.y || 0))),
+            width: Math.max(0.05, Math.min(1, Number(region?.width || 0.1))),
+            height: Math.max(0.05, Math.min(1, Number(region?.height || 0.1))),
+            score: Math.max(0, Math.min(1, Number(region?.score || 0))),
+            label: String(region?.label || 'damage indicator'),
+          }))
+      : [];
+
+    res.json({
+      summary: String(parsed?.summary || 'Server vision analysis completed.'),
+      suggestedSeverity: [1, 2, 3].includes(Number(parsed?.suggestedSeverity)) ? Number(parsed.suggestedSeverity) : 2,
+      confidence: Math.max(40, Math.min(99, Number(parsed?.confidence || 70))),
+      findings: Array.isArray(parsed?.findings) ? parsed.findings.slice(0, 6).map((item) => String(item)) : [],
+      riskSignals: Array.isArray(parsed?.riskSignals) ? parsed.riskSignals.slice(0, 6).map((item) => String(item)) : [],
+      damageRegions: safeRegions,
+      model: String(parsed?.model || `Gemini Vision (${modelName})`),
+    });
+  } catch (error) {
+    logger.warn('Vision analysis failed', { message: error?.message || String(error), requestId: req.requestId });
+    return res.status(502).json({ error: 'Vision analysis failed. Please try again.' });
+  }
 });
 
 // Public organizations list (for discovery)

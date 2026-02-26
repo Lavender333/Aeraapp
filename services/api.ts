@@ -1,6 +1,9 @@
 import type { HouseholdMember, OrgInventory, UserProfile } from '../types';
 import { supabase, getOrgByCode, getOrgIdByCode } from './supabase';
 import { calculateAgeFromDob, isValidPhoneForInvite, normalizePhoneDigits, validateHouseholdMembers } from './validation';
+import type { VisionAssessmentResult } from './visionAssessment';
+
+const API_BASE_URL = String(import.meta.env.VITE_API_URL || '').trim().replace(/\/$/, '');
 
 const mapInventory = (row: any): OrgInventory => ({
   water: Number(row?.water || 0),
@@ -3079,6 +3082,34 @@ export async function notifyEmergencyContact(payload: {
 }
 
 // Damage Assessments
+export async function analyzeDamagePhotoOnServer(payload: {
+  damageType: string;
+  imageDataUrl: string;
+}): Promise<VisionAssessmentResult> {
+  const endpoint = `${API_BASE_URL}/api/v1/vision/analyze-damage`;
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      damageType: payload.damageType,
+      imageDataUrl: payload.imageDataUrl,
+    }),
+  });
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(String((body as any)?.error || 'Server vision analysis unavailable'));
+  }
+
+  const result = body as VisionAssessmentResult;
+  if (!result || !result.summary || !result.suggestedSeverity) {
+    throw new Error('Server vision analysis returned invalid data');
+  }
+  return result;
+}
+
 export async function submitDamageAssessment(payload: {
   damageType: string;
   severity: number;

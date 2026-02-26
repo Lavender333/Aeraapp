@@ -5,8 +5,9 @@ import { Button } from '../components/Button';
 import { Textarea } from '../components/Input';
 import { ArrowLeft, Camera, Home, Zap, Droplets, Triangle, CheckCircle, AlertTriangle, Loader2, Sparkles, X, MapPin, RefreshCw, Aperture, Keyboard, Download } from 'lucide-react';
 import { t } from '../services/translations';
-import { submitDamageAssessment, getAssessmentPhotoSignedUrl, listDamageAssessmentsForCurrentUser, DamageAssessmentResult } from '../services/api';
+import { submitDamageAssessment, getAssessmentPhotoSignedUrl, listDamageAssessmentsForCurrentUser, DamageAssessmentResult, analyzeDamagePhotoOnServer } from '../services/api';
 import { StorageService } from '../services/storage';
+import { analyzeDamagePhoto as analyzeDamagePhotoLocally } from '../services/visionAssessment';
 
 export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const normalizeRole = (role: any): UserRole => {
@@ -292,81 +293,43 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     }
   };
 
-  const analyzeImage = (imageData: string) => {
+  const analyzeImage = async (imageData: string) => {
     setIsAnalyzing(true);
-
-    setTimeout(() => {
-      const image = new Image();
-      image.onload = () => {
-        const sample = document.createElement('canvas');
-        const sampleSize = 64;
-        sample.width = sampleSize;
-        sample.height = sampleSize;
-        const ctx = sample.getContext('2d');
-
-        if (!ctx) {
-          setIsAnalyzing(false);
-          return;
-        }
-
-        ctx.drawImage(image, 0, 0, sampleSize, sampleSize);
-        const { data } = ctx.getImageData(0, 0, sampleSize, sampleSize);
-
-        let brightnessSum = 0;
-        let contrastScore = 0;
-        for (let index = 0; index < data.length; index += 4) {
-          const red = data[index];
-          const green = data[index + 1];
-          const blue = data[index + 2];
-          const luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
-          brightnessSum += luma;
-          if (index >= 4) {
-            const prevRed = data[index - 4];
-            const prevGreen = data[index - 3];
-            const prevBlue = data[index - 2];
-            const prevLuma = 0.2126 * prevRed + 0.7152 * prevGreen + 0.0722 * prevBlue;
-            contrastScore += Math.abs(luma - prevLuma);
-          }
-        }
-
-        const pixels = data.length / 4;
-        const avgBrightness = brightnessSum / Math.max(1, pixels);
-        const avgContrast = contrastScore / Math.max(1, pixels - 1);
-
-        const typeBoost = damageType === 'STRUCTURAL' ? 0.25 : damageType === 'FLOOD' ? 0.2 : damageType === 'ELECTRICAL' ? 0.15 : 0.1;
-        const darknessFactor = avgBrightness < 70 ? 0.22 : avgBrightness < 110 ? 0.12 : 0.03;
-        const textureFactor = avgContrast > 35 ? 0.28 : avgContrast > 22 ? 0.16 : 0.05;
-        const urgency = Math.min(1, typeBoost + darknessFactor + textureFactor);
-
-        const suggestedSeverity = urgency > 0.62 ? 3 : urgency > 0.38 ? 2 : 1;
-        const confidence = Math.round((0.55 + urgency * 0.4) * 100);
-
-        const finding =
-          damageType === 'STRUCTURAL'
-            ? 'Possible structural compromise with visible surface disruption.'
-            : damageType === 'FLOOD'
-              ? 'Potential standing-water or moisture-related damage pattern detected.'
-              : damageType === 'ELECTRICAL'
-                ? 'Possible utility risk area detected; prioritize power/gas safety checks.'
-                : 'Access obstruction indicators detected; verify route safety on-site.';
-
-        const generated = `AI Analysis: ${finding} Suggested severity: ${suggestedSeverity === 3 ? 'Critical' : suggestedSeverity === 2 ? 'Moderate' : 'Minor'} (confidence ${confidence}%).`;
-        setAiAnalysis(generated);
-        setSeverity((prev) => Math.max(prev, suggestedSeverity));
-        setDescription((prev) => {
-          const withoutOldAi = prev.replace(/\n*AI Analysis:[\s\S]*$/i, '').trim();
-          return `${withoutOldAi}${withoutOldAi ? '\n\n' : ''}${generated}`;
+    try {
+      let result;
+      try {
+        result = await analyzeDamagePhotoOnServer({
+          damageType: damageType || 'ACCESS',
+          imageDataUrl: imageData,
         });
-        setIsAnalyzing(false);
-      };
+      } catch {
+        result = await analyzeDamagePhotoLocally(imageData, damageType || 'ACCESS');
+      }
 
-      image.onerror = () => {
-        setAiAnalysis('AI Analysis: Unable to score image detail. You can still submit this report manually.');
-        setIsAnalyzing(false);
-      };
+      const severityLabel = result.suggestedSeverity === 3 ? 'Critical' : result.suggestedSeverity === 2 ? 'Moderate' : 'Minor';
+      const regionLine = result.damageRegions.length
+        ? `Hotspots: ${result.damageRegions.map((r, i) => `${i + 1}) ${r.label} (${Math.round(r.score * 100)}%)`).join('; ')}`
+        : 'Hotspots: none with high confidence';
+      const riskLine = result.riskSignals.length ? `Risk Signals: ${result.riskSignals.join(', ')}` : 'Risk Signals: none elevated';
 
-      image.src = imageData;
-    }, 900);
+      const generated = [
+        `AI Analysis (${result.model}): ${result.summary}`,
+        `Suggested severity: ${severityLabel} (confidence ${result.confidence}%).`,
+        regionLine,
+        riskLine,
+      ].join(' ');
+
+      setAiAnalysis(generated);
+      setSeverity((prev) => Math.max(prev, result.suggestedSeverity));
+      setDescription((prev) => {
+        const withoutOldAi = prev.replace(/\n*AI Analysis(?:\s*\([^)]*\))?:[\s\S]*$/i, '').trim();
+        return `${withoutOldAi}${withoutOldAi ? '\n\n' : ''}${generated}`;
+      });
+    } catch {
+      setAiAnalysis('AI Analysis: Unable to run enhanced vision analysis. You can still submit this report manually.');
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const saveCapturedPhoto = () => {
@@ -691,7 +654,7 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                {aiAnalysis && !isAnalyzing && (
                  <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-xl animate-slide-up shadow-sm">
                     <div className="flex items-center gap-2 mb-2 text-indigo-700 font-bold text-xs uppercase tracking-wide">
-                      <Sparkles size={16} /> Gemini AI Assessment
+                       <Sparkles size={16} /> Computer Vision Assessment
                     </div>
                     <p className="text-sm text-indigo-900 leading-relaxed font-medium">
                       "{aiAnalysis}"
