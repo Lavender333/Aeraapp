@@ -272,13 +272,27 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     setHasChanges(true);
   };
 
-  const saveInventory = () => {
+  const saveInventory = async () => {
     const summary = `Water: ${inventory.water}\nFood: ${inventory.food}\nBlankets: ${inventory.blankets}\nMed Kits: ${inventory.medicalKits}\n\nSave these counts?`;
     if (!window.confirm(summary)) return;
     StorageService.updateOrgInventory(activeOrgCode, inventory);
-    StorageService.saveOrgInventoryRemote(activeOrgCode, inventory);
+    let message = 'Inventory Updated in Central Database';
+
+    try {
+      await StorageService.saveOrgInventoryRemote(activeOrgCode, inventory);
+      const { inventory: latestInventory, fromCache } = await StorageService.fetchOrgInventoryRemote(activeOrgCode);
+      setInventory(latestInventory);
+      setInventoryFallback(fromCache);
+      if (fromCache) {
+        message = 'Inventory saved locally (using cached data until API is available).';
+      }
+    } catch {
+      setInventoryFallback(true);
+      message = 'Inventory saved locally. Remote sync will retry when available.';
+    }
+
     setHasChanges(false);
-    alert("Inventory Updated in Central Database");
+    alert(message);
   };
 
   const copyToClipboard = async () => {
@@ -467,12 +481,13 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
   };
 
   const status = getInventoryStatuses(inventory, coverageBase);
-  const lowItems = [
+  const inventoryItems = [
     { label: 'Water Cases', key: 'water' as const, unit: 'cases' },
     { label: 'Food Boxes', key: 'food' as const, unit: 'boxes' },
     { label: 'Blankets', key: 'blankets' as const, unit: 'units' },
     { label: 'Med Kits', key: 'medicalKits' as const, unit: 'kits' },
-  ].filter(item => status[item.key].level === 'LOW');
+  ];
+  const lowItems = inventoryItems.filter(item => status[item.key].level === 'LOW');
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col pb-safe animate-fade-in relative">
@@ -999,33 +1014,39 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
             )}
 
             <div className="grid grid-cols-2 gap-4">
-                {[
-                 { label: 'Water Cases', key: 'water', unit: 'cases' },
-                 { label: 'Food Boxes', key: 'food', unit: 'boxes' },
-                 { label: 'Blankets', key: 'blankets', unit: 'units' },
-                 { label: 'Med Kits', key: 'medicalKits', unit: 'kits' },
-               ].map((item) => (
-                 <div key={item.label} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm text-center">
-                    <p className="text-slate-500 text-xs font-bold uppercase mb-1">{item.label}</p>
-                    {/* @ts-ignore */}
-                    <input 
-                      type="number"
-                      min="0"
-                      className="w-full mt-2 p-2 rounded-lg border border-slate-300 text-center font-bold text-slate-900"
-                      value={inventory[item.key as keyof OrgInventory]}
-                      onChange={(e) => handleInventoryChange(item.key as keyof OrgInventory, parseInt(e.target.value))}
-                    />
-                    <p className="text-slate-400 text-xs mt-1">{item.unit}</p>
-                    <p className={`text-[11px] font-bold mt-1 ${
-                      status[item.key as keyof OrgInventory].level === 'HIGH' ? 'text-green-600' :
-                      status[item.key as keyof OrgInventory].level === 'MEDIUM' ? 'text-amber-600' :
-                      status[item.key as keyof OrgInventory].level === 'LOW' ? 'text-red-600' :
-                      'text-slate-400'
-                    }`}>
-                      {status[item.key as keyof OrgInventory].level === 'UNKNOWN' ? 'N/A' : status[item.key as keyof OrgInventory].level}
-                    </p>
-                 </div>
-               ))}
+                {inventoryItems.map((item) => {
+                  const key = item.key as keyof OrgInventory;
+                  const recommendedResupply = getRecommendedResupply(inventory[key], coverageBase);
+                  const suggestedTarget = recommendedResupply == null ? null : inventory[key] + recommendedResupply;
+
+                  return (
+                    <div key={item.label} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm text-center">
+                      <p className="text-slate-500 text-xs font-bold uppercase mb-1">{item.label}</p>
+                      {/* @ts-ignore */}
+                      <input 
+                        type="number"
+                        min="0"
+                        className="w-full mt-2 p-2 rounded-lg border border-slate-300 text-center font-bold text-slate-900"
+                        value={inventory[key]}
+                        onChange={(e) => handleInventoryChange(key, parseInt(e.target.value))}
+                      />
+                      <p className="text-slate-400 text-xs mt-1">{item.unit}</p>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        {suggestedTarget == null
+                          ? 'Suggested target unavailable (set population).'
+                          : `Suggested target: ${suggestedTarget} ${item.unit}`}
+                      </p>
+                      <p className={`text-[11px] font-bold mt-1 ${
+                        status[key].level === 'HIGH' ? 'text-green-600' :
+                        status[key].level === 'MEDIUM' ? 'text-amber-600' :
+                        status[key].level === 'LOW' ? 'text-red-600' :
+                        'text-slate-400'
+                      }`}>
+                        {status[key].level === 'UNKNOWN' ? 'N/A' : status[key].level}
+                      </p>
+                    </div>
+                  );
+                })}
             </div>
             
             <Button fullWidth className="font-bold" onClick={saveInventory} disabled={!hasChanges}>
