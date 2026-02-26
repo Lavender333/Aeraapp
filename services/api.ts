@@ -150,7 +150,7 @@ export async function fetchKitGuidanceForCurrentUser() {
       .eq('is_active', true),
     supabase
       .from('profiles')
-      .select('org_id, county_id, state_id')
+      .select('org_id, county_id, state_id, pet_details')
       .eq('id', profileId)
       .maybeSingle(),
   ]);
@@ -178,6 +178,8 @@ export async function fetchKitGuidanceForCurrentUser() {
     activeAlertTypes = [];
   }
 
+  const hasPets = Boolean(String(profileScope?.pet_details || '').trim());
+
   const context: Record<string, any> = {
     risk_score: Number(vpData?.risk_score || 0),
     medication_dependency: Boolean(vpData?.medication_dependency),
@@ -186,11 +188,30 @@ export async function fetchKitGuidanceForCurrentUser() {
     mobility_limitation: Boolean(vpData?.mobility_limitation),
     transportation_access: Boolean(vpData?.transportation_access ?? true),
     financial_strain: Boolean(vpData?.financial_strain),
+    pets_present: hasPets,
+    has_pets: hasPets,
     active_alert_types: activeAlertTypes.join('|'),
   };
 
   const rules = (ruleData || []) as KitRuleRow[];
   const matched = rules.filter((rule) => evaluateRule(rule, context));
+
+  if (hasPets && !matched.some((rule) => rule.kit_item_id === 'pet_emergency_kit')) {
+    matched.push({
+      trigger_type: 'profile_flag',
+      trigger_key: 'pets_present',
+      operator: 'equals',
+      trigger_value: 'true',
+      kit_item_id: 'pet_emergency_kit',
+      kit_item: 'Pet Emergency Kit (Food, Water, Carrier, Records)',
+      category: 'pets',
+      priority: 'recommended',
+      outreach_flag: null,
+      duration_bump_days: 0,
+      readiness_cap: null,
+      explanation: 'Pets detected in profile. Add pet-specific supplies and records to your ready kit.',
+    });
+  }
 
   const checkedIds = new Set<string>((readyData?.checked_ids || []) as string[]);
   const requiredIds = new Set<string>();
