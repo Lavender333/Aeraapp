@@ -41,6 +41,17 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
   const [submittedPhotoUrl, setSubmittedPhotoUrl] = useState<string | null>(null);
   const [requiresCommunityConnection, setRequiresCommunityConnection] = useState(false);
   const [isMobile, setIsMobile] = useState<boolean>(false);
+  const [roofAnswers, setRoofAnswers] = useState({
+    damagedShingles: 'none',
+    flashingCracked: false,
+    granuleLoss: 'none',
+    hitsPerSquare: 'none',
+    softSpots: false,
+    exposedDecking: false,
+    interiorLeaks: false,
+    structuralSagging: false,
+  });
+  const [roofScore, setRoofScore] = useState<number>(1);
 
   // Damage Categories
   const categories = [
@@ -51,6 +62,31 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
   ];
 
   const canViewReportedResults = userRole === 'ADMIN' || userRole === 'ORG_ADMIN' || userRole === 'INSTITUTION_ADMIN';
+
+  const roofRatingMap: Record<number, { label: string; meaning: string; action: string }> = {
+    1: { label: 'Maintenance', meaning: 'Normal wear, minor debris, maybe a loose shingle.', action: 'Cleaning & tune-up.' },
+    2: { label: 'Minor Repair', meaning: '1–5 shingles damaged; flashing sealant may be cracked.', action: 'Targeted repair ($500–$1,500).' },
+    3: { label: 'Moderate Repair', meaning: 'Widespread wind creases or 5–10% granule loss.', action: 'Sectional replacement.' },
+    4: { label: 'Significant', meaning: 'Functional damage. 10+ hits per square or structural soft spots.', action: 'Full replacement likely.' },
+    5: { label: 'Catastrophic', meaning: 'Exposed decking, active interior leaks, or structural sagging.', action: 'Emergency tarping & replacement.' },
+  };
+
+  const calculateRoofScore = (answers: typeof roofAnswers) => {
+    let score = 1;
+
+    if (answers.damagedShingles === '1-5' || answers.flashingCracked) score = Math.max(score, 2);
+    if (answers.damagedShingles === '6-20' || answers.granuleLoss === '5-10') score = Math.max(score, 3);
+    if (answers.hitsPerSquare === '10+' || answers.softSpots || answers.granuleLoss === '10+') score = Math.max(score, 4);
+    if (answers.exposedDecking || answers.interiorLeaks || answers.structuralSagging || answers.damagedShingles === '20+') score = 5;
+
+    return score;
+  };
+
+  const mapRoofScoreToSeverity = (score: number) => {
+    if (score >= 4) return 3;
+    if (score === 3) return 2;
+    return 1;
+  };
 
   // Cleanup camera on unmount
   useEffect(() => {
@@ -71,6 +107,13 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
   }, []);
+
+  useEffect(() => {
+    if (damageType !== 'STRUCTURAL') return;
+    const nextRoofScore = calculateRoofScore(roofAnswers);
+    setRoofScore(nextRoofScore);
+    setSeverity(mapRoofScoreToSeverity(nextRoofScore));
+  }, [damageType, roofAnswers]);
 
   const loadAssessmentResults = async () => {
     setResultsLoading(true);
@@ -349,11 +392,23 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
         return;
       }
 
+      const finalDescription = (() => {
+        if (damageType !== 'STRUCTURAL') return description;
+        const rating = roofRatingMap[roofScore];
+        const roofSummary = [
+          `Roof Score: ${roofScore}/5 (${rating.label})`,
+          `Meaning: ${rating.meaning}`,
+          `Recommended Action: ${rating.action}`,
+        ].join('\n');
+        const base = String(description || '').trim();
+        return `${base}${base ? '\n\n' : ''}${roofSummary}`;
+      })();
+
       setRequiresCommunityConnection(false);
       const result = await submitDamageAssessment({
         damageType,
         severity,
-        description,
+        description: finalDescription,
         imageDataUrl: capturedImage || null,
         communityId: profile.communityId || null,
       });
@@ -660,6 +715,69 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                </div>
             </div>
 
+            {damageType === 'STRUCTURAL' && (
+              <div className="space-y-3 bg-white border border-slate-200 rounded-xl p-4">
+                <label className="block text-sm font-bold text-slate-900 uppercase tracking-wider">Roofing Triage (1–5)</label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <label className="space-y-1">
+                    <span className="text-slate-700 font-semibold">Damaged shingles</span>
+                    <select className="w-full border border-slate-300 rounded-lg p-2" value={roofAnswers.damagedShingles} onChange={(e) => setRoofAnswers((prev) => ({ ...prev, damagedShingles: e.target.value }))}>
+                      <option value="none">None / unsure</option>
+                      <option value="1-5">1–5 shingles</option>
+                      <option value="6-20">6–20 shingles</option>
+                      <option value="20+">20+ shingles / widespread</option>
+                    </select>
+                  </label>
+
+                  <label className="space-y-1">
+                    <span className="text-slate-700 font-semibold">Granule loss</span>
+                    <select className="w-full border border-slate-300 rounded-lg p-2" value={roofAnswers.granuleLoss} onChange={(e) => setRoofAnswers((prev) => ({ ...prev, granuleLoss: e.target.value }))}>
+                      <option value="none">None / unsure</option>
+                      <option value="5-10">5–10%</option>
+                      <option value="10+">10%+</option>
+                    </select>
+                  </label>
+
+                  <label className="space-y-1 sm:col-span-2">
+                    <span className="text-slate-700 font-semibold">Impact hits per square (hail/wind)</span>
+                    <select className="w-full border border-slate-300 rounded-lg p-2" value={roofAnswers.hitsPerSquare} onChange={(e) => setRoofAnswers((prev) => ({ ...prev, hitsPerSquare: e.target.value }))}>
+                      <option value="none">None / unsure</option>
+                      <option value="1-5">1–5 hits</option>
+                      <option value="6-10">6–10 hits</option>
+                      <option value="10+">10+ hits</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                  {[
+                    ['flashingCracked', 'Flashing or sealant cracked'],
+                    ['softSpots', 'Roof soft spots (structural feel)'],
+                    ['exposedDecking', 'Exposed decking visible'],
+                    ['interiorLeaks', 'Active interior leaks'],
+                    ['structuralSagging', 'Structural sagging'],
+                  ].map(([key, label]) => (
+                    <label key={key} className="flex items-center justify-between border border-slate-200 rounded-lg px-3 py-2">
+                      <span className="text-slate-700">{label}</span>
+                      <input
+                        type="checkbox"
+                        checked={Boolean((roofAnswers as any)[key])}
+                        onChange={(e) => setRoofAnswers((prev) => ({ ...prev, [key]: e.target.checked }))}
+                      />
+                    </label>
+                  ))}
+                </div>
+
+                <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
+                  <p className="text-xs font-bold text-indigo-800 uppercase">Roof Score</p>
+                  <p className="text-lg font-black text-indigo-900">{roofScore} — {roofRatingMap[roofScore].label}</p>
+                  <p className="text-xs text-indigo-900 mt-1">{roofRatingMap[roofScore].meaning}</p>
+                  <p className="text-xs text-indigo-700 mt-1">Action: {roofRatingMap[roofScore].action}</p>
+                </div>
+              </div>
+            )}
+
             {/* Details */}
             <div className="space-y-3">
                <label className="block text-sm font-bold text-slate-900 uppercase tracking-wider">3. Details</label>
@@ -728,6 +846,12 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                    <span className="text-xs font-bold text-slate-500 uppercase">Type</span>
                    <span className="text-sm font-bold text-slate-900">{damageType}</span>
                  </div>
+                 {damageType === 'STRUCTURAL' && (
+                   <div className="flex justify-between mb-3 border-b border-slate-100 pb-2">
+                     <span className="text-xs font-bold text-slate-500 uppercase">Roof Score</span>
+                     <span className="text-sm font-bold text-slate-900">{roofScore} / 5 • {roofRatingMap[roofScore].label}</span>
+                   </div>
+                 )}
                  <div className="flex justify-between items-center">
                    <span className="text-xs font-bold text-slate-500 uppercase">Est. Severity</span>
                    <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase ${
