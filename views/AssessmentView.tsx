@@ -3,13 +3,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ViewState, UserRole } from '../types';
 import { Button } from '../components/Button';
 import { Textarea } from '../components/Input';
-import { ArrowLeft, Camera, Home, Zap, Droplets, Triangle, CheckCircle, AlertTriangle, Loader2, Sparkles, X, MapPin, RefreshCw, Aperture, Keyboard } from 'lucide-react';
+import { ArrowLeft, Camera, Home, Zap, Droplets, Triangle, CheckCircle, AlertTriangle, Loader2, Sparkles, X, MapPin, RefreshCw, Aperture, Keyboard, Download } from 'lucide-react';
 import { t } from '../services/translations';
 import { submitDamageAssessment, getAssessmentPhotoSignedUrl, listDamageAssessmentsForCurrentUser, DamageAssessmentResult } from '../services/api';
 import { StorageService } from '../services/storage';
-
-// Mock AI Analysis for demo purposes (since we can't upload real files in this env)
-const MOCK_AI_RESPONSE = "Analysis: Detected significant shingle loss on approximately 40% of the visible roof surface. Potential water intrusion points identified near the chimney. Estimated Severity: High.";
 
 export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const normalizeRole = (role: any): UserRole => {
@@ -43,6 +40,7 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submittedPhotoUrl, setSubmittedPhotoUrl] = useState<string | null>(null);
   const [requiresCommunityConnection, setRequiresCommunityConnection] = useState(false);
+  const [isMobile, setIsMobile] = useState<boolean>(false);
 
   // Damage Categories
   const categories = [
@@ -64,6 +62,14 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
   useEffect(() => {
     const profile = StorageService.getProfile();
     setUserRole(normalizeRole(profile.role));
+  }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 768px)');
+    const update = () => setIsMobile(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
   }, []);
 
   const loadAssessmentResults = async () => {
@@ -240,13 +246,89 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
 
   const analyzeImage = (imageData: string) => {
     setIsAnalyzing(true);
-    // Simulate AI Analysis delay
+
     setTimeout(() => {
-      setIsAnalyzing(false);
-      setAiAnalysis(MOCK_AI_RESPONSE);
-      setDescription(prev => prev + (prev ? '\n\n' : '') + MOCK_AI_RESPONSE);
-      setSeverity(3); // AI detected High severity
-    }, 2500);
+      const image = new Image();
+      image.onload = () => {
+        const sample = document.createElement('canvas');
+        const sampleSize = 64;
+        sample.width = sampleSize;
+        sample.height = sampleSize;
+        const ctx = sample.getContext('2d');
+
+        if (!ctx) {
+          setIsAnalyzing(false);
+          return;
+        }
+
+        ctx.drawImage(image, 0, 0, sampleSize, sampleSize);
+        const { data } = ctx.getImageData(0, 0, sampleSize, sampleSize);
+
+        let brightnessSum = 0;
+        let contrastScore = 0;
+        for (let index = 0; index < data.length; index += 4) {
+          const red = data[index];
+          const green = data[index + 1];
+          const blue = data[index + 2];
+          const luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+          brightnessSum += luma;
+          if (index >= 4) {
+            const prevRed = data[index - 4];
+            const prevGreen = data[index - 3];
+            const prevBlue = data[index - 2];
+            const prevLuma = 0.2126 * prevRed + 0.7152 * prevGreen + 0.0722 * prevBlue;
+            contrastScore += Math.abs(luma - prevLuma);
+          }
+        }
+
+        const pixels = data.length / 4;
+        const avgBrightness = brightnessSum / Math.max(1, pixels);
+        const avgContrast = contrastScore / Math.max(1, pixels - 1);
+
+        const typeBoost = damageType === 'STRUCTURAL' ? 0.25 : damageType === 'FLOOD' ? 0.2 : damageType === 'ELECTRICAL' ? 0.15 : 0.1;
+        const darknessFactor = avgBrightness < 70 ? 0.22 : avgBrightness < 110 ? 0.12 : 0.03;
+        const textureFactor = avgContrast > 35 ? 0.28 : avgContrast > 22 ? 0.16 : 0.05;
+        const urgency = Math.min(1, typeBoost + darknessFactor + textureFactor);
+
+        const suggestedSeverity = urgency > 0.62 ? 3 : urgency > 0.38 ? 2 : 1;
+        const confidence = Math.round((0.55 + urgency * 0.4) * 100);
+
+        const finding =
+          damageType === 'STRUCTURAL'
+            ? 'Possible structural compromise with visible surface disruption.'
+            : damageType === 'FLOOD'
+              ? 'Potential standing-water or moisture-related damage pattern detected.'
+              : damageType === 'ELECTRICAL'
+                ? 'Possible utility risk area detected; prioritize power/gas safety checks.'
+                : 'Access obstruction indicators detected; verify route safety on-site.';
+
+        const generated = `AI Analysis: ${finding} Suggested severity: ${suggestedSeverity === 3 ? 'Critical' : suggestedSeverity === 2 ? 'Moderate' : 'Minor'} (confidence ${confidence}%).`;
+        setAiAnalysis(generated);
+        setSeverity((prev) => Math.max(prev, suggestedSeverity));
+        setDescription((prev) => {
+          const withoutOldAi = prev.replace(/\n*AI Analysis:[\s\S]*$/i, '').trim();
+          return `${withoutOldAi}${withoutOldAi ? '\n\n' : ''}${generated}`;
+        });
+        setIsAnalyzing(false);
+      };
+
+      image.onerror = () => {
+        setAiAnalysis('AI Analysis: Unable to score image detail. You can still submit this report manually.');
+        setIsAnalyzing(false);
+      };
+
+      image.src = imageData;
+    }, 900);
+  };
+
+  const saveCapturedPhoto = () => {
+    if (!capturedImage) return;
+    const link = document.createElement('a');
+    link.href = capturedImage;
+    link.download = `assessment-${Date.now()}.jpg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const retakePhoto = () => {
@@ -493,7 +575,8 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                      
                      <div className="absolute top-4 left-4 z-10 pointer-events-none">
                        <span className="bg-black/50 text-white text-[10px] px-2 py-1 rounded backdrop-blur font-bold uppercase flex items-center gap-1">
-                         <Keyboard size={10} className="hidden md:block" /> Click or Press Space
+                         {!isMobile ? <Keyboard size={10} className="hidden md:block" /> : null}
+                         {isMobile ? 'Tap shutter to capture' : 'Click or press space'}
                        </span>
                      </div>
                    </div>
@@ -507,7 +590,10 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                         </div>
                      )}
                      {!isAnalyzing && (
-                        <div className="absolute bottom-4 right-4">
+                        <div className="absolute bottom-4 right-4 flex gap-2">
+                          <Button size="sm" variant="outline" onClick={saveCapturedPhoto} className="bg-white text-slate-900 hover:bg-slate-100 font-bold shadow-lg">
+                            <Download size={16} className="mr-1" /> Save
+                          </Button>
                           <Button size="sm" onClick={retakePhoto} className="bg-white text-slate-900 hover:bg-slate-100 font-bold shadow-lg">
                             <RefreshCw size={16} className="mr-2" /> Retake
                           </Button>
@@ -585,25 +671,27 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                />
             </div>
 
-            <Button
-              fullWidth
-              size="lg"
-              className="shadow-lg mt-4 bg-brand-600 hover:bg-brand-700 font-bold"
-              onClick={handleSubmitAssessment}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Submitting...' : 'Submit Assessment'}
-            </Button>
-            {submitError && (
-              <div className="mt-2 space-y-2">
-                <p className="text-xs text-red-600 font-semibold">{submitError}</p>
-                {requiresCommunityConnection && (
-                  <Button size="sm" variant="outline" onClick={() => setView('SETTINGS')}>
-                    Go to Settings
-                  </Button>
-                )}
-              </div>
-            )}
+            <div className="sticky bottom-0 bg-slate-50 pt-3 pb-2 space-y-2">
+              <Button
+                fullWidth
+                size="lg"
+                className="shadow-lg bg-brand-600 hover:bg-brand-700 font-bold"
+                onClick={handleSubmitAssessment}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? 'Submitting...' : 'Submit Assessment'}
+              </Button>
+              {submitError && (
+                <div className="space-y-2">
+                  <p className="text-xs text-red-600 font-semibold">{submitError}</p>
+                  {requiresCommunityConnection && (
+                    <Button size="sm" variant="outline" onClick={() => setView('SETTINGS')}>
+                      Go to Settings
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
