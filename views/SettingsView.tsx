@@ -33,9 +33,7 @@ const formatCommunityIdInput = (value: string) => {
     .replace(/[^A-Z0-9-]/g, '')
     .replace(/-+/g, '-');
 
-  if (cleaned.length <= 2) return cleaned;
-  if (cleaned.includes('-')) return cleaned;
-  return `${cleaned.slice(0, 2)}-${cleaned.slice(2)}`;
+  return cleaned;
 };
 
 const maskPhoneNumber = (value: string) => {
@@ -3769,7 +3767,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                      }}
                      className={connectedOrg ? "border-green-500 focus:ring-green-500 bg-green-50/30" : verifyError ? "border-red-500 focus:ring-red-500" : ""}
                    />
-                   <p className="text-[11px] text-slate-500 mt-1">Format: CH-1234</p>
+                   <p className="text-[11px] text-slate-500 mt-1">Examples: CH-9921, NG-1001, NGO-5500</p>
                 </div>
                 <div className="flex flex-col items-center">
                   <Button 
@@ -3838,7 +3836,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                   }}
                   className={connectedOrg ? "border-green-500 focus:ring-green-500 bg-green-50/30" : verifyError ? "border-red-500 focus:ring-red-500" : ""}
                 />
-                <p className="text-[11px] text-slate-500 mt-1">Format: CH-1234</p>
+                <p className="text-[11px] text-slate-500 mt-1">Examples: CH-9921, NG-1001, NGO-5500</p>
               </div>
               <div className="flex flex-col items-center">
                 <Button 
