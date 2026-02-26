@@ -1098,7 +1098,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                   <Navigation size={24} />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-slate-900">Drone Dispatch</h3>
+                  <h3 className="font-semibold text-slate-900">Drone to Phone</h3>
                   <p className="text-xs text-slate-500 mt-1">UAV Feed & Delivery</p>
                 </div>
               </div>

@@ -81,7 +81,7 @@ const DECK: DeckSlide[] = [
     title: 'Future Tech',
     subtitle: 'AI & Drone Integration',
     bullets: [
-      'Drone dispatch for supply drops and reconnaissance.',
+      'Drone to Phone for supply drops and reconnaissance.',
       'AI-assisted damage assessment and content moderation.'
     ]
   }

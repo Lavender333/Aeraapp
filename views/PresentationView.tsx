@@ -242,7 +242,7 @@ export const PresentationView: React.FC<{ setView: (v: ViewState) => void }> = (
       content: (
         <div className="space-y-4">
           {[
-            { icon: <Navigation size={18} className="text-teal-400" />, label: "Drone Dispatch", detail: "Autonomous UAVs dispatched for supply drops or visual recon based on GPS distress signals." },
+            { icon: <Navigation size={18} className="text-teal-400" />, label: "Drone to Phone", detail: "Autonomous UAVs dispatched for supply drops or visual recon based on GPS distress signals." },
             { icon: <ShieldCheck size={18} className="text-teal-400" />, label: "AI Analysis", detail: "Gemini-powered damage assessment from photos and real-time content moderation for broadcasts." },
           ].map((item) => (
             <div key={item.label} className="relative bg-white/5 border border-teal-500/20 p-4 rounded-xl">
