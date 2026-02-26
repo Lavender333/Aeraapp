@@ -88,6 +88,11 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     return 1;
   };
 
+  const isRoofingTriageComplete =
+    roofAnswers.damagedShingles !== 'none' &&
+    roofAnswers.granuleLoss !== 'none' &&
+    roofAnswers.hitsPerSquare !== 'none';
+
   // Cleanup camera on unmount
   useEffect(() => {
     return () => {
@@ -382,6 +387,10 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
 
   const handleSubmitAssessment = async () => {
     if (!damageType) return;
+    if (damageType === 'STRUCTURAL' && !isRoofingTriageComplete) {
+      setSubmitError('Complete the Roofing Triage fields before submitting this structural report.');
+      return;
+    }
     setIsSubmitting(true);
     setSubmitError(null);
     try {
@@ -718,6 +727,7 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
             {damageType === 'STRUCTURAL' && (
               <div className="space-y-3 bg-white border border-slate-200 rounded-xl p-4">
                 <label className="block text-sm font-bold text-slate-900 uppercase tracking-wider">Roofing Triage (1–5)</label>
+                <p className="text-xs text-slate-500">Required: Damaged shingles, Granule loss, and Impact hits per square.</p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                   <label className="space-y-1">
@@ -775,6 +785,9 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                   <p className="text-xs text-indigo-900 mt-1">{roofRatingMap[roofScore].meaning}</p>
                   <p className="text-xs text-indigo-700 mt-1">Action: {roofRatingMap[roofScore].action}</p>
                 </div>
+                {!isRoofingTriageComplete && (
+                  <p className="text-xs font-semibold text-amber-700">Please complete all required roofing triage fields to submit.</p>
+                )}
               </div>
             )}
 
@@ -795,7 +808,7 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                 size="lg"
                 className="shadow-lg bg-brand-600 hover:bg-brand-700 font-bold"
                 onClick={handleSubmitAssessment}
-                disabled={isSubmitting}
+                disabled={isSubmitting || (damageType === 'STRUCTURAL' && !isRoofingTriageComplete)}
               >
                 {isSubmitting ? 'Submitting...' : 'Submit Assessment'}
               </Button>
