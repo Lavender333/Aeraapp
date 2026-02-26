@@ -244,6 +244,8 @@ DROP POLICY IF EXISTS "Users can update own avatar" ON storage.objects;
 DROP POLICY IF EXISTS "Anyone can view avatars" ON storage.objects;
 DROP POLICY IF EXISTS "Users can upload own assessment photos" ON storage.objects;
 DROP POLICY IF EXISTS "Users can view own assessment photos" ON storage.objects;
+DROP POLICY IF EXISTS "Institution admins can view org assessment photos" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can view all assessment photos" ON storage.objects;
 
 -- damage_assessments
 DROP POLICY IF EXISTS "Users can view own damage assessments" ON damage_assessments;
@@ -730,6 +732,28 @@ CREATE POLICY "Users can view own assessment photos"
   USING (
     bucket_id = 'assessment_photos' AND 
     (select auth.uid())::text = (storage.foldername(name))[1]
+  );
+
+-- Institution admins can view assessment photos for reports in their org scope
+CREATE POLICY "Institution admins can view org assessment photos"
+  ON storage.objects FOR SELECT
+  USING (
+    bucket_id = 'assessment_photos'
+    AND public.is_institution_admin()
+    AND EXISTS (
+      SELECT 1
+      FROM public.damage_assessments da
+      WHERE da.photo_path = name
+        AND public.org_in_scope(da.org_id)
+    )
+  );
+
+-- Platform admins can view all assessment photos
+CREATE POLICY "Admins can view all assessment photos"
+  ON storage.objects FOR SELECT
+  USING (
+    bucket_id = 'assessment_photos'
+    AND public.is_admin()
   );
 
 -- =====================================================

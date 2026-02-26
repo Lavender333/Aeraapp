@@ -3269,8 +3269,6 @@ export async function listDamageAssessmentsForCurrentUser(limit = 75): Promise<D
   const canViewAll = role === 'ADMIN' || role === 'STATE_ADMIN' || role === 'COUNTY_ADMIN';
   const canViewOrg = role === 'ORG_ADMIN' || role === 'INSTITUTION_ADMIN';
 
-  if (!canViewAll && !canViewOrg) return [];
-
   const safeLimit = Math.max(1, Math.min(limit, 200));
   let rows: any[] = [];
   let error: any = null;
@@ -3318,6 +3316,7 @@ export async function listDamageAssessmentsForCurrentUser(limit = 75): Promise<D
     const response = await supabase
       .from('damage_assessments')
       .select('id, profile_id, org_id, damage_type, severity, description, photo_path, location, created_at')
+      .eq('profile_id', authData.user.id)
       .order('created_at', { ascending: false })
       .limit(safeLimit);
     rows = response.data || [];
@@ -3347,8 +3346,8 @@ export async function listDamageAssessmentsForCurrentUser(limit = 75): Promise<D
   if (profilesResp.error) throw new Error('Failed to resolve assessment reporters');
   if (orgsResp.error) throw new Error('Failed to resolve assessment organizations');
 
-  const profileMap = new Map((profilesResp.data || []).map((p: any) => [p.id, p]));
-  const orgMap = new Map((orgsResp.data || []).map((o: any) => [o.id, o]));
+  const profileMap = new Map<string, any>((profilesResp.data || []).map((p: any) => [p.id, p]));
+  const orgMap = new Map<string, any>((orgsResp.data || []).map((o: any) => [o.id, o]));
 
   return (rows || []).map((row: any) => {
     const reporter = profileMap.get(row.profile_id);

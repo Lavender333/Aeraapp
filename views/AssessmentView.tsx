@@ -42,6 +42,7 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submittedPhotoUrl, setSubmittedPhotoUrl] = useState<string | null>(null);
+  const [requiresCommunityConnection, setRequiresCommunityConnection] = useState(false);
 
   // Damage Categories
   const categories = [
@@ -260,6 +261,13 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     setSubmitError(null);
     try {
       const profile = StorageService.getProfile();
+      if (!String(profile.communityId || '').trim()) {
+        setRequiresCommunityConnection(true);
+        setSubmitError('Connect to a community first in Settings so your report routes to your org.');
+        return;
+      }
+
+      setRequiresCommunityConnection(false);
       const result = await submitDamageAssessment({
         damageType,
         severity,
@@ -277,8 +285,10 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
       } else {
         setSubmittedPhotoUrl(null);
       }
+      await loadAssessmentResults();
       setStep(3);
     } catch (err: any) {
+      setRequiresCommunityConnection(false);
       setSubmitError(err?.message || 'Unable to submit assessment.');
     } finally {
       setIsSubmitting(false);
@@ -585,56 +595,106 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
               {isSubmitting ? 'Submitting...' : 'Submit Assessment'}
             </Button>
             {submitError && (
-              <p className="text-xs text-red-600 font-semibold mt-2">{submitError}</p>
+              <div className="mt-2 space-y-2">
+                <p className="text-xs text-red-600 font-semibold">{submitError}</p>
+                {requiresCommunityConnection && (
+                  <Button size="sm" variant="outline" onClick={() => setView('SETTINGS')}>
+                    Go to Settings
+                  </Button>
+                )}
+              </div>
             )}
           </div>
         )}
 
         {step === 3 && (
-          <div className="flex flex-col items-center justify-center text-center space-y-6 animate-fade-in pt-10">
-             <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-2 shadow-inner">
-               <CheckCircle size={48} />
-             </div>
-             <div>
-               <h2 className="text-2xl font-bold text-slate-900">Report Filed</h2>
-               <p className="text-slate-600 font-medium">Your damage assessment has been logged.</p>
-             </div>
-             
-             <div className="bg-white p-6 rounded-xl w-full text-left border border-slate-200 shadow-sm">
-               <div className="flex justify-between mb-3 border-b border-slate-100 pb-2">
-                 <span className="text-xs font-bold text-slate-500 uppercase">Case ID</span>
-                 <span className="text-xs font-mono font-bold text-slate-900">DMG-{Math.floor(Math.random()*10000)}</span>
+          <div className="flex flex-col animate-fade-in min-h-[calc(100vh-220px)]">
+             <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6 pt-6">
+               <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-2 shadow-inner">
+                 <CheckCircle size={48} />
                </div>
-               {(submittedPhotoUrl || capturedImage) && (
-                 <div className="mb-4">
-                   <p className="text-xs font-bold text-slate-500 uppercase mb-2">Photo Preview</p>
-                   <img
-                     src={submittedPhotoUrl || capturedImage || ''}
-                     alt="Submitted damage"
-                     className="w-full max-h-56 object-cover rounded-lg border border-slate-200"
-                   />
-                   {submittedPhotoUrl && (
-                     <p className="text-[10px] text-slate-500 mt-1">Private link expires in 1 hour.</p>
-                   )}
+               <div>
+                 <h2 className="text-2xl font-bold text-slate-900">Report Filed</h2>
+                 <p className="text-slate-600 font-medium">Your damage assessment has been logged.</p>
+               </div>
+
+               <div className="bg-white p-6 rounded-xl w-full text-left border border-slate-200 shadow-sm">
+                 <div className="flex justify-between mb-3 border-b border-slate-100 pb-2">
+                   <span className="text-xs font-bold text-slate-500 uppercase">Case ID</span>
+                   <span className="text-xs font-mono font-bold text-slate-900">DMG-{Math.floor(Math.random()*10000)}</span>
                  </div>
-               )}
-               <div className="flex justify-between mb-3 border-b border-slate-100 pb-2">
-                 <span className="text-xs font-bold text-slate-500 uppercase">Type</span>
-                 <span className="text-sm font-bold text-slate-900">{damageType}</span>
-               </div>
-               <div className="flex justify-between items-center">
-                 <span className="text-xs font-bold text-slate-500 uppercase">Est. Severity</span>
-                 <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase ${
-                   severity === 3 ? 'bg-red-100 text-red-700' : severity === 2 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
-                 }`}>
-                   {severity === 3 ? 'Critical' : severity === 2 ? 'Moderate' : 'Minor'}
-                 </span>
+                 {(submittedPhotoUrl || capturedImage) && (
+                   <div className="mb-4">
+                     <p className="text-xs font-bold text-slate-500 uppercase mb-2">Photo Preview</p>
+                     <img
+                       src={submittedPhotoUrl || capturedImage || ''}
+                       alt="Submitted damage"
+                       className="w-full max-h-56 object-cover rounded-lg border border-slate-200"
+                     />
+                     {submittedPhotoUrl && (
+                       <p className="text-[10px] text-slate-500 mt-1">Private link expires in 1 hour.</p>
+                     )}
+                   </div>
+                 )}
+                 <div className="flex justify-between mb-3 border-b border-slate-100 pb-2">
+                   <span className="text-xs font-bold text-slate-500 uppercase">Type</span>
+                   <span className="text-sm font-bold text-slate-900">{damageType}</span>
+                 </div>
+                 <div className="flex justify-between items-center">
+                   <span className="text-xs font-bold text-slate-500 uppercase">Est. Severity</span>
+                   <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase ${
+                     severity === 3 ? 'bg-red-100 text-red-700' : severity === 2 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
+                   }`}>
+                     {severity === 3 ? 'Critical' : severity === 2 ? 'Moderate' : 'Minor'}
+                   </span>
+                 </div>
                </div>
              </div>
 
-             <Button fullWidth variant="outline" onClick={() => setView('DASHBOARD')} className="border-slate-300 text-slate-700 font-bold">
-               Return to Dashboard
-             </Button>
+             <div className="sticky bottom-0 bg-slate-50 pt-3 pb-2 space-y-2">
+               <Button fullWidth variant="secondary" onClick={() => setStep(4)}>
+                 View My Reports
+               </Button>
+               <Button fullWidth variant="outline" onClick={() => setView('DASHBOARD')} className="border-slate-300 text-slate-700 font-bold">
+                 Return to Dashboard
+               </Button>
+             </div>
+          </div>
+        )}
+
+        {step === 4 && (
+          <div className="space-y-4 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-slate-900">My Submitted Reports</h2>
+              <Button size="sm" variant="outline" onClick={loadAssessmentResults} disabled={resultsLoading}>
+                <RefreshCw size={14} className="mr-1" /> Refresh
+              </Button>
+            </div>
+            {resultsLoading && (
+              <div className="bg-white border border-slate-200 rounded-xl p-4 text-sm text-slate-600 flex items-center gap-2">
+                <Loader2 size={16} className="animate-spin" /> Loading your reports...
+              </div>
+            )}
+            {!resultsLoading && reportedAssessments.length === 0 && (
+              <div className="bg-white border border-slate-200 rounded-xl p-4 text-sm text-slate-600">
+                No submitted reports yet.
+              </div>
+            )}
+            {!resultsLoading && reportedAssessments.map((item) => (
+              <div key={item.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2">
+                <div className="flex items-start justify-between">
+                  <p className="text-sm font-bold text-slate-900">{item.damageType}</p>
+                  <span className="text-[11px] text-slate-500">{new Date(item.createdAt).toLocaleString()}</span>
+                </div>
+                {item.description && <p className="text-sm text-slate-700">{item.description}</p>}
+                {assessmentPhotoUrls[item.id] && (
+                  <img src={assessmentPhotoUrls[item.id]} alt="Submitted evidence" className="w-full max-h-52 object-cover rounded-lg border border-slate-200" />
+                )}
+              </div>
+            ))}
+            <Button fullWidth variant="outline" onClick={() => setStep(1)}>
+              Submit Another Report
+            </Button>
           </div>
         )}
 
