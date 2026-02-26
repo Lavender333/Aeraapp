@@ -261,10 +261,25 @@ export default function App() {
                   currentView !== 'ORG_DASHBOARD' &&
                   currentView !== 'PRIVACY_POLICY';
 
+  const useWideLayout = [
+    'SETTINGS',
+    'MAP',
+    'GAP',
+    'ASSESSMENT',
+    'POPULATION',
+    'RECOVERY',
+    'DRONE',
+    'LOGISTICS',
+    'ORG_DASHBOARD',
+    'NEW_SIGNUPS',
+  ].includes(currentView);
+
   return (
     <div className={isPresentationView
       ? 'w-screen h-screen min-h-screen relative overflow-hidden print:max-w-none print:w-full print:h-auto print:overflow-visible print:shadow-none print:border-0'
-      : 'max-w-md mx-auto min-h-screen shadow-2xl relative overflow-hidden md:border-x md:border-slate-200 print:max-w-none print:w-full print:h-auto print:overflow-visible print:shadow-none print:border-0'} style={{ backgroundColor: 'var(--bg-app)' }}>
+      : `${useWideLayout
+          ? 'w-full max-w-md md:max-w-5xl'
+          : 'w-full max-w-md'} mx-auto min-h-screen shadow-2xl relative overflow-hidden md:border-x md:border-slate-200 print:max-w-none print:w-full print:h-auto print:overflow-visible print:shadow-none print:border-0`} style={{ backgroundColor: 'var(--bg-app)' }}>
       {showSetupNotice && (
         <div className="absolute top-0 inset-x-0 z-50">
           <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2 text-xs text-center">
