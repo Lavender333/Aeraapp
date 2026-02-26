@@ -111,7 +111,7 @@ export const presentationSlides: PresentationSlide[] = [
       <ProfileContext profile={presentationProfiles.member}>
         <div className="relative h-full w-full">
           <DashboardView setView={noOpSetView} />
-          <AnnouncementOverlay text="Family, today we are activating our preparedness network. Download AERA. Enter our Community Code." />
+          <AnnouncementOverlay text="Download AERA. Enter our Community Code." />
         </div>
       </ProfileContext>
     ),
@@ -250,13 +250,13 @@ export const presentationSlides: PresentationSlide[] = [
   {
     id: 15,
     section: 'Section 4 • Lifecycle',
-    title: 'Step 14 — Hurricane Helion Declared',
+    title: 'Step 14 — Hurrican Helen Declared',
     speakerNote: 'Now we fast-forward into an actual event to show the full lifecycle under pressure.',
     status: 'LIVE',
     content: (
       <div className="h-full w-full flex items-center justify-center p-6">
         <Card className="max-w-2xl w-full">
-          <p className="text-2xl font-bold text-slate-900">Let’s fast-forward. Hurricane Helion is announced.</p>
+          <p className="text-2xl font-bold text-slate-900">Let’s fast-forward. Hurrican Helen is announced.</p>
         </Card>
       </div>
     ),
