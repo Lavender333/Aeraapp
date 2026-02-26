@@ -644,6 +644,9 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <div key={category.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
               <button
                 onClick={() => toggleCategory(category.id)}
+                aria-expanded={isOpen}
+                aria-controls={`buildkit-category-panel-${category.id}`}
+                id={`buildkit-category-button-${category.id}`}
                 className="w-full flex items-center justify-between px-4 py-4 hover:bg-slate-50"
               >
                 <div className="flex items-center gap-3">
@@ -659,11 +662,16 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                   <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg">
                     {catChecked}/{category.items.length}
                   </span>
-                  <ChevronDown size={18} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                  <ChevronDown size={18} className={`text-black transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                 </div>
               </button>
               {isOpen && (
-                <div className="border-t border-slate-100">
+                <div
+                  id={`buildkit-category-panel-${category.id}`}
+                  role="region"
+                  aria-labelledby={`buildkit-category-button-${category.id}`}
+                  className="border-t border-slate-100"
+                >
                   {category.items.map((item) => {
                     const checked = !!checkedItems[item.id];
                     return (
@@ -693,6 +701,12 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </div>
 
       <div className="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 px-4 pt-3 pb-6">
+        <button
+          onClick={() => setView('DASHBOARD')}
+          className="w-full mb-2 flex items-center justify-center gap-2 rounded-xl border border-slate-200 py-3 text-sm font-semibold text-black hover:bg-slate-50"
+        >
+          <ArrowLeft size={16} /> Back
+        </button>
         <div className="grid grid-cols-2 gap-2 mb-2">
           <button
             onClick={exportPDF}

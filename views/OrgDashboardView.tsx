@@ -11,7 +11,9 @@ import { Building2, CheckCircle, AlertTriangle, HelpCircle, Package, ArrowLeft, 
 import { Textarea } from '../components/Input';
 import { GoogleGenAI } from "../services/mockGenAI";
 
-export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
+type OrgDashboardTab = 'MEMBERS' | 'PREPAREDNESS' | 'INVENTORY';
+
+export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initialTab?: OrgDashboardTab; communityIdOverride?: string }> = ({ setView, initialTab = 'MEMBERS', communityIdOverride }) => {
   const isUuid = (value: string) =>
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
 
@@ -62,7 +64,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
 
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [inventory, setInventory] = useState<OrgInventory>({ water: 0, food: 0, blankets: 0, medicalKits: 0 });
-  const [activeTab, setActiveTab] = useState<'MEMBERS' | 'PREPAREDNESS' | 'INVENTORY'>('MEMBERS');
+  const [activeTab, setActiveTab] = useState<OrgDashboardTab>(initialTab);
   const [orgName, setOrgName] = useState('Community Organization');
   const [parentOrgName, setParentOrgName] = useState('Community Organization');
   const [communityId, setCommunityId] = useState('');
@@ -108,8 +110,12 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
   const [moderationError, setModerationError] = useState<string | null>(null);
 
   useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  useEffect(() => {
     const profile = StorageService.getProfile();
-    const id = profile.communityId || 'CH-9921';
+    const id = communityIdOverride || profile.communityId || 'CH-9921';
     setCommunityId(id);
     setParentOrgName(profile.communityName || 'Community Organization');
 
@@ -131,7 +137,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void }> = (
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, []);
+  }, [communityIdOverride]);
 
   // whenever communityId changes, fetch child org list and compute aggregates
   useEffect(() => {

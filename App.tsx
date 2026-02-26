@@ -55,6 +55,7 @@ const ResetPasswordView = lazyWithRetry(() => import('./views/ResetPasswordView'
 const BuildKitView = lazyWithRetry(() => import('./views/BuildKitView').then((m) => ({ default: m.BuildKitView })));
 const ReadinessView = lazyWithRetry(() => import('./views/ReadinessView').then((m) => ({ default: m.ReadinessView })));
 const ReadinessGapView = lazyWithRetry(() => import('./views/ReadinessGapView').then((m) => ({ default: m.ReadinessGapView })));
+const PresentationLayout = lazyWithRetry(() => import('./src/presentation/PresentationLayout').then((m) => ({ default: m.PresentationLayout })));
 
 class ViewErrorBoundary extends React.Component<
   { onRecover: () => void; children: React.ReactNode },
@@ -107,6 +108,8 @@ export default function App() {
   const canAccessAdvancedViews = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN', 'FIRST_RESPONDER', 'LOCAL_AUTHORITY', 'CONTRACTOR'].includes(currentRole);
   const canAccessOrgDashboard = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(currentRole);
   const canAccessNewSignups = currentRole === 'ADMIN';
+  const isPresentationPath = typeof window !== 'undefined' && window.location.pathname === '/presentation';
+  const isPresentationView = currentView === 'PRESENTATION' || isPresentationPath;
 
   useEffect(() => {
     StorageService.startOfflineSyncListener();
@@ -120,10 +123,14 @@ export default function App() {
       const isRecoveryPath = window.location.pathname.includes('reset-password');
       const isRecoveryHash = hash.includes('type=recovery') || search.includes('type=recovery') || hash.includes('reset-password');
       const isRecoveryUrl = isRecoveryPath || isRecoveryHash;
+      const isPresentationUrl = window.location.pathname === '/presentation';
       try {
         const { data } = await supabase.auth.getSession();
         if (!active) return;
-        if (isRecoveryUrl) {
+        if (isPresentationUrl) {
+          setPostSplashView('PRESENTATION');
+          setView('PRESENTATION');
+        } else if (isRecoveryUrl) {
           setPostSplashView('RESET_PASSWORD');
           setView('RESET_PASSWORD');
         } else {
@@ -132,7 +139,10 @@ export default function App() {
         }
       } catch {
         if (!active) return;
-        if (isRecoveryUrl) {
+        if (isPresentationUrl) {
+          setPostSplashView('PRESENTATION');
+          setView('PRESENTATION');
+        } else if (isRecoveryUrl) {
           setPostSplashView('RESET_PASSWORD');
           setView('RESET_PASSWORD');
         } else {
@@ -189,7 +199,7 @@ export default function App() {
           />
         );
       case 'PRESENTATION':
-        return <PresentationView setView={setView} />;
+        return <PresentationLayout setView={setView} />;
       case 'REGISTRATION':
         return <RegistrationView setView={setView} mode="REGISTRATION" />;
       case 'ACCOUNT_SETUP':
@@ -252,7 +262,9 @@ export default function App() {
                   currentView !== 'PRIVACY_POLICY';
 
   return (
-    <div className="max-w-md mx-auto min-h-screen shadow-2xl relative overflow-hidden md:border-x md:border-slate-200 print:max-w-none print:w-full print:h-auto print:overflow-visible print:shadow-none print:border-0" style={{ backgroundColor: 'var(--bg-app)' }}>
+    <div className={isPresentationView
+      ? 'w-screen h-screen min-h-screen relative overflow-hidden print:max-w-none print:w-full print:h-auto print:overflow-visible print:shadow-none print:border-0'
+      : 'max-w-md mx-auto min-h-screen shadow-2xl relative overflow-hidden md:border-x md:border-slate-200 print:max-w-none print:w-full print:h-auto print:overflow-visible print:shadow-none print:border-0'} style={{ backgroundColor: 'var(--bg-app)' }}>
       {showSetupNotice && (
         <div className="absolute top-0 inset-x-0 z-50">
           <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2 text-xs text-center">

@@ -201,6 +201,14 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
         >
           {isLoggingIn ? 'Signing in…' : t('login.btn')}
         </Button>
+        <Button
+          fullWidth
+          variant="secondary"
+          size="sm"
+          onClick={() => window.location.assign('/presentation')}
+        >
+          Open Presentation Mode
+        </Button>
         <button className="text-sm text-brand-600 font-semibold underline" onClick={() => setShowReset(!showReset)}>
           Forgot password?
         </button>

@@ -48,7 +48,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     insulinDependency: false,
     oxygenPoweredDevice: false,
     mobilityLimitation: false,
-    transportationAccess: true,
+    transportationAccess: false,
     financialStrain: false,
     consentPreparednessPlanning: false,
     emergencyContactName: '',
@@ -326,7 +326,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
               <button
                 key={lang}
                 onClick={() => changeLanguage(lang as LanguageCode)}
-                className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${
+                className={`language-row text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${
                   formData.language === lang 
                     ? 'bg-slate-800 text-white border-slate-800' 
                     : 'bg-white text-slate-500 border-slate-200'

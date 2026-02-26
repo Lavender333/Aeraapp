@@ -19,6 +19,30 @@ body,
   font-family: Inter, system-ui, -apple-system, sans-serif;
 }
 
+html,
+body {
+  font-size: 16px;
+}
+
+:focus-visible {
+  outline: 3px solid #94A3B8;
+  outline-offset: 3px;
+}
+
+button,
+a[role="button"] {
+  min-height: 48px;
+}
+
+label:has(input[type="checkbox"]),
+.checkbox-row {
+  min-height: 48px;
+}
+
+.language-row {
+  min-height: 48px;
+}
+
 [class*="bg-gradient"] {
   background-image: none !important;
 }
