@@ -173,6 +173,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     community: false,
     security: false,
   });
+  const [householdAddToken, setHouseholdAddToken] = useState(0);
 
   // Main Settings State
   const [profile, setProfile] = useState<UserProfile>({
@@ -3131,15 +3132,17 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         <div>
           <div className="flex items-center justify-between gap-3 mb-2">
             <label className="block text-sm font-medium text-slate-700">Who Lives in Your Home</label>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => toggleShowMore('household')}
-              className="h-12 border border-[#2F7A64] bg-white text-[#2F7A64] hover:bg-white font-semibold"
-            >
-              Add Member
-            </Button>
+            {profile.householdRole === 'OWNER' && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setHouseholdAddToken((value) => value + 1)}
+                className="h-12 border border-[#2F7A64] bg-white text-[#2F7A64] hover:bg-white font-semibold"
+              >
+                Add Member
+              </Button>
+            )}
           </div>
           <p className="text-xs text-slate-500 mb-2">Each member requires DOB in MM/DD/YYYY. Young children and seniors are flagged automatically.</p>
           <HouseholdManager 
@@ -3147,6 +3150,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             onChange={(updated) => updateProfile('household', updated)}
             readOnly={profile.householdRole !== 'OWNER'}
             latestSafetyStatusByMember={latestSafetyStatusByMember}
+            requestAddToken={householdAddToken}
           />
           {profile.householdRole === 'OWNER' && (
             <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 space-y-3">

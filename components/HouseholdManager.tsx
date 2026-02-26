@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { HouseholdMember } from '../types';
 import { Button } from './Button';
 import { Input } from './Input';
@@ -11,9 +11,10 @@ interface HouseholdManagerProps {
   onChange: (members: HouseholdMember[]) => void;
   readOnly?: boolean;
   latestSafetyStatusByMember?: Record<string, { status: 'SAFE' | 'DANGER'; at?: string }>;
+  requestAddToken?: number;
 }
 
-export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onChange, readOnly = false, latestSafetyStatusByMember = {} }) => {
+export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onChange, readOnly = false, latestSafetyStatusByMember = {}, requestAddToken = 0 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [currentMember, setCurrentMember] = useState<HouseholdMember>({
@@ -75,6 +76,11 @@ export const HouseholdManager: React.FC<HouseholdManagerProps> = ({ members, onC
     setFormError(null);
     setIsEditing(true);
   };
+
+  useEffect(() => {
+    if (readOnly || requestAddToken <= 0) return;
+    startAdd();
+  }, [requestAddToken, readOnly]);
 
   const handleDelete = (id: string) => {
     if (confirm('Remove this member?')) {
