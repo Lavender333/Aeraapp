@@ -416,6 +416,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     : null;
   const projected12MonthProfit = monthlyProfit * 12;
   const initials = userName ? userName.trim().charAt(0).toUpperCase() : 'A';
+  const dashboardReadinessScore = [isOnline, isProfileComplete, hasCommunity].filter(Boolean).length;
+  const dashboardCompletionPct = Math.round((dashboardReadinessScore / 3) * 100);
 
   // Simple growth model: +10% users per month compared to base
   const userGrowthSeries = Array.from({ length: 12 }).map((_, idx) => {
@@ -730,6 +732,32 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         </div>
       </div>
 
+      <section className="bg-white/95 border border-slate-200 rounded-2xl p-4 shadow-sm">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Dashboard Overview</p>
+            <p className="text-lg font-bold text-slate-900 mt-1">Readiness: {dashboardCompletionPct}%</p>
+          </div>
+          <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${dashboardCompletionPct >= 67 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+            {dashboardCompletionPct >= 67 ? 'On track' : 'Needs setup'}
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${isOnline ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+            {isOnline ? 'Online' : 'Offline'}
+          </span>
+          <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${isProfileComplete ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+            {isProfileComplete ? 'Profile complete' : 'Profile needs info'}
+          </span>
+          <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${hasCommunity ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+            {hasCommunity ? 'Community connected' : 'Community not connected'}
+          </span>
+          <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${isSyncing ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-600'}`}>
+            {isSyncing ? 'Syncing' : 'Sync idle'}
+          </span>
+        </div>
+      </section>
+
       {canOpenOrgDashboard && connectedOrg && (
         (() => {
           const inventoryReady = Boolean(orgInventory);
@@ -744,7 +772,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                 medicalKits: { level: 'UNKNOWN' },
               };
           return (
-        <div className="bg-gradient-to-br from-sky-50 to-teal-50 border border-sky-100 rounded-2xl p-6 shadow-md space-y-3">
+        <div className="bg-white/95 border border-slate-200 rounded-2xl p-6 shadow-sm space-y-3">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs uppercase font-bold text-teal-700">Hub Inventory</p>
@@ -754,6 +782,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                 <p className="text-[11px] text-amber-600 font-semibold">Using cached inventory (API unavailable).</p>
               )}
             </div>
+            <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${inventoryReady ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+              {inventoryReady ? 'Ready' : 'Loading'}
+            </span>
             <Button size="sm" variant="outline" onClick={() => setView('ORG_DASHBOARD')}>
               Manage
             </Button>
@@ -845,8 +876,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         <Card
           title="Community Connection"
           icon={<Building2 size={20} />}
-          className="border-l-4 border-l-brand-500"
+          className="border border-slate-200 bg-white/95"
         >
+          <span className="inline-flex text-[11px] font-bold px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 mb-3">Connected</span>
           <p className="text-sm text-slate-600">
             Connected to <span className="font-semibold text-slate-900">{connectedOrg}</span>. Update the Community ID to reconnect.
           </p>
@@ -888,8 +920,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         <Card
           title="Trusted Community Connection"
           icon={<Building2 size={20} />}
-          className="border-l-4 border-l-brand-500"
+          className="border border-slate-200 bg-white/95"
         >
+          <span className="inline-flex text-[11px] font-bold px-2 py-1 rounded-full bg-amber-100 text-amber-700 mb-3">Setup needed</span>
           <p className="text-sm text-slate-600">
             Enter your Community ID to unlock local alerts, depots, and inventory updates.
           </p>
@@ -925,26 +958,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               <button
                 type="button"
                 onClick={() => setView('READINESS')}
-                className="text-left bg-sky-50/70 border border-sky-100 rounded-xl p-4 shadow-sm hover:border-sky-200 hover:shadow-md transition-all"
+                className="text-left bg-white/95 border border-slate-200 rounded-xl p-4 shadow-sm hover:border-sky-200 hover:shadow-md transition-all"
               >
                 <div className="w-10 h-10 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center mb-3">
                   <ClipboardCheck size={18} />
                 </div>
                 <div className="flex items-center gap-2">
                   <h4 className="font-semibold text-slate-900 text-sm">Readiness Checklist</h4>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">Checklist</span>
                 </div>
                 <p className="text-[11px] text-slate-500 mt-2">Build and track your kit with quantity guidance.</p>
               </button>
               <button
                 type="button"
                 onClick={() => setView('SETTINGS')}
-                className="text-left bg-teal-50/60 border border-teal-100 rounded-xl p-4 shadow-sm hover:border-teal-200 hover:shadow-md transition-all"
+                className="text-left bg-white/95 border border-slate-200 rounded-xl p-4 shadow-sm hover:border-teal-200 hover:shadow-md transition-all"
               >
                 <div className="w-10 h-10 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center mb-3">
                   <Phone size={18} />
                 </div>
                 <div className="flex items-center gap-2">
                   <h4 className="font-semibold text-slate-900 text-sm">Home & Profile</h4>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isProfileComplete ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                    {isProfileComplete ? 'Complete' : 'Needs info'}
+                  </span>
                 </div>
                 <p className="text-[11px] text-slate-500 mt-2">Household members, emergency contacts, and org connection.</p>
                 {isProfileComplete ? (
@@ -992,7 +1029,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         {/* G.A.P. Financial Aid - For Users in need of aid */}
         {(isGeneralUser || isOrgAdmin) && (
           <Card 
-            className="col-span-1 hover:border-sky-300 bg-sky-50/60 border-sky-100"
+            className="col-span-1 hover:border-sky-300 bg-white/95 border-slate-200"
             onClick={() => setView('GAP')}
           >
             <div className="flex flex-col items-start gap-3">
@@ -1002,6 +1039,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               <div>
                 <h3 className="font-semibold text-slate-900">{t('dash.gap')}</h3>
                 <p className="text-xs text-slate-500 mt-1">{t('dash.gap.desc')}</p>
+                <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 mt-2">Financial Aid</span>
               </div>
             </div>
           </Card>
@@ -1010,7 +1048,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         {/* Damage Assessment - For Users (reporting) and Pros (reviewing) */}
         {(isGeneralUser || isResponder || isContractor) && (
           <Card 
-            className="col-span-1 hover:border-violet-300 bg-violet-50/60 border-violet-100"
+            className="col-span-1 hover:border-violet-300 bg-white/95 border-slate-200"
             onClick={() => setView('ASSESSMENT')}
           >
             <div className="flex flex-col items-start gap-3">
@@ -1020,6 +1058,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               <div>
                 <h3 className="font-semibold text-slate-900">{t('dash.assess')}</h3>
                 <p className="text-xs text-slate-500 mt-1">{t('dash.assess.desc')}</p>
+                <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 mt-2">AI Enabled</span>
               </div>
             </div>
           </Card>
@@ -1027,7 +1066,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         
         {showLogisticsHome && (
           <Card 
-            className="col-span-2"
+            className="col-span-2 bg-white/95 border-slate-200"
             onClick={() => setView('LOGISTICS')}
           >
             <div className="flex items-start gap-4">
@@ -1037,6 +1076,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               <div className="flex-1">
                 <h3 className="text-xl font-bold text-slate-900">{t('dash.logistics')}</h3>
                 <p className="text-sm text-slate-600">{t('dash.logistics.desc')}</p>
+                <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 mt-2">Operations</span>
                 <div className="flex items-center gap-3 mt-3 flex-wrap">
                   <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-slate-200">
                     <Droplets size={16} className="text-blue-600" />
@@ -1058,7 +1098,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
           <>
             {/* Population Tracker */}
             <Card 
-              className="col-span-1 hover:border-brand-300 border-indigo-200 bg-indigo-50/50"
+              className="col-span-1 hover:border-brand-300 border-slate-200 bg-white/95"
               onClick={() => setView('POPULATION')}
             >
               <div className="flex flex-col items-start gap-3">
@@ -1068,13 +1108,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                 <div>
                   <h3 className="font-semibold text-slate-900">Population</h3>
                   <p className="text-xs text-slate-500 mt-1">Evac zones & heatmaps</p>
+                  <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 mt-2">Pro</span>
                 </div>
               </div>
             </Card>
 
             {/* Deployment & Recovery */}
             <Card 
-              className="col-span-1 hover:border-brand-300 border-orange-200 bg-orange-50/50"
+              className="col-span-1 hover:border-brand-300 border-slate-200 bg-white/95"
               onClick={() => setView('RECOVERY')}
             >
               <div className="flex flex-col items-start gap-3">
@@ -1084,13 +1125,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                 <div>
                   <h3 className="font-semibold text-slate-900">Recovery</h3>
                   <p className="text-xs text-slate-500 mt-1">Teams & Deployments</p>
+                  <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 mt-2">Pro</span>
                 </div>
               </div>
             </Card>
 
             {/* Drone Innovations */}
             <Card 
-              className="col-span-1 hover:border-brand-300 border-slate-300 bg-slate-100"
+              className="col-span-1 hover:border-brand-300 border-slate-200 bg-white/95"
               onClick={() => setView('DRONE')}
             >
               <div className="flex flex-col items-start gap-3">
@@ -1100,6 +1142,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                 <div>
                   <h3 className="font-semibold text-slate-900">Drone to Phone</h3>
                   <p className="text-xs text-slate-500 mt-1">UAV Feed & Delivery</p>
+                  <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 mt-2">Pro</span>
                 </div>
               </div>
             </Card>
