@@ -112,11 +112,11 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, className })
           Sign Here
         </div>
       </div>
-      <div className="flex gap-3">
-        <Button variant="outline" onClick={clear} size="sm" className="flex-1 text-slate-500 border-slate-300">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+        <Button variant="outline" onClick={clear} size="sm" className="w-full sm:flex-1 text-slate-500 border-slate-300">
           <Eraser size={16} className="mr-2" /> Clear
         </Button>
-        <Button onClick={save} size="sm" disabled={!hasSignature} className="flex-1 font-bold bg-blue-600 hover:bg-blue-700 text-white">
+        <Button onClick={save} size="sm" disabled={!hasSignature} className="w-full sm:flex-1 font-bold bg-blue-600 hover:bg-blue-700 text-white">
           <Check size={16} className="mr-2" /> Apply Signature
         </Button>
       </div>
