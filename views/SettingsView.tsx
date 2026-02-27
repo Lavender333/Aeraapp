@@ -3108,7 +3108,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <div className="flex items-center gap-2 mb-2 text-brand-400 font-bold text-xs uppercase tracking-wider">
               <Lock size={12} /> Administrator Area
             </div>
-            <h2 className="text-xl font-bold mb-4">Roles & Dashboards</h2>
+            <h2 className="text-xl font-bold mb-4 text-slate-700">Roles & Dashboards</h2>
             <div className="space-y-3">
               <Button 
                 onClick={openAccessControl} 
