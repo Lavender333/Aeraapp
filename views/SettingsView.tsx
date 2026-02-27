@@ -206,8 +206,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const normalizedRole = String(profile.role || '').toUpperCase();
   const isAdmin = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(normalizedRole);
   const isPlatformAdmin = normalizedRole === 'ADMIN';
-  const isOrgScopedAdmin = normalizedRole === 'ORG_ADMIN';
+  const isOrgScopedAdmin = normalizedRole === 'ORG_ADMIN' || normalizedRole === 'INSTITUTION_ADMIN';
   const orgScopeId = String(profile.communityId || '').trim();
+  function getStoredProfileImage(userId?: string) {
+    const normalizedId = String(userId || '').trim();
+    if (!normalizedId) return '';
+    return StorageService.getProfileImageDataUrl(normalizedId) || '';
+  }
   const addressSummary = [profile.address, profile.city, profile.state, profile.zipCode]
     .map((value) => String(value || '').trim())
     .filter(Boolean)
@@ -1780,7 +1785,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     })();
   };
 
-  const openAccessControl = () => {
+  const openAccessControl = async () => {
     console.info('[AccessControl] openAccessControl clicked', { isAdmin });
     if (!isAdmin) {
       console.warn('[AccessControl] blocked: not admin');
@@ -1788,9 +1793,36 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     }
     const db = StorageService.getDB();
     console.info('[AccessControl] loading users', { count: Array.isArray(db.users) ? db.users.length : 0 });
-    const scopedUsers = Array.isArray(db.users)
+    let scopedUsers = Array.isArray(db.users)
       ? (isOrgScopedAdmin ? db.users.filter((u) => String(u.communityId || '') === orgScopeId) : db.users)
       : [];
+
+    if (isOrgScopedAdmin && scopedUsers.length === 0 && orgScopeId) {
+      try {
+        const { members } = await StorageService.fetchOrgMembersRemote(orgScopeId);
+        scopedUsers = members.map((member) => ({
+          id: String(member.id || ''),
+          fullName: String(member.name || 'Unknown User'),
+          phone: String(member.phone || ''),
+          address: String(member.address || ''),
+          householdMembers: 1,
+          household: [],
+          petDetails: '',
+          medicalNeeds: '',
+          emergencyContactName: String(member.emergencyContactName || ''),
+          emergencyContactPhone: String(member.emergencyContactPhone || ''),
+          emergencyContactRelation: String(member.emergencyContactRelation || ''),
+          communityId: orgScopeId,
+          role: 'MEMBER' as UserRole,
+          language: 'en' as LanguageCode,
+          active: true,
+          notifications: { push: true, sms: true, email: true },
+        }));
+      } catch (err) {
+        console.warn('[AccessControl] org-scoped member fallback failed', err);
+      }
+    }
+
     setUsers(scopedUsers.map((u) => ({ ...u, active: u.active !== false })));
     setActiveTab('ALL_USERS');
     setCurrentSection('ACCESS_CONTROL');
@@ -3017,12 +3049,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const preparednessReady = Boolean(profile.consentPreparednessPlanning);
   const communityReady = Boolean(String(profile.communityId || '').trim());
   const profileInitial = (profile.fullName || 'A').trim().charAt(0).toUpperCase();
-  const getStoredProfileImage = (userId?: string) => {
-    const normalizedId = String(userId || '').trim();
-    if (!normalizedId) return '';
-    return StorageService.getProfileImageDataUrl(normalizedId) || '';
-  };
-
   return (
     <div className="p-6 pb-28 space-y-8 animate-fade-in bg-gradient-to-br from-sky-50 via-slate-50 to-teal-50 min-h-screen flex flex-col">
       {/* Header */}
