@@ -844,7 +844,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Community Announcement</p>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">LIVE</span>
               </div>
-              <p className="text-sm font-semibold text-slate-800 truncate">
+              <p
+                className="text-sm font-semibold text-slate-800 overflow-hidden"
+                style={{
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                }}
+              >
                 {tickerMessage}
               </p>
               <p className="text-[11px] text-slate-500 mt-1">Tap to read full message</p>
