@@ -2091,6 +2091,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               <div>
                 <h1 className="text-4xl font-bold uppercase tracking-tight">Work Order</h1>
                 <p className="text-sm font-bold uppercase mt-1">AERA Logistics Fulfillment</p>
+                <div className="mt-3 flex flex-wrap gap-2 text-[10px]">
+                  <span className={`px-2 py-1 border font-bold uppercase ${printingRequest.signature ? 'border-green-700 text-green-800 bg-green-50' : 'border-amber-700 text-amber-800 bg-amber-50'}`}>
+                    {printingRequest.signature ? 'Release Approved' : 'Release Pending'}
+                  </span>
+                  <span className={`px-2 py-1 border font-bold uppercase ${printingRequest.receivedSignature ? 'border-green-700 text-green-800 bg-green-50' : 'border-amber-700 text-amber-800 bg-amber-50'}`}>
+                    {printingRequest.receivedSignature ? 'Custody Accepted' : 'Custody Pending'}
+                  </span>
+                </div>
               </div>
               <div className="text-right">
                 <p className="text-sm"><strong>Order ID:</strong> {printingRequest.id}</p>
