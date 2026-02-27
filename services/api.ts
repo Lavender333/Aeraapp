@@ -576,6 +576,7 @@ export async function updateProfileForUser(payload: {
   fullName: string;
   phone: string;
   email?: string;
+  avatarDataUrl?: string;
   address?: string;
   addressLine1?: string;
   addressLine2?: string;
@@ -614,6 +615,10 @@ export async function updateProfileForUser(payload: {
     home_address: payload.address || null,
     emergency_contact: emergencyContact,
   };
+
+  if (Object.prototype.hasOwnProperty.call(payload, 'avatarDataUrl')) {
+    profileUpdate.avatar_url = payload.avatarDataUrl || null;
+  }
 
   if (Object.prototype.hasOwnProperty.call(payload, 'addressLine1')) {
     profileUpdate.address_line_1 = payload.addressLine1 || null;
@@ -2531,7 +2536,7 @@ export async function fetchProfileForUser(): Promise<Partial<UserProfile> | null
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('full_name, phone, mobile_phone, email, role, org_id, home_address, address_line_1, address_line_2, city, state, zip, latitude, longitude, google_place_id, address_verified, address_verified_at, emergency_contact, organizations(org_code)')
+    .select('full_name, phone, mobile_phone, email, role, org_id, home_address, address_line_1, address_line_2, city, state, zip, latitude, longitude, google_place_id, address_verified, address_verified_at, emergency_contact, avatar_url, organizations(org_code)')
     .eq('id', authData.user.id)
     .single();
 
@@ -2562,6 +2567,7 @@ export async function fetchProfileForUser(): Promise<Partial<UserProfile> | null
     emergencyContactName: data.emergency_contact?.name || '',
     emergencyContactPhone: data.emergency_contact?.phone || '',
     emergencyContactRelation: data.emergency_contact?.relation || '',
+    avatarDataUrl: data.avatar_url || '',
   };
 }
 

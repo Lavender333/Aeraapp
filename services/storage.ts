@@ -555,6 +555,10 @@ export const StorageService = {
             };
 
             this.saveProfile(mergedProfile, { skipRemoteSync: true });
+            const remoteAvatar = String((remoteProfile as any)?.avatarDataUrl || '').trim();
+            if (remoteAvatar.startsWith('data:image/')) {
+              this.saveProfileImageDataUrl(remoteAvatar, mergedProfile.id, { skipRemoteSync: true });
+            }
           } catch (hydrateErr) {
             console.warn('Post-login profile hydration failed', hydrateErr);
           }
@@ -712,7 +716,7 @@ export const StorageService = {
     }
   },
 
-  saveProfileImageDataUrl(dataUrl: string, userId?: string): boolean {
+  saveProfileImageDataUrl(dataUrl: string, userId?: string, options?: { skipRemoteSync?: boolean }): boolean {
     const aliases = this.getProfileImageAliases(userId);
     const nextValue = String(dataUrl || '');
     if (aliases.length === 0 || !nextValue.startsWith('data:image/')) return false;
@@ -726,13 +730,38 @@ export const StorageService = {
       if (saved && typeof window !== 'undefined') {
         window.dispatchEvent(new Event('profile-image-updated'));
       }
+
+      if (saved && !options?.skipRemoteSync) {
+        const profile = this.getProfile();
+        if (profile?.id && profile.id !== 'guest') {
+          (async () => {
+            try {
+              await updateProfileForUser({
+                fullName: profile.fullName,
+                phone: profile.phone,
+                email: profile.email,
+                address: profile.address,
+                emergencyContactName: profile.emergencyContactName,
+                emergencyContactPhone: profile.emergencyContactPhone,
+                emergencyContactRelation: profile.emergencyContactRelation,
+                communityId: profile.communityId,
+                role: profile.role,
+                avatarDataUrl: nextValue,
+              });
+            } catch (err) {
+              console.warn('Profile image sync failed', err);
+            }
+          })();
+        }
+      }
+
       return saved;
     } catch {
       return false;
     }
   },
 
-  clearProfileImageDataUrl(userId?: string): boolean {
+  clearProfileImageDataUrl(userId?: string, options?: { skipRemoteSync?: boolean }): boolean {
     const aliases = this.getProfileImageAliases(userId);
     if (aliases.length === 0) return false;
     try {
@@ -746,6 +775,31 @@ export const StorageService = {
       if (saved && typeof window !== 'undefined') {
         window.dispatchEvent(new Event('profile-image-updated'));
       }
+
+      if (saved && !options?.skipRemoteSync) {
+        const profile = this.getProfile();
+        if (profile?.id && profile.id !== 'guest') {
+          (async () => {
+            try {
+              await updateProfileForUser({
+                fullName: profile.fullName,
+                phone: profile.phone,
+                email: profile.email,
+                address: profile.address,
+                emergencyContactName: profile.emergencyContactName,
+                emergencyContactPhone: profile.emergencyContactPhone,
+                emergencyContactRelation: profile.emergencyContactRelation,
+                communityId: profile.communityId,
+                role: profile.role,
+                avatarDataUrl: '',
+              });
+            } catch (err) {
+              console.warn('Profile image clear sync failed', err);
+            }
+          })();
+        }
+      }
+
       return saved;
     } catch {
       return false;

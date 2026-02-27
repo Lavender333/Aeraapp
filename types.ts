@@ -78,6 +78,7 @@ export interface HouseholdMember {
 export interface UserProfile {
   id: string; // Unique ID (UUID)
   fullName: string;
+  avatarDataUrl?: string;
   email?: string;
   createdAt?: string; // ISO timestamp of account creation
   phone: string;
