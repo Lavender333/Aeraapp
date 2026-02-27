@@ -2338,10 +2338,18 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                                size="sm"
                                variant="outline"
                                onClick={() => handlePrintOrder(req)}
-                               className="text-xs py-1 h-8 px-2 border-slate-300"
-                               title={req.signature ? "Print Shipping Manifest" : "Sign Shipping Manifest"}
+                               className="text-xs py-1 h-8 px-3 border-slate-300"
+                               title={req.signature || req.receivedSignature ? "Open Shipping Manifest" : "Edit Shipping Manifest"}
                              >
-                               {req.signature && req.receivedSignature ? <Printer size={14} /> : <PenTool size={14} />}
+                               {req.signature || req.receivedSignature ? (
+                                 <>
+                                   <FileText size={14} className="mr-1" /> Open Manifest
+                                 </>
+                               ) : (
+                                 <>
+                                   <PenTool size={14} className="mr-1" /> Edit Manifest
+                                 </>
+                               )}
                              </Button>
                            </div>
                          ) : (
