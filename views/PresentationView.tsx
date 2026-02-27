@@ -221,7 +221,7 @@ export const PresentationView: React.FC<{ setView: (v: ViewState) => void }> = (
           {[
             { label: "Broadcasts", color: "text-rose-400", detail: "Push global or org-scoped emergency alerts instantly to all connected members." },
             { label: "Master Inventory", color: "text-orange-400", detail: "Aggregate and manage supply needs across every organization simultaneously." },
-            { label: "Paper Trail", color: "text-green-400", detail: "Digital signatures, printable work orders, and CSV exports for full legal accountability." },
+            { label: "Paper Trail", color: "text-green-400", detail: "Digital signatures, printable shipping manifests, and CSV exports for full legal accountability." },
           ].map((item) => (
             <div key={item.label} className="bg-white/5 border border-white/10 p-3 rounded-xl">
               <p className={`font-bold text-sm ${item.color} mb-1`}>{item.label}</p>

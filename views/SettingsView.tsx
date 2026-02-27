@@ -2066,7 +2066,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     document.body.removeChild(link);
   };
 
-  // --- Render: Printable Work Order (Overlay) ---
+  // --- Render: Printable Shipping Manifest (Overlay) ---
   if (printingRequest) {
     const org = StorageService.getOrganization(printingRequest.orgId);
     
@@ -2089,7 +2089,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         <div className="max-w-3xl mx-auto border border-black p-8 mt-16 print:mt-0 print:border-0 print:w-full">
            <div className="flex justify-between items-start border-b-2 border-black pb-4 mb-6">
               <div>
-                <h1 className="text-4xl font-bold uppercase tracking-tight">Work Order</h1>
+                <h1 className="text-4xl font-bold uppercase tracking-tight">Shipping Manifest</h1>
                 <p className="text-sm font-bold uppercase mt-1">AERA Logistics Fulfillment</p>
                 <div className="mt-3 flex flex-wrap gap-2 text-[10px]">
                   <span className={`px-2 py-1 border font-bold uppercase ${printingRequest.signature ? 'border-green-700 text-green-800 bg-green-50' : 'border-amber-700 text-amber-800 bg-amber-50'}`}>
@@ -2339,7 +2339,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                                variant="outline"
                                onClick={() => handlePrintOrder(req)}
                                className="text-xs py-1 h-8 px-2 border-slate-300"
-                               title={req.signature ? "Print Work Order" : "Sign Work Order"}
+                               title={req.signature ? "Print Shipping Manifest" : "Sign Shipping Manifest"}
                              >
                                {req.signature && req.receivedSignature ? <Printer size={14} /> : <PenTool size={14} />}
                              </Button>
