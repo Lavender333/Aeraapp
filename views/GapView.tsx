@@ -1,6 +1,6 @@
 
-import React from 'react';
-import { ViewState, UserRole } from '../types';
+import React, { useMemo, useState } from 'react';
+import { HelpRequestRecord, ViewState, UserRole } from '../types';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { StorageService } from '../services/storage';
@@ -8,11 +8,61 @@ import { AlertCircle, ArrowLeft, Info, ShieldCheck } from 'lucide-react';
 
 export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const profile = StorageService.getProfile();
+  const db = StorageService.getDB();
   const role = String(profile.role || 'GENERAL_USER').toUpperCase() as UserRole;
+  const [reviewActions, setReviewActions] = useState<Record<string, string>>({});
 
   const isCoreAdmin = role === 'ADMIN';
   const isOrgAdmin = role === 'ORG_ADMIN' || role === 'INSTITUTION_ADMIN';
   const isMemberView = !isCoreAdmin && !isOrgAdmin;
+
+  const users = db.users || [];
+  const allRequests = (db.requests || []).slice().sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  const allOrganizations = db.organizations || [];
+
+  const resolveOrgForRequest = (request: HelpRequestRecord) => {
+    const user = users.find((u) => u.id === request.userId);
+    return String(user?.communityId || '').trim();
+  };
+
+  const orgScopeId = String(profile.communityId || '').trim();
+  const orgMembers = orgScopeId ? StorageService.getOrgMembers(orgScopeId) : [];
+  const orgMemberById = new Map(orgMembers.map((member) => [member.id, member.name]));
+
+  const memberRequests = allRequests.filter((req) => req.userId === profile.id);
+  const orgRequests = isOrgAdmin
+    ? allRequests.filter((req) => resolveOrgForRequest(req) === orgScopeId)
+    : [];
+
+  const pendingStatuses = new Set(['PENDING', 'RECEIVED']);
+  const pendingOrgRequests = orgRequests.filter((req) => pendingStatuses.has(String(req.status || '').toUpperCase()));
+  const resolvedOrgRequests = orgRequests.filter((req) => String(req.status || '').toUpperCase() === 'RESOLVED');
+
+  const participatingUsers = new Set(orgRequests.map((req) => req.userId));
+  const participationBase = Math.max(0, orgMembers.length || users.filter((u) => String(u.communityId || '') === orgScopeId).length);
+  const participationPct = participationBase > 0 ? Math.round((participatingUsers.size / participationBase) * 100) : 0;
+
+  const allocationCapacity = participationBase * 250;
+  const amountDisbursed = resolvedOrgRequests.length * 250;
+  const remainingBalance = Math.max(0, allocationCapacity - amountDisbursed);
+
+  const corePendingApplications = allRequests.filter((req) => pendingStatuses.has(String(req.status || '').toUpperCase()));
+  const coreResolvedApplications = allRequests.filter((req) => String(req.status || '').toUpperCase() === 'RESOLVED');
+  const orgsWithPending = new Set(corePendingApplications.map((req) => resolveOrgForRequest(req)).filter(Boolean)).size;
+  const totalHardshipFund = allOrganizations.reduce((sum, org) => {
+    const orgCode = String(org.id || '').trim();
+    const memberCount = StorageService.getOrgMembers(orgCode).length || Number(org.registeredPopulation || 0) || 0;
+    return sum + memberCount * 250;
+  }, 0);
+
+  const reviewTarget = corePendingApplications[0] || null;
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value || 0);
+
+  const handleReviewAction = (requestId: string, action: 'Recommend' | 'Request Info' | 'Decline' | 'Approve' | 'Adjust' | 'Deny' | 'Override') => {
+    setReviewActions((prev) => ({ ...prev, [requestId]: action }));
+  };
 
   return (
     <div className="min-h-screen bg-emerald-50/60 flex flex-col pb-safe animate-fade-in">
@@ -45,6 +95,9 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
                 <Button variant="outline" size="sm">Status Tracker</Button>
                 <Button variant="outline" size="sm">Payment History</Button>
               </div>
+              <p className="text-xs text-slate-600">
+                {memberRequests.length} application(s) logged • {memberRequests.filter((req) => pendingStatuses.has(String(req.status || '').toUpperCase())).length} pending • {memberRequests.filter((req) => String(req.status || '').toUpperCase() === 'RESOLVED').length} resolved
+              </p>
             </Card>
 
             <Card className="border-slate-200 bg-white/95 space-y-3">
@@ -69,13 +122,13 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
             <Card className="border-emerald-200 bg-white/95">
               <h3 className="font-bold text-slate-900 mb-3">G.A.P. Allocation Overview</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                <div className="rounded-lg border border-slate-200 p-3"><p className="text-[10px] text-slate-500 uppercase font-bold">Participation Percentage</p><p className="text-lg font-black text-slate-900">—</p></div>
+                <div className="rounded-lg border border-slate-200 p-3"><p className="text-[10px] text-slate-500 uppercase font-bold">Participation Percentage</p><p className="text-lg font-black text-slate-900">{participationPct}%</p></div>
                 <div className="rounded-lg border border-slate-200 p-3">
                   <p className="text-[10px] text-slate-500 uppercase font-bold flex items-center gap-1">Allocation Capacity <Info size={12} className="text-slate-400" title="Allocation capacity represents the maximum potential hardship support available to your organization during the current review period." /></p>
-                  <p className="text-lg font-black text-slate-900">—</p>
+                  <p className="text-lg font-black text-slate-900">{formatCurrency(allocationCapacity)}</p>
                 </div>
-                <div className="rounded-lg border border-slate-200 p-3"><p className="text-[10px] text-slate-500 uppercase font-bold">Amount Disbursed</p><p className="text-lg font-black text-slate-900">—</p></div>
-                <div className="rounded-lg border border-slate-200 p-3"><p className="text-[10px] text-slate-500 uppercase font-bold">Remaining Balance</p><p className="text-lg font-black text-slate-900">—</p></div>
+                <div className="rounded-lg border border-slate-200 p-3"><p className="text-[10px] text-slate-500 uppercase font-bold">Amount Disbursed</p><p className="text-lg font-black text-slate-900">{formatCurrency(amountDisbursed)}</p></div>
+                <div className="rounded-lg border border-slate-200 p-3"><p className="text-[10px] text-slate-500 uppercase font-bold">Remaining Balance</p><p className="text-lg font-black text-slate-900">{formatCurrency(remainingBalance)}</p></div>
               </div>
             </Card>
 
@@ -94,16 +147,32 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
                     </tr>
                   </thead>
                   <tbody>
-                    <tr className="border-b border-slate-100">
-                      <td className="py-3">—</td><td>—</td><td>—</td><td>—</td><td>Pending</td>
-                      <td>
-                        <div className="flex gap-2">
-                          <Button size="sm">Recommend</Button>
-                          <Button size="sm" variant="outline">Request Info</Button>
-                          <Button size="sm" variant="outline">Decline</Button>
-                        </div>
-                      </td>
-                    </tr>
+                    {pendingOrgRequests.slice(0, 8).map((req) => {
+                      const docsReady = Boolean(String(req.situationDescription || '').trim()) && Boolean(req.consentToShare);
+                      const memberName = orgMemberById.get(req.userId) || users.find((u) => u.id === req.userId)?.fullName || 'Member';
+                      const requestedAmount = Math.max(100, Number(req.peopleCount || 1) * 125);
+                      return (
+                        <tr key={req.id} className="border-b border-slate-100">
+                          <td className="py-3 font-medium text-slate-900">{memberName}</td>
+                          <td className="py-3">{req.emergencyType || 'General'}</td>
+                          <td className="py-3">{formatCurrency(requestedAmount)}</td>
+                          <td className="py-3">{docsReady ? 'Submitted' : 'Needs Info'}</td>
+                          <td className="py-3">{reviewActions[req.id] || 'Pending'}</td>
+                          <td>
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={() => handleReviewAction(req.id, 'Recommend')}>Recommend</Button>
+                              <Button size="sm" variant="outline" onClick={() => handleReviewAction(req.id, 'Request Info')}>Request Info</Button>
+                              <Button size="sm" variant="outline" onClick={() => handleReviewAction(req.id, 'Decline')}>Decline</Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {pendingOrgRequests.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="py-4 text-center text-slate-500">No pending applications.</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -120,21 +189,33 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <div className="rounded-lg border border-slate-200 p-3"><p className="text-[10px] text-slate-500 uppercase font-bold">Total Hardship Fund</p><p className="text-lg font-black text-slate-900">—</p></div>
-              <div className="rounded-lg border border-slate-200 p-3"><p className="text-[10px] text-slate-500 uppercase font-bold">Pending Applications</p><p className="text-lg font-black text-slate-900">—</p></div>
-              <div className="rounded-lg border border-slate-200 p-3"><p className="text-[10px] text-slate-500 uppercase font-bold">Allocation Distribution</p><p className="text-lg font-black text-slate-900">—</p></div>
-              <div className="rounded-lg border border-slate-200 p-3"><p className="text-[10px] text-slate-500 uppercase font-bold">Override Log</p><p className="text-lg font-black text-slate-900">—</p></div>
+              <div className="rounded-lg border border-slate-200 p-3"><p className="text-[10px] text-slate-500 uppercase font-bold">Total Hardship Fund</p><p className="text-lg font-black text-slate-900">{formatCurrency(totalHardshipFund)}</p></div>
+              <div className="rounded-lg border border-slate-200 p-3"><p className="text-[10px] text-slate-500 uppercase font-bold">Pending Applications</p><p className="text-lg font-black text-slate-900">{corePendingApplications.length}</p></div>
+              <div className="rounded-lg border border-slate-200 p-3"><p className="text-[10px] text-slate-500 uppercase font-bold">Allocation Distribution</p><p className="text-lg font-black text-slate-900">{orgsWithPending}/{allOrganizations.length || 1}</p></div>
+              <div className="rounded-lg border border-slate-200 p-3"><p className="text-[10px] text-slate-500 uppercase font-bold">Override Log</p><p className="text-lg font-black text-slate-900">{Object.values(reviewActions).filter((v) => v === 'Override').length}</p></div>
             </div>
 
             <div className="rounded-xl border border-slate-200 p-4 space-y-3">
               <h4 className="font-bold text-slate-900">Application Review Panel</h4>
               <p className="text-sm text-slate-600">Full documentation • Allocation cap check • Approve / Adjust / Deny • Override (logged)</p>
+              {reviewTarget ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+                  <p className="font-semibold text-slate-900">{users.find((u) => u.id === reviewTarget.userId)?.fullName || reviewTarget.userId}</p>
+                  <p className="text-slate-600">Type: {reviewTarget.emergencyType || 'General'} • Priority: {reviewTarget.priority}</p>
+                  <p className="text-slate-600">Docs: {reviewTarget.consentToShare ? 'Consented' : 'Missing Consent'}</p>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">No pending applications to review.</p>
+              )}
               <div className="flex flex-wrap gap-2">
-                <Button size="sm">Approve</Button>
-                <Button size="sm" variant="outline">Adjust</Button>
-                <Button size="sm" variant="outline">Deny</Button>
-                <Button size="sm" variant="outline">Override (Logged)</Button>
+                <Button size="sm" disabled={!reviewTarget} onClick={() => reviewTarget && handleReviewAction(reviewTarget.id, 'Approve')}>Approve</Button>
+                <Button size="sm" variant="outline" disabled={!reviewTarget} onClick={() => reviewTarget && handleReviewAction(reviewTarget.id, 'Adjust')}>Adjust</Button>
+                <Button size="sm" variant="outline" disabled={!reviewTarget} onClick={() => reviewTarget && handleReviewAction(reviewTarget.id, 'Deny')}>Deny</Button>
+                <Button size="sm" variant="outline" disabled={!reviewTarget} onClick={() => reviewTarget && handleReviewAction(reviewTarget.id, 'Override')}>Override (Logged)</Button>
               </div>
+              {reviewTarget && reviewActions[reviewTarget.id] && (
+                <p className="text-xs text-emerald-700 font-semibold">Review action recorded: {reviewActions[reviewTarget.id]}</p>
+              )}
             </div>
           </Card>
         )}
