@@ -615,6 +615,13 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     medicalKits: 'Medical Kits',
   };
   const lowItems = inventoryItems.filter(item => status[item.key].level === 'LOW');
+  const pendingOrApprovedRequests = requests.filter((req) => req.status === 'PENDING' || req.status === 'APPROVED');
+  const fulfilledAwaitingStock = requests.filter((req) => req.status === 'FULFILLED' && !req.stocked);
+  const releaseApprovedCount = requests.filter((req) => Boolean(req.signature)).length;
+  const custodyAcceptedCount = requests.filter((req) => Boolean(req.receivedSignature)).length;
+  const importantRequests = requests
+    .filter((req) => req.status === 'PENDING' || req.status === 'APPROVED' || (req.status === 'FULFILLED' && !req.stocked))
+    .slice(0, 8);
   const getMemberProfileImage = (memberId?: string) => {
     const normalizedId = String(memberId || '').trim();
     if (!normalizedId) return '';
@@ -1209,6 +1216,9 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                  <h3 className="font-bold text-slate-900">{t('org.req_replenish')}</h3>
               </div>
               <p className="text-sm text-slate-600 mb-4 font-medium">{t('org.req_desc')}</p>
+              <p className="text-xs text-slate-500 mb-4">
+                Saved submissions are scoped to <span className="font-bold text-slate-700">{orgName}</span> ({displayOrgCode}), so this org only sees its own request priorities.
+              </p>
               
               {!isRequesting ? (
                  <Button variant="outline" fullWidth onClick={() => setIsRequesting(true)} className="text-slate-900 border-slate-300">
@@ -1263,6 +1273,56 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                  </div>
               )}
 
+              <div className="mt-6 border border-slate-200 rounded-xl p-4 bg-slate-50">
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <h4 className="font-bold text-slate-900">What’s Important to This Org</h4>
+                  <span className="text-[11px] text-slate-500 font-bold uppercase">Saved Request Snapshot</span>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+                  <div className="bg-white border border-amber-200 rounded-lg p-2">
+                    <p className="text-[10px] uppercase font-bold text-amber-700">Open Requests</p>
+                    <p className="text-lg font-black text-amber-800">{pendingOrApprovedRequests.length}</p>
+                  </div>
+                  <div className="bg-white border border-blue-200 rounded-lg p-2">
+                    <p className="text-[10px] uppercase font-bold text-blue-700">Awaiting Stock</p>
+                    <p className="text-lg font-black text-blue-800">{fulfilledAwaitingStock.length}</p>
+                  </div>
+                  <div className="bg-white border border-emerald-200 rounded-lg p-2">
+                    <p className="text-[10px] uppercase font-bold text-emerald-700">Release Signed</p>
+                    <p className="text-lg font-black text-emerald-800">{releaseApprovedCount}</p>
+                  </div>
+                  <div className="bg-white border border-purple-200 rounded-lg p-2">
+                    <p className="text-[10px] uppercase font-bold text-purple-700">Custody Signed</p>
+                    <p className="text-lg font-black text-purple-800">{custodyAcceptedCount}</p>
+                  </div>
+                </div>
+
+                {importantRequests.length > 0 ? (
+                  <div className="space-y-2">
+                    {importantRequests.map((req) => (
+                      <div key={`important-${req.id}`} className="bg-white border border-slate-200 rounded-lg p-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-bold text-slate-900">{req.item}</p>
+                            <p className="text-[11px] text-slate-500">Qty {req.quantity} • {new Date(req.timestamp).toLocaleString()}</p>
+                          </div>
+                          <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
+                            req.status === 'APPROVED' ? 'bg-blue-100 text-blue-700' :
+                            req.status === 'FULFILLED' ? 'bg-green-100 text-green-700' :
+                            'bg-amber-100 text-amber-700'
+                          }`}>
+                            {req.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500">No active priorities. New submissions will appear here.</p>
+                )}
+              </div>
+
               <div className="mt-6 space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="font-bold text-slate-900">Recent Requests</h4>
@@ -1271,7 +1331,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                 {requests.length === 0 && (
                   <p className="text-sm text-slate-500">No requests yet.</p>
                 )}
-                {requests.slice(0, 5).map((req) => (
+                {requests.slice(0, 12).map((req) => (
                   <div key={req.id} className="border border-slate-200 rounded-lg p-3 bg-white shadow-sm">
                     <div className="flex items-center justify-between">
                       <div>
@@ -1324,6 +1384,15 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                         )}
                       </div>
                     )}
+
+                    <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold uppercase">
+                      <span className={`px-2 py-1 rounded ${req.signature ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {req.signature ? 'Release Approved' : 'Release Pending'}
+                      </span>
+                      <span className={`px-2 py-1 rounded ${req.receivedSignature ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {req.receivedSignature ? 'Custody Accepted' : 'Custody Pending'}
+                      </span>
+                    </div>
 
                     {req.status === 'STOCKED' && (
                       <div className="mt-2 flex flex-wrap items-center gap-2">
