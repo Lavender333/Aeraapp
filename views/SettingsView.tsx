@@ -2707,6 +2707,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
     // If a user is selected, show their detail view
     if (selectedUser) {
+      const selectedUserImageDataUrl = getStoredProfileImage(selectedUser.id);
       return (
         <div className="p-6 pb-28 space-y-6 animate-fade-in bg-slate-50 min-h-screen">
           <div className="flex items-center gap-3 border-b border-slate-200 pb-4 sticky top-0 bg-slate-50 z-10">
@@ -2720,8 +2721,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
              <div className="bg-slate-800 p-6 text-white flex justify-between items-start">
                <div className="flex items-center gap-4">
                  <div className="w-16 h-16 rounded-full bg-slate-600 flex items-center justify-center text-2xl font-bold border-2 border-slate-500 overflow-hidden">
-                   {selectedUser.id === profile.id && profileImageDataUrl ? (
-                     <img src={profileImageDataUrl} alt="User" className="w-full h-full object-cover" />
+                   {selectedUserImageDataUrl ? (
+                     <img src={selectedUserImageDataUrl} alt="User" className="w-full h-full object-cover" />
                    ) : (
                      (selectedUser.fullName || '?').charAt(0)
                    )}
@@ -2917,6 +2918,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                const createdLabel = user.createdAt
                  ? new Date(user.createdAt).toLocaleDateString()
                  : 'Unknown';
+               const userImageDataUrl = getStoredProfileImage(user.id);
                return (
                <div 
                  key={user.id} 
@@ -2926,8 +2928,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                  <div className="flex items-center justify-between">
                    <div className="flex items-center gap-3">
                       <div className={`w-9 h-9 rounded-full ${user.active !== false ? 'bg-slate-100 text-slate-600' : 'bg-red-100 text-red-500'} flex items-center justify-center overflow-hidden`}>
-                         {user.id === profile.id && profileImageDataUrl ? (
-                           <img src={profileImageDataUrl} alt="User" className="w-full h-full object-cover" />
+                         {userImageDataUrl ? (
+                           <img src={userImageDataUrl} alt="User" className="w-full h-full object-cover" />
                          ) : (
                            <User size={18} />
                          )}
@@ -2978,6 +2980,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const preparednessReady = Boolean(profile.consentPreparednessPlanning);
   const communityReady = Boolean(String(profile.communityId || '').trim());
   const profileInitial = (profile.fullName || 'A').trim().charAt(0).toUpperCase();
+  const getStoredProfileImage = (userId?: string) => {
+    const normalizedId = String(userId || '').trim();
+    if (!normalizedId) return '';
+    return StorageService.getProfileImageDataUrl(normalizedId) || '';
+  };
 
   return (
     <div className="p-6 pb-28 space-y-8 animate-fade-in bg-gradient-to-br from-sky-50 via-slate-50 to-teal-50 min-h-screen flex flex-col">
