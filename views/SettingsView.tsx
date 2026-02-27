@@ -2891,6 +2891,24 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   }
 
   // --- Render: Main Settings ---
+  const settingsCoreChecks = [
+    Boolean(String(profile.fullName || '').trim()),
+    Boolean(String(profile.phone || '').trim()),
+    Boolean(String(profile.address || '').trim()),
+    Boolean(String(profile.city || '').trim()),
+    Boolean(String(profile.state || '').trim()),
+    Boolean(String(profile.zipCode || '').trim()),
+    Boolean(String(profile.emergencyContactName || '').trim()),
+    Boolean(String(profile.emergencyContactPhone || '').trim()),
+    Boolean(String(profile.communityId || '').trim()),
+  ];
+  const settingsCompletionPct = Math.round((settingsCoreChecks.filter(Boolean).length / settingsCoreChecks.length) * 100);
+  const profileComplete = settingsCompletionPct >= 80;
+  const contactsComplete = Boolean(String(profile.emergencyContactName || '').trim() && String(profile.emergencyContactPhone || '').trim());
+  const householdReady = Boolean(String(profile.householdCode || '').trim());
+  const preparednessReady = Boolean(profile.consentPreparednessPlanning);
+  const communityReady = Boolean(String(profile.communityId || '').trim());
+
   return (
     <div className="p-6 pb-28 space-y-8 animate-fade-in bg-gradient-to-br from-sky-50 via-slate-50 to-teal-50 min-h-screen flex flex-col">
       {/* Header */}
@@ -2909,8 +2927,20 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         )}
       </div>
 
+      <section className="bg-white/95 border border-slate-200 rounded-2xl p-4 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Settings Overview</p>
+            <p className="text-lg font-bold text-slate-900 mt-1">Account completion: {settingsCompletionPct}%</p>
+          </div>
+          <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${profileComplete ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+            {profileComplete ? 'Mostly complete' : 'Needs attention'}
+          </span>
+        </div>
+      </section>
+
       {/* Language Selector */}
-      <section className="bg-sky-50/70 p-6 rounded-2xl shadow-sm space-y-4 order-6 border border-sky-100">
+      <section className="bg-white/95 p-6 rounded-2xl shadow-sm space-y-4 order-6 border border-slate-200">
         <div className="flex items-center gap-4 mb-2">
           <div className="p-3 bg-sky-100 border border-sky-200 rounded-full text-sky-700">
             <Globe size={24} />
@@ -3028,7 +3058,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       )}
 
       {/* Profile */}
-      <section ref={profileSectionRef} className="bg-sky-50/60 p-6 rounded-2xl shadow-sm space-y-4 border border-sky-100 order-1">
+      <section ref={profileSectionRef} className="bg-white/95 p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 order-1">
         <button
           id={accordionButtonIds.profile}
           type="button"
@@ -3047,8 +3077,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${profileComplete ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+              {profileComplete ? 'Complete' : 'Needs attention'}
+            </span>
             {savingSection === 'profile' && <Loader2 size={18} className="text-brand-600 animate-spin" />}
-            <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.profile ? 'rotate-180' : ''}`} />
+            <ChevronDown size={20} className={`text-slate-600 transition-transform ${expandedSections.profile ? 'rotate-180' : ''}`} />
           </div>
         </button>
 
@@ -3170,7 +3203,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {/* Contacts */}
-      <section ref={contactsSectionRef} className="bg-teal-50/50 p-6 rounded-2xl shadow-sm space-y-4 border border-teal-100 border-l-4 border-l-teal-400 order-3">
+      <section ref={contactsSectionRef} className="bg-white/95 p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 border-l-4 border-l-teal-400 order-3">
         <button
           id={accordionButtonIds.contacts}
           type="button"
@@ -3198,8 +3231,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${contactsComplete ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+              {contactsComplete ? 'Complete' : 'Required'}
+            </span>
             {savingSection === 'contacts' && <Loader2 size={18} className="text-brand-600 animate-spin" />}
-            <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.contacts ? 'rotate-180' : ''}`} />
+            <ChevronDown size={20} className={`text-slate-600 transition-transform ${expandedSections.contacts ? 'rotate-180' : ''}`} />
           </div>
         </button>
         {savedSection === 'contacts' && (
@@ -3252,7 +3288,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {/* Household */}
-      <section ref={householdSectionRef} className="bg-teal-50/50 p-6 rounded-2xl shadow-sm space-y-4 border border-teal-100 border-l-4 border-l-teal-400 order-2">
+      <section ref={householdSectionRef} className="bg-white/95 p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 border-l-4 border-l-teal-400 order-2">
         <button
           id={accordionButtonIds.household}
           type="button"
@@ -3271,8 +3307,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${householdReady ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+              {householdReady ? 'Connected' : 'Setup needed'}
+            </span>
             {savingSection === 'household' && <Loader2 size={18} className="text-emerald-600 animate-spin" />}
-            <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.household ? 'rotate-180' : ''}`} />
+            <ChevronDown size={20} className={`text-slate-600 transition-transform ${expandedSections.household ? 'rotate-180' : ''}`} />
           </div>
         </button>
 
@@ -3731,7 +3770,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {/* Security */}
-      <section ref={securitySectionRef} className="bg-sky-50/60 p-6 rounded-2xl shadow-sm space-y-4 border border-sky-100 border-l-4 border-l-sky-400 order-4">
+      <section ref={securitySectionRef} className="bg-white/95 p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 border-l-4 border-l-sky-400 order-4">
         <button
           id={accordionButtonIds.security}
           type="button"
@@ -3750,8 +3789,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${preparednessReady ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+              {preparednessReady ? 'Complete' : 'Pending'}
+            </span>
             {savingSection === 'security' && <Loader2 size={18} className="text-slate-600 animate-spin" />}
-            <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.security ? 'rotate-180' : ''}`} />
+            <ChevronDown size={20} className={`text-slate-600 transition-transform ${expandedSections.security ? 'rotate-180' : ''}`} />
           </div>
         </button>
 
@@ -3889,7 +3931,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {/* Community Onboarding */}
-      <section ref={trustedCommunityRef} className="bg-teal-50/50 p-6 rounded-2xl shadow-sm space-y-4 border border-teal-100 order-5">
+      <section ref={trustedCommunityRef} className="bg-white/95 p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 order-5">
         <button
           id={accordionButtonIds.community}
           type="button"
@@ -3908,10 +3950,20 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${communityReady ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+              {communityReady ? 'Connected' : 'Not connected'}
+            </span>
             {savingSection === 'community' && <Loader2 size={18} className="text-brand-600 animate-spin" />}
-            <ChevronDown size={18} className={`text-slate-500 transition-transform ${expandedSections.community ? 'rotate-180' : ''}`} />
+            <ChevronDown size={20} className={`text-slate-600 transition-transform ${expandedSections.community ? 'rotate-180' : ''}`} />
           </div>
         </button>
+        {!expandedSections.community && !communityReady && (
+          <div className="mt-2">
+            <Button size="sm" className="bg-sky-600 hover:bg-sky-700" onClick={() => toggleSection('community')}>
+              Connect Community
+            </Button>
+          </div>
+        )}
         {savedSection === 'community' && (
           <p className="font-medium" style={{ color: '#2F7A64', fontSize: '14px' }}>✓ Saved</p>
         )}
@@ -4065,7 +4117,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         )}
       </section>
 
-      <section className="bg-sky-50/60 p-6 rounded-2xl shadow-sm space-y-4 order-7 border border-sky-100">
+      <section className="bg-white/95 p-6 rounded-2xl shadow-sm space-y-4 order-7 border border-slate-200">
         <div className="flex items-center gap-4">
           <div className="p-3 bg-sky-100 border border-sky-200 rounded-full text-sky-700">
             <ShieldCheck size={24} />
