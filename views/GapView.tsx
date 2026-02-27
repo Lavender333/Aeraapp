@@ -89,16 +89,16 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
 
   return (
     <div className="min-h-screen bg-emerald-50 flex flex-col pb-safe animate-fade-in">
-      <div className="bg-gradient-to-br from-emerald-900 to-emerald-800 border-b border-emerald-700 p-4 sticky top-0 z-20 text-white">
+      <div className="bg-gradient-to-br from-emerald-950 to-emerald-800 border-b border-emerald-700 p-4 sticky top-0 z-20 text-white shadow-sm">
         <div className="flex items-start gap-3">
-          <button onClick={() => setView('DASHBOARD')} className="p-2 -ml-2 text-emerald-100 hover:text-white">
+          <button onClick={() => setView('DASHBOARD')} className="p-2 -ml-2 text-white/90 hover:text-white">
             <ArrowLeft size={24} />
           </button>
           <div>
             <h1 className="font-bold text-xl">G.A.P. Center</h1>
-            <p className="text-xs text-emerald-100">Community Support Hub</p>
-            <p className="text-xs text-emerald-100">Powered by CORE (Community Organized Response &amp; Education)</p>
-            <p className="text-[11px] text-emerald-200 mt-2">Charitable hardship assistance is subject to documented need and available funds.</p>
+            <p className="text-xs text-white/95">Community Support Hub</p>
+            <p className="text-xs text-white/95">Powered by CORE (Community Organized Response &amp; Education)</p>
+            <p className="text-[11px] text-emerald-50/95 mt-2 font-medium">Charitable hardship assistance is subject to documented need and available funds.</p>
           </div>
         </div>
       </div>
