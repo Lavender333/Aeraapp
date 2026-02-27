@@ -1995,6 +1995,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   const handleSaveSignature = (dataUrl: string, type: 'RELEASE' | 'RECEIVE') => {
     if (printingRequest) {
+      if (type === 'RECEIVE' && !printingRequest.signature) {
+        alert('Facility/Warehouse Manager release approval is required before carrier custody acceptance.');
+        return;
+      }
+
       StorageService.signReplenishmentRequest(printingRequest.id, dataUrl, type);
       
       const updatedReq = { ...printingRequest };
@@ -2172,10 +2177,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
            <div className="grid grid-cols-2 gap-12 mt-12 pt-12">
               <div className="break-inside-avoid">
-                 <p className="text-xs font-bold uppercase mb-2">Released By (Signature)</p>
+                 <p className="text-xs font-bold uppercase mb-2">Signature 1: Facility/Warehouse Manager Release Approval</p>
                  {printingRequest.signature ? (
                    <div className="border border-slate-200 p-2 print:border-none">
-                     <img src={printingRequest.signature} alt="Digital Signature" className="h-16 mb-1"/>
+                     <img src={printingRequest.signature} alt="Facility/Warehouse Manager Signature" className="h-16 mb-1"/>
                      <p className="text-[10px] text-slate-500 font-mono print:text-black">
                        Signed: {new Date(printingRequest.signedAt || '').toLocaleString()}
                      </p>
@@ -2192,17 +2197,23 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               </div>
               
               <div className="break-inside-avoid">
-                 <p className="text-xs font-bold uppercase mb-2">Received By (Signature)</p>
+                 <p className="text-xs font-bold uppercase mb-2">Signature 2: Carrier/Shipping Custody Acceptance</p>
                  {printingRequest.receivedSignature ? (
                    <div className="border border-slate-200 p-2 print:border-none">
-                     <img src={printingRequest.receivedSignature} alt="Digital Signature" className="h-16 mb-1"/>
+                     <img src={printingRequest.receivedSignature} alt="Carrier/Shipping Custody Signature" className="h-16 mb-1"/>
                      <p className="text-[10px] text-slate-500 font-mono print:text-black">
                        Signed: {new Date(printingRequest.receivedAt || '').toLocaleString()}
                      </p>
                    </div>
                  ) : (
                    <div className="print:hidden">
-                     <SignaturePad onSave={(data) => handleSaveSignature(data, 'RECEIVE')} />
+                     {printingRequest.signature ? (
+                       <SignaturePad onSave={(data) => handleSaveSignature(data, 'RECEIVE')} />
+                     ) : (
+                       <div className="border border-amber-300 bg-amber-50 text-amber-800 text-xs p-3 rounded">
+                         Signature 1 is required before capturing carrier/shipping custody acceptance.
+                       </div>
+                     )}
                    </div>
                  )}
                  {/* Print-only signature line if digital not present */}
