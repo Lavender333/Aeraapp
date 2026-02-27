@@ -632,6 +632,69 @@ export const StorageService = {
     return Array.from(aliases);
   },
 
+  migrateProfileImageAliasesForProfile(profile: Partial<UserProfile> | null | undefined): void {
+    if (!profile) return;
+    const db = this.getDB();
+    const profileId = String(profile.id || '').trim();
+    const emailAlias = normalizeImageAliasEmail(profile.email);
+    const phoneAlias = normalizeImageAliasPhone(profile.phone);
+
+    const targetAliases = new Set<string>();
+    if (profileId) targetAliases.add(profileId);
+    if (emailAlias) targetAliases.add(`email:${emailAlias}`);
+    if (phoneAlias) targetAliases.add(`phone:${phoneAlias}`);
+    if (targetAliases.size === 0) return;
+
+    const candidateAliases = new Set<string>(targetAliases);
+    db.users.forEach((user) => {
+      const userId = String(user.id || '').trim();
+      const userEmail = normalizeImageAliasEmail(user.email);
+      const userPhone = normalizeImageAliasPhone(user.phone);
+      const emailMatches = Boolean(emailAlias && userEmail && emailAlias === userEmail);
+      const phoneMatches = Boolean(phoneAlias && userPhone && phoneAlias === userPhone);
+
+      if (emailMatches || phoneMatches) {
+        if (userId) candidateAliases.add(userId);
+        if (userEmail) candidateAliases.add(`email:${userEmail}`);
+        if (userPhone) candidateAliases.add(`phone:${userPhone}`);
+      }
+    });
+
+    try {
+      const raw = safeGetItem(PROFILE_IMAGE_MAP_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<string, string>;
+
+      let foundImage = '';
+      for (const alias of candidateAliases) {
+        const value = String(parsed?.[alias] || '');
+        if (value.startsWith('data:image/')) {
+          foundImage = value;
+          break;
+        }
+      }
+
+      if (!foundImage) return;
+
+      let changed = false;
+      targetAliases.forEach((alias) => {
+        if (parsed[alias] !== foundImage) {
+          parsed[alias] = foundImage;
+          changed = true;
+        }
+      });
+
+      if (changed) {
+        const saved = safeSetItem(PROFILE_IMAGE_MAP_KEY, JSON.stringify(parsed));
+        if (saved && typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('profile-image-updated'));
+        }
+      }
+    } catch {
+      // Ignore migration errors; image upload/display still works.
+    }
+  },
+
   getProfileImageDataUrl(userId?: string): string {
     const aliases = this.getProfileImageAliases(userId);
     if (aliases.length === 0) return '';
@@ -723,6 +786,8 @@ export const StorageService = {
     } else {
       db.users.push(profile);
     }
+
+    this.migrateProfileImageAliasesForProfile(profile);
 
     // Set as current session
     db.currentUser = profile.id;
