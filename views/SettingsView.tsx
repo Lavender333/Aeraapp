@@ -3123,10 +3123,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <ShieldCheck size={80} />
           </div>
           <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-2 text-brand-400 font-bold text-xs uppercase tracking-wider">
+            <div className="flex items-center gap-2 mb-2 text-slate-300 font-bold text-xs uppercase tracking-wider">
               <Lock size={12} /> Administrator Area
             </div>
-            <h2 className="text-xl font-bold mb-4 text-slate-700">Roles & Dashboards</h2>
+            <h2 className="text-xl font-bold mb-4 text-slate-300">Roles & Dashboards</h2>
             <div className="space-y-3">
               <Button 
                 onClick={openAccessControl} 
