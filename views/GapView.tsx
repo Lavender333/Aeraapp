@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { HelpRequestRecord, ViewState, UserRole } from '../types';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -10,7 +10,25 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
   const profile = StorageService.getProfile();
   const db = StorageService.getDB();
   const role = String(profile.role || 'GENERAL_USER').toUpperCase() as UserRole;
-  const [reviewActions, setReviewActions] = useState<Record<string, string>>({});
+  const reviewerScopeKey = `aera_gap_review_actions:${String(profile.id || 'guest')}:${String(profile.communityId || '').trim()}:${role}`;
+  const [reviewActions, setReviewActions] = useState<Record<string, string>>(() => {
+    try {
+      const raw = localStorage.getItem(reviewerScopeKey);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw) as Record<string, string>;
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(reviewerScopeKey, JSON.stringify(reviewActions));
+    } catch {
+      // Ignore storage write failures to keep workflow usable.
+    }
+  }, [reviewActions, reviewerScopeKey]);
 
   const isCoreAdmin = role === 'ADMIN';
   const isOrgAdmin = role === 'ORG_ADMIN' || role === 'INSTITUTION_ADMIN';
