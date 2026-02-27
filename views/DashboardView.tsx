@@ -17,7 +17,6 @@ import {
   ClipboardList,
   Users,
   HardHat,
-  BarChart2,
   Navigation,
   Truck,
   Database,
@@ -377,15 +376,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const isContractor = userRole === 'CONTRACTOR';
   const showCommunityBlocks = !isGeneralUser;
   const showCommunityAnnouncements = hasCommunity;
-  const isProStatusViewer = userRole === 'ADMIN' || userRole === 'FIRST_RESPONDER' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN';
   const showLogisticsHome = userRole === 'FIRST_RESPONDER' || userRole === 'LOCAL_AUTHORITY' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN' || isContractor;
-
-  const safeCount = orgMembers.filter((member) => member.status === 'SAFE').length;
-  const dangerCount = orgMembers.filter((member) => member.status === 'DANGER').length;
-  const accountedCount = safeCount + dangerCount;
-  const totalMembers = orgMembers.length || orgMemberCount || orgPopulation;
-  const evacuatedPercent = totalMembers ? Math.round((accountedCount / totalMembers) * 100) : null;
-  const rescuedDisplay = totalMembers ? safeCount : null;
   const depotCoverageBase = orgMemberCount || orgPopulation;
   const depotStatus = orgInventory
     ? getInventoryStatuses(orgInventory, depotCoverageBase)
@@ -396,9 +387,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     return level === 'LOW' ? 'Low' : 'Good';
   };
   const isProfileComplete = missingProfileFields.length === 0;
-  const sheltersOpen = orgProfile?.currentBroadcast
-    ? orgProfile.currentBroadcast.toLowerCase().includes('shelter') ? 1 : 0
-    : null;
 
   /**
    * Financial model defaults aligned with AERA business plan:
@@ -1221,35 +1209,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         </>
       )}
 
-      {/* Analytics / Stats Preview - Only for Pros */}
-      {isProStatusViewer && (
-        <Card 
-          title="Community Status (Pro)" 
-          icon={<BarChart2 size={20} />}
-          className="bg-slate-800 text-slate-100 border-slate-700"
-        >
-           <div className="grid grid-cols-3 gap-2 text-center divide-x divide-slate-700">
-              <div>
-                 <div className="text-xl font-bold text-brand-400">
-                   {evacuatedPercent === null ? 'N/A' : `${evacuatedPercent}%`}
-                 </div>
-                 <div className="text-[10px] text-slate-400">Evacuated</div>
-              </div>
-              <div>
-                 <div className="text-xl font-bold text-blue-400">
-                   {rescuedDisplay === null ? 'N/A' : rescuedDisplay}
-                 </div>
-                 <div className="text-[10px] text-slate-400">Rescued</div>
-              </div>
-              <div>
-                 <div className="text-xl font-bold text-green-400">
-                   {sheltersOpen === null ? 'N/A' : sheltersOpen}
-                 </div>
-                 <div className="text-[10px] text-slate-400">Shelters Open</div>
-             </div>
-           </div>
-        </Card>
-      )}
     </div>
   </div>
 );
