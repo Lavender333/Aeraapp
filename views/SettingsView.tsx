@@ -312,6 +312,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     state: false,
     zipCode: false,
   });
+  const [profileImageDataUrl, setProfileImageDataUrl] = useState('');
+  const profileImageInputRef = useRef<HTMLInputElement | null>(null);
   const [vitalsSaveError, setVitalsSaveError] = useState<string | null>(null);
   const [savedSection, setSavedSection] = useState<SettingsAccordionKey | null>(null);
   const saveIndicatorTimeoutRef = useRef<number | null>(null);
@@ -422,6 +424,57 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       return;
     }
     await handleProfileSave();
+  };
+
+  const handleProfileImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setProfileSaveError('Please select a valid image file.');
+      event.target.value = '';
+      return;
+    }
+
+    const maxBytes = 2 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      setProfileSaveError('Image is too large. Please choose one under 2MB.');
+      event.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      if (!dataUrl.startsWith('data:image/')) {
+        setProfileSaveError('Could not read image. Please try a different file.');
+        return;
+      }
+      const saved = StorageService.saveProfileImageDataUrl(dataUrl, profile.id);
+      if (!saved) {
+        setProfileSaveError('Could not save image (storage limit reached). Try a smaller file.');
+        return;
+      }
+      setProfileImageDataUrl(dataUrl);
+      setProfileSaveError(null);
+      showSavedIndicator('profile');
+    };
+    reader.onerror = () => {
+      setProfileSaveError('Could not read image. Please try again.');
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  };
+
+  const removeProfileImage = () => {
+    const cleared = StorageService.clearProfileImageDataUrl(profile.id);
+    if (!cleared) {
+      setProfileSaveError('Could not remove profile image. Please try again.');
+      return;
+    }
+    setProfileImageDataUrl('');
+    setProfileSaveError(null);
+    showSavedIndicator('profile');
   };
 
   // Broadcast Control State
@@ -537,6 +590,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       }
     }
   }, []);
+
+  useEffect(() => {
+    if (!profile.id) {
+      setProfileImageDataUrl('');
+      return;
+    }
+    setProfileImageDataUrl(StorageService.getProfileImageDataUrl(profile.id) || '');
+  }, [profile.id]);
 
   useEffect(() => {
     let active = true;
@@ -3106,6 +3167,37 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             }}
           >
             {showMoreSections.profile && <div className="text-xs text-slate-400 font-mono -mt-2 mb-1">ID: {profile.id}</div>}
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center gap-3">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-sky-400 to-teal-400 text-white flex items-center justify-center text-xl font-bold overflow-hidden shrink-0">
+                {profileImageDataUrl ? (
+                  <img src={profileImageDataUrl} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  (profile.fullName || 'A').trim().charAt(0).toUpperCase()
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-slate-900">Profile Photo</p>
+                <p className="text-xs text-slate-500">PNG or JPG, up to 2MB.</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <input
+                    ref={profileImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleProfileImageUpload}
+                  />
+                  <Button type="button" size="sm" variant="outline" onClick={() => profileImageInputRef.current?.click()}>
+                    Upload Photo
+                  </Button>
+                  {profileImageDataUrl && (
+                    <Button type="button" size="sm" variant="ghost" className="text-slate-600" onClick={removeProfileImage}>
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
 
             <Input 
               label="Full Name" 

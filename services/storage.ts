@@ -11,6 +11,7 @@ const OFFLINE_QUEUE_KEY = 'aera_offline_queue_v1';
 const SYNC_ID_MAP_KEY = 'aera_sync_id_map_v1';
 const STORAGE_STATE_KEY = 'aera_storage_state_v1';
 const ROLE_DEFINITIONS_KEY = 'aera_role_definitions_v1';
+const PROFILE_IMAGE_MAP_KEY = 'aera_profile_image_map_v1';
 const MAX_CACHED_REQUESTS = 200;
 const MAX_CACHED_REPLENISHMENTS = 200;
 const IS_PRODUCTION = import.meta.env.PROD;
@@ -606,6 +607,61 @@ export const StorageService = {
       active: true,
       notifications: { push: true, sms: true, email: true }
     };
+  },
+
+  getProfileImageDataUrl(userId?: string): string {
+    const db = this.getDB();
+    const targetId = String(userId || db.currentUser || '').trim();
+    if (!targetId) return '';
+    try {
+      const raw = safeGetItem(PROFILE_IMAGE_MAP_KEY);
+      if (!raw) return '';
+      const parsed = JSON.parse(raw) as Record<string, string>;
+      const value = String(parsed?.[targetId] || '');
+      return value.startsWith('data:image/') ? value : '';
+    } catch {
+      return '';
+    }
+  },
+
+  saveProfileImageDataUrl(dataUrl: string, userId?: string): boolean {
+    const db = this.getDB();
+    const targetId = String(userId || db.currentUser || '').trim();
+    const nextValue = String(dataUrl || '');
+    if (!targetId || !nextValue.startsWith('data:image/')) return false;
+    try {
+      const raw = safeGetItem(PROFILE_IMAGE_MAP_KEY);
+      const parsed = raw ? (JSON.parse(raw) as Record<string, string>) : {};
+      parsed[targetId] = nextValue;
+      const saved = safeSetItem(PROFILE_IMAGE_MAP_KEY, JSON.stringify(parsed));
+      if (saved && typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('profile-image-updated'));
+      }
+      return saved;
+    } catch {
+      return false;
+    }
+  },
+
+  clearProfileImageDataUrl(userId?: string): boolean {
+    const db = this.getDB();
+    const targetId = String(userId || db.currentUser || '').trim();
+    if (!targetId) return false;
+    try {
+      const raw = safeGetItem(PROFILE_IMAGE_MAP_KEY);
+      if (!raw) return true;
+      const parsed = JSON.parse(raw) as Record<string, string>;
+      if (parsed[targetId] !== undefined) {
+        delete parsed[targetId];
+      }
+      const saved = safeSetItem(PROFILE_IMAGE_MAP_KEY, JSON.stringify(parsed));
+      if (saved && typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('profile-image-updated'));
+      }
+      return saved;
+    } catch {
+      return false;
+    }
   },
 
   saveProfile(profile: UserProfile, options?: { skipRemoteSync?: boolean }): boolean {

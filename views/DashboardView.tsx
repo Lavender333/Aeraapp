@@ -88,6 +88,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [syncCount, setSyncCount] = useState(0);
   const [userRole, setUserRole] = useState<UserRole>('GENERAL_USER');
   const [userName, setUserName] = useState('');
+  const [profileImageDataUrl, setProfileImageDataUrl] = useState('');
   const [connectedOrg, setConnectedOrg] = useState<string | null>(null);
   const [orgProfile, setOrgProfile] = useState<OrganizationProfile | null>(null);
   const [orgPopulation, setOrgPopulation] = useState<number>(0);
@@ -136,6 +137,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   useEffect(() => {
     // Load Profile Data
     const profile = StorageService.getProfile();
+    setProfileImageDataUrl(StorageService.getProfileImageDataUrl(profile.id) || '');
     setUserRole(normalizeRole(profile.role));
     setUserName(profile.fullName);
     setMissingProfileFields(getMissingProfileFields(profile));
@@ -181,6 +183,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     // Listen for storage events (cross-tab)
     const handleStorageChange = () => {
        const updatedProfile = StorageService.getProfile();
+       setProfileImageDataUrl(StorageService.getProfileImageDataUrl(updatedProfile.id) || '');
        setUserRole(normalizeRole(updatedProfile.role));
       setMissingProfileFields(getMissingProfileFields(updatedProfile));
        setTickerMessage(StorageService.getTicker(updatedProfile));
@@ -216,6 +219,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
        setTickerMessage(StorageService.getTicker(updatedProfile));
     };
 
+    const handleProfileImageUpdate = () => {
+      const updatedProfile = StorageService.getProfile();
+      setProfileImageDataUrl(StorageService.getProfileImageDataUrl(updatedProfile.id) || '');
+    };
+
     // Handle deferred finance open (e.g., from Splash)
     const openFinanceIfFlagged = () => {
       if (sessionStorage.getItem('openFinanceOnLoad')) {
@@ -230,6 +238,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('ticker-update', handleTickerUpdate);
     window.addEventListener('inventory-update', handleStorageChange);
+    window.addEventListener('profile-image-updated', handleProfileImageUpdate);
     window.addEventListener('finance-open', openFinanceIfFlagged);
     if (profile.communityId) {
       const orgId = profile.communityId;
@@ -246,6 +255,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('ticker-update', handleTickerUpdate);
       window.removeEventListener('inventory-update', handleStorageChange);
+      window.removeEventListener('profile-image-updated', handleProfileImageUpdate);
       window.removeEventListener('finance-open', openFinanceIfFlagged);
     };
   }, []);
@@ -728,9 +738,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         <div className="flex items-center gap-2">
           <div 
             onClick={() => setView('SETTINGS')}
-            className="w-14 h-14 rounded-full bg-gradient-to-br from-sky-400 to-teal-400 flex items-center justify-center text-white text-xl font-semibold shadow-md cursor-pointer"
+            className="w-14 h-14 rounded-full bg-gradient-to-br from-sky-400 to-teal-400 flex items-center justify-center text-white text-xl font-semibold shadow-md cursor-pointer overflow-hidden"
           >
-            {initials}
+            {profileImageDataUrl ? (
+              <img src={profileImageDataUrl} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              initials
+            )}
           </div>
         </div>
       </div>
