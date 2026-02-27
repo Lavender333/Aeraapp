@@ -2719,8 +2719,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-slide-up">
              <div className="bg-slate-800 p-6 text-white flex justify-between items-start">
                <div className="flex items-center gap-4">
-                 <div className="w-16 h-16 rounded-full bg-slate-600 flex items-center justify-center text-2xl font-bold border-2 border-slate-500">
-                   {(selectedUser.fullName || '?').charAt(0)}
+                 <div className="w-16 h-16 rounded-full bg-slate-600 flex items-center justify-center text-2xl font-bold border-2 border-slate-500 overflow-hidden">
+                   {selectedUser.id === profile.id && profileImageDataUrl ? (
+                     <img src={profileImageDataUrl} alt="User" className="w-full h-full object-cover" />
+                   ) : (
+                     (selectedUser.fullName || '?').charAt(0)
+                   )}
                  </div>
                  <div>
                    <h2 className="text-2xl font-bold">{selectedUser.fullName || 'Unnamed User'}</h2>
@@ -2921,8 +2925,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                >
                  <div className="flex items-center justify-between">
                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-full ${user.active !== false ? 'bg-slate-100 text-slate-600' : 'bg-red-100 text-red-500'}`}>
-                         <User size={18} />
+                      <div className={`w-9 h-9 rounded-full ${user.active !== false ? 'bg-slate-100 text-slate-600' : 'bg-red-100 text-red-500'} flex items-center justify-center overflow-hidden`}>
+                         {user.id === profile.id && profileImageDataUrl ? (
+                           <img src={profileImageDataUrl} alt="User" className="w-full h-full object-cover" />
+                         ) : (
+                           <User size={18} />
+                         )}
                       </div>
                       <div>
                         <h3 className={`font-bold group-hover:text-brand-700 transition-colors ${user.active !== false ? 'text-slate-900' : 'text-slate-500 line-through'}`}>{user.fullName || 'Unnamed User'}</h3>
@@ -2969,6 +2977,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const householdReady = Boolean(String(profile.householdCode || '').trim());
   const preparednessReady = Boolean(profile.consentPreparednessPlanning);
   const communityReady = Boolean(String(profile.communityId || '').trim());
+  const profileInitial = (profile.fullName || 'A').trim().charAt(0).toUpperCase();
 
   return (
     <div className="p-6 pb-28 space-y-8 animate-fade-in bg-gradient-to-br from-sky-50 via-slate-50 to-teal-50 min-h-screen flex flex-col">
@@ -2980,12 +2989,21 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
            </button>
            <h1 className="text-2xl font-bold text-slate-900">{t('settings.title')}</h1>
         </div>
-        
-        {isSaved && (
-          <span className="text-sm font-medium text-green-600 flex items-center gap-1 animate-fade-in">
-            <Check size={16} /> Saved
-          </span>
-        )}
+
+        <div className="flex items-center gap-2">
+          {isSaved && (
+            <span className="text-sm font-medium text-green-600 flex items-center gap-1 animate-fade-in">
+              <Check size={16} /> Saved
+            </span>
+          )}
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sky-400 to-teal-400 text-white font-semibold flex items-center justify-center overflow-hidden border border-white shadow-sm">
+            {profileImageDataUrl ? (
+              <img src={profileImageDataUrl} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              profileInitial
+            )}
+          </div>
+        </div>
       </div>
 
       <section className="bg-white/95 border border-slate-200 rounded-2xl p-4 shadow-sm">
@@ -3129,8 +3147,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           className="w-full flex items-center justify-between gap-4"
         >
           <div className="flex items-center gap-4 text-left">
-            <div className="p-3 bg-sky-100 border border-sky-200 rounded-full text-sky-700">
-              <User size={24} />
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-sky-400 to-teal-400 text-white flex items-center justify-center text-lg font-bold overflow-hidden border border-sky-100">
+              {profileImageDataUrl ? (
+                <img src={profileImageDataUrl} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                profileInitial
+              )}
             </div>
             <div>
               <h2 className="text-lg font-semibold text-slate-800">Profile</h2>
