@@ -2085,6 +2085,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
            </div>
         </div>
 
+        <div className="fixed bottom-4 right-4 z-50 print:hidden">
+          <Button size="sm" className="bg-slate-900 text-white shadow-lg" onClick={() => setPrintingRequest(null)}>
+            <X size={16} className="mr-2" /> Save & Exit
+          </Button>
+        </div>
+
         {/* Paper Layout */}
         <div className="max-w-3xl mx-auto border border-black p-8 mt-16 print:mt-0 print:border-0 print:w-full">
            <div className="flex justify-between items-start border-b-2 border-black pb-4 mb-6">
