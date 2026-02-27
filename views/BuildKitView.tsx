@@ -34,6 +34,14 @@ type KitGuidance = {
   outreach_flags: string[];
 };
 
+type DynamicKitItem = {
+  id: string;
+  item: string;
+  category: string;
+  priority: string;
+  explanation?: string | null;
+};
+
 const CATEGORIES: KitCategory[] = [
   {
     id: 'food',
@@ -199,10 +207,78 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     }
   };
 
-  const dynamicItems = useMemo(() => {
+  const localPreparednessItems = useMemo<DynamicKitItem[]>(() => {
+    const profile = StorageService.getProfile();
+    const items: DynamicKitItem[] = [];
+
+    if (profile.medicationDependency) {
+      items.push({
+        id: 'local-medication-backup',
+        item: 'Medication backup pouch (labeled doses + refill contacts)',
+        category: 'health',
+        priority: 'critical',
+        explanation: 'Added because medication dependency is enabled in Preparedness.',
+      });
+    }
+
+    if (profile.insulinDependency) {
+      items.push({
+        id: 'local-insulin-cooling',
+        item: 'Insulin cooling case + glucose monitoring supplies',
+        category: 'health',
+        priority: 'critical',
+        explanation: 'Added because insulin dependency is enabled in Preparedness.',
+      });
+    }
+
+    if (profile.oxygenPoweredDevice) {
+      items.push({
+        id: 'local-oxygen-backup-power',
+        item: 'Oxygen equipment backup plan + power backup details',
+        category: 'power',
+        priority: 'critical',
+        explanation: 'Added because oxygen-powered device dependency is enabled in Preparedness.',
+      });
+    }
+
+    if (profile.mobilityLimitation) {
+      items.push({
+        id: 'local-accessibility-go-pack',
+        item: 'Accessibility go-pack (mobility aids, transfer tools, support contacts)',
+        category: 'health',
+        priority: 'high',
+        explanation: 'Added because mobility limitation is enabled in Preparedness.',
+      });
+    }
+
+    if (profile.transportationAccess === false) {
+      items.push({
+        id: 'local-transport-plan',
+        item: 'Evacuation transportation plan (driver numbers + pickup locations)',
+        category: 'papers',
+        priority: 'high',
+        explanation: 'Added because transportation access is limited in Preparedness.',
+      });
+    }
+
+    return items;
+  }, []);
+
+  const guidanceDynamicItems = useMemo(() => {
     const staticIds = new Set(CATEGORIES.flatMap((cat) => cat.items.map((item) => item.id)));
     return (guidance?.added_items || []).filter((item) => !staticIds.has(item.id));
   }, [guidance]);
+
+  const dynamicItems = useMemo(() => {
+    const merged = [...localPreparednessItems, ...guidanceDynamicItems];
+    const byId = new Map<string, DynamicKitItem>();
+    merged.forEach((item) => {
+      if (!byId.has(item.id)) {
+        byId.set(item.id, item);
+      }
+    });
+    return Array.from(byId.values());
+  }, [localPreparednessItems, guidanceDynamicItems]);
 
   const totalItems = useMemo(() => {
     const staticCount = CATEGORIES.reduce((sum, cat) => sum + cat.items.length, 0);
@@ -313,6 +389,14 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       });
       lines.push('');
     });
+    if (dynamicItems.length > 0) {
+      lines.push('Profile-Based Required Additions');
+      dynamicItems.forEach((item) => {
+        const checked = checkedItems[item.id];
+        lines.push(`${checked ? '✓' : '•'} ${item.item} - ${item.explanation || 'Added from preparedness profile.'}`);
+      });
+      lines.push('');
+    }
     return lines;
   };
 
