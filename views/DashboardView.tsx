@@ -3,7 +3,7 @@ import { Card } from '../components/Card';
 import { ViewState, HelpRequestRecord, UserProfile, UserRole, OrgInventory, OrgMember, OrganizationProfile } from '../types';
 import { StorageService } from '../services/storage';
 import { getInventoryStatuses } from '../services/inventoryStatus';
-import { getBroadcast } from '../services/api';
+import { fetchReadyKit, getBroadcast } from '../services/api';
 import { getOrgByCode } from '../services/supabase';
 import { t } from '../services/translations';
 import { 
@@ -89,6 +89,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [userRole, setUserRole] = useState<UserRole>('GENERAL_USER');
   const [userName, setUserName] = useState('');
   const [profileImageDataUrl, setProfileImageDataUrl] = useState('');
+  const [checklistCompletionPct, setChecklistCompletionPct] = useState(0);
   const [connectedOrg, setConnectedOrg] = useState<string | null>(null);
   const [orgProfile, setOrgProfile] = useState<OrganizationProfile | null>(null);
   const [orgPopulation, setOrgPopulation] = useState<number>(0);
@@ -129,6 +130,39 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [showTickerModal, setShowTickerModal] = useState(false);
   const [showCommunityConnectModal, setShowCommunityConnectModal] = useState(false);
 
+  const getChecklistCompletionFromLocal = () => {
+    try {
+      const raw = localStorage.getItem('aeraReadyKit');
+      if (!raw) return 0;
+      const parsed = JSON.parse(raw) as { checkedItems?: number; totalItems?: number; checkedIds?: string[] };
+      const total = Math.max(0, Number(parsed?.totalItems || 0));
+      const checkedFromCount = Math.max(0, Number(parsed?.checkedItems || 0));
+      const checkedFromIds = Array.isArray(parsed?.checkedIds) ? parsed.checkedIds.length : 0;
+      const checked = Math.max(checkedFromCount, checkedFromIds);
+      if (total <= 0) return 0;
+      return Math.max(0, Math.min(100, Math.round((checked / total) * 100)));
+    } catch {
+      return 0;
+    }
+  };
+
+  const refreshChecklistCompletion = async () => {
+    const localPct = getChecklistCompletionFromLocal();
+    setChecklistCompletionPct(localPct);
+
+    try {
+      const remote = await fetchReadyKit();
+      const total = Math.max(0, Number(remote?.total_items || 0));
+      const checked = Math.max(0, Number(remote?.checked_items || 0));
+      if (total > 0) {
+        const remotePct = Math.max(0, Math.min(100, Math.round((checked / total) * 100)));
+        setChecklistCompletionPct(remotePct);
+      }
+    } catch {
+      // Keep local completion as fallback.
+    }
+  };
+
   const refreshPendingPing = async () => {
     const pending = await StorageService.getPendingPingForCurrentUser();
     setPendingPing(pending);
@@ -137,6 +171,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   useEffect(() => {
     // Load Profile Data
     const profile = StorageService.getProfile();
+    refreshChecklistCompletion().catch(() => {});
     setProfileImageDataUrl(StorageService.getProfileImageDataUrl(profile.id) || '');
     setUserRole(normalizeRole(profile.role));
     setUserName(profile.fullName);
@@ -183,6 +218,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     // Listen for storage events (cross-tab)
     const handleStorageChange = () => {
        const updatedProfile = StorageService.getProfile();
+       setChecklistCompletionPct(getChecklistCompletionFromLocal());
        setProfileImageDataUrl(StorageService.getProfileImageDataUrl(updatedProfile.id) || '');
        setUserRole(normalizeRole(updatedProfile.role));
       setMissingProfileFields(getMissingProfileFields(updatedProfile));
@@ -426,8 +462,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     : null;
   const projected12MonthProfit = monthlyProfit * 12;
   const initials = userName ? userName.trim().charAt(0).toUpperCase() : 'A';
-  const dashboardReadinessScore = [isOnline, isProfileComplete, hasCommunity].filter(Boolean).length;
-  const dashboardCompletionPct = Math.round((dashboardReadinessScore / 3) * 100);
 
   // Simple growth model: +10% users per month compared to base
   const userGrowthSeries = Array.from({ length: 12 }).map((_, idx) => {
@@ -753,10 +787,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         <div className="flex items-center justify-between gap-3 mb-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Dashboard Overview</p>
-            <p className="text-lg font-bold text-slate-900 mt-1">Readiness: {dashboardCompletionPct}%</p>
+            <p className="text-lg font-bold text-slate-900 mt-1">Readiness: {checklistCompletionPct}%</p>
           </div>
-          <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${dashboardCompletionPct >= 67 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-            {dashboardCompletionPct >= 67 ? 'On track' : 'Needs setup'}
+          <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${checklistCompletionPct >= 100 ? 'bg-emerald-100 text-emerald-700' : checklistCompletionPct >= 50 ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-700'}`}>
+            {checklistCompletionPct >= 100 ? 'Complete' : checklistCompletionPct >= 50 ? 'In progress' : 'Needs setup'}
           </span>
         </div>
         <div className="flex flex-wrap gap-2">
