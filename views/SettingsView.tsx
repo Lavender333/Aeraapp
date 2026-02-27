@@ -2342,7 +2342,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
            />
            <div className="flex justify-end gap-2">
              <Button size="sm" variant="ghost" onClick={() => setSystemTicker('')} className="text-slate-500">Clear</Button>
-             <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={handleUpdateSystemTicker}>Update Global Alert</Button>
+             <Button size="sm" className="bg-amber-600 hover:bg-amber-700" onClick={handleUpdateSystemTicker}>Update Global Alert</Button>
            </div>
         </div>
 
@@ -2892,7 +2892,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   // --- Render: Main Settings ---
   return (
-    <div className="p-6 pb-28 space-y-8 animate-fade-in bg-slate-50 min-h-screen flex flex-col">
+    <div className="p-6 pb-28 space-y-8 animate-fade-in bg-gradient-to-br from-sky-50 via-slate-50 to-teal-50 min-h-screen flex flex-col">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-3">
@@ -2910,9 +2910,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </div>
 
       {/* Language Selector */}
-      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 order-6 border border-slate-200">
+      <section className="bg-sky-50/70 p-6 rounded-2xl shadow-sm space-y-4 order-6 border border-sky-100">
         <div className="flex items-center gap-4 mb-2">
-          <div className="p-3 bg-white border border-slate-200 rounded-full text-slate-700">
+          <div className="p-3 bg-sky-100 border border-sky-200 rounded-full text-sky-700">
             <Globe size={24} />
           </div>
           <h2 className="text-lg font-semibold text-slate-800">{t('settings.language')}</h2>
@@ -2965,7 +2965,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {isAdmin && (
-        <section className="bg-slate-900 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
+        <section className="bg-gradient-to-br from-slate-800 to-teal-900 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
           <div className="absolute top-0 right-0 p-6 opacity-10">
             <ShieldCheck size={80} />
           </div>
@@ -2993,21 +2993,21 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               )}
               <Button 
                 onClick={openOrgDirectory} 
-                className="bg-purple-600 hover:bg-purple-500 text-white border-0 w-full justify-between"
+                className="bg-sky-600 hover:bg-sky-500 text-white border-0 w-full justify-between"
               >
                 <span>Organization Directory</span>
                 <Building2 size={18} />
               </Button>
               <Button 
                 onClick={openMasterInventory} 
-                className="bg-orange-600 hover:bg-orange-500 text-white border-0 w-full justify-between"
+                className="bg-teal-600 hover:bg-teal-500 text-white border-0 w-full justify-between"
               >
                 <span>Master Inventory Database</span>
                 <FileText size={18} />
               </Button>
               <Button 
                 onClick={openBroadcastControl} 
-                className="bg-red-600 hover:bg-red-500 text-white border-0 w-full justify-between"
+                className="bg-amber-600 hover:bg-amber-500 text-white border-0 w-full justify-between"
               >
                 <span>Manage Broadcasts</span>
                 <Radio size={18} />
@@ -3028,7 +3028,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       )}
 
       {/* Profile */}
-      <section ref={profileSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 order-1">
+      <section ref={profileSectionRef} className="bg-sky-50/60 p-6 rounded-2xl shadow-sm space-y-4 border border-sky-100 order-1">
         <button
           id={accordionButtonIds.profile}
           type="button"
@@ -3038,7 +3038,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           className="w-full flex items-center justify-between gap-4"
         >
           <div className="flex items-center gap-4 text-left">
-            <div className="p-3 bg-white border border-slate-200 rounded-full text-slate-700">
+            <div className="p-3 bg-sky-100 border border-sky-200 rounded-full text-sky-700">
               <User size={24} />
             </div>
             <div>
@@ -3170,7 +3170,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {/* Contacts */}
-      <section ref={contactsSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 border-l-4 border-l-[#B91C1C] order-3">
+      <section ref={contactsSectionRef} className="bg-teal-50/50 p-6 rounded-2xl shadow-sm space-y-4 border border-teal-100 border-l-4 border-l-teal-400 order-3">
         <button
           id={accordionButtonIds.contacts}
           type="button"
@@ -3180,7 +3180,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           className="w-full flex items-center justify-between gap-4"
         >
           <div className="flex items-center gap-4 text-left">
-            <div className="p-3 bg-white border border-slate-200 rounded-full text-slate-700">
+            <div className="p-3 bg-teal-100 border border-teal-200 rounded-full text-teal-700">
               <Phone size={24} />
             </div>
             <div>
@@ -3189,7 +3189,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 {profile.emergencyContactName ? (
                   `${profile.emergencyContactName} • ${profile.emergencyContactPhone || 'No phone'}`
                 ) : (
-                  <span role="alert" className="inline-flex items-center gap-1 text-[#B91C1C]">
+                  <span role="alert" className="inline-flex items-center gap-1 text-amber-700">
                     <AlertTriangle size={12} />
                     Emergency contact required
                   </span>
@@ -3252,7 +3252,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {/* Household */}
-      <section ref={householdSectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 border-l-4 border-l-[#2F7A64] order-2">
+      <section ref={householdSectionRef} className="bg-teal-50/50 p-6 rounded-2xl shadow-sm space-y-4 border border-teal-100 border-l-4 border-l-teal-400 order-2">
         <button
           id={accordionButtonIds.household}
           type="button"
@@ -3262,7 +3262,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           className="w-full flex items-center justify-between gap-4"
         >
           <div className="flex items-center gap-4 text-left">
-            <div className="p-3 bg-white border border-slate-200 rounded-full text-slate-700">
+            <div className="p-3 bg-teal-100 border border-teal-200 rounded-full text-teal-700">
               <Users size={24} />
             </div>
             <div>
@@ -3424,7 +3424,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="text-red-600 hover:bg-red-50"
+                      className="text-amber-700 hover:bg-amber-50"
                       onClick={() => handleResolveJoinRequest(request, 'rejected')}
                       disabled={joinRequestBusyId === request.id}
                     >
@@ -3485,7 +3485,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <Button
               size="sm"
               variant="ghost"
-              className="text-[#B91C1C] font-semibold hover:bg-red-50 hover:text-[#B91C1C]"
+              className="text-amber-700 font-semibold hover:bg-amber-50 hover:text-amber-800"
               onClick={handleLeaveHousehold}
               disabled={isLeavingHousehold || (profile.householdRole === 'OWNER' && transferCandidates.length > 0 && !selectedTransferCandidateId)}
             >
@@ -3549,7 +3549,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           )}
 
           {householdCodeError && (
-            <p className="text-xs text-red-600 font-semibold">{householdCodeError}</p>
+            <p className="text-xs text-amber-700 font-semibold">{householdCodeError}</p>
           )}
           {householdCodeSuccess && (
             <p className="text-xs text-green-600 font-semibold">{householdCodeSuccess}</p>
@@ -3578,7 +3578,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="text-red-600 hover:bg-red-50"
+                  className="text-amber-700 hover:bg-amber-50"
                   onClick={handleCancelMyJoinRequest}
                   disabled={isCancellingJoinRequest}
                 >
@@ -3639,7 +3639,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="text-red-600 hover:bg-red-50"
+                            className="text-amber-700 hover:bg-amber-50"
                             onClick={() => handleRevokeMemberInvite(member)}
                             disabled={inviteBusyMemberId === member.id}
                           >
@@ -3652,7 +3652,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 </div>
 
                 {inviteStatusMessage && <p className="text-xs text-emerald-700 font-semibold">{inviteStatusMessage}</p>}
-                {inviteError && <p className="text-xs text-red-600 font-semibold">{inviteError}</p>}
+                {inviteError && <p className="text-xs text-amber-700 font-semibold">{inviteError}</p>}
               </div>
             )}
 
@@ -3724,14 +3724,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           <p className="text-[11px] text-amber-700 font-semibold mt-1">New join requests waiting — tap Show more to review.</p>
         )}
         {vitalsSaveError && (
-          <p className="text-xs text-red-600 font-semibold mt-2">{vitalsSaveError}</p>
+          <p className="text-xs text-amber-700 font-semibold mt-2">{vitalsSaveError}</p>
         )}
         </div>
         )}
       </section>
 
       {/* Security */}
-      <section ref={securitySectionRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 border-l-4 border-l-[#B91C1C] order-4">
+      <section ref={securitySectionRef} className="bg-sky-50/60 p-6 rounded-2xl shadow-sm space-y-4 border border-sky-100 border-l-4 border-l-sky-400 order-4">
         <button
           id={accordionButtonIds.security}
           type="button"
@@ -3741,7 +3741,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           className="w-full flex items-center justify-between gap-4"
         >
           <div className="flex items-center gap-4 text-left">
-            <div className="p-3 bg-white border border-slate-200 rounded-full text-slate-700">
+            <div className="p-3 bg-sky-100 border border-sky-200 rounded-full text-sky-700">
               <HeartPulse size={24} />
             </div>
             <div>
@@ -3882,14 +3882,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           {showMoreSections.security ? 'Show less' : 'Show more'}
         </button>
         {vitalsSaveError && (
-          <p className="text-xs text-red-600 font-semibold mt-2">{vitalsSaveError}</p>
+          <p className="text-xs text-amber-700 font-semibold mt-2">{vitalsSaveError}</p>
         )}
         </div>
         )}
       </section>
 
       {/* Community Onboarding */}
-      <section ref={trustedCommunityRef} className="bg-white p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 order-5">
+      <section ref={trustedCommunityRef} className="bg-teal-50/50 p-6 rounded-2xl shadow-sm space-y-4 border border-teal-100 order-5">
         <button
           id={accordionButtonIds.community}
           type="button"
@@ -3899,7 +3899,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           className="w-full flex items-center justify-between gap-4"
         >
           <div className="flex items-center gap-4 mb-2 text-left">
-            <div className="p-3 bg-white border border-slate-200 rounded-full text-slate-700">
+            <div className="p-3 bg-teal-100 border border-teal-200 rounded-full text-teal-700">
               <Building2 size={24} />
             </div>
             <div>
@@ -3921,16 +3921,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         
         {profile.role === 'INSTITUTION_ADMIN' ? (
           <div className="relative z-10 space-y-3">
-             <div className="bg-purple-100 border border-purple-200 p-4 rounded-xl flex items-center justify-between">
+             <div className="bg-sky-100 border border-sky-200 p-4 rounded-xl flex items-center justify-between">
                 <div>
-                   <p className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">Your Organization ID</p>
-                   <p className="text-2xl font-mono font-black text-purple-900 tracking-widest">{profile.communityId || 'NOT SET'}</p>
+                   <p className="text-[10px] font-bold text-sky-700 uppercase tracking-wider">Your Organization ID</p>
+                   <p className="text-2xl font-mono font-black text-sky-900 tracking-widest">{profile.communityId || 'NOT SET'}</p>
                 </div>
                 <Button 
                    size="sm"
                    variant="ghost" 
                    onClick={() => copyToClipboard(profile.communityId)}
-                   className="text-purple-700 hover:bg-purple-200"
+                   className="text-sky-700 hover:bg-sky-200"
                 >
                    <Copy size={20} />
                 </Button>
@@ -3951,17 +3951,17 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 </div>
                 <div className="flex flex-col items-center">
                   <Button 
-                    className={`mb-[1px] min-w-[50px] ${connectedOrg ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'}`}
+                    className={`mb-[1px] min-w-[50px] ${connectedOrg ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-sky-600 hover:bg-sky-700'}`}
                     onClick={verifyCommunityId}
                     disabled={isVerifying || !profile.communityId}
                   >
                     {isVerifying ? <Loader2 className="animate-spin" size={20} /> : connectedOrg ? <Check size={20} /> : <LinkIcon size={20} />}
                   </Button>
-                  <p className="text-[10px] font-semibold text-purple-600 mt-1">Click here</p>
+                  <p className="text-[10px] font-semibold text-sky-700 mt-1">Click here</p>
                 </div>
              </div>
              {verifyError && (
-               <div className="flex items-center gap-2 text-red-600 text-sm font-bold bg-red-50 p-2 rounded-lg animate-fade-in border border-red-100 relative z-10">
+               <div className="flex items-center gap-2 text-amber-700 text-sm font-bold bg-amber-50 p-2 rounded-lg animate-fade-in border border-amber-100 relative z-10">
                   <XCircle size={16} /> {verifyError}
                </div>
              )}
@@ -3984,20 +3984,20 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                </div>
                <div className="flex flex-col items-center">
                  <Button
-                   className="mb-[1px] min-w-[90px] bg-purple-600 hover:bg-purple-700"
+                   className="mb-[1px] min-w-[90px] bg-sky-600 hover:bg-sky-700"
                    onClick={linkParentOrganization}
                    disabled={isLinkingParentOrg || !profile.communityId || !parentOrgCodeInput}
                  >
                    {isLinkingParentOrg ? <Loader2 className="animate-spin" size={18} /> : 'Link Parent'}
                  </Button>
-                 <p className="text-[10px] font-semibold text-purple-600 mt-1">Optional</p>
+                 <p className="text-[10px] font-semibold text-sky-700 mt-1">Optional</p>
                </div>
              </div>
              {parentOrgLinkSuccess && (
                <p className="text-xs font-semibold text-emerald-700 relative z-10">{parentOrgLinkSuccess}</p>
              )}
              {parentOrgLinkError && (
-               <div className="flex items-center gap-2 text-red-600 text-sm font-bold bg-red-50 p-2 rounded-lg animate-fade-in border border-red-100 relative z-10">
+               <div className="flex items-center gap-2 text-amber-700 text-sm font-bold bg-amber-50 p-2 rounded-lg animate-fade-in border border-amber-100 relative z-10">
                  <XCircle size={16} /> {parentOrgLinkError}
                </div>
              )}
@@ -4020,20 +4020,20 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               </div>
               <div className="flex flex-col items-center">
                 <Button 
-                  className={`mb-[1px] min-w-[50px] ${connectedOrg ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'}`}
+                  className={`mb-[1px] min-w-[50px] ${connectedOrg ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-sky-600 hover:bg-sky-700'}`}
                   onClick={verifyCommunityId}
                   disabled={isVerifying || !profile.communityId}
                 >
                   {isVerifying ? <Loader2 className="animate-spin" size={20} /> : connectedOrg ? <Check size={20} /> : <LinkIcon size={20} />}
                 </Button>
-                <p className="text-[10px] font-semibold text-purple-600 mt-1">Click here</p>
+                <p className="text-[10px] font-semibold text-sky-700 mt-1">Click here</p>
               </div>
             </div>
             {connectedOrgLabel && (
               <p className="text-xs font-semibold text-emerald-700 relative z-10">Connected to {connectedOrgLabel}.</p>
             )}
             {verifyError && (
-               <div className="flex items-center gap-2 text-red-600 text-sm font-bold bg-red-50 p-2 rounded-lg animate-fade-in border border-red-100 relative z-10">
+               <div className="flex items-center gap-2 text-amber-700 text-sm font-bold bg-amber-50 p-2 rounded-lg animate-fade-in border border-amber-100 relative z-10">
                   <XCircle size={16} /> {verifyError}
                </div>
             )}
@@ -4043,7 +4043,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-red-600 hover:bg-red-50"
+                  className="text-slate-700 hover:bg-slate-100"
                   onClick={handleDisconnectCommunity}
                   disabled={isDisconnectingOrg || !profile.communityId}
                 >
@@ -4065,9 +4065,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         )}
       </section>
 
-      <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4 order-7 border border-slate-200">
+      <section className="bg-sky-50/60 p-6 rounded-2xl shadow-sm space-y-4 order-7 border border-sky-100">
         <div className="flex items-center gap-4">
-          <div className="p-3 bg-white border border-slate-200 rounded-full text-slate-700">
+          <div className="p-3 bg-sky-100 border border-sky-200 rounded-full text-sky-700">
             <ShieldCheck size={24} />
           </div>
           <div>
@@ -4099,7 +4099,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       <div className="space-y-4 pt-4 border-t border-slate-200 order-8">
-        <Button onClick={handleLogout} variant="ghost" fullWidth className="text-[#B91C1C] font-semibold hover:text-[#B91C1C]">
+        <Button onClick={handleLogout} variant="ghost" fullWidth className="text-slate-700 font-semibold hover:text-slate-900">
           <LogOut className="mr-2" size={18} />
           Log Out
         </Button>
@@ -4135,7 +4135,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               <Button
                 onClick={handleConfirmLeaveHousehold}
                 disabled={isLeavingHousehold}
-                className="bg-red-600 hover:bg-red-700"
+                className="bg-amber-600 hover:bg-amber-700"
               >
                 {leaveConfirmation.transferCandidate ? 'Transfer & Leave' : 'Leave Household'}
               </Button>
