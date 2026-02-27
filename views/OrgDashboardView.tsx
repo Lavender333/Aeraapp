@@ -615,6 +615,12 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     medicalKits: 'Medical Kits',
   };
   const lowItems = inventoryItems.filter(item => status[item.key].level === 'LOW');
+  const getMemberProfileImage = (memberId?: string) => {
+    const normalizedId = String(memberId || '').trim();
+    if (!normalizedId) return '';
+    return StorageService.getProfileImageDataUrl(normalizedId) || '';
+  };
+  const selectedMemberImageDataUrl = selectedMember ? getMemberProfileImage(selectedMember.id) : '';
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col pb-safe animate-fade-in relative">
@@ -859,8 +865,12 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                 <div className={`p-6 ${selectedMember.status === 'SAFE' ? 'bg-green-600' : selectedMember.status === 'DANGER' ? 'bg-red-600' : 'bg-slate-600'} text-white`}>
                    <div className="flex items-center justify-between">
                      <div className="flex items-center gap-3">
-                        <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center font-bold text-2xl border-2 border-white/30">
-                           {selectedMember.name.charAt(0)}
+                      <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center font-bold text-2xl border-2 border-white/30 overflow-hidden">
+                        {selectedMemberImageDataUrl ? (
+                          <img src={selectedMemberImageDataUrl} alt={selectedMember.name} className="w-full h-full object-cover" />
+                        ) : (
+                          selectedMember.name.charAt(0)
+                        )}
                         </div>
                         <div>
                            <h2 className="text-xl font-bold">{selectedMember.name}</h2>
@@ -970,17 +980,24 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                  </p>
                )}
                {filteredMembers.map(member => (
+                (() => {
+                  const memberImageDataUrl = getMemberProfileImage(member.id);
+                  return (
                  <div 
                    key={member.id} 
                    onClick={() => setSelectedMember(member)}
                    className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between cursor-pointer hover:border-brand-400 hover:shadow-md transition-all group"
                  >
                     <div className="flex items-center gap-3">
-                       <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
+                       <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold overflow-hidden ${
                          member.status === 'SAFE' ? 'bg-green-500' : 
                          member.status === 'DANGER' ? 'bg-red-500' : 'bg-slate-400'
                        }`}>
-                         {member.name.charAt(0)}
+                         {memberImageDataUrl ? (
+                           <img src={memberImageDataUrl} alt={member.name} className="w-full h-full object-cover" />
+                         ) : (
+                           member.name.charAt(0)
+                         )}
                        </div>
                        <div>
                          <h3 className="font-bold text-slate-900 group-hover:text-brand-700 transition-colors">{member.name}</h3>
@@ -1001,6 +1018,8 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                       <ArrowLeft size={16} className="text-slate-300 rotate-180 group-hover:text-brand-500 transition-colors" />
                     </div>
                  </div>
+                  );
+                })()
                ))}
             </div>
           )
