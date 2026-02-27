@@ -262,6 +262,7 @@ export default function App() {
                   currentView !== 'PRIVACY_POLICY';
 
   const useWideLayout = [
+    'DASHBOARD',
     'SETTINGS',
     'MAP',
     'GAP',
