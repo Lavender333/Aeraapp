@@ -2074,13 +2074,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       <div className="fixed inset-0 z-[100] overflow-y-auto bg-white p-8 font-serif text-black animate-fade-in print:p-0 print:bg-white print:text-black print:static print:overflow-visible">
         {/* Navigation (Hidden in Print) */}
         <div className="fixed top-0 left-0 right-0 p-4 bg-slate-900 text-white flex justify-between items-center print:hidden shadow-lg z-50">
-           <span className="font-bold">Receipt Preview</span>
+           <span className="font-bold">Shipping Manifest Preview</span>
            <div className="flex gap-2">
              <Button size="sm" className="bg-brand-600 text-white" onClick={() => window.print()}>
                <Printer size={16} className="mr-2" /> Print Now
              </Button>
              <Button size="sm" variant="secondary" onClick={() => setPrintingRequest(null)}>
-               <X size={16} className="mr-2" /> Close
+               <X size={16} className="mr-2" /> Save & Exit
              </Button>
            </div>
         </div>
@@ -2181,6 +2181,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                     ))}
                  </tbody>
               </table>
+           </div>
+
+           <div className="print:hidden mb-6 rounded-lg border border-sky-200 bg-sky-50 text-sky-900 px-3 py-2 text-xs">
+             Signatures are saved immediately. You can select <span className="font-bold">Save & Exit</span>, then reopen this Shipping Manifest later to complete Signature 2.
            </div>
 
            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 mt-12 pt-12">
