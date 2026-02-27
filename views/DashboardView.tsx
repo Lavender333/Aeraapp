@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Card } from '../components/Card';
 import { ViewState, HelpRequestRecord, UserProfile, UserRole, OrgInventory, OrgMember, OrganizationProfile } from '../types';
 import { StorageService } from '../services/storage';
@@ -63,6 +63,8 @@ interface DashboardViewProps {
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
+  const profileImageInputRef = useRef<HTMLInputElement | null>(null);
+
   const formatCommunityIdInput = (value: string) => {
     const cleaned = String(value || '')
       .toUpperCase()
@@ -360,6 +362,45 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     setCommunityIdInput('');
     setCommunityConnectError(null);
     setIsConnectingCommunity(false);
+  };
+
+  const handleDashboardProfileImageUpload: React.ChangeEventHandler<HTMLInputElement> = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please select a valid image file.');
+      event.target.value = '';
+      return;
+    }
+
+    const maxBytes = 2 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      alert('Image is too large. Please choose one under 2MB.');
+      event.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      if (!dataUrl.startsWith('data:image/')) {
+        alert('Could not read image. Please try a different file.');
+        return;
+      }
+      const profile = StorageService.getProfile();
+      const saved = StorageService.saveProfileImageDataUrl(dataUrl, profile.id);
+      if (!saved) {
+        alert('Could not save image (storage limit reached). Try a smaller file.');
+        return;
+      }
+      setProfileImageDataUrl(dataUrl);
+    };
+    reader.onerror = () => {
+      alert('Could not read image. Please try again.');
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
   };
 
   const respondToPing = (isSafe: boolean) => {
@@ -758,6 +799,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
           <p className="text-base sm:text-lg text-slate-500">{userName.split(' ')[0]}</p>
         </div>
         <div className="flex items-center gap-2">
+          <input
+            ref={profileImageInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleDashboardProfileImageUpload}
+          />
+          <Button size="sm" variant="outline" onClick={() => profileImageInputRef.current?.click()}>
+            Upload Photo
+          </Button>
           <div 
             onClick={() => setView('SETTINGS')}
             className="w-14 h-14 rounded-full bg-gradient-to-br from-sky-400 to-teal-400 flex items-center justify-center text-white text-xl font-semibold shadow-md cursor-pointer overflow-hidden"
