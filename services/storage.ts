@@ -738,6 +738,28 @@ export const StorageService = {
         if (profile?.id && profile.id !== 'guest') {
           (async () => {
             try {
+              let avatarValueForProfile = nextValue;
+
+              if (nextValue.startsWith('data:image/')) {
+                try {
+                  const avatarUrl = await uploadProfileAvatarDataUrl(nextValue);
+                  if (avatarUrl) {
+                    avatarValueForProfile = avatarUrl;
+                    const latestRaw = safeGetItem(PROFILE_IMAGE_MAP_KEY);
+                    const latest = latestRaw ? (JSON.parse(latestRaw) as Record<string, string>) : {};
+                    aliases.forEach((alias) => {
+                      latest[alias] = avatarUrl;
+                    });
+                    const localSaved = safeSetItem(PROFILE_IMAGE_MAP_KEY, JSON.stringify(latest));
+                    if (localSaved && typeof window !== 'undefined') {
+                      window.dispatchEvent(new Event('profile-image-updated'));
+                    }
+                  }
+                } catch (uploadErr) {
+                  console.warn('Profile image storage upload failed; falling back to profile avatar sync', uploadErr);
+                }
+              }
+
               await updateProfileForUser({
                 fullName: profile.fullName,
                 phone: profile.phone,
@@ -748,46 +770,12 @@ export const StorageService = {
                 emergencyContactRelation: profile.emergencyContactRelation,
                 communityId: profile.communityId,
                 role: profile.role,
-                avatarDataUrl: nextValue,
+                avatarDataUrl: avatarValueForProfile,
               });
             } catch (err) {
               console.warn('Profile image sync failed', err);
             }
           })();
-
-          if (nextValue.startsWith('data:image/')) {
-            (async () => {
-              try {
-                const avatarUrl = await uploadProfileAvatarDataUrl(nextValue);
-                if (!avatarUrl) return;
-
-                const latestRaw = safeGetItem(PROFILE_IMAGE_MAP_KEY);
-                const latest = latestRaw ? (JSON.parse(latestRaw) as Record<string, string>) : {};
-                aliases.forEach((alias) => {
-                  latest[alias] = avatarUrl;
-                });
-                const localSaved = safeSetItem(PROFILE_IMAGE_MAP_KEY, JSON.stringify(latest));
-                if (localSaved && typeof window !== 'undefined') {
-                  window.dispatchEvent(new Event('profile-image-updated'));
-                }
-
-                await updateProfileForUser({
-                  fullName: profile.fullName,
-                  phone: profile.phone,
-                  email: profile.email,
-                  address: profile.address,
-                  emergencyContactName: profile.emergencyContactName,
-                  emergencyContactPhone: profile.emergencyContactPhone,
-                  emergencyContactRelation: profile.emergencyContactRelation,
-                  communityId: profile.communityId,
-                  role: profile.role,
-                  avatarDataUrl: avatarUrl,
-                });
-              } catch (uploadErr) {
-                console.warn('Profile image storage upload failed; keeping local/base64 sync', uploadErr);
-              }
-            })();
-          }
         }
       }
 
