@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ViewState, OrgMember, OrgInventory, ReplenishmentRequest } from '../types';
 import { Button } from '../components/Button';
 import { StorageService } from '../services/storage';
@@ -96,6 +96,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
   const [requestSuccess, setRequestSuccess] = useState(false);
   const [selectedItem, setSelectedItem] = useState('Water Cases');
   const [requestAmount, setRequestAmount] = useState(10);
+  const requestFormRef = useRef<HTMLDivElement | null>(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [stockLoading, setStockLoading] = useState(false);
   const [outreachFlags, setOutreachFlags] = useState<OutreachFlagRow[]>([]);
@@ -607,6 +608,12 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     { label: 'Blankets', key: 'blankets' as const, unit: 'units' },
     { label: 'Med Kits', key: 'medicalKits' as const, unit: 'kits' },
   ];
+  const requestItemByInventoryKey: Record<keyof OrgInventory, string> = {
+    water: 'Water Cases',
+    food: 'Food Boxes',
+    blankets: 'Blankets',
+    medicalKits: 'Medical Kits',
+  };
   const lowItems = inventoryItems.filter(item => status[item.key].level === 'LOW');
 
   return (
@@ -1119,9 +1126,13 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                           size="sm" 
                           className="mt-2 w-full" 
                           onClick={() => {
-                            setSelectedItem(item.label);
+                            setSelectedItem(requestItemByInventoryKey[item.key]);
                             setRequestAmount(Math.max(1, needed));
+                            setRequestSuccess(false);
                             setIsRequesting(true);
+                            window.setTimeout(() => {
+                              requestFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }, 30);
                           }}
                         >
                           Prefill Request
@@ -1173,7 +1184,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                <Save size={18} className="mr-2" /> {hasChanges ? t('btn.save') : 'All Saved'}
             </Button>
 
-            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm mt-4">
+            <div ref={requestFormRef} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm mt-4">
               <div className="flex items-center gap-2 mb-3">
                  <Truck className="text-brand-600" size={20} />
                  <h3 className="font-bold text-slate-900">{t('org.req_replenish')}</h3>
@@ -1218,7 +1229,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                         min="1"
                         className="w-full p-2 rounded border border-slate-300 text-sm text-slate-900 font-bold"
                         value={requestAmount}
-                        onChange={(e) => setRequestAmount(parseInt(e.target.value))}
+                        onChange={(e) => setRequestAmount(Math.max(1, parseInt(e.target.value || '1', 10) || 1))}
                       />
                     </div>
                     <div className="text-xs text-slate-600 text-right">
