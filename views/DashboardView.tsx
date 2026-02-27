@@ -451,21 +451,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
           onClick={() => setShowTickerModal(false)}
         >
           <div 
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-slide-up"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-slide-up"
             onClick={(e) => e.stopPropagation()}
           >
              <div className="bg-slate-900 p-4 flex justify-between items-center text-white border-b border-slate-800">
                <div className="flex items-center gap-2">
                  <Activity className="text-brand-400" size={20} />
-                 <h3 className="font-bold text-lg">Active Broadcast</h3>
+                 <div>
+                   <h3 className="font-bold text-lg">Community Announcement</h3>
+                   <p className="text-[11px] text-slate-300 font-semibold">Live update</p>
+                 </div>
                </div>
                <button onClick={() => setShowTickerModal(false)} className="text-slate-400 hover:text-white transition-colors">
                  <X size={24} />
                </button>
              </div>
              <div className="p-6">
-               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6">
-                 <p className="text-slate-900 text-lg font-medium leading-relaxed whitespace-pre-wrap">
+               <div className="bg-sky-50/60 border border-sky-100 rounded-xl p-4 mb-6">
+                 <p className="text-slate-900 text-base font-semibold leading-relaxed whitespace-pre-wrap">
                    {tickerMessage}
                  </p>
                </div>
@@ -829,16 +832,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         /* Real-time Data Feed / Status Ticker - Clickable */
         <div 
           onClick={() => setShowTickerModal(true)}
-          className="bg-slate-700 text-white p-3 rounded-lg flex items-center gap-3 text-sm shadow-md overflow-hidden cursor-pointer group hover:bg-slate-600 transition-colors"
+          className="bg-white/95 border border-slate-200 p-4 rounded-xl shadow-sm overflow-hidden cursor-pointer group hover:border-sky-200 hover:shadow-md transition-all"
           title="Tap to read full message"
         >
-          <Activity size={16} className="text-brand-400 animate-pulse shrink-0" />
-          <div className="flex-1 overflow-hidden whitespace-nowrap relative">
-            <span className="inline-block animate-[slideLeft_20s_linear_infinite]">
-              {tickerMessage}
-            </span>
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center shrink-0">
+              <Bell size={18} className="animate-pulse" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Community Announcement</p>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">LIVE</span>
+              </div>
+              <p className="text-sm font-semibold text-slate-800 truncate">
+                {tickerMessage}
+              </p>
+              <p className="text-[11px] text-slate-500 mt-1">Tap to read full message</p>
+            </div>
+            <ChevronRight size={16} className="text-slate-400 group-hover:text-sky-700 shrink-0 mt-2" />
           </div>
-          <ChevronRight size={16} className="text-slate-500 group-hover:text-white shrink-0" />
         </div>
       )}
 
