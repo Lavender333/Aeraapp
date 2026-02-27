@@ -88,6 +88,9 @@ const sanitizeInventory = (inventory: OrgInventory): OrgInventory => ({
   medicalKits: Math.max(0, Number(inventory.medicalKits) || 0),
 });
 
+const normalizeImageAliasEmail = (value: unknown) => String(value || '').trim().toLowerCase();
+const normalizeImageAliasPhone = (value: unknown) => String(value || '').replace(/\D/g, '');
+
 const hasText = (value: unknown) => String(value || '').trim().length > 0;
 
 const inferOnboardingComplete = (
@@ -609,30 +612,53 @@ export const StorageService = {
     };
   },
 
-  getProfileImageDataUrl(userId?: string): string {
+  getProfileImageAliases(userId?: string): string[] {
     const db = this.getDB();
+    const aliases = new Set<string>();
     const targetId = String(userId || db.currentUser || '').trim();
-    if (!targetId) return '';
+    if (targetId) aliases.add(targetId);
+
+    const profile = targetId ? db.users.find((u) => u.id === targetId) : undefined;
+    const emailAlias = normalizeImageAliasEmail(profile?.email);
+    const phoneAlias = normalizeImageAliasPhone(profile?.phone);
+
+    if (emailAlias) aliases.add(`email:${emailAlias}`);
+    if (phoneAlias) aliases.add(`phone:${phoneAlias}`);
+
+    if (!profile && !targetId && db.currentUser) {
+      aliases.add(String(db.currentUser));
+    }
+
+    return Array.from(aliases);
+  },
+
+  getProfileImageDataUrl(userId?: string): string {
+    const aliases = this.getProfileImageAliases(userId);
+    if (aliases.length === 0) return '';
     try {
       const raw = safeGetItem(PROFILE_IMAGE_MAP_KEY);
       if (!raw) return '';
       const parsed = JSON.parse(raw) as Record<string, string>;
-      const value = String(parsed?.[targetId] || '');
-      return value.startsWith('data:image/') ? value : '';
+      for (const alias of aliases) {
+        const value = String(parsed?.[alias] || '');
+        if (value.startsWith('data:image/')) return value;
+      }
+      return '';
     } catch {
       return '';
     }
   },
 
   saveProfileImageDataUrl(dataUrl: string, userId?: string): boolean {
-    const db = this.getDB();
-    const targetId = String(userId || db.currentUser || '').trim();
+    const aliases = this.getProfileImageAliases(userId);
     const nextValue = String(dataUrl || '');
-    if (!targetId || !nextValue.startsWith('data:image/')) return false;
+    if (aliases.length === 0 || !nextValue.startsWith('data:image/')) return false;
     try {
       const raw = safeGetItem(PROFILE_IMAGE_MAP_KEY);
       const parsed = raw ? (JSON.parse(raw) as Record<string, string>) : {};
-      parsed[targetId] = nextValue;
+      aliases.forEach((alias) => {
+        parsed[alias] = nextValue;
+      });
       const saved = safeSetItem(PROFILE_IMAGE_MAP_KEY, JSON.stringify(parsed));
       if (saved && typeof window !== 'undefined') {
         window.dispatchEvent(new Event('profile-image-updated'));
@@ -644,16 +670,15 @@ export const StorageService = {
   },
 
   clearProfileImageDataUrl(userId?: string): boolean {
-    const db = this.getDB();
-    const targetId = String(userId || db.currentUser || '').trim();
-    if (!targetId) return false;
+    const aliases = this.getProfileImageAliases(userId);
+    if (aliases.length === 0) return false;
     try {
       const raw = safeGetItem(PROFILE_IMAGE_MAP_KEY);
       if (!raw) return true;
       const parsed = JSON.parse(raw) as Record<string, string>;
-      if (parsed[targetId] !== undefined) {
-        delete parsed[targetId];
-      }
+      aliases.forEach((alias) => {
+        if (parsed[alias] !== undefined) delete parsed[alias];
+      });
       const saved = safeSetItem(PROFILE_IMAGE_MAP_KEY, JSON.stringify(parsed));
       if (saved && typeof window !== 'undefined') {
         window.dispatchEvent(new Event('profile-image-updated'));
