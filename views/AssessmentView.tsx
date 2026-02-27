@@ -43,6 +43,7 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
   const [requiresCommunityConnection, setRequiresCommunityConnection] = useState(false);
   const [isMobile, setIsMobile] = useState<boolean>(false);
   const [roofAnswers, setRoofAnswers] = useState({
+    houseFloors: 'none',
     damagedShingles: 'none',
     flashingCracked: false,
     granuleLoss: 'none',
@@ -90,6 +91,7 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
   };
 
   const isRoofingTriageComplete =
+    roofAnswers.houseFloors !== 'none' &&
     roofAnswers.damagedShingles !== 'none' &&
     roofAnswers.granuleLoss !== 'none' &&
     roofAnswers.hitsPerSquare !== 'none';
@@ -368,6 +370,7 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
         if (damageType !== 'STRUCTURAL') return description;
         const rating = roofRatingMap[roofScore];
         const roofSummary = [
+          `House Floors: ${roofAnswers.houseFloors === '3+' ? '3 or more' : roofAnswers.houseFloors}`,
           `Roof Score: ${roofScore}/5 (${rating.label})`,
           `Meaning: ${rating.meaning}`,
           `Recommended Action: ${rating.action}`,
@@ -690,9 +693,20 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
             {damageType === 'STRUCTURAL' && (
               <div className="space-y-3 bg-white border border-slate-200 rounded-xl p-4">
                 <label className="block text-sm font-bold text-slate-900 uppercase tracking-wider">Roofing Triage (1–5)</label>
-                <p className="text-xs text-slate-500">Required: Damaged shingles, Granule loss, and Impact hits per square.</p>
+                <p className="text-xs text-slate-500">Required: House floors, Damaged shingles, Granule loss, and Impact hits per square.</p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <label className="space-y-1">
+                    <span className="text-slate-700 font-semibold">How many floors does your house have?</span>
+                    <select className="w-full border border-slate-300 rounded-lg p-2" value={roofAnswers.houseFloors} onChange={(e) => setRoofAnswers((prev) => ({ ...prev, houseFloors: e.target.value }))}>
+                      <option value="none">Select floors</option>
+                      <option value="1">1</option>
+                      <option value="2">2</option>
+                      <option value="3">3</option>
+                      <option value="3+">3 or more</option>
+                    </select>
+                  </label>
+
                   <label className="space-y-1">
                     <span className="text-slate-700 font-semibold">Damaged shingles</span>
                     <select className="w-full border border-slate-300 rounded-lg p-2" value={roofAnswers.damagedShingles} onChange={(e) => setRoofAnswers((prev) => ({ ...prev, damagedShingles: e.target.value }))}>
