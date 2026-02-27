@@ -1,7 +1,7 @@
 
 import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, RoleDefinition } from '../types';
 import { REQUEST_ITEM_MAP } from './validation';
-import { ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, fetchProfileForUser, fetchVitalsForUser, createHouseholdSafetyNotificationsForCurrentUser, listChildOrganizations, sendMemberPing, getPendingPingForCurrentUser as getPendingPingForCurrentUserApi } from './api';
+import { ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, fetchProfileForUser, fetchVitalsForUser, createHouseholdSafetyNotificationsForCurrentUser, listChildOrganizations, sendMemberPing, uploadProfileAvatarDataUrl, getPendingPingForCurrentUser as getPendingPingForCurrentUserApi } from './api';
 import { getMemberStatus, setMemberStatus } from './api';
 
 const DB_KEY = 'aera_backend_db_v4'; // Force fresh database
@@ -90,6 +90,8 @@ const sanitizeInventory = (inventory: OrgInventory): OrgInventory => ({
 
 const normalizeImageAliasEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const normalizeImageAliasPhone = (value: unknown) => String(value || '').replace(/\D/g, '');
+const isValidProfileImageSource = (value: string) =>
+  value.startsWith('data:image/') || value.startsWith('http://') || value.startsWith('https://');
 
 const hasText = (value: unknown) => String(value || '').trim().length > 0;
 
@@ -556,7 +558,7 @@ export const StorageService = {
 
             this.saveProfile(mergedProfile, { skipRemoteSync: true });
             const remoteAvatar = String((remoteProfile as any)?.avatarDataUrl || '').trim();
-            if (remoteAvatar.startsWith('data:image/')) {
+            if (isValidProfileImageSource(remoteAvatar)) {
               this.saveProfileImageDataUrl(remoteAvatar, mergedProfile.id, { skipRemoteSync: true });
             }
           } catch (hydrateErr) {
@@ -672,7 +674,7 @@ export const StorageService = {
       let foundImage = '';
       for (const alias of candidateAliases) {
         const value = String(parsed?.[alias] || '');
-        if (value.startsWith('data:image/')) {
+        if (isValidProfileImageSource(value)) {
           foundImage = value;
           break;
         }
@@ -708,7 +710,7 @@ export const StorageService = {
       const parsed = JSON.parse(raw) as Record<string, string>;
       for (const alias of aliases) {
         const value = String(parsed?.[alias] || '');
-        if (value.startsWith('data:image/')) return value;
+        if (isValidProfileImageSource(value)) return value;
       }
       return '';
     } catch {
@@ -719,7 +721,7 @@ export const StorageService = {
   saveProfileImageDataUrl(dataUrl: string, userId?: string, options?: { skipRemoteSync?: boolean }): boolean {
     const aliases = this.getProfileImageAliases(userId);
     const nextValue = String(dataUrl || '');
-    if (aliases.length === 0 || !nextValue.startsWith('data:image/')) return false;
+    if (aliases.length === 0 || !isValidProfileImageSource(nextValue)) return false;
     try {
       const raw = safeGetItem(PROFILE_IMAGE_MAP_KEY);
       const parsed = raw ? (JSON.parse(raw) as Record<string, string>) : {};
@@ -752,6 +754,40 @@ export const StorageService = {
               console.warn('Profile image sync failed', err);
             }
           })();
+
+          if (nextValue.startsWith('data:image/')) {
+            (async () => {
+              try {
+                const avatarUrl = await uploadProfileAvatarDataUrl(nextValue);
+                if (!avatarUrl) return;
+
+                const latestRaw = safeGetItem(PROFILE_IMAGE_MAP_KEY);
+                const latest = latestRaw ? (JSON.parse(latestRaw) as Record<string, string>) : {};
+                aliases.forEach((alias) => {
+                  latest[alias] = avatarUrl;
+                });
+                const localSaved = safeSetItem(PROFILE_IMAGE_MAP_KEY, JSON.stringify(latest));
+                if (localSaved && typeof window !== 'undefined') {
+                  window.dispatchEvent(new Event('profile-image-updated'));
+                }
+
+                await updateProfileForUser({
+                  fullName: profile.fullName,
+                  phone: profile.phone,
+                  email: profile.email,
+                  address: profile.address,
+                  emergencyContactName: profile.emergencyContactName,
+                  emergencyContactPhone: profile.emergencyContactPhone,
+                  emergencyContactRelation: profile.emergencyContactRelation,
+                  communityId: profile.communityId,
+                  role: profile.role,
+                  avatarDataUrl: avatarUrl,
+                });
+              } catch (uploadErr) {
+                console.warn('Profile image storage upload failed; keeping local/base64 sync', uploadErr);
+              }
+            })();
+          }
         }
       }
 

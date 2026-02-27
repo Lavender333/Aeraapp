@@ -666,6 +666,41 @@ export async function updateProfileForUser(payload: {
   return { ok: true };
 }
 
+export async function uploadProfileAvatarDataUrl(dataUrl: string): Promise<string> {
+  const raw = String(dataUrl || '').trim();
+  if (!raw.startsWith('data:image/')) {
+    throw new Error('Invalid profile image data.');
+  }
+
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const userId = authData.user.id;
+  const blob = await dataUrlToBlob(raw);
+  const ext = blob.type?.includes('png') ? 'png' : blob.type?.includes('webp') ? 'webp' : 'jpg';
+  const path = `${userId}/avatar-${Date.now()}.${ext}`;
+
+  const { error: uploadError } = await supabase
+    .storage
+    .from('profile_avatars')
+    .upload(path, blob, {
+      cacheControl: '3600',
+      upsert: true,
+      contentType: blob.type || 'image/jpeg',
+    });
+
+  if (uploadError) {
+    throw new Error(`Avatar upload failed: ${uploadError.message || 'unknown error'}`);
+  }
+
+  const { data: publicData } = supabase
+    .storage
+    .from('profile_avatars')
+    .getPublicUrl(path);
+
+  return String(publicData?.publicUrl || '').trim() || path;
+}
+
 export type HouseholdSummary = {
   householdId: string;
   householdCode: string;
