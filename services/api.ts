@@ -2212,7 +2212,7 @@ export async function updateVitalsForUser(payload: {
   if (authError || !authData?.user) throw new Error('Not authenticated');
 
   const memberValidation = validateHouseholdMembers(payload.household || []);
-  if (!memberValidation.ok) {
+  if ('error' in memberValidation) {
     throw new Error(memberValidation.error);
   }
 
@@ -2327,7 +2327,7 @@ export async function syncHouseholdMembersForUser(household: HouseholdMember[]) 
   if (authError || !authData?.user) throw new Error('Not authenticated');
 
   const memberValidation = validateHouseholdMembers(household || []);
-  if (!memberValidation.ok) {
+  if ('error' in memberValidation) {
     throw new Error(memberValidation.error);
   }
 
