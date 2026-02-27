@@ -440,12 +440,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-slate-50 to-teal-50 animate-fade-in pb-28">
-      <div className="max-w-5xl mx-auto p-6 space-y-6 relative">
+      <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 relative">
       
       {/* Broadcast Detail Modal */}
       {showTickerModal && (
         <div 
-          className="fixed inset-0 z-50 flex itemscenter justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in"
           onClick={() => setShowTickerModal(false)}
         >
           <div 
@@ -715,10 +715,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-4xl font-bold text-slate-800 mb-1">{t('dash.welcome')}</h1>
-          <p className="text-lg text-slate-500">{userName.split(' ')[0]}</p>
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-1">{t('dash.welcome')}</h1>
+          <p className="text-base sm:text-lg text-slate-500">{userName.split(' ')[0]}</p>
         </div>
         <div className="flex items-center gap-2">
           <div 
@@ -761,7 +761,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
           {!orgInventory && (
             <p className="text-[11px] text-slate-500 font-semibold">Inventory is loading or unavailable. You can still open Manage.</p>
           )}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
               { label: 'Water Cases', value: effectiveInventory.water, unit: 'cases', key: 'water' as const, icon: <Droplets size={16} className="text-blue-600" /> },
               { label: 'Food Boxes', value: effectiveInventory.food, unit: 'boxes', key: 'food' as const, icon: <Package size={16} className="text-emerald-600" /> },
@@ -824,7 +824,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               </div>
            </div>
            <p className="mb-4 font-medium">Are you safe right now?</p>
-           <div className="grid grid-cols-2 gap-3">
+           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Button 
                 onClick={() => respondToPing(true)} 
                 className="bg-green-500 hover:bg-green-400 text-white border-0 font-bold"
@@ -921,7 +921,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
           <div className="mt-4">
             <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Home & Safety</h3>
             <p className="text-xs text-slate-500 mt-1">Your readiness, household, and emergency settings in one place</p>
-            <div className="grid grid-cols-2 gap-3 mt-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
               <button
                 type="button"
                 onClick={() => setView('READINESS')}
@@ -985,7 +985,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         /* Modular Card Layout - DYNAMIC BASED ON ROLE */
         <>
           <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-2">Recovery & Resources</h3>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
         {/* Org Dashboard entry is provided in the Hub Inventory card via Manage button to avoid duplicate navigation */}
         
