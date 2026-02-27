@@ -439,7 +439,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     : null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-indigo-50 animate-fade-in pb-28">
+    <div className="min-h-screen bg-gradient-to-br from-sky-50 via-slate-50 to-teal-50 animate-fade-in pb-28">
       <div className="max-w-5xl mx-auto p-6 space-y-6 relative">
       
       {/* Broadcast Detail Modal */}
@@ -498,7 +498,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               />
               <p className="text-[11px] text-slate-500">Format: CH-1234</p>
               {communityConnectError && (
-                <p className="text-xs text-red-600 font-semibold">{communityConnectError}</p>
+                <p className="text-xs text-amber-700 font-semibold">{communityConnectError}</p>
               )}
               <Button
                 fullWidth
@@ -723,7 +723,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         <div className="flex items-center gap-2">
           <div 
             onClick={() => setView('SETTINGS')}
-            className="w-14 h-14 rounded-full bg-gradient-to-br from-teal-400 to-cyan-500 flex items-center justify-center text-white text-xl font-semibold shadow-md cursor-pointer"
+            className="w-14 h-14 rounded-full bg-gradient-to-br from-sky-400 to-teal-400 flex items-center justify-center text-white text-xl font-semibold shadow-md cursor-pointer"
           >
             {initials}
           </div>
@@ -744,10 +744,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                 medicalKits: { level: 'UNKNOWN' },
               };
           return (
-        <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 rounded-2xl p-6 shadow-md space-y-3">
+        <div className="bg-gradient-to-br from-sky-50 to-teal-50 border border-sky-100 rounded-2xl p-6 shadow-md space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs uppercase font-bold text-emerald-700">Hub Inventory</p>
+              <p className="text-xs uppercase font-bold text-teal-700">Hub Inventory</p>
               <p className="text-base font-bold text-slate-900">{connectedOrg}</p>
               <p className="text-[11px] text-slate-500 font-bold">Members: {orgMemberCount || orgPopulation}</p>
               {inventoryFallback && (
@@ -766,9 +766,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               { label: 'Water Cases', value: effectiveInventory.water, unit: 'cases', key: 'water' as const, icon: <Droplets size={16} className="text-blue-600" /> },
               { label: 'Food Boxes', value: effectiveInventory.food, unit: 'boxes', key: 'food' as const, icon: <Package size={16} className="text-emerald-600" /> },
               { label: 'Blankets', value: effectiveInventory.blankets, unit: 'units', key: 'blankets' as const, icon: <Box size={16} className="text-amber-600" /> },
-              { label: 'Med Kits', value: effectiveInventory.medicalKits, unit: 'kits', key: 'medicalKits' as const, icon: <AlertTriangle size={16} className="text-red-600" /> },
+              { label: 'Med Kits', value: effectiveInventory.medicalKits, unit: 'kits', key: 'medicalKits' as const, icon: <AlertTriangle size={16} className="text-amber-600" /> },
             ].map(item => (
-              <div key={item.label} className="bg-white border border-emerald-100 rounded-xl p-3 shadow-sm flex items-center gap-3">
+              <div key={item.label} className="bg-white/95 border border-teal-100 rounded-xl p-3 shadow-sm flex items-center gap-3">
                 <div className="p-2 bg-slate-50 rounded-lg">
                   {item.icon}
                 </div>
@@ -780,7 +780,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                     <span className={`font-bold ${
                       status[item.key].level === 'HIGH' ? 'text-green-600' :
                       status[item.key].level === 'MEDIUM' ? 'text-amber-600' :
-                      status[item.key].level === 'LOW' ? 'text-red-600' : 'text-slate-400'
+                      status[item.key].level === 'LOW' ? 'text-orange-700' : 'text-slate-400'
                     }`}>
                       {status[item.key].level === 'UNKNOWN' ? 'N/A' : status[item.key].level}
                     </span>
@@ -798,7 +798,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         /* Real-time Data Feed / Status Ticker - Clickable */
         <div 
           onClick={() => setShowTickerModal(true)}
-          className="bg-slate-900 text-white p-3 rounded-lg flex items-center gap-3 text-sm shadow-md overflow-hidden cursor-pointer group hover:bg-slate-800 transition-colors"
+          className="bg-slate-700 text-white p-3 rounded-lg flex items-center gap-3 text-sm shadow-md overflow-hidden cursor-pointer group hover:bg-slate-600 transition-colors"
           title="Tap to read full message"
         >
           <Activity size={16} className="text-brand-400 animate-pulse shrink-0" />
@@ -813,7 +813,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
 
       {/* PENDING PING ACTION - Top Priority */}
       {pendingPing && (
-        <div className="bg-purple-600 text-white p-5 rounded-2xl shadow-xl shadow-purple-200 animate-slide-up border-2 border-purple-400">
+        <div className="bg-violet-500 text-white p-5 rounded-2xl shadow-xl shadow-violet-200 animate-slide-up border-2 border-violet-300">
            <div className="flex items-center gap-3 mb-4">
               <div className="bg-white/20 p-2 rounded-full animate-bounce">
                 <BellRing size={24} />
@@ -833,7 +833,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               </Button>
               <Button 
                 onClick={() => respondToPing(false)} 
-                className="bg-red-500 hover:bg-red-400 text-white border-0 font-bold"
+                className="bg-amber-500 hover:bg-amber-400 text-white border-0 font-bold"
               >
                 I Need Help
               </Button>
@@ -858,7 +858,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
             />
             <p className="text-[11px] text-slate-500">Format: CH-1234</p>
             {communityConnectError && (
-              <p className="text-xs text-red-600 font-semibold">{communityConnectError}</p>
+              <p className="text-xs text-amber-700 font-semibold">{communityConnectError}</p>
             )}
             <div className="flex flex-wrap gap-2">
               <Button
@@ -874,7 +874,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               <Button
                 size="sm"
                 variant="ghost"
-                className="text-red-600 hover:bg-red-50"
+                className="text-slate-600 hover:bg-slate-100"
                 onClick={handleDisconnectCommunity}
               >
                 Disconnect
@@ -901,7 +901,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
             />
             <p className="text-[11px] text-slate-500">Format: CH-1234</p>
             {communityConnectError && (
-              <p className="text-xs text-red-600 font-semibold">{communityConnectError}</p>
+              <p className="text-xs text-amber-700 font-semibold">{communityConnectError}</p>
             )}
             <div className="flex gap-2">
               <Button
@@ -925,9 +925,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               <button
                 type="button"
                 onClick={() => setView('READINESS')}
-                className="text-left bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:border-slate-300 hover:shadow-md transition-all"
+                className="text-left bg-sky-50/70 border border-sky-100 rounded-xl p-4 shadow-sm hover:border-sky-200 hover:shadow-md transition-all"
               >
-                <div className="w-10 h-10 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center mb-3">
+                <div className="w-10 h-10 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center mb-3">
                   <ClipboardCheck size={18} />
                 </div>
                 <div className="flex items-center gap-2">
@@ -938,9 +938,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               <button
                 type="button"
                 onClick={() => setView('SETTINGS')}
-                className="text-left bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:border-slate-300 hover:shadow-md transition-all"
+                className="text-left bg-teal-50/60 border border-teal-100 rounded-xl p-4 shadow-sm hover:border-teal-200 hover:shadow-md transition-all"
               >
-                <div className="w-10 h-10 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center mb-3">
+                <div className="w-10 h-10 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center mb-3">
                   <Phone size={18} />
                 </div>
                 <div className="flex items-center gap-2">
@@ -966,13 +966,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
       {hasCommunity && isGeneralUser && isCommunityPodReady && (
         <>
           {/* Resource Alert System (Community Only) */}
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-3 shadow-sm">
-             <div className="p-2 bg-amber-200 rounded-full text-amber-800">
+          <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 flex items-start gap-3 shadow-sm">
+             <div className="p-2 bg-teal-200 rounded-full text-teal-800">
                <Building2 size={18} />
              </div>
              <div className="flex-1">
-               <h3 className="font-bold text-amber-900 text-sm">Community Pod Availability</h3>
-               <p className="text-xs text-amber-800">
+               <h3 className="font-bold text-teal-900 text-sm">Community Pod Availability</h3>
+               <p className="text-xs text-teal-800">
                  {`${connectedOrg} hub inventory — Water ${toDepotAvailability(depotStatus?.water.level || 'UNKNOWN')}, Food ${toDepotAvailability(depotStatus?.food.level || 'UNKNOWN')}, Blankets ${toDepotAvailability(depotStatus?.blankets.level || 'UNKNOWN')}, Med Kits ${toDepotAvailability(depotStatus?.medicalKits.level || 'UNKNOWN')}.`}
                </p>
              </div>
@@ -992,11 +992,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         {/* G.A.P. Financial Aid - For Users in need of aid */}
         {(isGeneralUser || isOrgAdmin) && (
           <Card 
-            className="col-span-1 hover:border-brand-300"
+            className="col-span-1 hover:border-sky-300 bg-sky-50/60 border-sky-100"
             onClick={() => setView('GAP')}
           >
             <div className="flex flex-col items-start gap-3">
-              <div className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700">
+              <div className="p-2 bg-sky-100 border border-sky-200 rounded-lg text-sky-700">
                 <DollarSign size={24} />
               </div>
               <div>
@@ -1010,11 +1010,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         {/* Damage Assessment - For Users (reporting) and Pros (reviewing) */}
         {(isGeneralUser || isResponder || isContractor) && (
           <Card 
-            className="col-span-1 hover:border-brand-300"
+            className="col-span-1 hover:border-violet-300 bg-violet-50/60 border-violet-100"
             onClick={() => setView('ASSESSMENT')}
           >
             <div className="flex flex-col items-start gap-3">
-              <div className="p-2 bg-purple-100 rounded-lg text-purple-700">
+              <div className="p-2 bg-violet-100 rounded-lg text-violet-700">
                 <ClipboardList size={24} />
               </div>
               <div>
