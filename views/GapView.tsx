@@ -9,6 +9,15 @@ import { AlertCircle, ArrowLeft, Info, ShieldCheck } from 'lucide-react';
 
 type ReviewAction = 'Recommend' | 'Request Info' | 'Decline' | 'Approve' | 'Adjust' | 'Deny' | 'Override';
 
+const REQUEST_INFO_OPTIONS = [
+  'Government ID image is unclear or expired',
+  'Proof of residency is missing or outdated',
+  'Hardship statement needs more detail',
+  'Bills / estimates / invoices are missing',
+  'Household impacted count needs correction',
+  'Monthly income loss documentation is needed',
+] as const;
+
 export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const profile = StorageService.getProfile();
   const db = StorageService.getDB();
@@ -34,6 +43,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
     action: ReviewAction;
     note: string;
   } | null>(null);
+  const [requestInfoSelections, setRequestInfoSelections] = useState<string[]>([]);
   const [selectedOrgApplication, setSelectedOrgApplication] = useState<HelpRequestRecord | null>(null);
   const [decisionError, setDecisionError] = useState('');
   const [documentUrlById, setDocumentUrlById] = useState<Record<string, string>>({});
@@ -239,6 +249,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
 
   const openDecisionDialog = (requestId: string, action: ReviewAction) => {
     setDecisionError('');
+    setRequestInfoSelections([]);
     setDecisionDraft({
       requestId,
       action,
@@ -253,17 +264,32 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
       decisionDraft.action === 'Decline' ||
       decisionDraft.action === 'Override' ||
       decisionDraft.action === 'Request Info';
-    if (requiresNote && !String(decisionDraft.note || '').trim()) {
+    const freeTextNote = String(decisionDraft.note || '').trim();
+    const hasRequestInfoChecklist = decisionDraft.action === 'Request Info' && requestInfoSelections.length > 0;
+    const hasRequestInfoDetails = decisionDraft.action === 'Request Info' && Boolean(freeTextNote);
+
+    if (decisionDraft.action === 'Request Info' && !hasRequestInfoChecklist && !hasRequestInfoDetails) {
       setDecisionError(
-        decisionDraft.action === 'Request Info'
-          ? 'Please specify exactly what additional information is required.'
-          : 'A decision note is required for this action.'
+        'Select at least one missing item or provide additional details for the member.'
       );
       return;
     }
 
-    applyReviewAction(decisionDraft.requestId, decisionDraft.action, decisionDraft.note);
+    if (requiresNote && decisionDraft.action !== 'Request Info' && !freeTextNote) {
+      setDecisionError('A decision note is required for this action.');
+      return;
+    }
+
+    const finalNote = decisionDraft.action === 'Request Info'
+      ? [
+          requestInfoSelections.length > 0 ? `Missing items: ${requestInfoSelections.join('; ')}` : '',
+          freeTextNote ? `Additional details: ${freeTextNote}` : '',
+        ].filter(Boolean).join('\n')
+      : freeTextNote;
+
+    applyReviewAction(decisionDraft.requestId, decisionDraft.action, finalNote);
     setDecisionDraft(null);
+    setRequestInfoSelections([]);
     setDecisionError('');
   };
 
@@ -934,6 +960,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
               <button
                 onClick={() => {
                   setDecisionDraft(null);
+                  setRequestInfoSelections([]);
                   setDecisionError('');
                 }}
                 className="text-slate-500 hover:text-slate-900 text-sm font-semibold"
@@ -954,9 +981,36 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
               }
             />
             {decisionDraft.action === 'Request Info' && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-2">
-                <p className="text-xs text-amber-800 font-semibold">Member will see this note in Status Tracker as the requested information list.</p>
-              </div>
+              <>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 space-y-2">
+                  <p className="text-xs text-amber-800 font-semibold">Select missing items to request from member:</p>
+                  <div className="space-y-1">
+                    {REQUEST_INFO_OPTIONS.map((item) => {
+                      const checked = requestInfoSelections.includes(item);
+                      return (
+                        <label key={item} className="flex items-start gap-2 text-xs text-amber-900">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5"
+                            checked={checked}
+                            onChange={(event) => {
+                              const isChecked = event.target.checked;
+                              setRequestInfoSelections((prev) => {
+                                if (isChecked) return prev.includes(item) ? prev : [...prev, item];
+                                return prev.filter((entry) => entry !== item);
+                              });
+                            }}
+                          />
+                          <span>{item}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-2">
+                  <p className="text-xs text-amber-800 font-semibold">Member will see selected missing items and your details in Status Tracker.</p>
+                </div>
+              </>
             )}
             {decisionError && <p className="text-sm text-red-600">{decisionError}</p>}
             <div className="flex gap-2">
@@ -965,6 +1019,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
                 fullWidth
                 onClick={() => {
                   setDecisionDraft(null);
+                  setRequestInfoSelections([]);
                   setDecisionError('');
                 }}
               >
