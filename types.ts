@@ -58,8 +58,16 @@ export interface HelpRequestData {
     program: 'HARDSHIP' | 'ADVANCE';
     householdImpacted: number;
     requestedAmount: number;
+    hardshipType?: string;
+    hardshipDate?: string;
+    relatedToDeclaredDisaster?: boolean;
+    declaredDisasterEvent?: string;
+    immediateExpenseCategories?: string[];
+    urgencyRisk?: string;
+    customRequestedAmount?: number;
     monthlyIncomeLoss?: number;
     hardshipSummary?: string;
+    declarationNoGuarantee?: boolean;
     documentsProvided?: string[];
     documents?: GapDocumentAttachment[];
     submittedToOrgQueue?: boolean;

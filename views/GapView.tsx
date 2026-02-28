@@ -18,6 +18,34 @@ const REQUEST_INFO_OPTIONS = [
   'Monthly income loss documentation is needed',
 ] as const;
 
+const HARDSHIP_TYPE_OPTIONS = [
+  'Home damage',
+  'Loss of income',
+  'Medical emergency',
+  'Temporary displacement',
+  'Utility shutoff risk',
+  'Business interruption',
+  'Other',
+] as const;
+
+const EXPENSE_CATEGORY_OPTIONS = [
+  'Rent / Mortgage',
+  'Utilities',
+  'Temporary housing',
+  'Food',
+  'Medical expenses',
+  'Repairs',
+  'Transportation',
+  'Other',
+] as const;
+
+const URGENCY_OPTIONS = [
+  'Risk of eviction',
+  'Risk of utility shutoff',
+  'Unsafe housing conditions',
+  'No immediate safety risk',
+] as const;
+
 export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const profile = StorageService.getProfile();
   const db = StorageService.getDB();
@@ -52,10 +80,18 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
   const [documentUrlById, setDocumentUrlById] = useState<Record<string, string>>({});
   const [documentOpenError, setDocumentOpenError] = useState('');
   const [formMode, setFormMode] = useState<'HARDSHIP' | 'ADVANCE'>('HARDSHIP');
+  const [formStep, setFormStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [isSubmittingForm, setIsSubmittingForm] = useState(false);
   const [formError, setFormError] = useState('');
   const [formState, setFormState] = useState({
     householdImpacted: Math.max(1, Number(profile.householdMembers || profile.household?.length || 1)),
+    hardshipType: '',
+    hardshipDate: '',
+    relatedToDeclaredDisaster: false,
+    declaredDisasterEvent: '',
+    immediateExpenseCategories: [] as string[],
+    customRequestedAmount: '',
+    urgencyRisk: '',
     monthlyIncomeLoss: '',
     hardshipSummary: '',
     contactPhone: String(profile.phone || '').trim(),
@@ -63,19 +99,23 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
     docsResidency: false,
     docsHardshipStatement: false,
     docsBillsEstimate: false,
+    docsInsuranceClaim: false,
     consentToReview: true,
     attestTruth: false,
+    noGuaranteeAcknowledge: false,
   });
   const [documentFiles, setDocumentFiles] = useState<{
     photoId: File | null;
     residency: File | null;
     hardshipStatement: File | null;
     billsEstimate: File | null;
+    insuranceClaim: File | null;
   }>({
     photoId: null,
     residency: null,
     hardshipStatement: null,
     billsEstimate: null,
+    insuranceClaim: null,
   });
 
   useEffect(() => {
@@ -168,7 +208,6 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
   }
 
   const scopedFunding = orgScopeId ? communityFundingById.get(orgScopeId) : undefined;
-  const participationBase = scopedFunding?.connectedUsers || 0;
   const participationPct = scopedFunding?.participationPct || 0;
   const pooledFund = scopedFunding?.pooledFund || 0;
   const allocationCapacity = scopedFunding?.allocationCapacity || 0;
@@ -296,7 +335,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
     setDecisionError('');
   };
 
-  const setDocument = (key: 'photoId' | 'residency' | 'hardshipStatement' | 'billsEstimate', file: File | null) => {
+  const setDocument = (key: 'photoId' | 'residency' | 'hardshipStatement' | 'billsEstimate' | 'insuranceClaim', file: File | null) => {
     setDocumentFiles((prev) => ({ ...prev, [key]: file }));
     setFormState((prev) => ({
       ...prev,
@@ -304,6 +343,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
       docsResidency: key === 'residency' ? Boolean(file) : prev.docsResidency,
       docsHardshipStatement: key === 'hardshipStatement' ? Boolean(file) : prev.docsHardshipStatement,
       docsBillsEstimate: key === 'billsEstimate' ? Boolean(file) : prev.docsBillsEstimate,
+      docsInsuranceClaim: key === 'insuranceClaim' ? Boolean(file) : prev.docsInsuranceClaim,
     }));
   };
 
@@ -313,6 +353,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
       { file: documentFiles.residency, label: 'Proof of residency' },
       { file: documentFiles.hardshipStatement, label: 'Hardship statement' },
       { file: documentFiles.billsEstimate, label: 'Bills / estimate / invoice' },
+      { file: documentFiles.insuranceClaim, label: 'Insurance claim (if applicable)' },
     ];
 
     const attachments: GapDocumentAttachment[] = [];
@@ -338,10 +379,70 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
 
   const householdForAmount = Math.max(1, Number(formState.householdImpacted || 1));
   const suggestedAmount = formMode === 'ADVANCE' ? householdForAmount * 125 : householdForAmount * 250;
+  const customRequestedAmount = Number(formState.customRequestedAmount || 0);
+  const finalRequestedAmount = customRequestedAmount > 0 ? customRequestedAmount : suggestedAmount;
+
+  const toggleExpenseCategory = (category: string, checked: boolean) => {
+    setFormState((prev) => ({
+      ...prev,
+      immediateExpenseCategories: checked
+        ? Array.from(new Set([...prev.immediateExpenseCategories, category]))
+        : prev.immediateExpenseCategories.filter((entry) => entry !== category),
+    }));
+  };
+
+  const canProceedStep = () => {
+    if (formStep === 1) {
+      return Boolean(formState.householdImpacted >= 1 && formState.hardshipType && formState.hardshipDate);
+    }
+    if (formStep === 2) {
+      return formState.immediateExpenseCategories.length > 0 && Boolean(formState.urgencyRisk);
+    }
+    if (formStep === 3) {
+      return Boolean(String(formState.hardshipSummary || '').trim());
+    }
+    if (formStep === 4) {
+      return Boolean(documentFiles.photoId && documentFiles.hardshipStatement);
+    }
+    return true;
+  };
+
+  const resetGapFormState = () => {
+    setFormStep(1);
+    setFormState({
+      householdImpacted: Math.max(1, Number(profile.householdMembers || profile.household?.length || 1)),
+      hardshipType: '',
+      hardshipDate: '',
+      relatedToDeclaredDisaster: false,
+      declaredDisasterEvent: '',
+      immediateExpenseCategories: [],
+      customRequestedAmount: '',
+      urgencyRisk: '',
+      monthlyIncomeLoss: '',
+      hardshipSummary: '',
+      contactPhone: String(profile.phone || '').trim(),
+      docsPhotoId: false,
+      docsResidency: false,
+      docsHardshipStatement: false,
+      docsBillsEstimate: false,
+      docsInsuranceClaim: false,
+      consentToReview: true,
+      attestTruth: false,
+      noGuaranteeAcknowledge: false,
+    });
+    setDocumentFiles({
+      photoId: null,
+      residency: null,
+      hardshipStatement: null,
+      billsEstimate: null,
+      insuranceClaim: null,
+    });
+  };
 
   const openGapForm = (mode: 'HARDSHIP' | 'ADVANCE') => {
     setFormMode(mode);
     setFormError('');
+    resetGapFormState();
     setShowGapForm(true);
   };
 
@@ -357,12 +458,20 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
   };
 
   const submitGapForm = async () => {
+    if (!formState.hardshipType || !formState.hardshipDate) {
+      setFormError('Please complete hardship type and hardship date.');
+      return;
+    }
+    if (formState.immediateExpenseCategories.length === 0 || !formState.urgencyRisk) {
+      setFormError('Please complete immediate expenses and urgency risk.');
+      return;
+    }
     if (!formState.hardshipSummary.trim()) {
       setFormError('Please provide a short hardship summary.');
       return;
     }
-    if (!formState.consentToReview || !formState.attestTruth) {
-      setFormError('Consent and attestation are required before submission.');
+    if (!formState.consentToReview || !formState.attestTruth || !formState.noGuaranteeAcknowledge) {
+      setFormError('All declarations are required before submission.');
       return;
     }
     if (!documentFiles.photoId || !documentFiles.hardshipStatement) {
@@ -373,7 +482,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
     const payload: HelpRequestData = {
       isSafe: true,
       location: String(profile.address || '').trim(),
-      emergencyType: formMode === 'ADVANCE' ? 'Advance Request' : 'Hardship Assistance',
+      emergencyType: formState.hardshipType || (formMode === 'ADVANCE' ? 'Advance Request' : 'Hardship Assistance'),
       isInjured: null,
       injuryDetails: '',
       situationDescription: formState.hardshipSummary.trim(),
@@ -403,9 +512,17 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
       payload.gapApplication = {
         program: formMode,
         householdImpacted: householdForAmount,
-        requestedAmount: suggestedAmount,
+        requestedAmount: finalRequestedAmount,
+        hardshipType: formState.hardshipType,
+        hardshipDate: formState.hardshipDate,
+        relatedToDeclaredDisaster: Boolean(formState.relatedToDeclaredDisaster),
+        declaredDisasterEvent: formState.relatedToDeclaredDisaster ? String(formState.declaredDisasterEvent || '').trim() || undefined : undefined,
+        immediateExpenseCategories: formState.immediateExpenseCategories,
+        urgencyRisk: formState.urgencyRisk,
+        customRequestedAmount: customRequestedAmount > 0 ? customRequestedAmount : undefined,
         monthlyIncomeLoss: Number(formState.monthlyIncomeLoss || 0) || undefined,
         hardshipSummary: formState.hardshipSummary.trim(),
+        declarationNoGuarantee: formState.noGuaranteeAcknowledge,
         documentsProvided: docs,
         documents: attachments,
         submittedToOrgQueue: true,
@@ -415,22 +532,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
 
       await StorageService.submitRequest(payload);
       setShowGapForm(false);
-      setFormState((prev) => ({
-        ...prev,
-        monthlyIncomeLoss: '',
-        hardshipSummary: '',
-        docsPhotoId: false,
-        docsResidency: false,
-        docsHardshipStatement: false,
-        docsBillsEstimate: false,
-        attestTruth: false,
-      }));
-      setDocumentFiles({
-        photoId: null,
-        residency: null,
-        hardshipStatement: null,
-        billsEstimate: null,
-      });
+      resetGapFormState();
     } catch (err) {
       setFormError(String((err as Error)?.message || 'Unable to submit application.'));
     } finally {
@@ -514,16 +616,16 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
 
   return (
     <div className="min-h-screen bg-emerald-50 flex flex-col pb-safe animate-fade-in">
-      <div className="bg-gradient-to-br from-emerald-950 to-emerald-800 border-b border-emerald-700 p-4 sticky top-0 z-20 text-white shadow-sm">
+      <div className="bg-white border-b border-slate-200 p-4 sticky top-0 z-20 text-slate-900 shadow-sm">
         <div className="flex items-start gap-3">
-          <button onClick={() => setView('DASHBOARD')} className="p-2 -ml-2 text-white/90 hover:text-white">
+          <button onClick={() => setView('DASHBOARD')} className="p-2 -ml-2 text-slate-700 hover:text-slate-900">
             <ArrowLeft size={24} />
           </button>
           <div>
-            <h1 className="font-bold text-xl">G.A.P. Center</h1>
-            <p className="text-xs text-white/95">Community Support Hub</p>
-            <p className="text-xs text-white/95">Powered by CORE (Community Organized Response &amp; Education)</p>
-            <p className="text-[11px] text-emerald-50/95 mt-2 font-medium">Charitable hardship assistance is subject to documented need and available funds.</p>
+            <h1 className="font-bold text-xl text-slate-900">G.A.P. Center</h1>
+            <p className="text-xs text-slate-800">Community Support Hub</p>
+            <p className="text-xs text-slate-800">Powered by CORE (Community Organized Response &amp; Education)</p>
+            <p className="text-[11px] text-slate-700 mt-2 font-medium">Charitable hardship assistance is subject to documented need and available funds.</p>
           </div>
         </div>
       </div>
@@ -535,40 +637,40 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
           <p className="text-xs text-slate-600 mt-1">Support options based on documented need and current eligibility.</p>
         </Card>
 
-        <Card className="border-slate-200 bg-white space-y-3">
-          <h3 className="font-bold text-slate-900">How G.A.P. Works in App</h3>
-          <p className="text-xs text-slate-700">
-            This screen reflects live G.A.P. operating rules: pooled hardship funds, participation-based allocation caps, and documented-need review.
-          </p>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs font-semibold text-slate-700 mb-1">Fund Flow</p>
-            <p className="text-xs text-slate-700">Member Registration / Contributions → AERA Payment + Community ID → Revenue Split Logic</p>
-            <p className="text-xs text-slate-700">→ CORE Pooled Hardship Fund → Participation Percentage per Church → Allocation Capacity</p>
-            <p className="text-xs text-slate-700">→ Member Application → Church Admin Recommendation → CORE Review</p>
-            <p className="text-xs text-slate-700">→ Disbursement (if approved) → Audit Log + Compliance Record</p>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <div className="rounded-lg border border-slate-200 p-2">
-              <p className="text-[10px] uppercase font-bold text-slate-500">Pooled Fund</p>
-              <p className="text-xs font-semibold text-slate-900">{formatCurrency(displayedPooledFund)}</p>
+        {isCoreAdmin && (
+          <Card className="border-slate-200 bg-white space-y-3">
+            <h3 className="font-bold text-slate-900">How G.A.P. Works in App</h3>
+            <p className="text-xs text-slate-700">
+              This screen reflects live G.A.P. operating rules: pooled hardship funds, participation-based allocation caps, and documented-need review.
+            </p>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs font-semibold text-slate-700 mb-1">Fund Flow</p>
+              <p className="text-xs text-slate-700">Member Registration / Contributions → AERA Payment + Community ID → Revenue Split Logic</p>
+              <p className="text-xs text-slate-700">→ CORE Pooled Hardship Fund → Participation Percentage per Church → Allocation Capacity</p>
+              <p className="text-xs text-slate-700">→ Member Application → Church Admin Recommendation → CORE Review</p>
+              <p className="text-xs text-slate-700">→ Disbursement (if approved) → Audit Log + Compliance Record</p>
             </div>
-            <div className="rounded-lg border border-slate-200 p-2">
-              <p className="text-[10px] uppercase font-bold text-slate-500">Your Participation</p>
-              <p className="text-xs font-semibold text-slate-900">{displayedParticipationPct}%</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="rounded-lg border border-slate-200 p-2">
+                <p className="text-[10px] uppercase font-bold text-slate-500">Pooled Fund</p>
+                <p className="text-xs font-semibold text-slate-900">{formatCurrency(displayedPooledFund)}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 p-2">
+                <p className="text-[10px] uppercase font-bold text-slate-500">Your Participation</p>
+                <p className="text-xs font-semibold text-slate-900">{displayedParticipationPct}%</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 p-2">
+                <p className="text-[10px] uppercase font-bold text-slate-500">Allocation Capacity</p>
+                <p className="text-xs font-semibold text-slate-900">{formatCurrency(displayedAllocationCapacity)}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 p-2">
+                <p className="text-[10px] uppercase font-bold text-slate-500">Remaining Balance</p>
+                <p className="text-xs font-semibold text-slate-900">{formatCurrency(displayedRemainingBalance)}</p>
+              </div>
             </div>
-            <div className="rounded-lg border border-slate-200 p-2">
-              <p className="text-[10px] uppercase font-bold text-slate-500">Allocation Capacity</p>
-              <p className="text-xs font-semibold text-slate-900">{formatCurrency(displayedAllocationCapacity)}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200 p-2">
-              <p className="text-[10px] uppercase font-bold text-slate-500">Remaining Balance</p>
-              <p className="text-xs font-semibold text-slate-900">{formatCurrency(displayedRemainingBalance)}</p>
-            </div>
-          </div>
-          <p className="text-xs text-slate-700">
-            Allocation capacity is a maximum access cap, not a guaranteed payout. Assistance remains subject to documented hardship and available charitable resources.
-          </p>
-          {isCoreAdmin && (
+            <p className="text-xs text-slate-700">
+              Allocation capacity is a maximum access cap, not a guaranteed payout. Assistance remains subject to documented hardship and available charitable resources.
+            </p>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1">
               <p className="text-xs font-semibold text-slate-700">Admin Calculation Breakdown</p>
               <p className="text-xs text-slate-600">Connected users: {totalConnectedUsers}</p>
@@ -577,8 +679,8 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
               <p className="text-xs text-slate-600">Allocation capacity = pooled fund</p>
               <p className="text-xs text-slate-600">Remaining balance = allocation capacity − distributed amount</p>
             </div>
-          )}
-        </Card>
+          </Card>
+        )}
 
         {isMemberView && (
           <>
@@ -837,77 +939,241 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
               <button onClick={() => setShowGapForm(false)} className="text-slate-500 hover:text-slate-900 text-sm font-semibold">Close</button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Input
-                type="number"
-                min={1}
-                label="Household impacted"
-                value={formState.householdImpacted}
-                onChange={(event) => setFormState((prev) => ({ ...prev, householdImpacted: Math.max(1, Number(event.target.value || 1)) }))}
-              />
-              <Input
-                type="number"
-                min={0}
-                label="Monthly income loss (optional)"
-                value={formState.monthlyIncomeLoss}
-                onChange={(event) => setFormState((prev) => ({ ...prev, monthlyIncomeLoss: event.target.value }))}
-                placeholder="0"
-              />
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs font-semibold text-slate-700">Step {formStep} of 5</p>
+              <p className="text-xs text-slate-600 mt-1">
+                {formStep === 1 && 'Impact'}
+                {formStep === 2 && 'Financial Need'}
+                {formStep === 3 && 'Narrative'}
+                {formStep === 4 && 'Documents'}
+                {formStep === 5 && 'Declarations'}
+              </p>
             </div>
 
-            <Input
-              label="Primary contact phone"
-              value={formState.contactPhone}
-              onChange={(event) => setFormState((prev) => ({ ...prev, contactPhone: event.target.value }))}
-              placeholder="Phone"
-            />
+            {formStep === 1 && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    type="number"
+                    min={1}
+                    label="How many people in your household were impacted?"
+                    value={formState.householdImpacted}
+                    onChange={(event) => setFormState((prev) => ({ ...prev, householdImpacted: Math.max(1, Number(event.target.value || 1)) }))}
+                  />
+                  <label className="text-sm font-medium text-slate-700 flex flex-col gap-1">
+                    What type of hardship are you experiencing?
+                    <select
+                      value={formState.hardshipType}
+                      onChange={(event) => setFormState((prev) => ({ ...prev, hardshipType: event.target.value }))}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                    >
+                      <option value="">Select hardship type</option>
+                      {HARDSHIP_TYPE_OPTIONS.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
 
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-              <p className="text-xs text-emerald-800 font-semibold">Suggested request amount: {formatCurrency(suggestedAmount)}</p>
-              <p className="text-xs text-emerald-700 mt-1">{formMode === 'ADVANCE' ? 'Advance estimate uses $125 per impacted household member.' : 'Hardship estimate uses $250 per impacted household member.'}</p>
-            </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    type="date"
+                    label="When did this hardship occur?"
+                    value={formState.hardshipDate}
+                    onChange={(event) => setFormState((prev) => ({ ...prev, hardshipDate: event.target.value }))}
+                  />
+                  <label className="text-sm font-medium text-slate-700 flex flex-col gap-1">
+                    Is this related to a declared disaster event?
+                    <select
+                      value={formState.relatedToDeclaredDisaster ? 'YES' : 'NO'}
+                      onChange={(event) => setFormState((prev) => ({
+                        ...prev,
+                        relatedToDeclaredDisaster: event.target.value === 'YES',
+                        declaredDisasterEvent: event.target.value === 'YES' ? prev.declaredDisasterEvent : '',
+                      }))}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                    >
+                      <option value="NO">No</option>
+                      <option value="YES">Yes</option>
+                    </select>
+                  </label>
+                </div>
 
-            <Textarea
-              label="Hardship summary"
-              value={formState.hardshipSummary}
-              onChange={(event) => setFormState((prev) => ({ ...prev, hardshipSummary: event.target.value }))}
-              placeholder="Describe what happened, current need, and immediate expenses."
-            />
+                {formState.relatedToDeclaredDisaster && (
+                  <Input
+                    label="Declared disaster event (if known)"
+                    value={formState.declaredDisasterEvent}
+                    onChange={(event) => setFormState((prev) => ({ ...prev, declaredDisasterEvent: event.target.value }))}
+                    placeholder="Event name or reference"
+                  />
+                )}
+              </div>
+            )}
 
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
-              <p className="text-xs font-semibold text-slate-700">Document uploads</p>
-              <div className="space-y-1">
-                <p className="text-xs text-slate-700">Government ID (required)</p>
-                <input type="file" accept="image/*,.pdf" onChange={(event) => setDocument('photoId', event.target.files?.[0] || null)} className="block w-full text-xs text-slate-700" />
-                {documentFiles.photoId && <p className="text-[11px] text-slate-500">{documentFiles.photoId.name}</p>}
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs text-slate-700">Proof of residency</p>
-                <input type="file" accept="image/*,.pdf" onChange={(event) => setDocument('residency', event.target.files?.[0] || null)} className="block w-full text-xs text-slate-700" />
-                {documentFiles.residency && <p className="text-[11px] text-slate-500">{documentFiles.residency.name}</p>}
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs text-slate-700">Hardship statement (required)</p>
-                <input type="file" accept="image/*,.pdf,.txt" onChange={(event) => setDocument('hardshipStatement', event.target.files?.[0] || null)} className="block w-full text-xs text-slate-700" />
-                {documentFiles.hardshipStatement && <p className="text-[11px] text-slate-500">{documentFiles.hardshipStatement.name}</p>}
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs text-slate-700">Bills / estimate / invoice</p>
-                <input type="file" accept="image/*,.pdf" onChange={(event) => setDocument('billsEstimate', event.target.files?.[0] || null)} className="block w-full text-xs text-slate-700" />
-                {documentFiles.billsEstimate && <p className="text-[11px] text-slate-500">{documentFiles.billsEstimate.name}</p>}
-              </div>
-            </div>
+            {formStep === 2 && (
+              <div className="space-y-3">
+                <div className="rounded-xl border border-slate-200 p-3 space-y-2">
+                  <p className="text-sm font-medium text-slate-800">What immediate expenses are you requesting assistance for?</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {EXPENSE_CATEGORY_OPTIONS.map((category) => {
+                      const checked = formState.immediateExpenseCategories.includes(category);
+                      return (
+                        <label key={category} className="flex items-start gap-2 text-sm text-slate-700">
+                          <input
+                            type="checkbox"
+                            className="mt-1"
+                            checked={checked}
+                            onChange={(event) => toggleExpenseCategory(category, event.target.checked)}
+                          />
+                          <span>{category}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
 
-            <div className="space-y-2">
-              <label className="flex items-start gap-2 text-sm text-slate-700"><input type="checkbox" className="mt-1" checked={formState.consentToReview} onChange={(event) => setFormState((prev) => ({ ...prev, consentToReview: event.target.checked }))} /> I consent to organization and CORE review of this request and attached documentation.</label>
-              <label className="flex items-start gap-2 text-sm text-slate-700"><input type="checkbox" className="mt-1" checked={formState.attestTruth} onChange={(event) => setFormState((prev) => ({ ...prev, attestTruth: event.target.checked }))} /> I attest this information is true and complete to the best of my knowledge.</label>
-            </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    type="number"
+                    min={0}
+                    label="Monthly income loss (optional)"
+                    value={formState.monthlyIncomeLoss}
+                    onChange={(event) => setFormState((prev) => ({ ...prev, monthlyIncomeLoss: event.target.value }))}
+                    placeholder="0"
+                  />
+                  <Input
+                    type="number"
+                    min={0}
+                    label="Total amount requested"
+                    value={formState.customRequestedAmount}
+                    onChange={(event) => setFormState((prev) => ({ ...prev, customRequestedAmount: event.target.value }))}
+                    placeholder={`${suggestedAmount}`}
+                  />
+                </div>
+
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                  <p className="text-xs text-emerald-800 font-semibold">Suggested request amount: {formatCurrency(suggestedAmount)}</p>
+                  <p className="text-xs text-emerald-700 mt-1">Suggested amount is based on estimated immediate hardship. Final award may vary.</p>
+                </div>
+
+                <label className="text-sm font-medium text-slate-700 flex flex-col gap-1">
+                  Is this situation currently putting your household at risk?
+                  <select
+                    value={formState.urgencyRisk}
+                    onChange={(event) => setFormState((prev) => ({ ...prev, urgencyRisk: event.target.value }))}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                  >
+                    <option value="">Select urgency level</option>
+                    {URGENCY_OPTIONS.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )}
+
+            {formStep === 3 && (
+              <div className="space-y-3">
+                <Input
+                  label="Primary contact phone"
+                  value={formState.contactPhone}
+                  onChange={(event) => setFormState((prev) => ({ ...prev, contactPhone: event.target.value }))}
+                  placeholder="Phone"
+                />
+                <Textarea
+                  label="Briefly describe what happened, your current financial need, and what this assistance will help cover."
+                  value={formState.hardshipSummary}
+                  onChange={(event) => setFormState((prev) => ({ ...prev, hardshipSummary: event.target.value }))}
+                  placeholder="Keep this short and specific."
+                />
+              </div>
+            )}
+
+            {formStep === 4 && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+                <p className="text-xs font-semibold text-slate-700">Document uploads</p>
+                <div className="space-y-1">
+                  <p className="text-xs text-slate-700">Government ID (required)</p>
+                  <input type="file" accept="image/*,.pdf" onChange={(event) => setDocument('photoId', event.target.files?.[0] || null)} className="block w-full text-xs text-slate-700" />
+                  {documentFiles.photoId && <p className="text-[11px] text-slate-500">{documentFiles.photoId.name}</p>}
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-slate-700">Proof of residency</p>
+                  <input type="file" accept="image/*,.pdf" onChange={(event) => setDocument('residency', event.target.files?.[0] || null)} className="block w-full text-xs text-slate-700" />
+                  {documentFiles.residency && <p className="text-[11px] text-slate-500">{documentFiles.residency.name}</p>}
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-slate-700">Hardship statement (required)</p>
+                  <input type="file" accept="image/*,.pdf,.txt" onChange={(event) => setDocument('hardshipStatement', event.target.files?.[0] || null)} className="block w-full text-xs text-slate-700" />
+                  {documentFiles.hardshipStatement && <p className="text-[11px] text-slate-500">{documentFiles.hardshipStatement.name}</p>}
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-slate-700">Bills / estimate / invoice</p>
+                  <input type="file" accept="image/*,.pdf" onChange={(event) => setDocument('billsEstimate', event.target.files?.[0] || null)} className="block w-full text-xs text-slate-700" />
+                  {documentFiles.billsEstimate && <p className="text-[11px] text-slate-500">{documentFiles.billsEstimate.name}</p>}
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-slate-700">Insurance claim (optional, if applicable)</p>
+                  <input type="file" accept="image/*,.pdf" onChange={(event) => setDocument('insuranceClaim', event.target.files?.[0] || null)} className="block w-full text-xs text-slate-700" />
+                  {documentFiles.insuranceClaim && <p className="text-[11px] text-slate-500">{documentFiles.insuranceClaim.name}</p>}
+                </div>
+              </div>
+            )}
+
+            {formStep === 5 && (
+              <div className="space-y-2">
+                <label className="flex items-start gap-2 text-sm text-slate-700"><input type="checkbox" className="mt-1" checked={formState.consentToReview} onChange={(event) => setFormState((prev) => ({ ...prev, consentToReview: event.target.checked }))} /> I consent to organization and CORE review of this request and attached documentation.</label>
+                <label className="flex items-start gap-2 text-sm text-slate-700"><input type="checkbox" className="mt-1" checked={formState.attestTruth} onChange={(event) => setFormState((prev) => ({ ...prev, attestTruth: event.target.checked }))} /> I attest this information is true and complete to the best of my knowledge.</label>
+                <label className="flex items-start gap-2 text-sm text-slate-700"><input type="checkbox" className="mt-1" checked={formState.noGuaranteeAcknowledge} onChange={(event) => setFormState((prev) => ({ ...prev, noGuaranteeAcknowledge: event.target.checked }))} /> I understand that assistance is not guaranteed and is subject to eligibility review and available charitable funds.</label>
+              </div>
+            )}
 
             {formError && <p className="text-sm text-red-600">{formError}</p>}
 
             <div className="flex flex-col sm:flex-row gap-2">
-              <Button variant="outline" fullWidth onClick={() => setShowGapForm(false)} disabled={isSubmittingForm}>Cancel</Button>
-              <Button fullWidth onClick={submitGapForm} disabled={isSubmittingForm}>{isSubmittingForm ? 'Submitting…' : 'Submit for Review'}</Button>
+              <Button
+                variant="outline"
+                fullWidth
+                onClick={() => {
+                  setShowGapForm(false);
+                  resetGapFormState();
+                  setFormError('');
+                }}
+                disabled={isSubmittingForm}
+              >
+                Cancel
+              </Button>
+              {formStep > 1 && (
+                <Button
+                  variant="outline"
+                  fullWidth
+                  onClick={() => {
+                    setFormStep((prev) => (Math.max(1, prev - 1) as 1 | 2 | 3 | 4 | 5));
+                    setFormError('');
+                  }}
+                  disabled={isSubmittingForm}
+                >
+                  Back
+                </Button>
+              )}
+              {formStep < 5 ? (
+                <Button
+                  fullWidth
+                  onClick={() => {
+                    if (!canProceedStep()) {
+                      setFormError('Please complete required fields before continuing.');
+                      return;
+                    }
+                    setFormError('');
+                    setFormStep((prev) => (Math.min(5, prev + 1) as 1 | 2 | 3 | 4 | 5));
+                  }}
+                  disabled={isSubmittingForm}
+                >
+                  Continue
+                </Button>
+              ) : (
+                <Button fullWidth onClick={submitGapForm} disabled={isSubmittingForm}>{isSubmittingForm ? 'Submitting…' : 'Submit for Review'}</Button>
+              )}
             </div>
           </div>
         </div>
