@@ -362,9 +362,23 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
 
     const attachments: GapDocumentAttachment[] = [];
     let uploadIndex = 0;
+
+    const isMissingBucketError = (error: unknown) =>
+      String((error as Error)?.message || '')
+        .toLowerCase()
+        .includes('bucket not found');
+
     for (const candidate of candidates) {
       if (!candidate.file) continue;
-      const uploaded = await StorageService.uploadGapDocument(candidate.file, candidate.label);
+      let uploaded: { storagePath: string; accessUrl: string | null } | null = null;
+      try {
+        uploaded = await StorageService.uploadGapDocument(candidate.file, candidate.label);
+      } catch (error) {
+        if (!isMissingBucketError(error)) {
+          throw error;
+        }
+      }
+
       attachments.push({
         id: `${Date.now()}-${uploadIndex}`,
         label: candidate.label,
@@ -372,8 +386,8 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
         mimeType: String(candidate.file?.type || 'application/octet-stream'),
         sizeBytes: Number(candidate.file?.size || 0),
         uploadedAt: new Date().toISOString(),
-        storagePath: uploaded.storagePath,
-        accessUrl: uploaded.accessUrl || undefined,
+        storagePath: uploaded?.storagePath,
+        accessUrl: uploaded?.accessUrl || undefined,
       });
       uploadIndex += 1;
     }
