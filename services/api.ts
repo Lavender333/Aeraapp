@@ -748,6 +748,24 @@ export async function uploadGapDocumentForCurrentUser(file: File, label: string)
   };
 }
 
+export async function getGapDocumentSignedUrl(path: string, expiresInSeconds = 3600): Promise<string> {
+  const storagePath = String(path || '').trim();
+  if (!storagePath) {
+    throw new Error('Missing document path.');
+  }
+
+  const { data, error } = await supabase
+    .storage
+    .from('gap_documents')
+    .createSignedUrl(storagePath, expiresInSeconds);
+
+  if (error || !data?.signedUrl) {
+    throw new Error(error?.message || 'Failed to get document URL');
+  }
+
+  return data.signedUrl;
+}
+
 export async function updateHelpRequestData(id: string, payload: {
   status?: string;
   data?: Record<string, any>;

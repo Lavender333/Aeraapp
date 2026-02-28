@@ -7,6 +7,8 @@ import { Input, Textarea } from '../components/Input';
 import { StorageService } from '../services/storage';
 import { AlertCircle, ArrowLeft, Info, ShieldCheck } from 'lucide-react';
 
+type ReviewAction = 'Recommend' | 'Request Info' | 'Decline' | 'Approve' | 'Adjust' | 'Deny' | 'Override';
+
 export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const profile = StorageService.getProfile();
   const db = StorageService.getDB();
@@ -23,6 +25,18 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
     }
   });
   const [showGapForm, setShowGapForm] = useState(false);
+  const [showStatusTracker, setShowStatusTracker] = useState(false);
+  const [showPaymentHistory, setShowPaymentHistory] = useState(false);
+  const [showGrantDirectory, setShowGrantDirectory] = useState(false);
+  const [selectedGrantUrl, setSelectedGrantUrl] = useState('');
+  const [decisionDraft, setDecisionDraft] = useState<{
+    requestId: string;
+    action: ReviewAction;
+    note: string;
+  } | null>(null);
+  const [decisionError, setDecisionError] = useState('');
+  const [documentUrlById, setDocumentUrlById] = useState<Record<string, string>>({});
+  const [documentOpenError, setDocumentOpenError] = useState('');
   const [formMode, setFormMode] = useState<'HARDSHIP' | 'ADVANCE'>('HARDSHIP');
   const [isSubmittingForm, setIsSubmittingForm] = useState(false);
   const [formError, setFormError] = useState('');
@@ -101,7 +115,6 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
   const remainingBalance = Math.max(0, allocationCapacity - amountDisbursed);
 
   const corePendingApplications = allRequests.filter((req) => pendingStatuses.has(String(req.status || '').toUpperCase()));
-  const coreResolvedApplications = allRequests.filter((req) => String(req.status || '').toUpperCase() === 'RESOLVED');
   const orgsWithPending = new Set(corePendingApplications.map((req) => resolveOrgForRequest(req)).filter(Boolean)).size;
   const totalHardshipFund = allOrganizations.reduce((sum, org) => {
     const orgCode = String(org.id || '').trim();
@@ -114,19 +127,10 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value || 0);
 
-  const handleReviewAction = (requestId: string, action: 'Recommend' | 'Request Info' | 'Decline' | 'Approve' | 'Adjust' | 'Deny' | 'Override') => {
-    let note = '';
-    if (action === 'Deny' || action === 'Decline' || action === 'Override') {
-      note = String(window.prompt('Decision note is required for this action.') || '').trim();
-      if (!note) {
-        window.alert('A decision note is required for this action.');
-        return;
-      }
-    }
-
+  const applyReviewAction = (requestId: string, action: ReviewAction, note: string) => {
     setReviewActions((prev) => ({ ...prev, [requestId]: action }));
 
-    const statusByAction: Partial<Record<typeof action, HelpRequestRecord['status']>> = {
+    const statusByAction: Partial<Record<ReviewAction, HelpRequestRecord['status']>> = {
       Approve: 'RESOLVED',
       Deny: 'RESOLVED',
       Override: 'RESOLVED',
@@ -156,7 +160,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
             reviewerRole: role,
             reviewerId: String(profile.id || 'unknown'),
             reviewedAt: new Date().toISOString(),
-            note: note || undefined,
+            note: String(note || '').trim() || undefined,
           },
         ];
 
@@ -176,6 +180,28 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
         });
       }
     }
+  };
+
+  const openDecisionDialog = (requestId: string, action: ReviewAction) => {
+    setDecisionError('');
+    setDecisionDraft({
+      requestId,
+      action,
+      note: '',
+    });
+  };
+
+  const submitDecision = () => {
+    if (!decisionDraft) return;
+    const requiresNote = decisionDraft.action === 'Deny' || decisionDraft.action === 'Decline' || decisionDraft.action === 'Override';
+    if (requiresNote && !String(decisionDraft.note || '').trim()) {
+      setDecisionError('A decision note is required for this action.');
+      return;
+    }
+
+    applyReviewAction(decisionDraft.requestId, decisionDraft.action, decisionDraft.note);
+    setDecisionDraft(null);
+    setDecisionError('');
   };
 
   const setDocument = (key: 'photoId' | 'residency' | 'hardshipStatement' | 'billsEstimate', file: File | null) => {
@@ -225,6 +251,17 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
     setFormMode(mode);
     setFormError('');
     setShowGapForm(true);
+  };
+
+  const openGrantDirectory = () => {
+    setSelectedGrantUrl('');
+    setShowGrantDirectory(true);
+  };
+
+  const openSelectedGrant = () => {
+    const target = String(selectedGrantUrl || '').trim();
+    if (!target) return;
+    window.open(target, '_blank', 'noopener,noreferrer');
   };
 
   const submitGapForm = async () => {
@@ -323,6 +360,49 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
     return trail[trail.length - 1].action;
   };
 
+  const getMemberStatusLabel = (request: HelpRequestRecord) => {
+    const latestAction = getLatestReviewAction(request);
+    return latestAction || reviewActions[request.id] || request.status;
+  };
+
+  const getRequestProgramLabel = (request: HelpRequestRecord) =>
+    request.gapApplication?.program === 'ADVANCE' ? 'Advance' : 'Hardship';
+
+  const grantCatalog = [
+    {
+      id: 'fema-ia',
+      title: 'FEMA Individual Assistance',
+      detail: 'Federal support for eligible disaster-related expenses.',
+      url: 'https://www.disasterassistance.gov/',
+    },
+    {
+      id: '211',
+      title: '2-1-1 Community Resource Search',
+      detail: 'Local housing, food, utility, and emergency support referrals.',
+      url: 'https://www.211.org/',
+    },
+    {
+      id: 'sba-disaster',
+      title: 'SBA Disaster Assistance',
+      detail: 'Low-interest disaster loans for homeowners, renters, and businesses.',
+      url: 'https://www.sba.gov/funding-programs/disaster-assistance',
+    },
+  ];
+
+  const openDocument = async (document: GapDocumentAttachment) => {
+    setDocumentOpenError('');
+    try {
+      const cachedUrl = documentUrlById[document.id];
+      const resolved = cachedUrl || await StorageService.resolveGapDocumentAccessUrl(document.storagePath, document.accessUrl);
+      if (!cachedUrl) {
+        setDocumentUrlById((prev) => ({ ...prev, [document.id]: resolved }));
+      }
+      window.open(resolved, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      setDocumentOpenError(String((error as Error)?.message || 'Unable to open document.'));
+    }
+  };
+
   return (
     <div className="min-h-screen bg-emerald-50 flex flex-col pb-safe animate-fade-in">
       <div className="bg-gradient-to-br from-emerald-950 to-emerald-800 border-b border-emerald-700 p-4 sticky top-0 z-20 text-white shadow-sm">
@@ -388,9 +468,10 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
               <Button fullWidth onClick={() => openGapForm('HARDSHIP')}>Apply for Assistance</Button>
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" size="sm" onClick={() => routeToDashboard(false)}>
+                <Button variant="outline" size="sm" onClick={() => setShowStatusTracker(true)}>
                   Status Tracker
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => routeToDashboard(true)}>
+                <Button variant="outline" size="sm" onClick={() => setShowPaymentHistory(true)}>
                   Payment History
                 </Button>
               </div>
@@ -413,8 +494,8 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
                 <p className="text-xs font-semibold text-slate-700">Recent Applications</p>
                 {memberRequests.slice(0, 3).map((req) => (
                   <div key={req.id} className="flex items-center justify-between text-xs">
-                    <span className="text-slate-700">{req.emergencyType || 'General'} • {new Date(req.timestamp).toLocaleDateString()}</span>
-                    <span className="font-semibold text-slate-900">{reviewActions[req.id] || req.status}</span>
+                    <span className="text-slate-700">{getRequestProgramLabel(req)} • {new Date(req.timestamp).toLocaleDateString()}</span>
+                    <span className="font-semibold text-slate-900">{getMemberStatusLabel(req)}</span>
                   </div>
                 ))}
                 {memberRequests.length === 0 && <p className="text-xs text-slate-500">No applications yet. Start with Apply for Assistance.</p>}
@@ -434,13 +515,25 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
               <h3 className="font-bold text-slate-900">Grants</h3>
               <p className="text-sm text-slate-600">External resources.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <Button variant="outline" onClick={() => routeToDashboard(true)}>View Available Grants</Button>
-                <Button onClick={() => routeToDashboard(true)}>Apply Externally</Button>
+                <Button variant="outline" onClick={openGrantDirectory}>View Available Grants</Button>
+                <Button onClick={openSelectedGrant} disabled={!selectedGrantUrl}>Apply Externally</Button>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2 text-xs text-slate-700">
-                <p>• FEMA Individual Assistance</p>
-                <p>• 2-1-1 community aid referrals</p>
-                <p>• Local nonprofit disaster grants</p>
+                {grantCatalog.map((grant) => (
+                  <label key={grant.id} className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="grant-selection"
+                      className="mt-0.5"
+                      checked={selectedGrantUrl === grant.url}
+                      onChange={() => setSelectedGrantUrl(grant.url)}
+                    />
+                    <span>
+                      <span className="font-semibold text-slate-800">{grant.title}</span>
+                      <span className="block text-slate-600">{grant.detail}</span>
+                    </span>
+                  </label>
+                ))}
               </div>
             </Card>
           </>
@@ -490,9 +583,9 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
                           <td className="py-3">{getLatestReviewAction(req) || reviewActions[req.id] || 'Pending'}</td>
                           <td>
                             <div className="flex gap-2">
-                              <Button size="sm" onClick={() => handleReviewAction(req.id, 'Recommend')}>Recommend</Button>
-                              <Button size="sm" variant="outline" onClick={() => handleReviewAction(req.id, 'Request Info')}>Request Info</Button>
-                              <Button size="sm" variant="outline" onClick={() => handleReviewAction(req.id, 'Decline')}>Decline</Button>
+                              <Button size="sm" onClick={() => openDecisionDialog(req.id, 'Recommend')}>Recommend</Button>
+                              <Button size="sm" variant="outline" onClick={() => openDecisionDialog(req.id, 'Request Info')}>Request Info</Button>
+                              <Button size="sm" variant="outline" onClick={() => openDecisionDialog(req.id, 'Decline')}>Decline</Button>
                             </div>
                           </td>
                         </tr>
@@ -539,19 +632,14 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
                     <div className="mt-2 space-y-1">
                       <p className="text-slate-600">Files:</p>
                       {reviewTarget.gapApplication.documents.map((document) => (
-                        document.accessUrl ? (
-                          <a
-                            key={document.id}
-                            href={document.accessUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="block text-xs text-emerald-700 underline"
-                          >
-                            {document.label}: {document.fileName}
-                          </a>
-                        ) : (
-                          <p key={document.id} className="text-xs text-slate-600">{document.label}: {document.fileName}</p>
-                        )
+                        <button
+                          key={document.id}
+                          type="button"
+                          onClick={() => openDocument(document)}
+                          className="block text-left text-xs text-emerald-700 underline"
+                        >
+                          {document.label}: {document.fileName}
+                        </button>
                       ))}
                     </div>
                   ) : null}
@@ -563,14 +651,15 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
                 <p className="text-sm text-slate-500">No pending applications to review.</p>
               )}
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" disabled={!reviewTarget} onClick={() => reviewTarget && handleReviewAction(reviewTarget.id, 'Approve')}>Approve</Button>
-                <Button size="sm" variant="outline" disabled={!reviewTarget} onClick={() => reviewTarget && handleReviewAction(reviewTarget.id, 'Adjust')}>Adjust</Button>
-                <Button size="sm" variant="outline" disabled={!reviewTarget} onClick={() => reviewTarget && handleReviewAction(reviewTarget.id, 'Deny')}>Deny</Button>
-                <Button size="sm" variant="outline" disabled={!reviewTarget} onClick={() => reviewTarget && handleReviewAction(reviewTarget.id, 'Override')}>Override (Logged)</Button>
+                <Button size="sm" disabled={!reviewTarget} onClick={() => reviewTarget && openDecisionDialog(reviewTarget.id, 'Approve')}>Approve</Button>
+                <Button size="sm" variant="outline" disabled={!reviewTarget} onClick={() => reviewTarget && openDecisionDialog(reviewTarget.id, 'Adjust')}>Adjust</Button>
+                <Button size="sm" variant="outline" disabled={!reviewTarget} onClick={() => reviewTarget && openDecisionDialog(reviewTarget.id, 'Deny')}>Deny</Button>
+                <Button size="sm" variant="outline" disabled={!reviewTarget} onClick={() => reviewTarget && openDecisionDialog(reviewTarget.id, 'Override')}>Override (Logged)</Button>
               </div>
               {reviewTarget && reviewActions[reviewTarget.id] && (
                 <p className="text-xs text-emerald-700 font-semibold">Review action recorded: {reviewActions[reviewTarget.id]}</p>
               )}
+              {documentOpenError && <p className="text-xs text-red-600">{documentOpenError}</p>}
             </div>
           </Card>
         )}
@@ -665,6 +754,147 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
             <div className="flex flex-col sm:flex-row gap-2">
               <Button variant="outline" fullWidth onClick={() => setShowGapForm(false)} disabled={isSubmittingForm}>Cancel</Button>
               <Button fullWidth onClick={submitGapForm} disabled={isSubmittingForm}>{isSubmittingForm ? 'Submitting…' : 'Submit for Review'}</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isMemberView && showStatusTracker && (
+        <div className="fixed inset-0 z-40 bg-black/40 p-4 flex items-end sm:items-center justify-center">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-xl p-4 sm:p-5 max-h-[90vh] overflow-y-auto space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Status Tracker</h3>
+                <p className="text-xs text-slate-600 mt-1">Track each G.A.P. application from submission to final review.</p>
+              </div>
+              <button onClick={() => setShowStatusTracker(false)} className="text-slate-500 hover:text-slate-900 text-sm font-semibold">Close</button>
+            </div>
+            <div className="space-y-2">
+              {memberRequests.length === 0 && <p className="text-sm text-slate-500">No applications submitted yet.</p>}
+              {memberRequests.map((request) => {
+                const latestTrail = request.gapApplication?.reviewTrail?.[request.gapApplication.reviewTrail.length - 1];
+                return (
+                  <div key={request.id} className="rounded-xl border border-slate-200 p-3 space-y-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-slate-900">{getRequestProgramLabel(request)} • {formatCurrency(getRequestAmount(request))}</p>
+                      <p className="text-xs font-semibold text-slate-700">{getMemberStatusLabel(request)}</p>
+                    </div>
+                    <p className="text-xs text-slate-600">Submitted: {new Date(request.timestamp).toLocaleString()}</p>
+                    {latestTrail?.note ? (
+                      <p className="text-xs text-slate-700">Reviewer note: {latestTrail.note}</p>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isMemberView && showPaymentHistory && (
+        <div className="fixed inset-0 z-40 bg-black/40 p-4 flex items-end sm:items-center justify-center">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-xl p-4 sm:p-5 max-h-[90vh] overflow-y-auto space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Payment History</h3>
+                <p className="text-xs text-slate-600 mt-1">Resolved applications and award decisions recorded in your account timeline.</p>
+              </div>
+              <button onClick={() => setShowPaymentHistory(false)} className="text-slate-500 hover:text-slate-900 text-sm font-semibold">Close</button>
+            </div>
+            <div className="space-y-2">
+              {memberResolvedRequests.length === 0 && <p className="text-sm text-slate-500">No completed disbursements yet.</p>}
+              {memberResolvedRequests.map((request) => {
+                const resolvedAt = request.gapApplication?.lastReviewedAt || request.timestamp;
+                const latestAction = getLatestReviewAction(request) || 'Resolved';
+                return (
+                  <div key={request.id} className="rounded-xl border border-slate-200 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-slate-900">{getRequestProgramLabel(request)} • {formatCurrency(getRequestAmount(request))}</p>
+                      <p className="text-xs font-semibold text-emerald-700">{latestAction}</p>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-1">Finalized: {new Date(resolvedAt).toLocaleString()}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isMemberView && showGrantDirectory && (
+        <div className="fixed inset-0 z-40 bg-black/40 p-4 flex items-end sm:items-center justify-center">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-xl p-4 sm:p-5 max-h-[90vh] overflow-y-auto space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Available Grants</h3>
+                <p className="text-xs text-slate-600 mt-1">Choose a resource and launch the official external application site.</p>
+              </div>
+              <button onClick={() => setShowGrantDirectory(false)} className="text-slate-500 hover:text-slate-900 text-sm font-semibold">Close</button>
+            </div>
+            <div className="space-y-2">
+              {grantCatalog.map((grant) => (
+                <label key={grant.id} className="block rounded-xl border border-slate-200 p-3 cursor-pointer hover:bg-slate-50">
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="radio"
+                      name="grant-directory-selection"
+                      className="mt-1"
+                      checked={selectedGrantUrl === grant.url}
+                      onChange={() => setSelectedGrantUrl(grant.url)}
+                    />
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{grant.title}</p>
+                      <p className="text-xs text-slate-600">{grant.detail}</p>
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button variant="outline" fullWidth onClick={() => setShowGrantDirectory(false)}>Close</Button>
+              <Button fullWidth onClick={openSelectedGrant} disabled={!selectedGrantUrl}>Apply Externally</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {decisionDraft && (
+        <div className="fixed inset-0 z-40 bg-black/40 p-4 flex items-end sm:items-center justify-center">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-xl p-4 sm:p-5 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">{decisionDraft.action} Application</h3>
+                <p className="text-xs text-slate-600 mt-1">Record this review decision in the request trail.</p>
+              </div>
+              <button
+                onClick={() => {
+                  setDecisionDraft(null);
+                  setDecisionError('');
+                }}
+                className="text-slate-500 hover:text-slate-900 text-sm font-semibold"
+              >
+                Close
+              </button>
+            </div>
+            <Textarea
+              label="Decision note"
+              value={decisionDraft.note}
+              onChange={(event) => setDecisionDraft((prev) => prev ? ({ ...prev, note: event.target.value }) : prev)}
+              placeholder={decisionDraft.action === 'Deny' || decisionDraft.action === 'Decline' || decisionDraft.action === 'Override' ? 'Required note for this action' : 'Optional note'}
+            />
+            {decisionError && <p className="text-sm text-red-600">{decisionError}</p>}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                fullWidth
+                onClick={() => {
+                  setDecisionDraft(null);
+                  setDecisionError('');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button fullWidth onClick={submitDecision}>Save Decision</Button>
             </div>
           </div>
         </div>

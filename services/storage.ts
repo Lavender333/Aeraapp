@@ -1,7 +1,7 @@
 
 import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, RoleDefinition } from '../types';
 import { REQUEST_ITEM_MAP } from './validation';
-import { ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, fetchProfileForUser, fetchVitalsForUser, createHouseholdSafetyNotificationsForCurrentUser, listChildOrganizations, sendMemberPing, uploadProfileAvatarDataUrl, uploadGapDocumentForCurrentUser, updateHelpRequestData, getPendingPingForCurrentUser as getPendingPingForCurrentUserApi } from './api';
+import { ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, fetchProfileForUser, fetchVitalsForUser, createHouseholdSafetyNotificationsForCurrentUser, listChildOrganizations, sendMemberPing, uploadProfileAvatarDataUrl, uploadGapDocumentForCurrentUser, getGapDocumentSignedUrl, updateHelpRequestData, getPendingPingForCurrentUser as getPendingPingForCurrentUserApi } from './api';
 import { getMemberStatus, setMemberStatus } from './api';
 
 const DB_KEY = 'aera_backend_db_v4'; // Force fresh database
@@ -1525,6 +1525,21 @@ export const StorageService = {
       throw new Error('Document upload requires an internet connection.');
     }
     return uploadGapDocumentForCurrentUser(file, label);
+  },
+
+  async resolveGapDocumentAccessUrl(storagePath?: string, accessUrl?: string): Promise<string> {
+    const directUrl = String(accessUrl || '').trim();
+    if (directUrl) return directUrl;
+
+    const path = String(storagePath || '').trim();
+    if (!path) {
+      throw new Error('Missing document path.');
+    }
+    if (!navigator.onLine) {
+      throw new Error('Document access requires an internet connection.');
+    }
+
+    return getGapDocumentSignedUrl(path);
   },
 
   async syncRequestReviewDecision(payload: {
