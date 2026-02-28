@@ -161,10 +161,18 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
     return map;
   }, new Map<string, number>());
 
+  const calculateSuggestedAmount = (program: 'HARDSHIP' | 'ADVANCE', householdImpacted: number) => {
+    const safeHouseholdImpacted = Math.max(1, Number(householdImpacted || 1));
+    const perPersonRate = program === 'ADVANCE' ? 125 : 250;
+    return safeHouseholdImpacted * perPersonRate;
+  };
+
   const getRequestAmount = (request: HelpRequestRecord) => {
     const gapAmount = Number(request.gapApplication?.requestedAmount || 0);
     if (gapAmount > 0) return gapAmount;
-    return Math.max(100, Number(request.peopleCount || 1) * 125);
+    const program = request.gapApplication?.program === 'ADVANCE' ? 'ADVANCE' : 'HARDSHIP';
+    const householdImpacted = Number(request.gapApplication?.householdImpacted || request.peopleCount || 1);
+    return calculateSuggestedAmount(program, householdImpacted);
   };
 
   const communityIds = Array.from(new Set([
@@ -378,7 +386,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
   };
 
   const householdForAmount = Math.max(1, Number(formState.householdImpacted || 1));
-  const suggestedAmount = formMode === 'ADVANCE' ? householdForAmount * 125 : householdForAmount * 250;
+  const suggestedAmount = calculateSuggestedAmount(formMode, householdForAmount);
   const customRequestedAmount = Number(formState.customRequestedAmount || 0);
   const finalRequestedAmount = customRequestedAmount > 0 ? customRequestedAmount : suggestedAmount;
 
@@ -1138,7 +1146,9 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
 
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                   <p className="text-xs text-emerald-800 font-semibold">Suggested request amount: {formatCurrency(suggestedAmount)}</p>
-                  <p className="text-xs text-emerald-700 mt-1">Suggested amount is based on estimated immediate hardship. Final award may vary.</p>
+                  <p className="text-xs text-emerald-700 mt-1">
+                    Calculated as {formMode === 'ADVANCE' ? '$125' : '$250'} × {householdForAmount} household impacted. Suggested amount is based on estimated immediate hardship. Final award may vary.
+                  </p>
                 </div>
 
                 <label className="text-sm font-medium text-slate-700 flex flex-col gap-1">
