@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Input, Textarea } from '../components/Input';
 import { StorageService } from '../services/storage';
+import { calculateGapSuggestedAmount, resolveGapRequestAmount } from '../services/gapCalculation';
 import { AlertCircle, ArrowLeft, Info, ShieldCheck } from 'lucide-react';
 
 type ReviewAction = 'Recommend' | 'Request Info' | 'Decline' | 'Approve' | 'Adjust' | 'Deny' | 'Override';
@@ -161,18 +162,13 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
     return map;
   }, new Map<string, number>());
 
-  const calculateSuggestedAmount = (program: 'HARDSHIP' | 'ADVANCE', householdImpacted: number) => {
-    const safeHouseholdImpacted = Math.max(1, Number(householdImpacted || 1));
-    const perPersonRate = program === 'ADVANCE' ? 125 : 250;
-    return safeHouseholdImpacted * perPersonRate;
-  };
-
   const getRequestAmount = (request: HelpRequestRecord) => {
-    const gapAmount = Number(request.gapApplication?.requestedAmount || 0);
-    if (gapAmount > 0) return gapAmount;
-    const program = request.gapApplication?.program === 'ADVANCE' ? 'ADVANCE' : 'HARDSHIP';
-    const householdImpacted = Number(request.gapApplication?.householdImpacted || request.peopleCount || 1);
-    return calculateSuggestedAmount(program, householdImpacted);
+    return resolveGapRequestAmount({
+      requestedAmount: request.gapApplication?.requestedAmount,
+      program: request.gapApplication?.program,
+      householdImpacted: request.gapApplication?.householdImpacted,
+      fallbackPeopleCount: request.peopleCount,
+    });
   };
 
   const communityIds = Array.from(new Set([
@@ -386,7 +382,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
   };
 
   const householdForAmount = Math.max(1, Number(formState.householdImpacted || 1));
-  const suggestedAmount = calculateSuggestedAmount(formMode, householdForAmount);
+  const suggestedAmount = calculateGapSuggestedAmount(formMode, householdForAmount);
   const customRequestedAmount = Number(formState.customRequestedAmount || 0);
   const finalRequestedAmount = customRequestedAmount > 0 ? customRequestedAmount : suggestedAmount;
 
