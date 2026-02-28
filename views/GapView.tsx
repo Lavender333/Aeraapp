@@ -21,7 +21,6 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
       return {};
     }
   });
-  const [memberPanel, setMemberPanel] = useState<'STATUS' | 'PAYMENTS' | 'ADVANCE' | 'GRANTS'>('STATUS');
 
   useEffect(() => {
     try {
@@ -87,6 +86,14 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
 
   const getRequestAmount = (request: HelpRequestRecord) => Math.max(100, Number(request.peopleCount || 1) * 125);
 
+  const routeToDashboard = (openFinanceModal = false) => {
+    if (openFinanceModal) {
+      sessionStorage.setItem('openFinanceOnLoad', '1');
+      window.dispatchEvent(new Event('finance-open'));
+    }
+    setView('DASHBOARD');
+  };
+
   return (
     <div className="min-h-screen bg-emerald-50 flex flex-col pb-safe animate-fade-in">
       <div className="bg-gradient-to-br from-emerald-950 to-emerald-800 border-b border-emerald-700 p-4 sticky top-0 z-20 text-white shadow-sm">
@@ -116,18 +123,10 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
               <h3 className="font-bold text-slate-900">Hardship Assistance (CORE)</h3>
               <Button fullWidth onClick={() => setView('HELP_WIZARD')}>Apply for Assistance</Button>
               <div className="grid grid-cols-2 gap-2">
-                <Button
-                  variant={memberPanel === 'STATUS' ? 'primary' : 'outline'}
-                  size="sm"
-                  onClick={() => setMemberPanel('STATUS')}
-                >
+                <Button variant="outline" size="sm" onClick={() => routeToDashboard(false)}>
                   Status Tracker
                 </Button>
-                <Button
-                  variant={memberPanel === 'PAYMENTS' ? 'primary' : 'outline'}
-                  size="sm"
-                  onClick={() => setMemberPanel('PAYMENTS')}
-                >
+                <Button variant="outline" size="sm" onClick={() => routeToDashboard(true)}>
                   Payment History
                 </Button>
               </div>
@@ -146,58 +145,39 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
                 </div>
               </div>
 
-              {memberPanel === 'STATUS' && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
-                  <p className="text-xs font-semibold text-slate-700">Recent Applications</p>
-                  {memberRequests.slice(0, 3).map((req) => (
-                    <div key={req.id} className="flex items-center justify-between text-xs">
-                      <span className="text-slate-700">{req.emergencyType || 'General'} • {new Date(req.timestamp).toLocaleDateString()}</span>
-                      <span className="font-semibold text-slate-900">{reviewActions[req.id] || req.status}</span>
-                    </div>
-                  ))}
-                  {memberRequests.length === 0 && <p className="text-xs text-slate-500">No applications yet. Start with Apply for Assistance.</p>}
-                </div>
-              )}
-
-              {memberPanel === 'PAYMENTS' && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
-                  <p className="text-xs font-semibold text-slate-700">Resolved Disbursements</p>
-                  {memberResolvedRequests.slice(0, 3).map((req) => (
-                    <div key={req.id} className="flex items-center justify-between text-xs">
-                      <span className="text-slate-700">{new Date(req.timestamp).toLocaleDateString()}</span>
-                      <span className="font-semibold text-emerald-700">{formatCurrency(getRequestAmount(req))}</span>
-                    </div>
-                  ))}
-                  {memberResolvedRequests.length === 0 && <p className="text-xs text-slate-500">No payment history available yet.</p>}
-                </div>
-              )}
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                <p className="text-xs font-semibold text-slate-700">Recent Applications</p>
+                {memberRequests.slice(0, 3).map((req) => (
+                  <div key={req.id} className="flex items-center justify-between text-xs">
+                    <span className="text-slate-700">{req.emergencyType || 'General'} • {new Date(req.timestamp).toLocaleDateString()}</span>
+                    <span className="font-semibold text-slate-900">{reviewActions[req.id] || req.status}</span>
+                  </div>
+                ))}
+                {memberRequests.length === 0 && <p className="text-xs text-slate-500">No applications yet. Start with Apply for Assistance.</p>}
+              </div>
             </Card>
 
             <Card className="border-slate-200 bg-white space-y-3">
               <h3 className="font-bold text-slate-900">Advances (If Enabled)</h3>
               <p className="text-sm text-slate-600">Short-term assistance pending other funding.</p>
-              <Button fullWidth variant={memberPanel === 'ADVANCE' ? 'primary' : 'outline'} onClick={() => setMemberPanel('ADVANCE')}>Request Advance</Button>
-              {memberPanel === 'ADVANCE' && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs text-slate-700">Advance requests are reviewed alongside your hardship application to prevent duplicate awards.</p>
-                </div>
-              )}
+              <Button fullWidth variant="outline" onClick={() => setView('HELP_WIZARD')}>Request Advance</Button>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs text-slate-700">Advance requests are reviewed alongside your hardship application to prevent duplicate awards.</p>
+              </div>
             </Card>
 
             <Card className="border-slate-200 bg-white space-y-3">
               <h3 className="font-bold text-slate-900">Grants</h3>
               <p className="text-sm text-slate-600">External resources.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <Button variant={memberPanel === 'GRANTS' ? 'primary' : 'outline'} onClick={() => setMemberPanel('GRANTS')}>View Available Grants</Button>
-                <Button onClick={() => setMemberPanel('GRANTS')}>Apply Externally</Button>
+                <Button variant="outline" onClick={() => routeToDashboard(true)}>View Available Grants</Button>
+                <Button onClick={() => routeToDashboard(true)}>Apply Externally</Button>
               </div>
-              {memberPanel === 'GRANTS' && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2 text-xs text-slate-700">
-                  <p>• FEMA Individual Assistance</p>
-                  <p>• 2-1-1 community aid referrals</p>
-                  <p>• Local nonprofit disaster grants</p>
-                </div>
-              )}
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2 text-xs text-slate-700">
+                <p>• FEMA Individual Assistance</p>
+                <p>• 2-1-1 community aid referrals</p>
+                <p>• Local nonprofit disaster grants</p>
+              </div>
             </Card>
           </>
         )}
