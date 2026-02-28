@@ -1,6 +1,26 @@
 
 export type ViewState = 'SPLASH' | 'LOGIN' | 'REGISTRATION' | 'ACCOUNT_SETUP' | 'DASHBOARD' | 'HELP_WIZARD' | 'SETTINGS' | 'NEW_SIGNUPS' | 'MAP' | 'ALERTS' | 'GAP' | 'ASSESSMENT' | 'POPULATION' | 'RECOVERY' | 'DRONE' | 'LOGISTICS' | 'ORG_DASHBOARD' | 'PRESENTATION' | 'PRIVACY_POLICY' | 'RESET_PASSWORD' | 'BUILD_KIT' | 'READINESS' | 'READINESS_GAP';
 
+export interface GapDocumentAttachment {
+  id: string;
+  label: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadedAt: string;
+  storagePath?: string;
+  accessUrl?: string;
+}
+
+export interface GapReviewTrailEntry {
+  id: string;
+  action: 'Recommend' | 'Request Info' | 'Decline' | 'Approve' | 'Adjust' | 'Deny' | 'Override';
+  reviewerRole: UserRole;
+  reviewerId: string;
+  reviewedAt: string;
+  note?: string;
+}
+
 export interface HelpRequestData {
   // Step 1: Safety
   isSafe: boolean | null;
@@ -32,6 +52,23 @@ export interface HelpRequestData {
   
   // Step 5: Submission
   consentToShare: boolean;
+
+  // Optional G.A.P. intake metadata
+  gapApplication?: {
+    program: 'HARDSHIP' | 'ADVANCE';
+    householdImpacted: number;
+    requestedAmount: number;
+    monthlyIncomeLoss?: number;
+    hardshipSummary?: string;
+    documentsProvided?: string[];
+    documents?: GapDocumentAttachment[];
+    submittedToOrgQueue?: boolean;
+    submittedToCoreQueue?: boolean;
+    submittedAt?: string;
+    reviewTrail?: GapReviewTrailEntry[];
+    lastReviewAction?: GapReviewTrailEntry['action'];
+    lastReviewedAt?: string;
+  };
 }
 
 export interface HelpRequestRecord extends HelpRequestData {

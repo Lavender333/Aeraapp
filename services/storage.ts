@@ -1,7 +1,7 @@
 
 import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, RoleDefinition } from '../types';
 import { REQUEST_ITEM_MAP } from './validation';
-import { ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, fetchProfileForUser, fetchVitalsForUser, createHouseholdSafetyNotificationsForCurrentUser, listChildOrganizations, sendMemberPing, uploadProfileAvatarDataUrl, getPendingPingForCurrentUser as getPendingPingForCurrentUserApi } from './api';
+import { ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, fetchProfileForUser, fetchVitalsForUser, createHouseholdSafetyNotificationsForCurrentUser, listChildOrganizations, sendMemberPing, uploadProfileAvatarDataUrl, uploadGapDocumentForCurrentUser, updateHelpRequestData, getPendingPingForCurrentUser as getPendingPingForCurrentUserApi } from './api';
 import { getMemberStatus, setMemberStatus } from './api';
 
 const DB_KEY = 'aera_backend_db_v4'; // Force fresh database
@@ -1517,6 +1517,58 @@ export const StorageService = {
         type: 'updateHelpRequestLocation',
         payload: { requestId, location },
       });
+    }
+  },
+
+  async uploadGapDocument(file: File, label: string): Promise<{ storagePath: string; accessUrl: string | null }> {
+    if (!navigator.onLine) {
+      throw new Error('Document upload requires an internet connection.');
+    }
+    return uploadGapDocumentForCurrentUser(file, label);
+  },
+
+  async syncRequestReviewDecision(payload: {
+    requestId: string;
+    status: HelpRequestRecord['status'];
+    gapApplication: HelpRequestData['gapApplication'];
+  }) {
+    const db = this.getDB();
+    const idx = db.requests.findIndex((request) => request.id === payload.requestId);
+    if (idx < 0) return;
+
+    db.requests[idx] = {
+      ...db.requests[idx],
+      status: payload.status,
+      gapApplication: payload.gapApplication,
+    };
+    this.saveDB(db);
+
+    if (!navigator.onLine) return;
+
+    try {
+      const syncMap = this.getSyncIdMap();
+      const serverId = syncMap[payload.requestId] || db.requests[idx].serverId || payload.requestId;
+      const {
+        id: _id,
+        clientId: _clientId,
+        serverId: _serverId,
+        userId: _userId,
+        timestamp: _timestamp,
+        status: _status,
+        priority: _priority,
+        synced: _synced,
+        ...requestData
+      } = db.requests[idx] as any;
+
+      await updateHelpRequestData(serverId, {
+        status: payload.status,
+        data: {
+          ...(requestData as HelpRequestData),
+          gapApplication: payload.gapApplication,
+        },
+      });
+    } catch (error) {
+      console.warn('Failed to sync review decision to backend', error);
     }
   },
 

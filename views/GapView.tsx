@@ -1,8 +1,9 @@
 
 import React, { useEffect, useState } from 'react';
-import { HelpRequestRecord, ViewState, UserRole } from '../types';
+import { GapDocumentAttachment, HelpRequestData, HelpRequestRecord, ViewState, UserRole } from '../types';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { Input, Textarea } from '../components/Input';
 import { StorageService } from '../services/storage';
 import { AlertCircle, ArrowLeft, Info, ShieldCheck } from 'lucide-react';
 
@@ -20,6 +21,33 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
     } catch {
       return {};
     }
+  });
+  const [showGapForm, setShowGapForm] = useState(false);
+  const [formMode, setFormMode] = useState<'HARDSHIP' | 'ADVANCE'>('HARDSHIP');
+  const [isSubmittingForm, setIsSubmittingForm] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [formState, setFormState] = useState({
+    householdImpacted: Math.max(1, Number(profile.householdMembers || profile.household?.length || 1)),
+    monthlyIncomeLoss: '',
+    hardshipSummary: '',
+    contactPhone: String(profile.phone || '').trim(),
+    docsPhotoId: false,
+    docsResidency: false,
+    docsHardshipStatement: false,
+    docsBillsEstimate: false,
+    consentToReview: true,
+    attestTruth: false,
+  });
+  const [documentFiles, setDocumentFiles] = useState<{
+    photoId: File | null;
+    residency: File | null;
+    hardshipStatement: File | null;
+    billsEstimate: File | null;
+  }>({
+    photoId: null,
+    residency: null,
+    hardshipStatement: null,
+    billsEstimate: null,
   });
 
   useEffect(() => {
@@ -62,8 +90,14 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
   const participationBase = Math.max(0, orgMembers.length || users.filter((u) => String(u.communityId || '') === orgScopeId).length);
   const participationPct = participationBase > 0 ? Math.round((participatingUsers.size / participationBase) * 100) : 0;
 
+  const getRequestAmount = (request: HelpRequestRecord) => {
+    const gapAmount = Number(request.gapApplication?.requestedAmount || 0);
+    if (gapAmount > 0) return gapAmount;
+    return Math.max(100, Number(request.peopleCount || 1) * 125);
+  };
+
   const allocationCapacity = participationBase * 250;
-  const amountDisbursed = resolvedOrgRequests.length * 250;
+  const amountDisbursed = resolvedOrgRequests.reduce((sum, req) => sum + getRequestAmount(req), 0);
   const remainingBalance = Math.max(0, allocationCapacity - amountDisbursed);
 
   const corePendingApplications = allRequests.filter((req) => pendingStatuses.has(String(req.status || '').toUpperCase()));
@@ -81,10 +115,199 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value || 0);
 
   const handleReviewAction = (requestId: string, action: 'Recommend' | 'Request Info' | 'Decline' | 'Approve' | 'Adjust' | 'Deny' | 'Override') => {
+    let note = '';
+    if (action === 'Deny' || action === 'Decline' || action === 'Override') {
+      note = String(window.prompt('Decision note is required for this action.') || '').trim();
+      if (!note) {
+        window.alert('A decision note is required for this action.');
+        return;
+      }
+    }
+
     setReviewActions((prev) => ({ ...prev, [requestId]: action }));
+
+    const statusByAction: Partial<Record<typeof action, HelpRequestRecord['status']>> = {
+      Approve: 'RESOLVED',
+      Deny: 'RESOLVED',
+      Override: 'RESOLVED',
+      Adjust: 'RECEIVED',
+      Recommend: 'PENDING',
+      'Request Info': 'RECEIVED',
+      Decline: 'PENDING',
+    };
+
+    const nextStatus = statusByAction[action];
+    if (nextStatus) {
+      const dbToUpdate = StorageService.getDB();
+      const idx = dbToUpdate.requests.findIndex((req) => req.id === requestId);
+      if (idx >= 0) {
+        const request = dbToUpdate.requests[idx];
+        const currentGap = request.gapApplication || {
+          program: 'HARDSHIP' as const,
+          householdImpacted: Math.max(1, Number(request.peopleCount || 1)),
+          requestedAmount: getRequestAmount(request),
+        };
+
+        const reviewTrail = [
+          ...(currentGap.reviewTrail || []),
+          {
+            id: `${requestId}:${Date.now()}`,
+            action,
+            reviewerRole: role,
+            reviewerId: String(profile.id || 'unknown'),
+            reviewedAt: new Date().toISOString(),
+            note: note || undefined,
+          },
+        ];
+
+        const nextGapApplication = {
+          ...currentGap,
+          reviewTrail,
+          lastReviewAction: action,
+          lastReviewedAt: new Date().toISOString(),
+        };
+
+        StorageService.syncRequestReviewDecision({
+          requestId,
+          status: nextStatus,
+          gapApplication: nextGapApplication,
+        }).catch((error) => {
+          console.warn('Failed to sync review decision', error);
+        });
+      }
+    }
   };
 
-  const getRequestAmount = (request: HelpRequestRecord) => Math.max(100, Number(request.peopleCount || 1) * 125);
+  const setDocument = (key: 'photoId' | 'residency' | 'hardshipStatement' | 'billsEstimate', file: File | null) => {
+    setDocumentFiles((prev) => ({ ...prev, [key]: file }));
+    setFormState((prev) => ({
+      ...prev,
+      docsPhotoId: key === 'photoId' ? Boolean(file) : prev.docsPhotoId,
+      docsResidency: key === 'residency' ? Boolean(file) : prev.docsResidency,
+      docsHardshipStatement: key === 'hardshipStatement' ? Boolean(file) : prev.docsHardshipStatement,
+      docsBillsEstimate: key === 'billsEstimate' ? Boolean(file) : prev.docsBillsEstimate,
+    }));
+  };
+
+  const buildDocumentAttachments = async (): Promise<GapDocumentAttachment[]> => {
+    const candidates: Array<{ file: File | null; label: string }> = [
+      { file: documentFiles.photoId, label: 'Government ID' },
+      { file: documentFiles.residency, label: 'Proof of residency' },
+      { file: documentFiles.hardshipStatement, label: 'Hardship statement' },
+      { file: documentFiles.billsEstimate, label: 'Bills / estimate / invoice' },
+    ];
+
+    const attachments: GapDocumentAttachment[] = [];
+    let uploadIndex = 0;
+    for (const candidate of candidates) {
+      if (!candidate.file) continue;
+      const uploaded = await StorageService.uploadGapDocument(candidate.file, candidate.label);
+      attachments.push({
+        id: `${Date.now()}-${uploadIndex}`,
+        label: candidate.label,
+        fileName: String(candidate.file?.name || ''),
+        mimeType: String(candidate.file?.type || 'application/octet-stream'),
+        sizeBytes: Number(candidate.file?.size || 0),
+        uploadedAt: new Date().toISOString(),
+        storagePath: uploaded.storagePath,
+        accessUrl: uploaded.accessUrl || undefined,
+      });
+      uploadIndex += 1;
+    }
+
+    return attachments;
+  };
+
+  const householdForAmount = Math.max(1, Number(formState.householdImpacted || 1));
+  const suggestedAmount = formMode === 'ADVANCE' ? householdForAmount * 125 : householdForAmount * 250;
+
+  const openGapForm = (mode: 'HARDSHIP' | 'ADVANCE') => {
+    setFormMode(mode);
+    setFormError('');
+    setShowGapForm(true);
+  };
+
+  const submitGapForm = async () => {
+    if (!formState.hardshipSummary.trim()) {
+      setFormError('Please provide a short hardship summary.');
+      return;
+    }
+    if (!formState.consentToReview || !formState.attestTruth) {
+      setFormError('Consent and attestation are required before submission.');
+      return;
+    }
+    if (!documentFiles.photoId || !documentFiles.hardshipStatement) {
+      setFormError('Government ID file and hardship statement file are required.');
+      return;
+    }
+
+    const payload: HelpRequestData = {
+      isSafe: true,
+      location: String(profile.address || '').trim(),
+      emergencyType: formMode === 'ADVANCE' ? 'Advance Request' : 'Hardship Assistance',
+      isInjured: null,
+      injuryDetails: '',
+      situationDescription: formState.hardshipSummary.trim(),
+      canEvacuate: null,
+      hazardsPresent: null,
+      hazardDetails: '',
+      peopleCount: householdForAmount,
+      petsPresent: null,
+      hasWater: null,
+      hasFood: null,
+      hasMeds: null,
+      hasPower: null,
+      hasPhone: Boolean(formState.contactPhone.trim()),
+      needsTransport: null,
+      vulnerableGroups: [],
+      medicalConditions: '',
+      damageType: '',
+      consentToShare: true,
+    };
+
+    setIsSubmittingForm(true);
+    setFormError('');
+    try {
+      const attachments = await buildDocumentAttachments();
+      const docs: string[] = attachments.map((item) => item.label);
+
+      payload.gapApplication = {
+        program: formMode,
+        householdImpacted: householdForAmount,
+        requestedAmount: suggestedAmount,
+        monthlyIncomeLoss: Number(formState.monthlyIncomeLoss || 0) || undefined,
+        hardshipSummary: formState.hardshipSummary.trim(),
+        documentsProvided: docs,
+        documents: attachments,
+        submittedToOrgQueue: true,
+        submittedToCoreQueue: true,
+        submittedAt: new Date().toISOString(),
+      };
+
+      await StorageService.submitRequest(payload);
+      setShowGapForm(false);
+      setFormState((prev) => ({
+        ...prev,
+        monthlyIncomeLoss: '',
+        hardshipSummary: '',
+        docsPhotoId: false,
+        docsResidency: false,
+        docsHardshipStatement: false,
+        docsBillsEstimate: false,
+        attestTruth: false,
+      }));
+      setDocumentFiles({
+        photoId: null,
+        residency: null,
+        hardshipStatement: null,
+        billsEstimate: null,
+      });
+    } catch (err) {
+      setFormError(String((err as Error)?.message || 'Unable to submit application.'));
+    } finally {
+      setIsSubmittingForm(false);
+    }
+  };
 
   const routeToDashboard = (openFinanceModal = false) => {
     if (openFinanceModal) {
@@ -92,6 +315,12 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
       window.dispatchEvent(new Event('finance-open'));
     }
     setView('DASHBOARD');
+  };
+
+  const getLatestReviewAction = (request: HelpRequestRecord) => {
+    const trail = request.gapApplication?.reviewTrail || [];
+    if (trail.length === 0) return '';
+    return trail[trail.length - 1].action;
   };
 
   return (
@@ -117,11 +346,46 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
           <p className="text-xs text-slate-600 mt-1">Support options based on documented need and current eligibility.</p>
         </Card>
 
+        <Card className="border-slate-200 bg-white space-y-3">
+          <h3 className="font-bold text-slate-900">How G.A.P. Works in App</h3>
+          <p className="text-xs text-slate-700">
+            This screen reflects live G.A.P. operating rules: pooled hardship funds, participation-based allocation caps, and documented-need review.
+          </p>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-semibold text-slate-700 mb-1">Fund Flow</p>
+            <p className="text-xs text-slate-700">Member Registration / Contributions → AERA Payment + Community ID → Revenue Split Logic</p>
+            <p className="text-xs text-slate-700">→ CORE Pooled Hardship Fund → Participation Percentage per Church → Allocation Capacity</p>
+            <p className="text-xs text-slate-700">→ Member Application → Church Admin Recommendation → CORE Review</p>
+            <p className="text-xs text-slate-700">→ Disbursement (if approved) → Audit Log + Compliance Record</p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="rounded-lg border border-slate-200 p-2">
+              <p className="text-[10px] uppercase font-bold text-slate-500">Pooled Fund</p>
+              <p className="text-xs font-semibold text-slate-900">{formatCurrency(totalHardshipFund)}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-2">
+              <p className="text-[10px] uppercase font-bold text-slate-500">Your Participation</p>
+              <p className="text-xs font-semibold text-slate-900">{participationPct}%</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-2">
+              <p className="text-[10px] uppercase font-bold text-slate-500">Allocation Capacity</p>
+              <p className="text-xs font-semibold text-slate-900">{formatCurrency(allocationCapacity)}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-2">
+              <p className="text-[10px] uppercase font-bold text-slate-500">Remaining Balance</p>
+              <p className="text-xs font-semibold text-slate-900">{formatCurrency(remainingBalance)}</p>
+            </div>
+          </div>
+          <p className="text-xs text-slate-700">
+            Allocation capacity is a maximum access cap, not a guaranteed payout. Assistance remains subject to documented hardship and available charitable resources.
+          </p>
+        </Card>
+
         {isMemberView && (
           <>
             <Card className="border-slate-200 bg-white space-y-3">
               <h3 className="font-bold text-slate-900">Hardship Assistance (CORE)</h3>
-              <Button fullWidth onClick={() => setView('HELP_WIZARD')}>Apply for Assistance</Button>
+              <Button fullWidth onClick={() => openGapForm('HARDSHIP')}>Apply for Assistance</Button>
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" size="sm" onClick={() => routeToDashboard(false)}>
                   Status Tracker
@@ -160,7 +424,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
             <Card className="border-slate-200 bg-white space-y-3">
               <h3 className="font-bold text-slate-900">Advances (If Enabled)</h3>
               <p className="text-sm text-slate-600">Short-term assistance pending other funding.</p>
-              <Button fullWidth variant="outline" onClick={() => setView('HELP_WIZARD')}>Request Advance</Button>
+              <Button fullWidth variant="outline" onClick={() => openGapForm('ADVANCE')}>Request Advance</Button>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs text-slate-700">Advance requests are reviewed alongside your hardship application to prevent duplicate awards.</p>
               </div>
@@ -213,16 +477,17 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
                   </thead>
                   <tbody>
                     {pendingOrgRequests.slice(0, 8).map((req) => {
-                      const docsReady = Boolean(String(req.situationDescription || '').trim()) && Boolean(req.consentToShare);
+                      const submittedDocs = req.gapApplication?.documentsProvided || req.gapApplication?.documents?.map((item) => item.label) || [];
+                      const docsReady = submittedDocs.length >= 2 || (Boolean(String(req.situationDescription || '').trim()) && Boolean(req.consentToShare));
                       const memberName = orgMemberById.get(req.userId) || users.find((u) => u.id === req.userId)?.fullName || 'Member';
-                      const requestedAmount = Math.max(100, Number(req.peopleCount || 1) * 125);
+                      const requestedAmount = getRequestAmount(req);
                       return (
                         <tr key={req.id} className="border-b border-slate-100">
                           <td className="py-3 font-medium text-slate-900">{memberName}</td>
-                          <td className="py-3">{req.emergencyType || 'General'}</td>
+                          <td className="py-3">{req.gapApplication?.program === 'ADVANCE' ? 'Advance' : 'Hardship'}</td>
                           <td className="py-3">{formatCurrency(requestedAmount)}</td>
-                          <td className="py-3">{docsReady ? 'Submitted' : 'Needs Info'}</td>
-                          <td className="py-3">{reviewActions[req.id] || 'Pending'}</td>
+                          <td className="py-3">{docsReady ? `${submittedDocs.length || 2} docs` : 'Needs Info'}</td>
+                          <td className="py-3">{getLatestReviewAction(req) || reviewActions[req.id] || 'Pending'}</td>
                           <td>
                             <div className="flex gap-2">
                               <Button size="sm" onClick={() => handleReviewAction(req.id, 'Recommend')}>Recommend</Button>
@@ -241,7 +506,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-slate-600">All hardship disbursements are reviewed and approved by CORE.</p>
+              <p className="text-xs text-slate-600">Member submissions route to the organization queue first, then CORE review for final hardship disbursement decisions.</p>
             </Card>
           </>
         )}
@@ -266,8 +531,33 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
               {reviewTarget ? (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
                   <p className="font-semibold text-slate-900">{users.find((u) => u.id === reviewTarget.userId)?.fullName || reviewTarget.userId}</p>
-                  <p className="text-slate-600">Type: {reviewTarget.emergencyType || 'General'} • Priority: {reviewTarget.priority}</p>
-                  <p className="text-slate-600">Docs: {reviewTarget.consentToShare ? 'Consented' : 'Missing Consent'}</p>
+                  <p className="text-slate-600">Program: {reviewTarget.gapApplication?.program === 'ADVANCE' ? 'Advance' : 'Hardship'} • Priority: {reviewTarget.priority}</p>
+                  <p className="text-slate-600">Requested: {formatCurrency(getRequestAmount(reviewTarget))} • Household: {reviewTarget.gapApplication?.householdImpacted || reviewTarget.peopleCount || 1}</p>
+                  <p className="text-slate-600">Docs: {(reviewTarget.gapApplication?.documentsProvided || reviewTarget.gapApplication?.documents?.map((item) => item.label) || []).join(', ') || (reviewTarget.consentToShare ? 'Consented' : 'Missing Consent')}</p>
+                  <p className="text-slate-600">Summary: {reviewTarget.gapApplication?.hardshipSummary || reviewTarget.situationDescription || 'Not provided'}</p>
+                  {reviewTarget.gapApplication?.documents?.length ? (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-slate-600">Files:</p>
+                      {reviewTarget.gapApplication.documents.map((document) => (
+                        document.accessUrl ? (
+                          <a
+                            key={document.id}
+                            href={document.accessUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block text-xs text-emerald-700 underline"
+                          >
+                            {document.label}: {document.fileName}
+                          </a>
+                        ) : (
+                          <p key={document.id} className="text-xs text-slate-600">{document.label}: {document.fileName}</p>
+                        )
+                      ))}
+                    </div>
+                  ) : null}
+                  {reviewTarget.gapApplication?.reviewTrail?.length ? (
+                    <p className="text-slate-600">Latest Decision: {reviewTarget.gapApplication.reviewTrail[reviewTarget.gapApplication.reviewTrail.length - 1].action} ({new Date(reviewTarget.gapApplication.reviewTrail[reviewTarget.gapApplication.reviewTrail.length - 1].reviewedAt).toLocaleDateString()})</p>
+                  ) : null}
                 </div>
               ) : (
                 <p className="text-sm text-slate-500">No pending applications to review.</p>
@@ -288,10 +578,97 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
         <Card className="border-slate-200 bg-white/95">
           <p className="text-xs text-slate-700 flex items-start gap-2">
             <AlertCircle size={14} className="mt-0.5 text-slate-500" />
-            Allocation capacity reflects participation and remains subject to charitable review.
+            CORE (Community Organized Response &amp; Education) distributes hardship assistance based on documented need and available charitable resources.
           </p>
         </Card>
       </div>
+
+      {isMemberView && showGapForm && (
+        <div className="fixed inset-0 z-40 bg-black/40 p-4 flex items-end sm:items-center justify-center">
+          <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white shadow-xl p-4 sm:p-5 max-h-[92vh] overflow-y-auto space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">{formMode === 'ADVANCE' ? 'Advance Request Form' : 'Hardship Assistance Form'}</h3>
+                <p className="text-xs text-slate-600 mt-1">Submission routes to your organization reviewer queue and CORE administration queue.</p>
+              </div>
+              <button onClick={() => setShowGapForm(false)} className="text-slate-500 hover:text-slate-900 text-sm font-semibold">Close</button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input
+                type="number"
+                min={1}
+                label="Household impacted"
+                value={formState.householdImpacted}
+                onChange={(event) => setFormState((prev) => ({ ...prev, householdImpacted: Math.max(1, Number(event.target.value || 1)) }))}
+              />
+              <Input
+                type="number"
+                min={0}
+                label="Monthly income loss (optional)"
+                value={formState.monthlyIncomeLoss}
+                onChange={(event) => setFormState((prev) => ({ ...prev, monthlyIncomeLoss: event.target.value }))}
+                placeholder="0"
+              />
+            </div>
+
+            <Input
+              label="Primary contact phone"
+              value={formState.contactPhone}
+              onChange={(event) => setFormState((prev) => ({ ...prev, contactPhone: event.target.value }))}
+              placeholder="Phone"
+            />
+
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+              <p className="text-xs text-emerald-800 font-semibold">Suggested request amount: {formatCurrency(suggestedAmount)}</p>
+              <p className="text-xs text-emerald-700 mt-1">{formMode === 'ADVANCE' ? 'Advance estimate uses $125 per impacted household member.' : 'Hardship estimate uses $250 per impacted household member.'}</p>
+            </div>
+
+            <Textarea
+              label="Hardship summary"
+              value={formState.hardshipSummary}
+              onChange={(event) => setFormState((prev) => ({ ...prev, hardshipSummary: event.target.value }))}
+              placeholder="Describe what happened, current need, and immediate expenses."
+            />
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+              <p className="text-xs font-semibold text-slate-700">Document uploads</p>
+              <div className="space-y-1">
+                <p className="text-xs text-slate-700">Government ID (required)</p>
+                <input type="file" accept="image/*,.pdf" onChange={(event) => setDocument('photoId', event.target.files?.[0] || null)} className="block w-full text-xs text-slate-700" />
+                {documentFiles.photoId && <p className="text-[11px] text-slate-500">{documentFiles.photoId.name}</p>}
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-slate-700">Proof of residency</p>
+                <input type="file" accept="image/*,.pdf" onChange={(event) => setDocument('residency', event.target.files?.[0] || null)} className="block w-full text-xs text-slate-700" />
+                {documentFiles.residency && <p className="text-[11px] text-slate-500">{documentFiles.residency.name}</p>}
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-slate-700">Hardship statement (required)</p>
+                <input type="file" accept="image/*,.pdf,.txt" onChange={(event) => setDocument('hardshipStatement', event.target.files?.[0] || null)} className="block w-full text-xs text-slate-700" />
+                {documentFiles.hardshipStatement && <p className="text-[11px] text-slate-500">{documentFiles.hardshipStatement.name}</p>}
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-slate-700">Bills / estimate / invoice</p>
+                <input type="file" accept="image/*,.pdf" onChange={(event) => setDocument('billsEstimate', event.target.files?.[0] || null)} className="block w-full text-xs text-slate-700" />
+                {documentFiles.billsEstimate && <p className="text-[11px] text-slate-500">{documentFiles.billsEstimate.name}</p>}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="flex items-start gap-2 text-sm text-slate-700"><input type="checkbox" className="mt-1" checked={formState.consentToReview} onChange={(event) => setFormState((prev) => ({ ...prev, consentToReview: event.target.checked }))} /> I consent to organization and CORE review of this request and attached documentation.</label>
+              <label className="flex items-start gap-2 text-sm text-slate-700"><input type="checkbox" className="mt-1" checked={formState.attestTruth} onChange={(event) => setFormState((prev) => ({ ...prev, attestTruth: event.target.checked }))} /> I attest this information is true and complete to the best of my knowledge.</label>
+            </div>
+
+            {formError && <p className="text-sm text-red-600">{formError}</p>}
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button variant="outline" fullWidth onClick={() => setShowGapForm(false)} disabled={isSubmittingForm}>Cancel</Button>
+              <Button fullWidth onClick={submitGapForm} disabled={isSubmittingForm}>{isSubmittingForm ? 'Submitting…' : 'Submit for Review'}</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

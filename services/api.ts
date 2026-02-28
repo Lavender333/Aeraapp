@@ -701,6 +701,91 @@ export async function uploadProfileAvatarDataUrl(dataUrl: string): Promise<strin
   return String(publicData?.publicUrl || '').trim() || path;
 }
 
+export async function uploadGapDocumentForCurrentUser(file: File, label: string): Promise<{
+  storagePath: string;
+  accessUrl: string | null;
+}> {
+  if (!file) {
+    throw new Error('No document selected.');
+  }
+
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const userId = authData.user.id;
+  const safeLabel = String(label || 'document').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 32);
+  const safeName = String(file.name || 'upload').replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `${userId}/${Date.now()}-${safeLabel}-${safeName}`;
+
+  const { error: uploadError } = await supabase
+    .storage
+    .from('gap_documents')
+    .upload(path, file, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: file.type || 'application/octet-stream',
+    });
+
+  if (uploadError) {
+    throw new Error(`Document upload failed: ${uploadError.message || 'unknown error'}`);
+  }
+
+  let accessUrl: string | null = null;
+  try {
+    const { data: publicData } = supabase
+      .storage
+      .from('gap_documents')
+      .getPublicUrl(path);
+    const publicUrl = String(publicData?.publicUrl || '').trim();
+    accessUrl = publicUrl || null;
+  } catch {
+    accessUrl = null;
+  }
+
+  return {
+    storagePath: path,
+    accessUrl,
+  };
+}
+
+export async function updateHelpRequestData(id: string, payload: {
+  status?: string;
+  data?: Record<string, any>;
+}) {
+  const updates: Record<string, any> = {};
+  if (payload.status) updates.status = payload.status;
+  if (payload.data) updates.data = payload.data;
+
+  const { data, error } = await supabase
+    .from('help_requests')
+    .update(updates)
+    .eq('id', id)
+    .select('id, user_id, status, priority, data, location, created_at')
+    .single();
+
+  if (error || !data) throw new Error('Failed to update help request');
+
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'help_requests',
+    entityId: id,
+    details: {
+      status: payload.status || null,
+      updatedGapData: Boolean(payload.data),
+    },
+  });
+
+  return {
+    id: data.id,
+    userId: data.user_id,
+    status: data.status,
+    priority: data.priority,
+    data: data.data,
+    location: data.location,
+    timestamp: data.created_at,
+  };
+}
+
 export type HouseholdSummary = {
   householdId: string;
   householdCode: string;
