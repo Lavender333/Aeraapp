@@ -18,9 +18,9 @@ import { User, Bell, Lock, LogOut, Check, Building2, ArrowLeft, ArrowRight, Link
 const formatPhoneNumber = (value: string) => {
   if (!value) return value;
   const phoneNumber = value.replace(/[^\d]/g, '');
-  const phoneNumberLength = phoneNumber.length;
-  if (phoneNumberLength < 4) return phoneNumber;
-  if (phoneNumberLength < 7) {
+  const householdSectionRef = useRef<HTMLDivElement | null>(null);
+  if (phoneNumber.length < 4) return phoneNumber;
+  if (phoneNumber.length < 7) {
     return `(${phoneNumber.slice(0, 3)}) ${phoneNumber.slice(3)}`;
   }
   return `(${phoneNumber.slice(0, 3)}) ${phoneNumber.slice(3, 6)}-${phoneNumber.slice(6, 10)}`;
@@ -959,7 +959,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     }
     const memberValidation = validateHouseholdMembers(profile.household || []);
     if (!memberValidation.ok) {
-      setVitalsSaveError(memberValidation.error);
+      setVitalsSaveError((memberValidation as { ok: false; error: string }).error);
       return;
     }
     if (!profile.consentPreparednessPlanning) {
