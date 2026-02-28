@@ -562,6 +562,77 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
     return submittedDocs.length >= 2 || (Boolean(String(request.situationDescription || '').trim()) && Boolean(request.consentToShare));
   };
 
+  const getHardshipScorePreview = (request: HelpRequestRecord) => {
+    let score = 0;
+    const factors: string[] = [];
+
+    const householdImpacted = Math.max(1, Number(request.gapApplication?.householdImpacted || request.peopleCount || 1));
+    const householdPoints = Math.min(20, householdImpacted * 3);
+    score += householdPoints;
+    factors.push(`Household impact: +${householdPoints}`);
+
+    const urgencyRisk = String(request.gapApplication?.urgencyRisk || '').toLowerCase();
+    if (urgencyRisk.includes('eviction')) {
+      score += 25;
+      factors.push('Urgency (eviction risk): +25');
+    } else if (urgencyRisk.includes('utility')) {
+      score += 20;
+      factors.push('Urgency (utility shutoff): +20');
+    } else if (urgencyRisk.includes('unsafe')) {
+      score += 20;
+      factors.push('Urgency (unsafe housing): +20');
+    }
+
+    const monthlyIncomeLoss = Number(request.gapApplication?.monthlyIncomeLoss || 0);
+    if (monthlyIncomeLoss >= 3000) {
+      score += 20;
+      factors.push('Income loss (high): +20');
+    } else if (monthlyIncomeLoss >= 1500) {
+      score += 15;
+      factors.push('Income loss (moderate): +15');
+    } else if (monthlyIncomeLoss >= 500) {
+      score += 10;
+      factors.push('Income loss (some): +10');
+    } else if (monthlyIncomeLoss > 0) {
+      score += 5;
+      factors.push('Income loss (reported): +5');
+    }
+
+    if (request.gapApplication?.relatedToDeclaredDisaster) {
+      score += 10;
+      factors.push('Declared disaster related: +10');
+    }
+
+    const submittedDocs = getSubmittedDocs(request);
+    const hasCoreDocs = submittedDocs.length >= 2;
+    const docsPoints = hasCoreDocs ? 15 : submittedDocs.length > 0 ? 8 : 0;
+    if (docsPoints > 0) {
+      score += docsPoints;
+      factors.push(`Documentation support: +${docsPoints}`);
+    }
+
+    const hardshipSummary = String(request.gapApplication?.hardshipSummary || request.situationDescription || '').trim();
+    if (hardshipSummary.length >= 40) {
+      score += 10;
+      factors.push('Narrative detail provided: +10');
+    } else if (hardshipSummary.length > 0) {
+      score += 5;
+      factors.push('Narrative provided: +5');
+    }
+
+    const normalizedScore = Math.max(0, Math.min(100, score));
+    const priority =
+      normalizedScore >= 75 ? 'CRITICAL' :
+      normalizedScore >= 55 ? 'HIGH' :
+      normalizedScore >= 35 ? 'MEDIUM' : 'LOW';
+
+    return {
+      score: normalizedScore,
+      priority,
+      factors,
+    };
+  };
+
   const filteredPendingOrgRequests = pendingOrgRequests
     .filter((request) => {
       if (queueProgramFilter === 'ALL') return true;
@@ -884,6 +955,20 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
                   <p className="text-slate-600">Requested: {formatCurrency(getRequestAmount(reviewTarget))} • Household: {reviewTarget.gapApplication?.householdImpacted || reviewTarget.peopleCount || 1}</p>
                   <p className="text-slate-600">Docs: {(reviewTarget.gapApplication?.documentsProvided || reviewTarget.gapApplication?.documents?.map((item) => item.label) || []).join(', ') || (reviewTarget.consentToShare ? 'Consented' : 'Missing Consent')}</p>
                   <p className="text-slate-600">Summary: {reviewTarget.gapApplication?.hardshipSummary || reviewTarget.situationDescription || 'Not provided'}</p>
+                  {(() => {
+                    const hardshipPreview = getHardshipScorePreview(reviewTarget);
+                    return (
+                      <div className="mt-2 rounded-lg border border-slate-200 bg-white p-2 space-y-1">
+                        <p className="text-xs font-semibold text-slate-800">Internal Hardship Score (Admin only)</p>
+                        <p className="text-xs text-slate-700">Score: {hardshipPreview.score}/100 • Priority Preview: {hardshipPreview.priority}</p>
+                        <div className="space-y-0.5">
+                          {hardshipPreview.factors.map((factor, index) => (
+                            <p key={`${factor}-${index}`} className="text-[11px] text-slate-600">• {factor}</p>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
                   {reviewTarget.gapApplication?.documents?.length ? (
                     <div className="mt-2 space-y-1">
                       <p className="text-slate-600">Files:</p>
