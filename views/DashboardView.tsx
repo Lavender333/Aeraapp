@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card } from '../components/Card';
 import { ViewState, HelpRequestRecord, UserProfile, UserRole, OrgInventory, OrgMember, OrganizationProfile } from '../types';
 import { StorageService } from '../services/storage';
@@ -63,8 +63,6 @@ interface DashboardViewProps {
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
-  const profileImageInputRef = useRef<HTMLInputElement | null>(null);
-
   const formatCommunityIdInput = (value: string) => {
     const cleaned = String(value || '')
       .toUpperCase()
@@ -109,6 +107,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [communityConnectError, setCommunityConnectError] = useState<string | null>(null);
   const [isConnectingCommunity, setIsConnectingCommunity] = useState(false);
   const [missingProfileFields, setMissingProfileFields] = useState<string[]>([]);
+  const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
+  const [householdMemberCount, setHouseholdMemberCount] = useState(0);
+  const [showOnboardingWelcomeCard, setShowOnboardingWelcomeCard] = useState(true);
   const hasCommunity = !!connectedOrg;
   const isGeneralUser = userRole === 'GENERAL_USER';
 
@@ -177,9 +178,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     setUserRole(normalizeRole(profile.role));
     setUserName(profile.fullName);
     setMissingProfileFields(getMissingProfileFields(profile));
+    setIsOnboardingComplete(Boolean(profile.onboardComplete));
+    setHouseholdMemberCount(Array.isArray(profile.household) ? profile.household.length : 0);
     setPendingPing(profile.pendingStatusRequest);
     refreshPendingPing().catch(() => {});
     setCommunityIdInput(profile.communityId || '');
+    setShowOnboardingWelcomeCard(sessionStorage.getItem('aera.onboarding.welcome.dismissed') !== '1');
     
     if (profile.communityId) {
        const org = StorageService.getOrganization(profile.communityId);
@@ -223,6 +227,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
        setProfileImageDataUrl(StorageService.getProfileImageDataUrl(updatedProfile.id) || '');
        setUserRole(normalizeRole(updatedProfile.role));
       setMissingProfileFields(getMissingProfileFields(updatedProfile));
+      setIsOnboardingComplete(Boolean(updatedProfile.onboardComplete));
+      setHouseholdMemberCount(Array.isArray(updatedProfile.household) ? updatedProfile.household.length : 0);
        setTickerMessage(StorageService.getTicker(updatedProfile));
       setPendingPing(updatedProfile.pendingStatusRequest);
       refreshPendingPing().catch(() => {});
@@ -364,45 +370,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     setIsConnectingCommunity(false);
   };
 
-  const handleDashboardProfileImageUpload: React.ChangeEventHandler<HTMLInputElement> = (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      alert('Please select a valid image file.');
-      event.target.value = '';
-      return;
-    }
-
-    const maxBytes = 2 * 1024 * 1024;
-    if (file.size > maxBytes) {
-      alert('Image is too large. Please choose one under 2MB.');
-      event.target.value = '';
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = String(reader.result || '');
-      if (!dataUrl.startsWith('data:image/')) {
-        alert('Could not read image. Please try a different file.');
-        return;
-      }
-      const profile = StorageService.getProfile();
-      const saved = StorageService.saveProfileImageDataUrl(dataUrl, profile.id);
-      if (!saved) {
-        alert('Could not save image (storage limit reached). Try a smaller file.');
-        return;
-      }
-      setProfileImageDataUrl(dataUrl);
-    };
-    reader.onerror = () => {
-      alert('Could not read image. Please try again.');
-    };
-    reader.readAsDataURL(file);
-    event.target.value = '';
-  };
-
   const respondToPing = (isSafe: boolean) => {
     StorageService.respondToPing(isSafe);
     setPendingPing(undefined);
@@ -428,6 +395,32 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     return level === 'LOW' ? 'Low' : 'Good';
   };
   const isProfileComplete = missingProfileFields.length === 0;
+  const onboardingChecklistItems = [
+    { label: 'Join your community (Community ID)', done: hasCommunity },
+    { label: 'Complete Preparedness profile', done: isProfileComplete },
+    { label: 'Add household members (optional now, editable anytime)', done: householdMemberCount > 0 },
+  ];
+  const onboardingChecklistDone = onboardingChecklistItems.filter((item) => item.done).length;
+  const hasOnboardingStepsIncomplete = onboardingChecklistDone < onboardingChecklistItems.length;
+
+  const handleOnboardingDoItNow = () => {
+    if (!hasCommunity) {
+      setShowCommunityConnectModal(true);
+      return;
+    }
+    if (!isProfileComplete) {
+      setView(isOnboardingComplete ? 'SETTINGS' : 'ACCOUNT_SETUP');
+      return;
+    }
+    if (householdMemberCount <= 0) {
+      setView('SETTINGS');
+    }
+  };
+
+  const handleOnboardingSkipForNow = () => {
+    setShowOnboardingWelcomeCard(false);
+    sessionStorage.setItem('aera.onboarding.welcome.dismissed', '1');
+  };
 
   /**
    * Financial model defaults aligned with AERA business plan:
@@ -799,16 +792,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
           <p className="text-base sm:text-lg text-slate-500">{userName.split(' ')[0]}</p>
         </div>
         <div className="flex items-center gap-2">
-          <input
-            ref={profileImageInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleDashboardProfileImageUpload}
-          />
-          <Button size="sm" variant="outline" onClick={() => profileImageInputRef.current?.click()}>
-            Upload Photo
-          </Button>
           <div 
             onClick={() => setView('SETTINGS')}
             className="w-14 h-14 rounded-full bg-gradient-to-br from-sky-400 to-teal-400 flex items-center justify-center text-white text-xl font-semibold shadow-md cursor-pointer overflow-hidden"
@@ -821,6 +804,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
           </div>
         </div>
       </div>
+
+      {isGeneralUser && hasOnboardingStepsIncomplete && (
+        <div className="bg-sky-50 border border-sky-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold text-slate-700">You have {onboardingChecklistItems.length - onboardingChecklistDone} setup step{onboardingChecklistItems.length - onboardingChecklistDone === 1 ? '' : 's'} left.</p>
+          <Button size="sm" onClick={handleOnboardingDoItNow}>Do it now</Button>
+        </div>
+      )}
 
       <section className="bg-white/95 border border-slate-200 rounded-2xl p-4 shadow-sm">
         <div className="flex items-center justify-between gap-3 mb-3">
@@ -849,6 +839,39 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
           )}
         </div>
       </section>
+
+      {isGeneralUser && hasOnboardingStepsIncomplete && showOnboardingWelcomeCard && (
+        <section className="bg-white/95 border border-amber-200 rounded-2xl p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-amber-700">Onboarding</p>
+              <p className="text-lg font-bold text-slate-900 mt-1">You’re almost ready.</p>
+              <p className="text-xs text-slate-600 mt-1">Complete 3 quick steps to protect your household.</p>
+            </div>
+            <span className="text-[11px] font-bold px-2 py-1 rounded-full bg-amber-100 text-amber-700">
+              {onboardingChecklistDone}/{onboardingChecklistItems.length} done
+            </span>
+          </div>
+          <div className="mt-3 space-y-2">
+            {onboardingChecklistItems.map((item) => (
+              <div key={item.label} className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full ${item.done ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                  {item.done ? <Check size={12} /> : <ChevronRight size={12} />}
+                </span>
+                <span>{item.label}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button size="sm" onClick={handleOnboardingDoItNow}>
+              Do it now
+            </Button>
+            <Button size="sm" variant="ghost" onClick={handleOnboardingSkipForNow}>
+              Skip for now
+            </Button>
+          </div>
+        </section>
+      )}
 
       {canOpenOrgDashboard && connectedOrg && (
         (() => {
