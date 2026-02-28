@@ -34,6 +34,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
     action: ReviewAction;
     note: string;
   } | null>(null);
+  const [selectedOrgApplication, setSelectedOrgApplication] = useState<HelpRequestRecord | null>(null);
   const [decisionError, setDecisionError] = useState('');
   const [documentUrlById, setDocumentUrlById] = useState<Record<string, string>>({});
   const [documentOpenError, setDocumentOpenError] = useState('');
@@ -247,9 +248,17 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
 
   const submitDecision = () => {
     if (!decisionDraft) return;
-    const requiresNote = decisionDraft.action === 'Deny' || decisionDraft.action === 'Decline' || decisionDraft.action === 'Override';
+    const requiresNote =
+      decisionDraft.action === 'Deny' ||
+      decisionDraft.action === 'Decline' ||
+      decisionDraft.action === 'Override' ||
+      decisionDraft.action === 'Request Info';
     if (requiresNote && !String(decisionDraft.note || '').trim()) {
-      setDecisionError('A decision note is required for this action.');
+      setDecisionError(
+        decisionDraft.action === 'Request Info'
+          ? 'Please specify exactly what additional information is required.'
+          : 'A decision note is required for this action.'
+      );
       return;
     }
 
@@ -638,6 +647,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
                           <td className="py-3">{getLatestReviewAction(req) || reviewActions[req.id] || 'Pending'}</td>
                           <td>
                             <div className="flex gap-2">
+                              <Button size="sm" variant="outline" onClick={() => setSelectedOrgApplication(req)}>View App</Button>
                               <Button size="sm" onClick={() => openDecisionDialog(req.id, 'Recommend')}>Recommend</Button>
                               <Button size="sm" variant="outline" onClick={() => openDecisionDialog(req.id, 'Request Info')}>Request Info</Button>
                               <Button size="sm" variant="outline" onClick={() => openDecisionDialog(req.id, 'Decline')}>Decline</Button>
@@ -935,8 +945,19 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
               label="Decision note"
               value={decisionDraft.note}
               onChange={(event) => setDecisionDraft((prev) => prev ? ({ ...prev, note: event.target.value }) : prev)}
-              placeholder={decisionDraft.action === 'Deny' || decisionDraft.action === 'Decline' || decisionDraft.action === 'Override' ? 'Required note for this action' : 'Optional note'}
+              placeholder={
+                decisionDraft.action === 'Request Info'
+                  ? 'List missing items (e.g., updated hardship statement, utility bill, proof of residency, corrected household count).'
+                  : decisionDraft.action === 'Deny' || decisionDraft.action === 'Decline' || decisionDraft.action === 'Override'
+                    ? 'Required note for this action'
+                    : 'Optional note'
+              }
             />
+            {decisionDraft.action === 'Request Info' && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-2">
+                <p className="text-xs text-amber-800 font-semibold">Member will see this note in Status Tracker as the requested information list.</p>
+              </div>
+            )}
             {decisionError && <p className="text-sm text-red-600">{decisionError}</p>}
             <div className="flex gap-2">
               <Button
@@ -950,6 +971,59 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
                 Cancel
               </Button>
               <Button fullWidth onClick={submitDecision}>Save Decision</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isOrgAdmin && selectedOrgApplication && (
+        <div className="fixed inset-0 z-40 bg-black/40 p-4 flex items-end sm:items-center justify-center">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-xl p-4 sm:p-5 max-h-[90vh] overflow-y-auto space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Application Details</h3>
+                <p className="text-xs text-slate-600 mt-1">Full member submission for recommendation decisions.</p>
+              </div>
+              <button onClick={() => setSelectedOrgApplication(null)} className="text-slate-500 hover:text-slate-900 text-sm font-semibold">Close</button>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1 text-sm">
+              <p className="font-semibold text-slate-900">{users.find((u) => u.id === selectedOrgApplication.userId)?.fullName || 'Member'}</p>
+              <p className="text-slate-700">Program: {getRequestProgramLabel(selectedOrgApplication)}</p>
+              <p className="text-slate-700">Requested amount: {formatCurrency(getRequestAmount(selectedOrgApplication))}</p>
+              <p className="text-slate-700">Household impacted: {selectedOrgApplication.gapApplication?.householdImpacted || selectedOrgApplication.peopleCount || 1}</p>
+              <p className="text-slate-700">Submitted: {new Date(selectedOrgApplication.timestamp).toLocaleString()}</p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 p-3 space-y-2">
+              <p className="text-sm font-semibold text-slate-900">Hardship Summary</p>
+              <p className="text-sm text-slate-700 whitespace-pre-wrap">{selectedOrgApplication.gapApplication?.hardshipSummary || selectedOrgApplication.situationDescription || 'Not provided'}</p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 p-3 space-y-2">
+              <p className="text-sm font-semibold text-slate-900">Submitted Documents</p>
+              {selectedOrgApplication.gapApplication?.documents?.length ? (
+                <div className="space-y-1">
+                  {selectedOrgApplication.gapApplication.documents.map((document) => (
+                    <button
+                      key={document.id}
+                      type="button"
+                      onClick={() => openDocument(document)}
+                      className="block text-left text-xs text-emerald-700 underline"
+                    >
+                      {document.label}: {document.fileName}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-600">No files uploaded.</p>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => openDecisionDialog(selectedOrgApplication.id, 'Recommend')}>Recommend</Button>
+              <Button variant="outline" onClick={() => openDecisionDialog(selectedOrgApplication.id, 'Request Info')}>Request Info</Button>
+              <Button variant="outline" onClick={() => openDecisionDialog(selectedOrgApplication.id, 'Decline')}>Decline</Button>
             </div>
           </div>
         </div>
