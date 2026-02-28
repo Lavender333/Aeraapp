@@ -505,6 +505,16 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
           <p className="text-xs text-slate-700">
             Allocation capacity is a maximum access cap, not a guaranteed payout. Assistance remains subject to documented hardship and available charitable resources.
           </p>
+          {isCoreAdmin && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1">
+              <p className="text-xs font-semibold text-slate-700">Admin Calculation Breakdown</p>
+              <p className="text-xs text-slate-600">Connected users: {totalConnectedUsers}</p>
+              <p className="text-xs text-slate-600">Participating users: {totalParticipatingUsers} ({overallParticipationPct}%)</p>
+              <p className="text-xs text-slate-600">Pooled fund = connected users × $250 × participation ratio</p>
+              <p className="text-xs text-slate-600">Allocation capacity = pooled fund</p>
+              <p className="text-xs text-slate-600">Remaining balance = allocation capacity − distributed amount</p>
+            </div>
+          )}
         </Card>
 
         {isMemberView && (
