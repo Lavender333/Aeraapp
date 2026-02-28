@@ -90,19 +90,22 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
   const orgMemberById = new Map(orgMembers.map((member) => [member.id, member.name]));
 
   const pendingStatuses = new Set(['PENDING', 'RECEIVED']);
+  const resolvedStatuses = new Set(['RESOLVED']);
   const memberRequests = allRequests.filter((req) => req.userId === profile.id);
   const memberPendingRequests = memberRequests.filter((req) => pendingStatuses.has(String(req.status || '').toUpperCase()));
-  const memberResolvedRequests = memberRequests.filter((req) => String(req.status || '').toUpperCase() === 'RESOLVED');
+  const memberResolvedRequests = memberRequests.filter((req) => resolvedStatuses.has(String(req.status || '').toUpperCase()));
   const orgRequests = isOrgAdmin
     ? allRequests.filter((req) => resolveOrgForRequest(req) === orgScopeId)
     : [];
 
   const pendingOrgRequests = orgRequests.filter((req) => pendingStatuses.has(String(req.status || '').toUpperCase()));
-  const resolvedOrgRequests = orgRequests.filter((req) => String(req.status || '').toUpperCase() === 'RESOLVED');
 
-  const participatingUsers = new Set(orgRequests.map((req) => req.userId));
-  const participationBase = Math.max(0, orgMembers.length || users.filter((u) => String(u.communityId || '') === orgScopeId).length);
-  const participationPct = participationBase > 0 ? Math.round((participatingUsers.size / participationBase) * 100) : 0;
+  const connectedUsersByOrg = users.reduce((map, user) => {
+    const communityId = String(user.communityId || '').trim();
+    if (!communityId) return map;
+    map.set(communityId, (map.get(communityId) || 0) + 1);
+    return map;
+  }, new Map<string, number>());
 
   const getRequestAmount = (request: HelpRequestRecord) => {
     const gapAmount = Number(request.gapApplication?.requestedAmount || 0);
@@ -110,17 +113,68 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
     return Math.max(100, Number(request.peopleCount || 1) * 125);
   };
 
-  const allocationCapacity = participationBase * 250;
-  const amountDisbursed = resolvedOrgRequests.reduce((sum, req) => sum + getRequestAmount(req), 0);
-  const remainingBalance = Math.max(0, allocationCapacity - amountDisbursed);
+  const communityIds = Array.from(new Set([
+    ...Array.from(connectedUsersByOrg.keys()),
+    ...allRequests.map((request) => resolveOrgForRequest(request)).filter(Boolean),
+  ]));
+
+  const communityFundingById = new Map<string, {
+    connectedUsers: number;
+    participatingUsers: number;
+    participationPct: number;
+    pooledFund: number;
+    allocationCapacity: number;
+    amountDisbursed: number;
+    remainingBalance: number;
+  }>();
+
+  for (const communityId of communityIds) {
+    const connectedUsers = Number(connectedUsersByOrg.get(communityId) || 0);
+    const communityRequests = allRequests.filter((request) => resolveOrgForRequest(request) === communityId);
+    const participatingUsers = new Set(communityRequests.map((request) => request.userId)).size;
+    const participationRatio = connectedUsers > 0 ? Math.min(1, participatingUsers / connectedUsers) : 0;
+    const participationPct = Math.round(participationRatio * 100);
+    const basePooledFund = connectedUsers * 250;
+    const pooledFund = Math.round(basePooledFund * participationRatio);
+    const amountDisbursed = communityRequests
+      .filter((request) => resolvedStatuses.has(String(request.status || '').toUpperCase()))
+      .reduce((sum, request) => sum + getRequestAmount(request), 0);
+    const allocationCapacity = pooledFund;
+    const remainingBalance = Math.max(0, allocationCapacity - amountDisbursed);
+
+    communityFundingById.set(communityId, {
+      connectedUsers,
+      participatingUsers,
+      participationPct,
+      pooledFund,
+      allocationCapacity,
+      amountDisbursed,
+      remainingBalance,
+    });
+  }
+
+  const scopedFunding = orgScopeId ? communityFundingById.get(orgScopeId) : undefined;
+  const participationBase = scopedFunding?.connectedUsers || 0;
+  const participationPct = scopedFunding?.participationPct || 0;
+  const pooledFund = scopedFunding?.pooledFund || 0;
+  const allocationCapacity = scopedFunding?.allocationCapacity || 0;
+  const amountDisbursed = scopedFunding?.amountDisbursed || 0;
+  const remainingBalance = scopedFunding?.remainingBalance || 0;
+
+  const totalConnectedUsers = Array.from(communityFundingById.values()).reduce((sum, item) => sum + item.connectedUsers, 0);
+  const totalParticipatingUsers = Array.from(communityFundingById.values()).reduce((sum, item) => sum + item.participatingUsers, 0);
+  const overallParticipationPct = totalConnectedUsers > 0 ? Math.round((totalParticipatingUsers / totalConnectedUsers) * 100) : 0;
+  const totalHardshipFund = Array.from(communityFundingById.values()).reduce((sum, item) => sum + item.pooledFund, 0);
+  const totalAllocationCapacity = Array.from(communityFundingById.values()).reduce((sum, item) => sum + item.allocationCapacity, 0);
+  const totalRemainingBalance = Array.from(communityFundingById.values()).reduce((sum, item) => sum + item.remainingBalance, 0);
+
+  const displayedParticipationPct = isCoreAdmin ? overallParticipationPct : participationPct;
+  const displayedPooledFund = isCoreAdmin ? totalHardshipFund : pooledFund;
+  const displayedAllocationCapacity = isCoreAdmin ? totalAllocationCapacity : allocationCapacity;
+  const displayedRemainingBalance = isCoreAdmin ? totalRemainingBalance : remainingBalance;
 
   const corePendingApplications = allRequests.filter((req) => pendingStatuses.has(String(req.status || '').toUpperCase()));
   const orgsWithPending = new Set(corePendingApplications.map((req) => resolveOrgForRequest(req)).filter(Boolean)).size;
-  const totalHardshipFund = allOrganizations.reduce((sum, org) => {
-    const orgCode = String(org.id || '').trim();
-    const memberCount = StorageService.getOrgMembers(orgCode).length || Number(org.registeredPopulation || 0) || 0;
-    return sum + memberCount * 250;
-  }, 0);
 
   const reviewTarget = corePendingApplications[0] || null;
 
@@ -346,14 +400,6 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
     }
   };
 
-  const routeToDashboard = (openFinanceModal = false) => {
-    if (openFinanceModal) {
-      sessionStorage.setItem('openFinanceOnLoad', '1');
-      window.dispatchEvent(new Event('finance-open'));
-    }
-    setView('DASHBOARD');
-  };
-
   const getLatestReviewAction = (request: HelpRequestRecord) => {
     const trail = request.gapApplication?.reviewTrail || [];
     if (trail.length === 0) return '';
@@ -441,19 +487,19 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <div className="rounded-lg border border-slate-200 p-2">
               <p className="text-[10px] uppercase font-bold text-slate-500">Pooled Fund</p>
-              <p className="text-xs font-semibold text-slate-900">{formatCurrency(totalHardshipFund)}</p>
+              <p className="text-xs font-semibold text-slate-900">{formatCurrency(displayedPooledFund)}</p>
             </div>
             <div className="rounded-lg border border-slate-200 p-2">
               <p className="text-[10px] uppercase font-bold text-slate-500">Your Participation</p>
-              <p className="text-xs font-semibold text-slate-900">{participationPct}%</p>
+              <p className="text-xs font-semibold text-slate-900">{displayedParticipationPct}%</p>
             </div>
             <div className="rounded-lg border border-slate-200 p-2">
               <p className="text-[10px] uppercase font-bold text-slate-500">Allocation Capacity</p>
-              <p className="text-xs font-semibold text-slate-900">{formatCurrency(allocationCapacity)}</p>
+              <p className="text-xs font-semibold text-slate-900">{formatCurrency(displayedAllocationCapacity)}</p>
             </div>
             <div className="rounded-lg border border-slate-200 p-2">
               <p className="text-[10px] uppercase font-bold text-slate-500">Remaining Balance</p>
-              <p className="text-xs font-semibold text-slate-900">{formatCurrency(remainingBalance)}</p>
+              <p className="text-xs font-semibold text-slate-900">{formatCurrency(displayedRemainingBalance)}</p>
             </div>
           </div>
           <p className="text-xs text-slate-700">
@@ -467,7 +513,6 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
               <h3 className="font-bold text-slate-900">Hardship Assistance (CORE)</h3>
               <Button fullWidth onClick={() => openGapForm('HARDSHIP')}>Apply for Assistance</Button>
               <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" size="sm" onClick={() => routeToDashboard(false)}>
                 <Button variant="outline" size="sm" onClick={() => setShowStatusTracker(true)}>
                   Status Tracker
                 </Button>
