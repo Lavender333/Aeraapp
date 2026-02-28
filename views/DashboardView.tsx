@@ -63,6 +63,16 @@ interface DashboardViewProps {
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
+  const ONBOARDING_WELCOME_SNOOZE_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
+  const ONBOARDING_BANNER_SNOOZE_MS = 1000 * 60 * 60 * 24; // 1 day
+  const ONBOARDING_WELCOME_KEY = 'aera.onboarding.welcome.dismissUntil';
+  const ONBOARDING_BANNER_KEY = 'aera.onboarding.banner.dismissUntil';
+
+  const isSnoozed = (key: string) => {
+    const raw = Number(localStorage.getItem(key) || '0');
+    return Number.isFinite(raw) && raw > Date.now();
+  };
+
   const formatCommunityIdInput = (value: string) => {
     const cleaned = String(value || '')
       .toUpperCase()
@@ -110,6 +120,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
   const [householdMemberCount, setHouseholdMemberCount] = useState(0);
   const [showOnboardingWelcomeCard, setShowOnboardingWelcomeCard] = useState(true);
+  const [showOnboardingReminderBanner, setShowOnboardingReminderBanner] = useState(true);
   const hasCommunity = !!connectedOrg;
   const isGeneralUser = userRole === 'GENERAL_USER';
 
@@ -183,7 +194,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     setPendingPing(profile.pendingStatusRequest);
     refreshPendingPing().catch(() => {});
     setCommunityIdInput(profile.communityId || '');
-    setShowOnboardingWelcomeCard(sessionStorage.getItem('aera.onboarding.welcome.dismissed') !== '1');
+    setShowOnboardingWelcomeCard(!isSnoozed(ONBOARDING_WELCOME_KEY));
+    setShowOnboardingReminderBanner(!isSnoozed(ONBOARDING_BANNER_KEY));
     
     if (profile.communityId) {
        const org = StorageService.getOrganization(profile.communityId);
@@ -419,7 +431,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
 
   const handleOnboardingSkipForNow = () => {
     setShowOnboardingWelcomeCard(false);
-    sessionStorage.setItem('aera.onboarding.welcome.dismissed', '1');
+    setShowOnboardingReminderBanner(false);
+    localStorage.setItem(ONBOARDING_WELCOME_KEY, String(Date.now() + ONBOARDING_WELCOME_SNOOZE_MS));
+    localStorage.setItem(ONBOARDING_BANNER_KEY, String(Date.now() + ONBOARDING_BANNER_SNOOZE_MS));
+  };
+
+  const handleDismissOnboardingReminderBanner = () => {
+    setShowOnboardingReminderBanner(false);
+    localStorage.setItem(ONBOARDING_BANNER_KEY, String(Date.now() + ONBOARDING_BANNER_SNOOZE_MS));
   };
 
   /**
@@ -805,10 +824,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         </div>
       </div>
 
-      {isGeneralUser && hasOnboardingStepsIncomplete && (
+      {isGeneralUser && hasOnboardingStepsIncomplete && showOnboardingReminderBanner && (
         <div className="bg-sky-50 border border-sky-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
           <p className="text-xs font-semibold text-slate-700">You have {onboardingChecklistItems.length - onboardingChecklistDone} setup step{onboardingChecklistItems.length - onboardingChecklistDone === 1 ? '' : 's'} left.</p>
-          <Button size="sm" onClick={handleOnboardingDoItNow}>Do it now</Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={handleOnboardingDoItNow}>Do it now</Button>
+            <button
+              type="button"
+              onClick={handleDismissOnboardingReminderBanner}
+              className="p-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+              aria-label="Dismiss setup reminder"
+            >
+              <X size={14} />
+            </button>
+          </div>
         </div>
       )}
 
