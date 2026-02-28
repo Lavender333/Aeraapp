@@ -570,8 +570,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               <video
                 className="w-full rounded-xl"
                 controls
-                autoPlay
                 playsInline
+                preload="metadata"
                 src="/Untitled.MP4"
               />
             </div>
