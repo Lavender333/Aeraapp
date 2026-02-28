@@ -121,6 +121,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [householdMemberCount, setHouseholdMemberCount] = useState(0);
   const [showOnboardingWelcomeCard, setShowOnboardingWelcomeCard] = useState(true);
   const [showOnboardingReminderBanner, setShowOnboardingReminderBanner] = useState(true);
+  const [showWelcomeVideoModal, setShowWelcomeVideoModal] = useState(false);
   const hasCommunity = !!connectedOrg;
   const isGeneralUser = userRole === 'GENERAL_USER';
 
@@ -196,6 +197,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     setCommunityIdInput(profile.communityId || '');
     setShowOnboardingWelcomeCard(!isSnoozed(ONBOARDING_WELCOME_KEY));
     setShowOnboardingReminderBanner(!isSnoozed(ONBOARDING_BANNER_KEY));
+
+    const shouldPlayWelcomeVideo = sessionStorage.getItem('aera.playWelcomeVideoOnDashboard') === '1';
+    const welcomeVideoSeenKey = `aera.welcomeVideo.seen.${profile.id || 'guest'}`;
+    const hasSeenWelcomeVideo = localStorage.getItem(welcomeVideoSeenKey) === '1';
+    if (shouldPlayWelcomeVideo && !hasSeenWelcomeVideo) {
+      setShowWelcomeVideoModal(true);
+      localStorage.setItem(welcomeVideoSeenKey, '1');
+    }
+    sessionStorage.removeItem('aera.playWelcomeVideoOnDashboard');
     
     if (profile.communityId) {
        const org = StorageService.getOrganization(profile.communityId);
@@ -441,6 +451,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     localStorage.setItem(ONBOARDING_BANNER_KEY, String(Date.now() + ONBOARDING_BANNER_SNOOZE_MS));
   };
 
+  const handleCloseWelcomeVideoModal = () => {
+    setShowWelcomeVideoModal(false);
+  };
+
   /**
    * Financial model defaults aligned with AERA business plan:
    * - Tier 1: MVP pilot (loss leader)
@@ -530,6 +544,44 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
       <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 relative">
       
       {/* Broadcast Detail Modal */}
+      {showWelcomeVideoModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in"
+          onClick={handleCloseWelcomeVideoModal}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden animate-slide-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-slate-900 p-4 flex justify-between items-center text-white border-b border-slate-800">
+              <div>
+                <h3 className="font-bold text-lg">Welcome to AERA</h3>
+                <p className="text-[11px] text-slate-300 font-semibold">Thanks for completing your setup</p>
+              </div>
+              <button
+                onClick={handleCloseWelcomeVideoModal}
+                className="text-slate-400 hover:text-white transition-colors"
+                aria-label="Close welcome video"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-4 bg-black">
+              <video
+                className="w-full rounded-xl"
+                controls
+                autoPlay
+                playsInline
+                src="/Untitled.MP4"
+              />
+            </div>
+            <div className="p-4 bg-white border-t border-slate-200 flex justify-end">
+              <Button size="sm" onClick={handleCloseWelcomeVideoModal}>Continue</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showTickerModal && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in"

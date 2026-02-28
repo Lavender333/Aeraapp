@@ -244,6 +244,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
         householdCode: household.householdCode,
         householdRole: household.householdRole,
       });
+      sessionStorage.setItem('aera.playWelcomeVideoOnDashboard', '1');
       setView('DASHBOARD');
     } catch (e: any) {
       const currentProfile = StorageService.getProfile();
@@ -251,6 +252,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       const authId = authData?.user?.id || null;
       const profileId = authId || (payload.id && payload.id !== 'guest' ? payload.id : currentProfile.id);
       StorageService.saveProfile({ ...payload, id: profileId });
+      sessionStorage.setItem('aera.playWelcomeVideoOnDashboard', '1');
       setAuthError('Profile saved locally. Sync will resume when available.');
       setView('DASHBOARD');
     } finally {
