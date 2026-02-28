@@ -46,6 +46,9 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
   const [requestInfoSelections, setRequestInfoSelections] = useState<string[]>([]);
   const [selectedOrgApplication, setSelectedOrgApplication] = useState<HelpRequestRecord | null>(null);
   const [decisionError, setDecisionError] = useState('');
+  const [queueProgramFilter, setQueueProgramFilter] = useState<'ALL' | 'HARDSHIP' | 'ADVANCE'>('ALL');
+  const [queueMissingDocsOnly, setQueueMissingDocsOnly] = useState(false);
+  const [queueSortBy, setQueueSortBy] = useState<'NEWEST' | 'HIGHEST_AMOUNT'>('NEWEST');
   const [documentUrlById, setDocumentUrlById] = useState<Record<string, string>>({});
   const [documentOpenError, setDocumentOpenError] = useState('');
   const [formMode, setFormMode] = useState<'HARDSHIP' | 'ADVANCE'>('HARDSHIP');
@@ -449,6 +452,31 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
   const getRequestProgramLabel = (request: HelpRequestRecord) =>
     request.gapApplication?.program === 'ADVANCE' ? 'Advance' : 'Hardship';
 
+  const getSubmittedDocs = (request: HelpRequestRecord) =>
+    request.gapApplication?.documentsProvided || request.gapApplication?.documents?.map((item) => item.label) || [];
+
+  const isDocsReady = (request: HelpRequestRecord) => {
+    const submittedDocs = getSubmittedDocs(request);
+    return submittedDocs.length >= 2 || (Boolean(String(request.situationDescription || '').trim()) && Boolean(request.consentToShare));
+  };
+
+  const filteredPendingOrgRequests = pendingOrgRequests
+    .filter((request) => {
+      if (queueProgramFilter === 'ALL') return true;
+      const requestProgram = request.gapApplication?.program || 'HARDSHIP';
+      return requestProgram === queueProgramFilter;
+    })
+    .filter((request) => {
+      if (!queueMissingDocsOnly) return true;
+      return !isDocsReady(request);
+    })
+    .sort((left, right) => {
+      if (queueSortBy === 'HIGHEST_AMOUNT') {
+        return getRequestAmount(right) - getRequestAmount(left);
+      }
+      return new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime();
+    });
+
   const grantCatalog = [
     {
       id: 'fema-ia',
@@ -646,6 +674,41 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
 
             <Card className="border-slate-200 bg-white/95 space-y-3">
               <h3 className="font-bold text-slate-900">Member Applications Queue</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <label className="text-xs font-semibold text-slate-600 flex flex-col gap-1">
+                  Program
+                  <select
+                    className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-medium text-slate-800 bg-white"
+                    value={queueProgramFilter}
+                    onChange={(event) => setQueueProgramFilter(event.target.value as 'ALL' | 'HARDSHIP' | 'ADVANCE')}
+                  >
+                    <option value="ALL">All</option>
+                    <option value="HARDSHIP">Hardship only</option>
+                    <option value="ADVANCE">Advance only</option>
+                  </select>
+                </label>
+
+                <label className="text-xs font-semibold text-slate-600 flex flex-col gap-1">
+                  Sort
+                  <select
+                    className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-medium text-slate-800 bg-white"
+                    value={queueSortBy}
+                    onChange={(event) => setQueueSortBy(event.target.value as 'NEWEST' | 'HIGHEST_AMOUNT')}
+                  >
+                    <option value="NEWEST">Newest first</option>
+                    <option value="HIGHEST_AMOUNT">High amount first</option>
+                  </select>
+                </label>
+
+                <label className="text-xs font-semibold text-slate-600 flex items-center gap-2 mt-5 md:mt-6">
+                  <input
+                    type="checkbox"
+                    checked={queueMissingDocsOnly}
+                    onChange={(event) => setQueueMissingDocsOnly(event.target.checked)}
+                  />
+                  Missing docs only
+                </label>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead>
@@ -659,9 +722,9 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
                     </tr>
                   </thead>
                   <tbody>
-                    {pendingOrgRequests.slice(0, 8).map((req) => {
-                      const submittedDocs = req.gapApplication?.documentsProvided || req.gapApplication?.documents?.map((item) => item.label) || [];
-                      const docsReady = submittedDocs.length >= 2 || (Boolean(String(req.situationDescription || '').trim()) && Boolean(req.consentToShare));
+                    {filteredPendingOrgRequests.slice(0, 8).map((req) => {
+                      const submittedDocs = getSubmittedDocs(req);
+                      const docsReady = isDocsReady(req);
                       const memberName = orgMemberById.get(req.userId) || users.find((u) => u.id === req.userId)?.fullName || 'Member';
                       const requestedAmount = getRequestAmount(req);
                       return (
@@ -682,7 +745,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
                         </tr>
                       );
                     })}
-                    {pendingOrgRequests.length === 0 && (
+                    {filteredPendingOrgRequests.length === 0 && (
                       <tr>
                         <td colSpan={6} className="py-4 text-center text-slate-500">No pending applications.</td>
                       </tr>
