@@ -8,7 +8,10 @@ CREATE TABLE IF NOT EXISTS public.app_metrics (
 );
 
 INSERT INTO public.app_metrics (key, value)
-VALUES ('people_served', 0)
+VALUES (
+  'people_served',
+  COALESCE((SELECT COUNT(*)::bigint FROM public.profiles), 0)
+)
 ON CONFLICT (key) DO NOTHING;
 
 CREATE OR REPLACE FUNCTION public.increment_people_served()
