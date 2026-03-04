@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Card } from '../components/Card';
 import { ViewState, HelpRequestRecord, UserProfile, UserRole, OrgInventory, OrgMember, OrganizationProfile } from '../types';
 import { StorageService } from '../services/storage';
@@ -122,6 +122,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [showOnboardingWelcomeCard, setShowOnboardingWelcomeCard] = useState(true);
   const [showOnboardingReminderBanner, setShowOnboardingReminderBanner] = useState(true);
   const [showWelcomeVideoModal, setShowWelcomeVideoModal] = useState(false);
+  const [welcomeVideoPlaybackMessage, setWelcomeVideoPlaybackMessage] = useState('');
+  const welcomeVideoRef = useRef<HTMLVideoElement | null>(null);
   const hasCommunity = !!connectedOrg;
   const isGeneralUser = userRole === 'GENERAL_USER';
 
@@ -452,7 +454,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   };
 
   const handleCloseWelcomeVideoModal = () => {
+    setWelcomeVideoPlaybackMessage('');
     setShowWelcomeVideoModal(false);
+  };
+
+  const handlePlayWelcomeVideo = async () => {
+    setWelcomeVideoPlaybackMessage('');
+    const element = welcomeVideoRef.current;
+    if (!element) return;
+    try {
+      await element.play();
+    } catch {
+      setWelcomeVideoPlaybackMessage('Tap play on the video controls to start playback.');
+    }
   };
 
   /**
@@ -568,6 +582,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
             </div>
             <div className="p-4 bg-black">
               <video
+                ref={welcomeVideoRef}
                 className="w-full rounded-xl"
                 controls
                 playsInline
@@ -575,8 +590,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                 src="/Untitled.MP4"
               />
             </div>
-            <div className="p-4 bg-white border-t border-slate-200 flex justify-end">
-              <Button size="sm" onClick={handleCloseWelcomeVideoModal}>Continue</Button>
+            <div className="p-4 bg-white border-t border-slate-200">
+              {welcomeVideoPlaybackMessage && (
+                <p className="text-xs text-amber-700 font-semibold mb-2">{welcomeVideoPlaybackMessage}</p>
+              )}
+              <div className="flex items-center justify-end gap-2">
+                <Button size="sm" variant="outline" onClick={handlePlayWelcomeVideo}>Play Video</Button>
+                <Button size="sm" onClick={handleCloseWelcomeVideoModal}>Continue</Button>
+              </div>
             </div>
           </div>
         </div>

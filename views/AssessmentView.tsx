@@ -224,6 +224,9 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
       setTimeout(() => {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {
+            // Handle play() rejection (e.g., user gesture required)
+          });
         }
       }, 100);
     } catch (err) {
