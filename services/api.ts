@@ -3086,6 +3086,22 @@ export async function setBroadcast(orgCode: string, message: string) {
   return { message };
 }
 
+export async function getPeopleServedCount() {
+  const { data, error } = await supabase.rpc('get_people_served_count');
+  if (error) throw new Error('Failed to load people served count');
+  const value = Number(data ?? 0);
+  if (!Number.isFinite(value) || value < 0) return 0;
+  return Math.floor(value);
+}
+
+export async function incrementPeopleServedCount() {
+  const { data, error } = await supabase.rpc('increment_people_served');
+  if (error) throw new Error('Failed to increment people served count');
+  const value = Number(data ?? 0);
+  if (!Number.isFinite(value) || value < 0) return 0;
+  return Math.floor(value);
+}
+
 // Auth
 export async function registerAuth(payload: { email?: string; phone?: string; password: string; fullName?: string; role?: string; orgId?: string }) {
   const normalizedEmail = payload.email ? String(payload.email).trim().toLowerCase() : undefined;
@@ -3131,6 +3147,14 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
         throw new Error('That email already has an account. Log in or reset your password.');
       }
       throw profileError;
+    }
+  }
+
+  if (userId) {
+    try {
+      await incrementPeopleServedCount();
+    } catch (e) {
+      console.warn('People served metric increment failed', e);
     }
   }
 
