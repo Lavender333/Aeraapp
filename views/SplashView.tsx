@@ -25,7 +25,7 @@ export const SplashView: React.FC<SplashViewProps> = ({ onEnter, onPrivacy, peop
         </div>
 
         <p className="aera-fade aera-delay-2 mt-6 text-[20px] leading-[1.35] tracking-[-0.01em] font-normal text-[#4B5563]">
-          Preparedness, organized.
+          Prepare with clarity.
         </p>
 
         <div className="aera-fade aera-delay-3 mt-5 px-4 py-2 rounded-full bg-white border border-[#D1D5DB]">
