@@ -6,10 +6,10 @@ import splashLogo from '../logo4.png';
 interface SplashViewProps {
   onEnter: () => void;
   onPrivacy?: () => void;
-  peopleServedCount?: number;
+  peopleRegisteredCount?: number;
 }
 
-export const SplashView: React.FC<SplashViewProps> = ({ onEnter, onPrivacy, peopleServedCount = 0 }) => {
+export const SplashView: React.FC<SplashViewProps> = ({ onEnter, onPrivacy, peopleRegisteredCount = 0 }) => {
   return (
     <div className="min-h-screen bg-[#F6F8F7] flex items-center justify-center px-6 py-10">
       <div className="w-full max-w-[420px] text-center flex flex-col items-center">
@@ -29,8 +29,8 @@ export const SplashView: React.FC<SplashViewProps> = ({ onEnter, onPrivacy, peop
         </p>
 
         <div className="aera-fade aera-delay-3 mt-5 px-4 py-2 rounded-full bg-white border border-[#D1D5DB]">
-          <p className="text-[12px] uppercase tracking-[0.1em] text-[#4B5563]">People Served</p>
-          <p className="text-[24px] leading-none font-semibold text-[#1F2937]">{peopleServedCount.toLocaleString()}</p>
+          <p className="text-[12px] uppercase tracking-[0.1em] text-[#4B5563]">People Registered</p>
+          <p className="text-[24px] leading-none font-semibold text-[#1F2937]">{peopleRegisteredCount.toLocaleString()}</p>
         </div>
 
         <div className="aera-fade aera-delay-3 w-full mt-8 max-w-[320px]">

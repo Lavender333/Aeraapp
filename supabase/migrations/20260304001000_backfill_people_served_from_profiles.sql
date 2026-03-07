@@ -1,9 +1,9 @@
--- Backfill people_served metric from existing user base.
+-- Backfill people_registered metric from existing user base.
 -- Safe for already deployed environments: raises value to at least profiles count.
 
 INSERT INTO public.app_metrics (key, value, updated_at)
 VALUES (
-  'people_served',
+  'people_registered',
   COALESCE((SELECT COUNT(*)::bigint FROM public.profiles), 0),
   now()
 )

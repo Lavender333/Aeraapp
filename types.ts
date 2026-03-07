@@ -193,7 +193,7 @@ export interface OrganizationProfile {
   active: boolean; // Organization status
   currentBroadcast?: string; // Scoped message for members only
   lastBroadcastTime?: string;
-  registeredPopulation?: number; // People served
+  registeredPopulation?: number; // People registered
   parentOrgId?: string; // reference to a supervising organization
 }
 

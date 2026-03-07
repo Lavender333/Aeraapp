@@ -3,7 +3,7 @@ import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { BottomNav } from './components/BottomNav';
 import { ViewState } from './types';
 import { StorageService } from './services/storage';
-import { getPeopleServedCount as fetchPeopleServedCount } from './services/api';
+import { getPeopleRegisteredCount as fetchPeopleRegisteredCount } from './services/api';
 import { hasSupabaseConfig, supabaseConfigMessage, supabase } from './services/supabase';
 
 const lazyWithRetry = <T extends React.ComponentType<any>>(
@@ -104,7 +104,7 @@ export default function App() {
   const [currentView, setView] = useState<ViewState>('SPLASH');
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [postSplashView, setPostSplashView] = useState<ViewState>('LOGIN');
-  const [peopleServedCount, setPeopleServedCount] = useState(0);
+  const [peopleRegisteredCount, setPeopleRegisteredCount] = useState(0);
   const showSetupNotice = !hasSupabaseConfig;
   const currentRole = String(StorageService.getProfile()?.role || 'GENERAL_USER').toUpperCase();
   const canAccessAdvancedViews = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN', 'FIRST_RESPONDER', 'LOCAL_AUTHORITY', 'CONTRACTOR'].includes(currentRole);
@@ -119,16 +119,16 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
-    const loadPeopleServedCount = async () => {
+    const loadPeopleRegisteredCount = async () => {
       if (!isBootstrapping && currentView !== 'SPLASH') return;
       try {
-        const count = await fetchPeopleServedCount();
-        if (active) setPeopleServedCount(count);
+        const count = await fetchPeopleRegisteredCount();
+        if (active) setPeopleRegisteredCount(count);
       } catch (e) {
-        console.warn('Failed to fetch people served count', e);
+        console.warn('Failed to fetch people registered count', e);
       }
     };
-    loadPeopleServedCount();
+    loadPeopleRegisteredCount();
     return () => {
       active = false;
     };
@@ -206,7 +206,7 @@ export default function App() {
         <SplashView
           onEnter={handleSplashComplete}
           onPrivacy={() => setView('PRIVACY_POLICY')}
-          peopleServedCount={peopleServedCount}
+          peopleRegisteredCount={peopleRegisteredCount}
         />
       );
     }
@@ -216,7 +216,7 @@ export default function App() {
           <SplashView
             onEnter={handleSplashComplete}
             onPrivacy={() => setView('PRIVACY_POLICY')}
-            peopleServedCount={peopleServedCount}
+            peopleRegisteredCount={peopleRegisteredCount}
           />
         );
       case 'PRESENTATION':
