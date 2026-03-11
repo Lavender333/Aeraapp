@@ -13,7 +13,7 @@ export type CommunityQrSeed = {
 };
 
 const PENDING_COMMUNITY_INVITE_KEY = 'aera_pending_community_invite_v1';
-export const DEFAULT_COMMUNITY_INVITE_BASE_URL = 'https://lavender333.github.io/Aeratest/';
+export const DEFAULT_COMMUNITY_INVITE_BASE_URL = 'https://appandwebsitetesting.site/';
 
 export const DEMO_COMMUNITY_QR_SEEDS: CommunityQrSeed[] = [
   { communityId: 'NG-1001', name: 'Network Response Hub', type: 'NGO' },

@@ -4,7 +4,7 @@ import { ViewState } from '../types';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { StorageService } from '../services/storage';
-import { getPendingCommunityInvite } from '../services/communityInvite';
+import { DEMO_COMMUNITY_QR_SEEDS, getPendingCommunityInvite } from '../services/communityInvite';
 import { supabase } from '../services/supabase';
 import { t } from '../services/translations';
 import { LogIn, AlertOctagon, Mail, KeyRound, HelpCircle } from 'lucide-react';
@@ -46,6 +46,9 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [pendingCommunityId, setPendingCommunityId] = useState('');
+  const pendingCommunityName = pendingCommunityId
+    ? StorageService.getOrganization(pendingCommunityId)?.name || DEMO_COMMUNITY_QR_SEEDS.find((seed) => seed.communityId === pendingCommunityId)?.name || pendingCommunityId
+    : '';
 
   useEffect(() => {
     const hash = window.location.hash || '';
@@ -184,7 +187,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
         {pendingCommunityId && (
           <div className="flex items-start gap-2 text-sm text-emerald-700 bg-emerald-50 p-3 rounded-lg border border-emerald-200">
             <HelpCircle size={16} className="mt-0.5 shrink-0" />
-            <span>This link will connect your account to Community ID {pendingCommunityId} after sign in or signup.</span>
+            <span>You are joining {pendingCommunityName}. This link will connect your account to Community ID {pendingCommunityId} after sign in or signup.</span>
           </div>
         )}
         <Input 

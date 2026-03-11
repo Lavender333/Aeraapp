@@ -5,7 +5,7 @@ import { Button } from '../components/Button';
 import { Input, Textarea } from '../components/Input';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { StorageService } from '../services/storage';
-import { getPendingCommunityInvite } from '../services/communityInvite';
+import { DEMO_COMMUNITY_QR_SEEDS, getPendingCommunityInvite } from '../services/communityInvite';
 import { ensureHouseholdForCurrentUser, syncHouseholdMembersForUser, updateProfileForUser, updateVitalsForUser } from '../services/api';
 import { validateHouseholdMembers } from '../services/validation';
 import { supabase } from '../services/supabase';
@@ -75,6 +75,9 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
   const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [pendingCommunityId, setPendingCommunityId] = useState('');
+  const pendingCommunityName = pendingCommunityId
+    ? StorageService.getOrganization(pendingCommunityId)?.name || DEMO_COMMUNITY_QR_SEEDS.find((seed) => seed.communityId === pendingCommunityId)?.name || pendingCommunityId
+    : '';
   
   // Initialize language from storage if available
   useEffect(() => {
@@ -375,7 +378,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
               {pendingCommunityId && (
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
                   <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Community invite detected</p>
-                  <p className="text-sm font-semibold text-emerald-900">This signup will prefill Community ID {pendingCommunityId}.</p>
+                  <p className="text-sm font-semibold text-emerald-900">You are joining {pendingCommunityName}. This signup will prefill Community ID {pendingCommunityId}.</p>
                 </div>
               )}
               <Input 
