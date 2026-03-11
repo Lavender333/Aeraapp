@@ -310,7 +310,7 @@ export default function App() {
 
   return (
     <div className={isPresentationView
-      ? 'w-screen h-screen min-h-screen relative overflow-hidden print:max-w-none print:w-full print:h-auto print:overflow-visible print:shadow-none print:border-0'
+      ? 'w-screen min-h-screen relative overflow-x-hidden overflow-y-auto print:max-w-none print:w-full print:h-auto print:overflow-visible print:shadow-none print:border-0'
       : `${useWideLayout
           ? 'w-full max-w-md md:max-w-5xl'
           : 'w-full max-w-md'} mx-auto min-h-screen relative overflow-hidden ${shellFrameClass} print:max-w-none print:w-full print:h-auto print:overflow-visible print:shadow-none print:border-0`} style={{ backgroundColor: 'var(--bg-app)' }}>
