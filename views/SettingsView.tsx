@@ -208,6 +208,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const isPlatformAdmin = normalizedRole === 'ADMIN';
   const isOrgScopedAdmin = normalizedRole === 'ORG_ADMIN' || normalizedRole === 'INSTITUTION_ADMIN';
   const orgScopeId = String(profile.communityId || '').trim();
+  const visibleManageRoles = useMemo(
+    () => roles.filter((role) => !(isOrgScopedAdmin && role.id === 'ADMIN')),
+    [roles, isOrgScopedAdmin]
+  );
   function getStoredProfileImage(userId?: string) {
     const normalizedId = String(userId || '').trim();
     if (!normalizedId) return '';
@@ -2882,7 +2886,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                         className={`text-sm p-2 rounded border bg-white font-medium ${selectedUser.active === false ? 'opacity-50 cursor-not-allowed' : 'border-slate-300'}`}
                         disabled={selectedUser.active === false}
                       >
-                        {roles.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+                        {visibleManageRoles.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
                       </select>
                    </div>
 
