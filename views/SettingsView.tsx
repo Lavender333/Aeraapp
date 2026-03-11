@@ -19,7 +19,6 @@ import { User, Bell, Lock, LogOut, Check, Building2, ArrowLeft, ArrowRight, Link
 const formatPhoneNumber = (value: string) => {
   if (!value) return value;
   const phoneNumber = value.replace(/[^\d]/g, '');
-  const householdSectionRef = useRef<HTMLDivElement | null>(null);
   if (phoneNumber.length < 4) return phoneNumber;
   if (phoneNumber.length < 7) {
     return `(${phoneNumber.slice(0, 3)}) ${phoneNumber.slice(3)}`;
@@ -300,6 +299,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [userSearch, setUserSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [communityInviteQrDataUrl, setCommunityInviteQrDataUrl] = useState('');
+  const [selectedOrgDetails, setSelectedOrgDetails] = useState<OrganizationProfile | null>(null);
   const visibleManageRoles = useMemo(
     () => roles.filter((role) => !(isOrgScopedAdmin && role.id === 'ADMIN')),
     [roles, isOrgScopedAdmin]
@@ -325,7 +325,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   // Org Directory State
   const [orgList, setOrgList] = useState<OrganizationProfile[]>([]);
   const [orgSearch, setOrgSearch] = useState('');
-  const [selectedOrgDetails, setSelectedOrgDetails] = useState<OrganizationProfile | null>(null);
   const [selectedOrgInviteQrDataUrl, setSelectedOrgInviteQrDataUrl] = useState('');
   const [orgMembers, setOrgMembers] = useState<OrgMember[]>([]);
   const [membersFallback, setMembersFallback] = useState(false);
