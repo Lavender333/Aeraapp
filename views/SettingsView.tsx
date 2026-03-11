@@ -4354,6 +4354,38 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <ChevronDown size={20} className={`text-slate-600 transition-transform ${expandedSections.community ? 'rotate-180' : ''}`} />
           </div>
         </button>
+        {!expandedSections.community && isOrgScopedAdmin && (
+          communityInviteUrl ? (
+            <div className="mt-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-20 h-20 rounded-xl border border-emerald-200 bg-white flex items-center justify-center overflow-hidden shrink-0">
+                    {communityInviteQrDataUrl ? (
+                      <img src={communityInviteQrDataUrl} alt={`QR code for ${profile.communityId}`} className="w-full h-full object-contain" />
+                    ) : (
+                      <Loader2 size={20} className="animate-spin text-emerald-700" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Member join QR ready</p>
+                    <p className="text-sm font-semibold text-emerald-900">Share this QR code so people can join {connectedOrgLabel || profile.communityId}.</p>
+                    <p className="text-xs text-slate-600 mt-1 break-all">{communityInviteUrl}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => toggleSection('community')}>
+                    View QR
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">QR not ready</p>
+              <p className="text-sm font-semibold text-amber-900">Add or verify your Organization ID in this section to generate the member join QR code.</p>
+            </div>
+          )
+        )}
         {!expandedSections.community && !communityReady && (
           <div className="mt-2">
             <Button size="sm" className="bg-sky-600 hover:bg-sky-700" onClick={() => toggleSection('community')}>
