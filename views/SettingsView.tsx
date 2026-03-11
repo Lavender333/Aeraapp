@@ -6,6 +6,7 @@ import { Button } from '../components/Button';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
+import { buildCommunityInviteUrl, generateCommunityInviteQrDataUrl } from '../services/communityInvite';
 import { AppNotificationRecord, cancelMyHouseholdJoinRequest, ConnectedHouseholdMember, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateProfileForUser, updateRequestStatus, updateVitalsForUser } from '../services/api';
 import { getOrgByCode } from '../services/supabase';
 import { listOrganizations as listOrganizationsSupabase } from '../services/supabaseApi';
@@ -208,10 +209,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const isPlatformAdmin = normalizedRole === 'ADMIN';
   const isOrgScopedAdmin = normalizedRole === 'ORG_ADMIN' || normalizedRole === 'INSTITUTION_ADMIN';
   const orgScopeId = String(profile.communityId || '').trim();
-  const visibleManageRoles = useMemo(
-    () => roles.filter((role) => !(isOrgScopedAdmin && role.id === 'ADMIN')),
-    [roles, isOrgScopedAdmin]
-  );
   function getStoredProfileImage(userId?: string) {
     const normalizedId = String(userId || '').trim();
     if (!normalizedId) return '';
@@ -289,6 +286,19 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [userSearch, setUserSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [communityInviteQrDataUrl, setCommunityInviteQrDataUrl] = useState('');
+  const visibleManageRoles = useMemo(
+    () => roles.filter((role) => !(isOrgScopedAdmin && role.id === 'ADMIN')),
+    [roles, isOrgScopedAdmin]
+  );
+  const communityInviteUrl = useMemo(
+    () => (profile.communityId ? buildCommunityInviteUrl(profile.communityId) : ''),
+    [profile.communityId]
+  );
+  const selectedOrgInviteUrl = useMemo(
+    () => (selectedOrgDetails?.id ? buildCommunityInviteUrl(selectedOrgDetails.id) : ''),
+    [selectedOrgDetails]
+  );
 
   useEffect(() => {
     // Ensure localStorage always contains a current role set (older caches may be missing roles).
@@ -303,6 +313,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [orgList, setOrgList] = useState<OrganizationProfile[]>([]);
   const [orgSearch, setOrgSearch] = useState('');
   const [selectedOrgDetails, setSelectedOrgDetails] = useState<OrganizationProfile | null>(null);
+  const [selectedOrgInviteQrDataUrl, setSelectedOrgInviteQrDataUrl] = useState('');
   const [orgMembers, setOrgMembers] = useState<OrgMember[]>([]);
   const [membersFallback, setMembersFallback] = useState(false);
 
@@ -610,6 +621,52 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     }
     setProfileImageDataUrl(StorageService.getProfileImageDataUrl(profile.id) || '');
   }, [profile.id]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!isOrgScopedAdmin || !profile.communityId) {
+      setCommunityInviteQrDataUrl('');
+      return () => {
+        active = false;
+      };
+    }
+
+    generateCommunityInviteQrDataUrl(profile.communityId)
+      .then((dataUrl) => {
+        if (active) setCommunityInviteQrDataUrl(dataUrl);
+      })
+      .catch(() => {
+        if (active) setCommunityInviteQrDataUrl('');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isOrgScopedAdmin, profile.communityId]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!selectedOrgDetails?.id) {
+      setSelectedOrgInviteQrDataUrl('');
+      return () => {
+        active = false;
+      };
+    }
+
+    generateCommunityInviteQrDataUrl(selectedOrgDetails.id)
+      .then((dataUrl) => {
+        if (active) setSelectedOrgInviteQrDataUrl(dataUrl);
+      })
+      .catch(() => {
+        if (active) setSelectedOrgInviteQrDataUrl('');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedOrgDetails]);
 
   useEffect(() => {
     let active = true;
@@ -2652,6 +2709,46 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                     </div>
                  </div>
 
+                 {selectedOrgInviteUrl && (
+                   <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
+                     <div className="flex items-start justify-between gap-3 flex-wrap">
+                       <div>
+                         <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Automatic join QR</p>
+                         <p className="text-sm font-semibold text-emerald-900">This organization automatically gets a join QR code from its Community ID.</p>
+                       </div>
+                       <span className="text-xs font-bold px-2 py-1 rounded-full bg-white text-emerald-700 border border-emerald-200">
+                         {selectedOrgDetails.id}
+                       </span>
+                     </div>
+                     <div className="flex flex-col gap-4 md:flex-row md:items-center">
+                       <div className="w-40 h-40 rounded-2xl border border-emerald-200 bg-white flex items-center justify-center overflow-hidden">
+                         {selectedOrgInviteQrDataUrl ? (
+                           <img src={selectedOrgInviteQrDataUrl} alt={`QR code for ${selectedOrgDetails.id}`} className="w-full h-full object-contain" />
+                         ) : (
+                           <Loader2 size={24} className="animate-spin text-emerald-700" />
+                         )}
+                       </div>
+                       <div className="flex-1 space-y-2">
+                         <p className="text-xs text-slate-600 break-all">{selectedOrgInviteUrl}</p>
+                         <div className="flex flex-wrap gap-2">
+                           <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => copyToClipboard(selectedOrgInviteUrl)}>
+                             <Copy size={16} className="mr-2" /> Copy Join Link
+                           </Button>
+                           {selectedOrgInviteQrDataUrl && (
+                             <a
+                               href={selectedOrgInviteQrDataUrl}
+                               download={`${selectedOrgDetails.id}_join_qr.png`}
+                               className="inline-flex items-center rounded-lg bg-white px-3 py-2 text-sm font-semibold text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+                             >
+                               <Download size={16} className="mr-2" /> Download QR
+                             </a>
+                           )}
+                         </div>
+                       </div>
+                     </div>
+                   </div>
+                 )}
+
                  {/* Member List Section */}
                 <div className="space-y-3">
                    <h3 className="font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
@@ -4241,6 +4338,40 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
         {expandedSections.community && (
           <div id={accordionPanelIds.community} role="region" aria-labelledby={accordionButtonIds.community}>
+        {isOrgScopedAdmin && communityInviteUrl && (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 space-y-3 mb-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Member join QR code</p>
+              <p className="text-sm font-semibold text-emerald-900">Share this QR code so people can join with Community ID {profile.communityId}.</p>
+            </div>
+            <div className="flex flex-col gap-4 md:flex-row md:items-center">
+              <div className="w-40 h-40 rounded-2xl border border-emerald-200 bg-white flex items-center justify-center overflow-hidden">
+                {communityInviteQrDataUrl ? (
+                  <img src={communityInviteQrDataUrl} alt={`QR code for ${profile.communityId}`} className="w-full h-full object-contain" />
+                ) : (
+                  <Loader2 size={24} className="animate-spin text-emerald-700" />
+                )}
+              </div>
+              <div className="flex-1 space-y-2">
+                <p className="text-xs text-slate-600 break-all">{communityInviteUrl}</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => copyToClipboard(communityInviteUrl)}>
+                    <Copy size={16} className="mr-2" /> Copy Link
+                  </Button>
+                  {communityInviteQrDataUrl && (
+                    <a
+                      href={communityInviteQrDataUrl}
+                      download={`${profile.communityId}_join_qr.png`}
+                      className="inline-flex items-center rounded-lg bg-white px-3 py-2 text-sm font-semibold text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+                    >
+                      <Download size={16} className="mr-2" /> Download QR
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         
         {profile.role === 'INSTITUTION_ADMIN' ? (
           <div className="relative z-10 space-y-3">
@@ -4324,6 +4455,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                  <XCircle size={16} /> {parentOrgLinkError}
                </div>
              )}
+
           </div>
         ) : (
           <>

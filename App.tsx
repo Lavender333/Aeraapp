@@ -3,6 +3,7 @@ import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { BottomNav } from './components/BottomNav';
 import { ViewState } from './types';
 import { StorageService } from './services/storage';
+import { capturePendingCommunityInviteFromUrl, getPendingCommunityInvite } from './services/communityInvite';
 import { getPeopleRegisteredCount as fetchPeopleRegisteredCount } from './services/api';
 import { hasSupabaseConfig, supabaseConfigMessage, supabase } from './services/supabase';
 
@@ -137,6 +138,8 @@ export default function App() {
   useEffect(() => {
     let active = true;
     const bootstrapSession = async () => {
+      const pendingInviteFromUrl = capturePendingCommunityInviteFromUrl();
+      const pendingInvite = pendingInviteFromUrl || getPendingCommunityInvite();
       const hash = window.location.hash || '';
       const search = window.location.search || '';
       const isRecoveryPath = window.location.pathname.includes('reset-password');
@@ -152,6 +155,9 @@ export default function App() {
         } else if (isRecoveryUrl) {
           setPostSplashView('RESET_PASSWORD');
           setView('RESET_PASSWORD');
+        } else if (pendingInvite?.communityId) {
+          setPostSplashView('REGISTRATION');
+          setView('SPLASH');
         } else {
           setPostSplashView('LOGIN');
           setView('SPLASH');
@@ -164,6 +170,9 @@ export default function App() {
         } else if (isRecoveryUrl) {
           setPostSplashView('RESET_PASSWORD');
           setView('RESET_PASSWORD');
+        } else if (pendingInvite?.communityId) {
+          setPostSplashView('REGISTRATION');
+          setView('SPLASH');
         } else {
           setView('SPLASH');
         }

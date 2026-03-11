@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { Input, Textarea } from '../components/Input';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { StorageService } from '../services/storage';
+import { getPendingCommunityInvite } from '../services/communityInvite';
 import { ensureHouseholdForCurrentUser, syncHouseholdMembersForUser, updateProfileForUser, updateVitalsForUser } from '../services/api';
 import { validateHouseholdMembers } from '../services/validation';
 import { supabase } from '../services/supabase';
@@ -73,10 +74,15 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
   const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [pendingCommunityId, setPendingCommunityId] = useState('');
   
   // Initialize language from storage if available
   useEffect(() => {
     const profile = StorageService.getProfile();
+    const pendingInvite = getPendingCommunityInvite();
+    if (pendingInvite?.communityId) {
+      setPendingCommunityId(pendingInvite.communityId);
+    }
     if (profile.language) {
       setFormData(prev => ({ ...prev, language: profile.language }));
     }
@@ -87,9 +93,11 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
          fullName: profile.fullName || prev.fullName,
          email: profile.email || prev.email,
          phone: profile.phone || prev.phone,
-         communityId: profile.communityId || prev.communityId,
+         communityId: profile.communityId || pendingInvite?.communityId || prev.communityId,
          role: profile.role || prev.role,
        }));
+    } else if (pendingInvite?.communityId) {
+      setFormData(prev => ({ ...prev, communityId: prev.communityId || pendingInvite.communityId }));
     }
   }, []);
 
@@ -364,6 +372,12 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
             </div>
 
             <div className="space-y-4">
+              {pendingCommunityId && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                  <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Community invite detected</p>
+                  <p className="text-sm font-semibold text-emerald-900">This signup will prefill Community ID {pendingCommunityId}.</p>
+                </div>
+              )}
               <Input 
                 label="Full Name" 
                 placeholder="Jane Doe"

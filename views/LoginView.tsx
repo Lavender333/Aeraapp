@@ -4,6 +4,7 @@ import { ViewState } from '../types';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { StorageService } from '../services/storage';
+import { getPendingCommunityInvite } from '../services/communityInvite';
 import { supabase } from '../services/supabase';
 import { t } from '../services/translations';
 import { LogIn, AlertOctagon, Mail, KeyRound, HelpCircle } from 'lucide-react';
@@ -44,6 +45,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
   const [recoveryPassword, setRecoveryPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [pendingCommunityId, setPendingCommunityId] = useState('');
 
   useEffect(() => {
     const hash = window.location.hash || '';
@@ -53,6 +55,10 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
       setIsRecovery(true);
       setShowReset(true);
       setInfo('Enter a new password to finish resetting your account.');
+    }
+    const pendingInvite = getPendingCommunityInvite();
+    if (pendingInvite?.communityId) {
+      setPendingCommunityId(pendingInvite.communityId);
     }
   }, []);
 
@@ -69,7 +75,13 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
       }
       console.log('Attempting login with email:', normalizedEmail);
       await StorageService.loginWithCredentials(normalizedEmail, enteredPassword);
-      const profile = safeGetProfile();
+      let profile = safeGetProfile();
+      const pendingInvite = getPendingCommunityInvite();
+      if (pendingInvite?.communityId && !String((profile as any)?.communityId || '').trim()) {
+        const updatedProfile = { ...profile, communityId: pendingInvite.communityId };
+        StorageService.saveProfile(updatedProfile as any);
+        profile = updatedProfile;
+      }
       // Defensive: fallback values for missing fields
       const id = profile.id || '';
       const name = profile.fullName || '';
@@ -123,7 +135,13 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
     }
     
     // Defensive: fallback for missing or malformed profile
-    const profile = safeGetProfile();
+    let profile = safeGetProfile();
+    const pendingInvite = getPendingCommunityInvite();
+    if (pendingInvite?.communityId && !String((profile as any)?.communityId || '').trim()) {
+      const updatedProfile = { ...profile, communityId: pendingInvite.communityId };
+      StorageService.saveProfile(updatedProfile as any);
+      profile = updatedProfile;
+    }
     const id = profile.id || '';
     const name = profile.fullName || '';
     const role = profile.role || 'GENERAL_USER';
@@ -163,6 +181,12 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
 
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
         <h2 className="text-sm font-bold text-slate-700 uppercase">Email Login</h2>
+        {pendingCommunityId && (
+          <div className="flex items-start gap-2 text-sm text-emerald-700 bg-emerald-50 p-3 rounded-lg border border-emerald-200">
+            <HelpCircle size={16} className="mt-0.5 shrink-0" />
+            <span>This link will connect your account to Community ID {pendingCommunityId} after sign in or signup.</span>
+          </div>
+        )}
         <Input 
           label="Email"
           placeholder="you@example.com"
