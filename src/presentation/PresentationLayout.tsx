@@ -1,166 +1,245 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { ExternalLink, X } from 'lucide-react';
 import { ViewState } from '../../types';
 import { Button } from '../../components/Button';
-import { PresentationDemoProvider } from './PresentationDemoProvider';
-import { presentationSlides } from './slides/slideDefinitions';
 
-const statusBadgeClass = (status: 'LIVE' | 'NEXT') => {
-  if (status === 'LIVE') return 'bg-emerald-600 text-white';
-  return 'bg-amber-500 text-white';
-};
+const featureRows = [
+  {
+    feature: 'Structured emergency intake',
+    advantage: 'Captures safety status, location, injuries, hazards, household size, and resource needs in a consistent workflow',
+    benefit: 'Faster triage, clearer field decisions, and fewer missed details during high-stress events',
+  },
+  {
+    feature: 'AI-assisted triage support',
+    advantage: 'Helps prioritize incoming requests and surface urgency signals quickly',
+    benefit: 'Reduces response delays and helps teams focus first on the highest-risk households',
+  },
+  {
+    feature: 'Offline-first operation',
+    advantage: 'Supports store-and-forward reporting with sync when connectivity returns',
+    benefit: 'Keeps communities operational when networks are overloaded or down',
+  },
+  {
+    feature: 'Role-based dashboards',
+    advantage: 'Gives admins, organization leaders, responders, and residents views tailored to their responsibilities',
+    benefit: 'Less confusion, stronger accountability, and quicker action by every user group',
+  },
+  {
+    feature: 'Community hub coordination',
+    advantage: 'Connects churches, NGOs, and local institutions through trusted community structures',
+    benefit: 'Enables hyper-local response using organizations people already know and trust',
+  },
+  {
+    feature: 'Member safety check and status tracking',
+    advantage: 'Makes it easy to see who is safe, who needs help, and who has not responded',
+    benefit: 'Improves situational awareness and reduces time spent chasing incomplete status updates',
+  },
+  {
+    feature: 'Broadcast alerts and targeted communication',
+    advantage: 'Supports system-wide or organization-level messaging',
+    benefit: 'Delivers clear instructions quickly and helps reduce misinformation during incidents',
+  },
+  {
+    feature: 'Inventory and replenishment management',
+    advantage: 'Tracks supply levels and requests for items like water, food, blankets, and medical kits',
+    benefit: 'Prevents shortages, improves logistics visibility, and supports faster resupply',
+  },
+  {
+    feature: 'Household and vulnerability profiles',
+    advantage: 'Stores important readiness factors such as mobility limits, medical dependency, and transportation access',
+    benefit: 'Helps teams identify high-risk households before and during an event',
+  },
+  {
+    feature: 'Preparedness and recovery support',
+    advantage: 'Extends beyond immediate response into kit readiness, recovery tracking, and financial assistance workflows',
+    benefit: 'Makes AERA useful before, during, and after disaster—not only at the moment of crisis',
+  },
+  {
+    feature: 'Multi-language support',
+    advantage: 'Improves accessibility for diverse communities',
+    benefit: 'Expands reach, trust, and adoption across broader populations',
+  },
+  {
+    feature: 'Mobile-first experience',
+    advantage: 'Designed for rapid use in the field and on personal devices',
+    benefit: 'Increases usability for both affected residents and operational teams',
+  },
+];
 
-const statusLabel = (status: 'LIVE' | 'NEXT') => {
-  if (status === 'LIVE') return 'Live Now';
-  return 'Next Release';
-};
+const standoutSections = [
+  {
+    title: 'Built for real disaster conditions',
+    body: 'AERA is designed for environments where time is limited, information is incomplete, and connectivity may fail. Its offline-first and mobile-first approach keeps operations practical when conventional workflows break down.',
+  },
+  {
+    title: 'Connects institutions and households',
+    body: 'AERA creates a shared operating picture across households, churches, NGOs, organization administrators, responders, and public leaders.',
+  },
+  {
+    title: 'Supports preparedness, response, and recovery',
+    body: 'The platform stays useful before, during, and after an incident through onboarding, alerts, triage, logistics, and financial recovery support.',
+  },
+  {
+    title: 'Turns trusted networks into response assets',
+    body: 'Community organizations can operate as digital hubs that accelerate communication, accountability, and help distribution.',
+  },
+];
 
-const SlideFrame: React.FC<{
-  slideNumber: number;
-  section?: string;
-  title: string;
-  speakerNote?: string;
-  status: 'LIVE' | 'NEXT';
-  children: React.ReactNode;
-  lockInteraction?: boolean;
-  scale?: number;
-}> = ({ slideNumber, section, title, speakerNote, status, children, lockInteraction = true, scale = 1 }) => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const contentRef = useRef<HTMLDivElement | null>(null);
-  const [fitScale, setFitScale] = useState(1);
-
-  useLayoutEffect(() => {
-    const container = containerRef.current;
-    const content = contentRef.current;
-    if (!container || !content) return;
-
-    const updateScale = () => {
-      const containerRect = container.getBoundingClientRect();
-      const contentWidth = Math.max(content.scrollWidth, 1);
-      const contentHeight = Math.max(content.scrollHeight, 1);
-
-      const widthRatio = containerRect.width / contentWidth;
-      const heightRatio = containerRect.height / contentHeight;
-      const nextFitScale = Math.min(1, widthRatio, heightRatio);
-
-      setFitScale(Number.isFinite(nextFitScale) ? nextFitScale : 1);
-    };
-
-    updateScale();
-
-    const observer = new ResizeObserver(() => updateScale());
-    observer.observe(container);
-    observer.observe(content);
-    window.addEventListener('resize', updateScale);
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', updateScale);
-    };
-  }, [children]);
-
-  const effectiveScale = Math.min(scale, fitScale);
-
-  return (
-    <section className="w-screen h-screen relative bg-slate-950 overflow-hidden text-slate-100">
-      <div className="absolute inset-0 z-0 opacity-15 bg-[radial-gradient(circle_at_1px_1px,rgba(251,191,36,0.5)_1px,transparent_0)] bg-[size:32px_32px]" />
-      <div className="absolute -top-20 -right-20 w-56 h-56 rotate-45 bg-amber-400/10 z-0" />
-
-      <div className="absolute top-4 left-4 z-40 max-w-[72vw] rounded-xl border border-slate-700 bg-slate-900/95 px-4 py-3 shadow-sm">
-        {section && <p className="text-[11px] tracking-[0.18em] uppercase text-amber-300 font-semibold mb-1">{section}</p>}
-        <p className="text-xl md:text-2xl leading-tight font-semibold text-slate-100">{title}</p>
-        <p className="text-xs text-slate-400 mt-1">Slide {slideNumber}</p>
-      </div>
-
-      <div className="absolute top-4 right-4 z-40 flex items-center gap-2">
-        <div className={`rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeClass(status)}`}>
-          {statusLabel(status)}
-        </div>
-      </div>
-
-      <div ref={containerRef} className="absolute inset-x-0 top-24 bottom-14 overflow-hidden flex items-start justify-center z-10">
-        <div
-          ref={contentRef}
-          style={{
-            transform: `scale(${effectiveScale})`,
-            transformOrigin: 'top center',
-            width: '100%',
-            height: '100%',
-          }}
-        >
-          {children}
-        </div>
-      </div>
-
-      <div className="absolute bottom-0 left-0 right-0 z-40 h-12 border-t border-slate-700 bg-slate-900/95 px-4 flex items-center">
-        <p className="text-sm text-slate-200 truncate">
-          {speakerNote || 'Presentation walkthrough of current AERA capabilities and clearly marked next-release areas.'}
-        </p>
-      </div>
-
-      {lockInteraction && <div className="absolute inset-0 z-20" aria-hidden="true" />}
-    </section>
-  );
-};
+const stakeholderBenefits = [
+  {
+    title: 'Residents and Households',
+    items: ['Easier access to help', 'Faster reporting during emergencies', 'Better visibility to trusted support networks', 'More personalized response based on household realities'],
+  },
+  {
+    title: 'Churches, NGOs, and Community Organizations',
+    items: ['Better member accountability', 'Stronger preparedness oversight', 'Clearer resource planning', 'Faster communication with affected households'],
+  },
+  {
+    title: 'Responders and Authorities',
+    items: ['Better triage inputs', 'Improved prioritization of high-risk cases', 'Stronger local coordination', 'More efficient use of limited personnel and supplies'],
+  },
+  {
+    title: 'Overall Community',
+    items: ['Faster, more coordinated response', 'Reduced duplication and confusion', 'Better use of local trust networks', 'Stronger resilience before, during, and after disasters'],
+  },
+];
 
 export const PresentationLayout: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
-  const [slideIndex, setSlideIndex] = useState(0);
-
-  const totalSlides = presentationSlides.length;
-  const currentSlide = useMemo(() => presentationSlides[slideIndex], [slideIndex]);
-
-  const goNext = () => setSlideIndex((value) => Math.min(value + 1, totalSlides - 1));
-  const goPrev = () => setSlideIndex((value) => Math.max(value - 1, 0));
+  const handleExit = () => {
+    if (typeof window !== 'undefined' && window.location.pathname === '/presentation') {
+      window.location.assign('/');
+      return;
+    }
+    setView('LOGIN');
+  };
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'ArrowRight') {
-        event.preventDefault();
-        goNext();
-      }
-      if (event.key === 'ArrowLeft') {
-        event.preventDefault();
-        goPrev();
-      }
       if (event.key === 'Escape') {
         event.preventDefault();
-        setView('DASHBOARD');
+        handleExit();
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [setView]);
+  }, []);
 
   return (
-    <PresentationDemoProvider>
-      <div className="w-screen h-screen bg-slate-950 overflow-hidden">
-        <div key={currentSlide.id} className="w-full h-full transition-opacity duration-300 ease-in-out opacity-100">
-          <SlideFrame
-            slideNumber={currentSlide.id}
-            section={currentSlide.section}
-            title={currentSlide.title}
-            speakerNote={currentSlide.speakerNote}
-            status={currentSlide.status}
-            lockInteraction={currentSlide.lockInteraction}
-            scale={currentSlide.scale || 1}
-          >
-            {currentSlide.content}
-          </SlideFrame>
-        </div>
-
-        <div className="absolute top-14 right-4 z-50 flex items-center gap-3 bg-slate-900/95 border border-slate-700 rounded-xl px-3 py-2 shadow-sm">
-          <Button size="sm" variant="secondary" onClick={goPrev} disabled={slideIndex === 0}>
-            <ArrowLeft size={16} className="mr-1" /> Prev
-          </Button>
-          <span className="text-sm font-medium text-slate-200 min-w-[110px] text-center">
-            {slideIndex + 1} / {totalSlides}
-          </span>
-          <Button size="sm" onClick={goNext} disabled={slideIndex === totalSlides - 1}>
-            Next <ArrowRight size={16} className="ml-1" />
-          </Button>
+    <div className="min-h-screen bg-slate-950 text-slate-100 overflow-y-auto">
+      <div className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/90 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3 md:px-6">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-300">Presentation Mode</p>
+            <h1 className="text-lg font-semibold text-white md:text-xl">AERA One-Pager</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <a
+              href="/docs/AERA_FEATURES_ADVANTAGES_BENEFITS_ONE_PAGER.md"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-200 transition hover:border-amber-400/40 hover:text-white"
+            >
+              <ExternalLink size={16} /> Open source file
+            </a>
+            <Button size="sm" variant="secondary" onClick={handleExit}>
+              <X size={16} className="mr-1" /> Exit
+            </Button>
+          </div>
         </div>
       </div>
-    </PresentationDemoProvider>
+
+      <div className="relative overflow-hidden">
+        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,rgba(245,158,11,0.35),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.22),transparent_28%)]" />
+        <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-10 md:px-6 md:py-14">
+          <section className="rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl shadow-slate-950/40">
+            <div className="max-w-4xl space-y-5">
+              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-amber-300">AERA at a glance</p>
+              <h2 className="text-4xl font-semibold tracking-tight text-white md:text-6xl">Features, advantages, and benefits in one presentation-ready page.</h2>
+              <p className="max-w-3xl text-base leading-7 text-slate-300 md:text-lg">
+                AERA is a mobile-first emergency coordination platform that helps households, trusted organizations, responders, and public-sector leaders prepare, communicate, respond, and recover faster during disasters.
+              </p>
+              <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-5 text-emerald-50">
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-300">Core value proposition</p>
+                <p className="mt-2 text-xl font-medium leading-8 md:text-2xl">AERA helps communities move from chaos to coordinated action by giving every stakeholder the right information, at the right time, in the right format.</p>
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-300">Feature matrix</p>
+                <h3 className="text-2xl font-semibold text-white md:text-3xl">What AERA does, why it matters, and what it changes</h3>
+              </div>
+              <p className="max-w-2xl text-sm leading-6 text-slate-400">This view replaces the old slide deck in presentation mode and keeps the entire one-pager accessible in a single scrollable layout.</p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {featureRows.map((row) => (
+                <article key={row.feature} className="rounded-2xl border border-white/10 bg-slate-900/70 p-5">
+                  <p className="text-lg font-semibold text-white">{row.feature}</p>
+                  <div className="mt-4 space-y-3 text-sm leading-6">
+                    <div>
+                      <p className="font-semibold text-amber-300">Advantage</p>
+                      <p className="text-slate-300">{row.advantage}</p>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-emerald-300">Benefit</p>
+                      <p className="text-slate-300">{row.benefit}</p>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-purple-300">Why AERA stands out</p>
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                {standoutSections.map((section) => (
+                  <div key={section.title} className="rounded-2xl border border-white/10 bg-slate-900/70 p-5">
+                    <h4 className="text-lg font-semibold text-white">{section.title}</h4>
+                    <p className="mt-2 text-sm leading-6 text-slate-300">{section.body}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-6 md:p-8">
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-amber-300">Bottom line</p>
+              <h4 className="mt-3 text-3xl font-semibold text-white">From fragmented reaction to coordinated action.</h4>
+              <p className="mt-4 text-sm leading-7 text-amber-50/90">
+                By combining structured intake, offline resilience, role-based coordination, community hub operations, logistics visibility, and recovery support, AERA helps communities respond faster, protect vulnerable households, and recover with greater confidence.
+              </p>
+            </div>
+          </section>
+
+          <section className="space-y-4 pb-10">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-rose-300">Stakeholder benefits</p>
+              <h3 className="text-2xl font-semibold text-white md:text-3xl">Clear value for every participant in the response chain</h3>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              {stakeholderBenefits.map((group) => (
+                <article key={group.title} className="rounded-2xl border border-white/10 bg-slate-900/70 p-5">
+                  <h4 className="text-lg font-semibold text-white">{group.title}</h4>
+                  <ul className="mt-4 space-y-2 text-sm text-slate-300">
+                    {group.items.map((item) => (
+                      <li key={item} className="flex gap-3">
+                        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-300" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
   );
 };
