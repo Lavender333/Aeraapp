@@ -84,6 +84,7 @@
       (function () {
         var BOOT_TIMEOUT_MS = 20000;
         var BANNER_ID = 'aera-bootstrap-timeout';
+        var RETRY_KEY = 'aera.assetLoadRetry';
         var firstErrorText = null;
 
         function getBanner() {
@@ -135,6 +136,23 @@
           renderBanner('AERA did not finish loading', detail);
         }
 
+        function shouldRetryAssetLoad(src) {
+          return typeof src === 'string' && /\/assets\/(index|polyfills|.*legacy).*\.js($|\?)/i.test(src);
+        }
+
+        function retryWithCacheBust() {
+          try {
+            if (window.sessionStorage.getItem(RETRY_KEY) === '1') return false;
+            window.sessionStorage.setItem(RETRY_KEY, '1');
+            var url = new URL(window.location.href);
+            url.searchParams.set('v', String(Date.now()));
+            window.location.replace(url.toString());
+            return true;
+          } catch (e) {
+            return false;
+          }
+        }
+
         window.addEventListener('error', function (event) {
           if (window.__AERA_BOOTED__) return;
           var target = event && event.target;
@@ -142,6 +160,10 @@
             ? ('Script failed to load: ' + target.src)
             : null;
           firstErrorText = firstErrorText || loadError || normalizeError(event && (event.error || event.message));
+          if (target && target.tagName === 'SCRIPT' && shouldRetryAssetLoad(target.src) && retryWithCacheBust()) {
+            renderBanner('AERA is refreshing', 'A startup asset failed to load. Retrying once with a fresh copy…');
+            return;
+          }
           renderBanner('AERA startup error', firstErrorText || 'Unknown startup error');
         }, true);
 
@@ -155,6 +177,7 @@
 
         window.setInterval(function () {
           if (!window.__AERA_BOOTED__) return;
+          try { window.sessionStorage.removeItem(RETRY_KEY); } catch (e) {}
           var banner = getBanner();
           if (banner && banner.parentNode) {
             banner.parentNode.removeChild(banner);
