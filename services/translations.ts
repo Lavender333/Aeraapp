@@ -50,6 +50,11 @@ const DICTIONARY: Record<LanguageCode, Record<string, string>> = {
     "dash.logistics": "Logistics",
     "dash.logistics.desc": "Retail & Supply Chain",
     "dash.manage_org": "Manage Organization Hub",
+    "ping.requested": "Status Check Requested",
+    "ping.by": "By",
+    "ping.safe_question": "Are you safe right now?",
+    "ping.safe_action": "I Am Safe",
+    "ping.help_action": "I Need Help",
 
     // GAP (Financial Aid)
     "gap.title": "Financial Aid Center (G.A.P.)",
@@ -147,7 +152,25 @@ const DICTIONARY: Record<LanguageCode, Record<string, string>> = {
     "settings.personal_info": "Personal Info",
     "settings.vital_info": "Vital Intake Info",
     "settings.trusted_conn": "Trusted Community Connection",
-    "settings.notifications": "Notifications"
+    "settings.notifications": "Notifications",
+    "settings.language_updated": "Language updated",
+    "settings.overview": "Settings Overview",
+    "settings.account_completion": "Account completion:",
+    "settings.status_complete": "Mostly complete",
+    "settings.status_attention": "Needs attention",
+    "settings.training_video": "Training Video",
+    "settings.training_title": "Watch the welcome walkthrough again",
+    "settings.training_desc": "Open the original onboarding video from Settings whenever you need a refresher.",
+    "settings.play_welcome_video": "Play Welcome Video",
+    "settings.admin_area": "Administrator Area",
+    "settings.admin_roles_dashboards": "Roles & Dashboards",
+    "settings.user_directory_access": "User Directory & Access Control",
+    "settings.new_signups": "New Signups",
+    "settings.financial_dashboard": "Financial Dashboard",
+    "settings.organization_directory": "Organization Directory",
+    "settings.master_inventory": "Master Inventory Database",
+    "settings.manage_broadcasts": "Manage Broadcasts",
+    "settings.view_raw_database": "View Raw Database"
   },
   es: {
     // General
@@ -195,6 +218,11 @@ const DICTIONARY: Record<LanguageCode, Record<string, string>> = {
     "dash.logistics": "Logística",
     "dash.logistics.desc": "Cadena de Suministro",
     "dash.manage_org": "Gestionar Organización",
+    "ping.requested": "Verificación de estado solicitada",
+    "ping.by": "Por",
+    "ping.safe_question": "¿Estás a salvo en este momento?",
+    "ping.safe_action": "Estoy a salvo",
+    "ping.help_action": "Necesito ayuda",
 
     // GAP
     "gap.title": "Centro de Ayuda Financiera (G.A.P.)",
@@ -265,7 +293,7 @@ const DICTIONARY: Record<LanguageCode, Record<string, string>> = {
     "help.medical_cond": "Condiciones Médicas / Necesidades Especiales",
     "help.upload": "Subir Fotos / Video (Opcional)",
     "help.review": "Revisar y Enviar",
-    "help.consent": "I consent to share my information with AERA and, when appropriate, with emergency services. If I am experiencing an immediate emergency, I understand that I should call 911.",
+    "help.consent": "Doy mi consentimiento para compartir mi información con AERA y, cuando corresponda, con los servicios de emergencia. Si estoy experimentando una emergencia inmediata, entiendo que debo llamar al 911.",
     "help.submit_btn": "Enviar Solicitud de Emergencia",
     "help.success_title": "Solicitud Enviada",
     "help.success_desc": "Los servicios de emergencia han recibido tu solicitud.",
@@ -281,7 +309,7 @@ const DICTIONARY: Record<LanguageCode, Record<string, string>> = {
     "reg.vital": "Ingreso Vital",
     "reg.vital_desc": "Llenar esto ahorra tiempo crítico.",
     "reg.community": "Conexión Comunitaria",
-    "reg.community_desc": "Lienzo a una institución de confiance.",
+    "reg.community_desc": "Vincúlate a una institución de confianza.",
     "reg.safety": "Seguridad y Privacidad",
     "reg.complete": "Completar Configuración",
     
@@ -292,7 +320,25 @@ const DICTIONARY: Record<LanguageCode, Record<string, string>> = {
     "settings.personal_info": "Información Personal",
     "settings.vital_info": "Información Vital",
     "settings.trusted_conn": "Conexión Comunitaria",
-    "settings.notifications": "Notificaciones"
+    "settings.notifications": "Notificaciones",
+    "settings.language_updated": "Idioma actualizado",
+    "settings.overview": "Resumen de configuración",
+    "settings.account_completion": "Progreso de la cuenta:",
+    "settings.status_complete": "Casi completo",
+    "settings.status_attention": "Requiere atención",
+    "settings.training_video": "Video de capacitación",
+    "settings.training_title": "Vuelve a ver la guía de bienvenida",
+    "settings.training_desc": "Abre el video original de incorporación desde Configuración cuando necesites un repaso.",
+    "settings.play_welcome_video": "Reproducir video de bienvenida",
+    "settings.admin_area": "Área administrativa",
+    "settings.admin_roles_dashboards": "Roles y paneles",
+    "settings.user_directory_access": "Directorio de usuarios y control de acceso",
+    "settings.new_signups": "Nuevos registros",
+    "settings.financial_dashboard": "Panel financiero",
+    "settings.organization_directory": "Directorio de organizaciones",
+    "settings.master_inventory": "Base maestra de inventario",
+    "settings.manage_broadcasts": "Gestionar transmisiones",
+    "settings.view_raw_database": "Ver base de datos"
   },
   fr: {
     // General
@@ -340,6 +386,11 @@ const DICTIONARY: Record<LanguageCode, Record<string, string>> = {
     "dash.logistics": "Logistique",
     "dash.logistics.desc": "Chaîne d'approvisionnement",
     "dash.manage_org": "Gérer l'Organisation",
+    "ping.requested": "Vérification de statut demandée",
+    "ping.by": "Par",
+    "ping.safe_question": "Êtes-vous en sécurité en ce moment ?",
+    "ping.safe_action": "Je suis en sécurité",
+    "ping.help_action": "J'ai besoin d'aide",
 
     // GAP
     "gap.title": "Centre d'Aide Financière (G.A.P.)",
@@ -410,7 +461,7 @@ const DICTIONARY: Record<LanguageCode, Record<string, string>> = {
     "help.medical_cond": "Conditions Médicales",
     "help.upload": "Télécharger Photos / Vidéo",
     "help.review": "Vérifier et Soumettre",
-    "help.consent": "I consent to share my information with AERA and, when appropriate, with emergency services. If I am experiencing an immediate emergency, I understand that I should call 911.",
+    "help.consent": "Je consens à partager mes informations avec AERA et, le cas échéant, avec les services d'urgence. Si je fais face à une urgence immédiate, je comprends que je dois appeler le 911.",
     "help.submit_btn": "Envoyer Demande",
     "help.success_title": "Demande Envoyée",
     "help.success_desc": "Les secours ont reçu votre demande.",
@@ -437,7 +488,25 @@ const DICTIONARY: Record<LanguageCode, Record<string, string>> = {
     "settings.personal_info": "Infos Personnelles",
     "settings.vital_info": "Infos Vitales",
     "settings.trusted_conn": "Connexion Communautaire",
-    "settings.notifications": "Notifications"
+    "settings.notifications": "Notifications",
+    "settings.language_updated": "Langue mise à jour",
+    "settings.overview": "Vue d'ensemble des paramètres",
+    "settings.account_completion": "Avancement du compte :",
+    "settings.status_complete": "Presque complet",
+    "settings.status_attention": "Attention requise",
+    "settings.training_video": "Vidéo de formation",
+    "settings.training_title": "Regarder à nouveau la présentation de bienvenue",
+    "settings.training_desc": "Ouvrez la vidéo d'intégration originale depuis les paramètres chaque fois que vous avez besoin d'un rappel.",
+    "settings.play_welcome_video": "Lire la vidéo de bienvenue",
+    "settings.admin_area": "Zone administrateur",
+    "settings.admin_roles_dashboards": "Rôles et tableaux de bord",
+    "settings.user_directory_access": "Annuaire des utilisateurs et contrôle d'accès",
+    "settings.new_signups": "Nouvelles inscriptions",
+    "settings.financial_dashboard": "Tableau de bord financier",
+    "settings.organization_directory": "Annuaire des organisations",
+    "settings.master_inventory": "Base d'inventaire principale",
+    "settings.manage_broadcasts": "Gérer les diffusions",
+    "settings.view_raw_database": "Voir la base de données"
   }
 };
 

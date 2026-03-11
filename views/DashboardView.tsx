@@ -63,6 +63,7 @@ interface DashboardViewProps {
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
+  const PING_REFRESH_INTERVAL_MS = 15000;
   const ONBOARDING_WELCOME_SNOOZE_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
   const ONBOARDING_BANNER_SNOOZE_MS = 1000 * 60 * 60 * 24; // 1 day
   const ONBOARDING_WELCOME_KEY = 'aera.onboarding.welcome.dismissUntil';
@@ -293,12 +294,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
 
     // Handle deferred finance open (e.g., from Splash)
     const openFinanceIfFlagged = () => {
+      if (normalizeRole(profile.role) !== 'ADMIN') {
+        sessionStorage.removeItem('openFinanceOnLoad');
+        return;
+      }
+
       if (sessionStorage.getItem('openFinanceOnLoad')) {
         setShowFinanceModal(true);
         sessionStorage.removeItem('openFinanceOnLoad');
       }
     };
     openFinanceIfFlagged();
+
+    const refreshPingIfVisible = () => {
+      if (document.visibilityState === 'visible') {
+        refreshPendingPing().catch(() => {});
+      }
+    };
+
+    const pingInterval = window.setInterval(() => {
+      refreshPendingPing().catch(() => {});
+    }, PING_REFRESH_INTERVAL_MS);
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -307,6 +323,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     window.addEventListener('inventory-update', handleStorageChange);
     window.addEventListener('profile-image-updated', handleProfileImageUpdate);
     window.addEventListener('finance-open', openFinanceIfFlagged);
+    window.addEventListener('focus', refreshPingIfVisible);
+    document.addEventListener('visibilitychange', refreshPingIfVisible);
     if (profile.communityId) {
       const orgId = profile.communityId;
       getBroadcast(orgId)
@@ -324,6 +342,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
       window.removeEventListener('inventory-update', handleStorageChange);
       window.removeEventListener('profile-image-updated', handleProfileImageUpdate);
       window.removeEventListener('finance-open', openFinanceIfFlagged);
+      window.removeEventListener('focus', refreshPingIfVisible);
+      document.removeEventListener('visibilitychange', refreshPingIfVisible);
+      window.clearInterval(pingInterval);
     };
   }, []);
 
@@ -676,7 +697,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
       )}
 
       {/* Financial Intelligence Modal */}
-      {showFinanceModal && (
+      {userRole === 'ADMIN' && showFinanceModal && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in"
           onClick={() => setShowFinanceModal(false)}
@@ -1083,23 +1104,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                 <BellRing size={24} />
               </div>
               <div>
-                <h2 className="font-bold text-lg leading-tight">Status Check Requested</h2>
-                <p className="text-purple-200 text-sm">By {pendingPing.requesterName}</p>
+                <h2 className="font-bold text-lg leading-tight">{t('ping.requested')}</h2>
+                <p className="text-purple-200 text-sm">{t('ping.by')} {pendingPing.requesterName}</p>
               </div>
            </div>
-           <p className="mb-4 font-medium">Are you safe right now?</p>
+           <p className="mb-4 font-medium">{t('ping.safe_question')}</p>
            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Button 
                 onClick={() => respondToPing(true)} 
                 className="bg-green-500 hover:bg-green-400 text-white border-0 font-bold"
               >
-                I Am Safe
+                {t('ping.safe_action')}
               </Button>
               <Button 
                 onClick={() => respondToPing(false)} 
                 className="bg-amber-500 hover:bg-amber-400 text-white border-0 font-bold"
               >
-                I Need Help
+                {t('ping.help_action')}
               </Button>
            </div>
         </div>

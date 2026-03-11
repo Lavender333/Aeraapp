@@ -13,6 +13,19 @@ import { GoogleGenAI } from "../services/mockGenAI";
 
 type OrgDashboardTab = 'MEMBERS' | 'PREPAREDNESS' | 'INVENTORY';
 
+const mergeReplenishmentRequests = (remoteRequests: ReplenishmentRequest[], localRequests: ReplenishmentRequest[]) => {
+  const merged = new Map<string, ReplenishmentRequest>();
+
+  [...localRequests, ...remoteRequests].forEach((request) => {
+    if (!request?.id) return;
+    merged.set(request.id, request);
+  });
+
+  return Array.from(merged.values()).sort(
+    (a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
+  );
+};
+
 export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initialTab?: OrgDashboardTab; communityIdOverride?: string }> = ({ setView, initialTab = 'MEMBERS', communityIdOverride }) => {
   const isUuid = (value: string) =>
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
@@ -213,14 +226,16 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
       setInventoryFallback(fromCache);
     });
 
+    const localRequests = StorageService.getOrgReplenishmentRequests(id);
+
     listRequests(id)
       .then((data) => {
         setRequestsFallback(false);
-        setRequests(data);
+        setRequests(mergeReplenishmentRequests(data, localRequests));
       })
       .catch(() => {
         setRequestsFallback(true);
-        setRequests(StorageService.getOrgReplenishmentRequests(id));
+        setRequests(localRequests);
       });
 
     StorageService.fetchMemberStatus(id).then((resp) => {
@@ -243,16 +258,17 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     let cancelled = false;
 
     const refreshRequests = () => {
+      const localRequests = StorageService.getOrgReplenishmentRequests(activeOrgCode);
       listRequests(activeOrgCode)
         .then((data) => {
           if (cancelled) return;
           setRequestsFallback(false);
-          setRequests(data);
+          setRequests(mergeReplenishmentRequests(data, localRequests));
         })
         .catch(() => {
           if (cancelled) return;
           setRequestsFallback(true);
-          setRequests(StorageService.getOrgReplenishmentRequests(activeOrgCode));
+          setRequests(localRequests);
         });
     };
 
@@ -460,7 +476,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
       try {
         await createRequest(activeOrgCode, { item: selectedItem, quantity: requestAmount, provider: replenishmentProvider, orgName });
         const refreshed = await listRequests(activeOrgCode);
-        setRequests(refreshed);
+        setRequests(mergeReplenishmentRequests(refreshed, StorageService.getOrgReplenishmentRequests(activeOrgCode)));
       } catch (apiError) {
         console.warn('API request failed, using local storage:', apiError);
         // Use local storage as fallback

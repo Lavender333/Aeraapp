@@ -153,6 +153,19 @@ const US_STATE_CODES = [
 ];
 
 export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
+  const mergeReplenishmentRequests = (remoteRequests: ReplenishmentRequest[], localRequests: ReplenishmentRequest[]) => {
+    const merged = new Map<string, ReplenishmentRequest>();
+
+    [...localRequests, ...remoteRequests].forEach((request) => {
+      if (!request?.id) return;
+      merged.set(request.id, request);
+    });
+
+    return Array.from(merged.values()).sort(
+      (a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
+    );
+  };
+
   const trustedCommunityRef = useRef<HTMLElement | null>(null);
   const profileSectionRef = useRef<HTMLElement | null>(null);
   const contactsSectionRef = useRef<HTMLElement | null>(null);
@@ -1906,18 +1919,19 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   const openMasterInventory = async () => {
     if (!isAdmin) return;
+    const localReqs = StorageService.getAllReplenishmentRequests();
     try {
       const remoteReqs = await listAllRequests();
-      const scopedRemoteReqs = isOrgScopedAdmin
-        ? remoteReqs.filter((req) => String(req.orgId || '') === orgScopeId)
-        : remoteReqs;
-      setInventoryRequests(scopedRemoteReqs);
+      const mergedReqs = mergeReplenishmentRequests(remoteReqs, localReqs);
+      const scopedMergedReqs = isOrgScopedAdmin
+        ? mergedReqs.filter((req) => String(req.orgId || '') === orgScopeId)
+        : mergedReqs;
+      setInventoryRequests(scopedMergedReqs);
     } catch (err) {
       console.warn('Failed to load master inventory requests from Supabase; using local cache', err);
-      const reqs = StorageService.getAllReplenishmentRequests();
       const scopedReqs = isOrgScopedAdmin
-        ? reqs.filter((req) => String(req.orgId || '') === orgScopeId)
-        : reqs;
+        ? localReqs.filter((req) => String(req.orgId || '') === orgScopeId)
+        : localReqs;
       setInventoryRequests(scopedReqs);
     }
     setCurrentSection('MASTER_INVENTORY');
@@ -2012,7 +2026,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       StorageService.saveProfile(updated);
       return updated;
     });
-    setLanguageUpdatedMessage('Language updated');
+    setLanguageUpdatedMessage(t('settings.language_updated'));
     if (languageUpdatedTimeoutRef.current) {
       window.clearTimeout(languageUpdatedTimeoutRef.current);
     }
@@ -2020,6 +2034,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       setLanguageUpdatedMessage(null);
       languageUpdatedTimeoutRef.current = null;
     }, 1500);
+  };
+
+  const openFinancialDashboard = () => {
+    if (!isPlatformAdmin) return;
+    sessionStorage.setItem('openFinanceOnLoad', '1');
+    setView('DASHBOARD');
+    window.dispatchEvent(new Event('finance-open'));
   };
 
   const handleMarkFulfilled = async (requestId: string) => {
@@ -3245,11 +3266,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       <section className="bg-white/95 border border-slate-200 rounded-2xl p-4 shadow-sm">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Settings Overview</p>
-            <p className="text-lg font-bold text-slate-900 mt-1">Account completion: {settingsCompletionPct}%</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{t('settings.overview')}</p>
+            <p className="text-lg font-bold text-slate-900 mt-1">{t('settings.account_completion')} {settingsCompletionPct}%</p>
           </div>
           <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${profileComplete ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-            {profileComplete ? 'Mostly complete' : 'Needs attention'}
+            {profileComplete ? t('settings.status_complete') : t('settings.status_attention')}
           </span>
         </div>
       </section>
@@ -3261,13 +3282,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               <PlayCircle size={22} />
             </div>
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Training Video</p>
-              <h2 className="text-lg font-bold text-slate-900 mt-1">Watch the welcome walkthrough again</h2>
-              <p className="text-sm text-slate-600 mt-1">Open the original onboarding video from Settings whenever you need a refresher.</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{t('settings.training_video')}</p>
+              <h2 className="text-lg font-bold text-slate-900 mt-1">{t('settings.training_title')}</h2>
+              <p className="text-sm text-slate-600 mt-1">{t('settings.training_desc')}</p>
             </div>
           </div>
           <Button onClick={() => setShowWelcomeVideoModal(true)} className="min-w-[220px] justify-center">
-            Play Welcome Video
+            {t('settings.play_welcome_video')}
           </Button>
         </div>
       </section>
@@ -3334,15 +3355,15 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           </div>
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-2 text-slate-300 font-bold text-xs uppercase tracking-wider">
-              <Lock size={12} /> Administrator Area
+              <Lock size={12} /> {t('settings.admin_area')}
             </div>
-            <h2 className="text-xl font-bold mb-4 text-slate-300">Roles & Dashboards</h2>
+            <h2 className="text-xl font-bold mb-4 text-slate-300">{t('settings.admin_roles_dashboards')}</h2>
             <div className="space-y-3">
               <Button 
                 onClick={openAccessControl} 
                 className="bg-brand-600 hover:bg-brand-500 text-white border-0 w-full justify-between"
               >
-                <span>User Directory & Access Control</span>
+                <span>{t('settings.user_directory_access')}</span>
                 <Users size={18} />
               </Button>
               {isPlatformAdmin && (
@@ -3350,29 +3371,38 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                   onClick={() => setView('NEW_SIGNUPS')}
                   className="bg-emerald-600 hover:bg-emerald-500 text-white border-0 w-full justify-between"
                 >
-                  <span>New Signups</span>
+                  <span>{t('settings.new_signups')}</span>
                   <Users size={18} />
+                </Button>
+              )}
+              {isPlatformAdmin && (
+                <Button
+                  onClick={openFinancialDashboard}
+                  className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white border-0 w-full justify-between"
+                >
+                  <span>{t('settings.financial_dashboard')}</span>
+                  <Activity size={18} />
                 </Button>
               )}
               <Button 
                 onClick={openOrgDirectory} 
                 className="bg-sky-600 hover:bg-sky-500 text-white border-0 w-full justify-between"
               >
-                <span>Organization Directory</span>
+                <span>{t('settings.organization_directory')}</span>
                 <Building2 size={18} />
               </Button>
               <Button 
                 onClick={openMasterInventory} 
                 className="bg-teal-600 hover:bg-teal-500 text-white border-0 w-full justify-between"
               >
-                <span>Master Inventory Database</span>
+                <span>{t('settings.master_inventory')}</span>
                 <FileText size={18} />
               </Button>
               <Button 
                 onClick={openBroadcastControl} 
                 className="bg-amber-600 hover:bg-amber-500 text-white border-0 w-full justify-between"
               >
-                <span>Manage Broadcasts</span>
+                <span>{t('settings.manage_broadcasts')}</span>
                 <Radio size={18} />
               </Button>
               {!isOrgScopedAdmin && (
@@ -3381,7 +3411,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                   variant="outline"
                   className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 w-full justify-between"
                 >
-                   <span>View Raw Database</span>
+                   <span>{t('settings.view_raw_database')}</span>
                    <Database size={18} />
                 </Button>
               )}
