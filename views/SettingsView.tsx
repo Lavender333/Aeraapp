@@ -12,7 +12,7 @@ import { listOrganizations as listOrganizationsSupabase } from '../services/supa
 import { subscribeToNotifications } from '../services/supabaseRealtime';
 import { isValidPhoneForInvite, validateHouseholdMembers } from '../services/validation';
 import { t } from '../services/translations';
-import { User, Bell, Lock, LogOut, Check, Building2, ArrowLeft, ArrowRight, Link as LinkIcon, Loader2, HeartPulse, ShieldCheck, Users, ToggleLeft, ToggleRight, MoreVertical, Copy, CheckCircle, Database, X, XCircle, Globe, Search, Truck, Phone, Mail, MapPin, Power, Ban, Activity, Radio, AlertTriangle, HelpCircle, FileText, Printer, CheckSquare, Download, RefreshCcw, Clipboard, PenTool, ChevronDown } from 'lucide-react';
+import { User, Bell, Lock, LogOut, Check, Building2, ArrowLeft, ArrowRight, Link as LinkIcon, Loader2, HeartPulse, ShieldCheck, Users, ToggleLeft, ToggleRight, MoreVertical, Copy, CheckCircle, Database, X, XCircle, Globe, Search, Truck, Phone, Mail, MapPin, Power, Ban, Activity, Radio, AlertTriangle, HelpCircle, FileText, Printer, CheckSquare, Download, RefreshCcw, Clipboard, PenTool, ChevronDown, PlayCircle } from 'lucide-react';
 
 // Phone Formatter Utility
 const formatPhoneNumber = (value: string) => {
@@ -326,6 +326,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const vitalsAutosaveTimeoutRef = useRef<number | null>(null);
   const [languageUpdatedMessage, setLanguageUpdatedMessage] = useState<string | null>(null);
   const languageUpdatedTimeoutRef = useRef<number | null>(null);
+  const [showWelcomeVideoModal, setShowWelcomeVideoModal] = useState(false);
+  const [welcomeVideoPlaybackMessage, setWelcomeVideoPlaybackMessage] = useState('');
+  const welcomeVideoRef = useRef<HTMLVideoElement | null>(null);
   const [householdCodeInput, setHouseholdCodeInput] = useState('');
   const [householdCodeError, setHouseholdCodeError] = useState<string | null>(null);
   const [householdCodeSuccess, setHouseholdCodeSuccess] = useState<string | null>(null);
@@ -3049,8 +3052,70 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const preparednessReady = Boolean(profile.consentPreparednessPlanning);
   const communityReady = Boolean(String(profile.communityId || '').trim());
   const profileInitial = (profile.fullName || 'A').trim().charAt(0).toUpperCase();
+
+  const handleCloseWelcomeVideoModal = () => {
+    setWelcomeVideoPlaybackMessage('');
+    setShowWelcomeVideoModal(false);
+  };
+
+  const handlePlayWelcomeVideo = async () => {
+    setWelcomeVideoPlaybackMessage('');
+    const element = welcomeVideoRef.current;
+    if (!element) return;
+    try {
+      await element.play();
+    } catch {
+      setWelcomeVideoPlaybackMessage('Tap play on the video controls to start playback.');
+    }
+  };
+
   return (
     <div className="p-6 pb-28 space-y-8 animate-fade-in bg-gradient-to-br from-sky-50 via-slate-50 to-teal-50 min-h-screen flex flex-col">
+      {showWelcomeVideoModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in"
+          onClick={handleCloseWelcomeVideoModal}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden animate-slide-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-slate-900 p-4 flex justify-between items-center text-white border-b border-slate-800">
+              <div>
+                <h3 className="font-bold text-lg">Welcome to AERA</h3>
+                <p className="text-[11px] text-slate-300 font-semibold">Replay the setup walkthrough anytime</p>
+              </div>
+              <button
+                onClick={handleCloseWelcomeVideoModal}
+                className="text-slate-400 hover:text-white transition-colors"
+                aria-label="Close welcome video"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-4 bg-black">
+              <video
+                ref={welcomeVideoRef}
+                className="w-full rounded-xl"
+                controls
+                playsInline
+                preload="metadata"
+                src="/Untitled.MP4"
+              />
+            </div>
+            <div className="p-4 bg-white border-t border-slate-200">
+              {welcomeVideoPlaybackMessage && (
+                <p className="text-xs text-amber-700 font-semibold mb-2">{welcomeVideoPlaybackMessage}</p>
+              )}
+              <div className="flex items-center justify-end gap-2">
+                <Button size="sm" variant="outline" onClick={handlePlayWelcomeVideo}>Play Video</Button>
+                <Button size="sm" onClick={handleCloseWelcomeVideoModal}>Done</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-3">
@@ -3085,6 +3150,24 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${profileComplete ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
             {profileComplete ? 'Mostly complete' : 'Needs attention'}
           </span>
+        </div>
+      </section>
+
+      <section className="bg-white/95 border border-slate-200 rounded-2xl p-5 shadow-sm">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="p-3 bg-sky-100 border border-sky-200 rounded-full text-sky-700">
+              <PlayCircle size={22} />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Training Video</p>
+              <h2 className="text-lg font-bold text-slate-900 mt-1">Watch the welcome walkthrough again</h2>
+              <p className="text-sm text-slate-600 mt-1">Open the original onboarding video from Settings whenever you need a refresher.</p>
+            </div>
+          </div>
+          <Button onClick={() => setShowWelcomeVideoModal(true)} className="min-w-[220px] justify-center">
+            Play Welcome Video
+          </Button>
         </div>
       </section>
 
