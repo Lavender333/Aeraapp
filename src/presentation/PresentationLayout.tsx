@@ -126,8 +126,8 @@ export const PresentationLayout: React.FC<{ setView: (v: ViewState) => void }> =
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 overflow-y-auto">
-      <div className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/90 backdrop-blur">
+    <div className="min-h-screen overflow-y-auto bg-[linear-gradient(180deg,#020617_0%,#0f172a_32%,#111827_100%)] text-slate-100">
+      <div className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/80 backdrop-blur-xl">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3 md:px-6">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-300">Presentation Mode</p>
@@ -138,7 +138,7 @@ export const PresentationLayout: React.FC<{ setView: (v: ViewState) => void }> =
               href="/docs/AERA_FEATURES_ADVANTAGES_BENEFITS_ONE_PAGER.md"
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-200 transition hover:border-amber-400/40 hover:text-white"
+              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 transition hover:border-amber-400/40 hover:bg-white/10 hover:text-white"
             >
               <ExternalLink size={16} /> Open source file
             </a>
@@ -150,19 +150,44 @@ export const PresentationLayout: React.FC<{ setView: (v: ViewState) => void }> =
       </div>
 
       <div className="relative overflow-hidden">
-        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,rgba(245,158,11,0.35),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.22),transparent_28%)]" />
+        <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_top,rgba(245,158,11,0.30),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.18),transparent_30%),radial-gradient(circle_at_left,rgba(16,185,129,0.12),transparent_25%)]" />
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-400/40 to-transparent" />
         <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-10 md:px-6 md:py-14">
-          <section className="rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl shadow-slate-950/40">
-            <div className="max-w-4xl space-y-5">
-              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-amber-300">AERA at a glance</p>
-              <h2 className="text-4xl font-semibold tracking-tight text-white md:text-6xl">Features, advantages, and benefits in one presentation-ready page.</h2>
-              <p className="max-w-3xl text-base leading-7 text-slate-300 md:text-lg">
-                AERA is a mobile-first emergency coordination platform that helps households, trusted organizations, responders, and public-sector leaders prepare, communicate, respond, and recover faster during disasters.
-              </p>
-              <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-5 text-emerald-50">
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-300">Core value proposition</p>
-                <p className="mt-2 text-xl font-medium leading-8 md:text-2xl">AERA helps communities move from chaos to coordinated action by giving every stakeholder the right information, at the right time, in the right format.</p>
+          <section className="relative overflow-hidden rounded-[32px] border border-white/10 bg-white/[0.06] p-8 shadow-[0_30px_80px_rgba(2,6,23,0.55)] md:p-10">
+            <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0.01)_45%,rgba(16,185,129,0.08))]" />
+            <div className="relative grid gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-end">
+              <div className="max-w-4xl space-y-5">
+                <div className="flex flex-wrap gap-2">
+                  {['Preparedness', 'Response', 'Recovery'].map((tag) => (
+                    <span key={tag} className="rounded-full border border-white/10 bg-white/8 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-sm font-semibold uppercase tracking-[0.28em] text-amber-300">AERA at a glance</p>
+                <h2 className="text-4xl font-semibold tracking-tight text-white md:text-6xl md:leading-[1.05]">Features, advantages, and benefits in one polished executive summary.</h2>
+                <p className="max-w-3xl text-base leading-7 text-slate-300 md:text-lg">
+                  AERA is a mobile-first emergency coordination platform that helps households, trusted organizations, responders, and public-sector leaders prepare, communicate, respond, and recover faster during disasters.
+                </p>
               </div>
+
+              <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                {[
+                  ['Mobile-first', 'Rapid field use'],
+                  ['Offline-ready', 'Resilient operations'],
+                  ['Role-based', 'Clear accountability'],
+                ].map(([title, caption]) => (
+                  <div key={title} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 backdrop-blur-sm">
+                    <p className="text-lg font-semibold text-white">{title}</p>
+                    <p className="mt-1 text-sm text-slate-400">{caption}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="relative mt-8 rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-6 text-emerald-50 shadow-inner shadow-emerald-950/20">
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-300">Core value proposition</p>
+              <p className="mt-2 max-w-4xl text-xl font-medium leading-8 md:text-2xl">AERA helps communities move from chaos to coordinated action by giving every stakeholder the right information, at the right time, in the right format.</p>
             </div>
           </section>
 
@@ -172,19 +197,21 @@ export const PresentationLayout: React.FC<{ setView: (v: ViewState) => void }> =
                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-300">Feature matrix</p>
                 <h3 className="text-2xl font-semibold text-white md:text-3xl">What AERA does, why it matters, and what it changes</h3>
               </div>
-              <p className="max-w-2xl text-sm leading-6 text-slate-400">This view replaces the old slide deck in presentation mode and keeps the entire one-pager accessible in a single scrollable layout.</p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {featureRows.map((row) => (
-                <article key={row.feature} className="rounded-2xl border border-white/10 bg-slate-900/70 p-5">
-                  <p className="text-lg font-semibold text-white">{row.feature}</p>
+                <article key={row.feature} className="group rounded-3xl border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.86),rgba(15,23,42,0.62))] p-5 shadow-lg shadow-slate-950/20 transition duration-200 hover:-translate-y-1 hover:border-sky-400/30 hover:shadow-sky-950/20">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <p className="text-lg font-semibold text-white">{row.feature}</p>
+                    <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-sky-200">AERA</span>
+                  </div>
                   <div className="mt-4 space-y-3 text-sm leading-6">
-                    <div>
+                    <div className="rounded-2xl bg-white/[0.03] p-3">
                       <p className="font-semibold text-amber-300">Advantage</p>
                       <p className="text-slate-300">{row.advantage}</p>
                     </div>
-                    <div>
+                    <div className="rounded-2xl bg-white/[0.03] p-3">
                       <p className="font-semibold text-emerald-300">Benefit</p>
                       <p className="text-slate-300">{row.benefit}</p>
                     </div>
@@ -195,11 +222,11 @@ export const PresentationLayout: React.FC<{ setView: (v: ViewState) => void }> =
           </section>
 
           <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
+            <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-6 shadow-lg shadow-slate-950/20 md:p-8">
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-purple-300">Why AERA stands out</p>
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 {standoutSections.map((section) => (
-                  <div key={section.title} className="rounded-2xl border border-white/10 bg-slate-900/70 p-5">
+                  <div key={section.title} className="rounded-2xl border border-white/10 bg-slate-900/70 p-5 transition hover:border-purple-400/30 hover:bg-slate-900/85">
                     <h4 className="text-lg font-semibold text-white">{section.title}</h4>
                     <p className="mt-2 text-sm leading-6 text-slate-300">{section.body}</p>
                   </div>
@@ -207,7 +234,7 @@ export const PresentationLayout: React.FC<{ setView: (v: ViewState) => void }> =
               </div>
             </div>
 
-            <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-6 md:p-8">
+            <div className="rounded-3xl border border-amber-400/20 bg-[linear-gradient(180deg,rgba(245,158,11,0.14),rgba(245,158,11,0.06))] p-6 shadow-lg shadow-amber-950/10 md:p-8">
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-amber-300">Bottom line</p>
               <h4 className="mt-3 text-3xl font-semibold text-white">From fragmented reaction to coordinated action.</h4>
               <p className="mt-4 text-sm leading-7 text-amber-50/90">
@@ -224,11 +251,11 @@ export const PresentationLayout: React.FC<{ setView: (v: ViewState) => void }> =
 
             <div className="grid gap-4 md:grid-cols-2">
               {stakeholderBenefits.map((group) => (
-                <article key={group.title} className="rounded-2xl border border-white/10 bg-slate-900/70 p-5">
+                <article key={group.title} className="rounded-3xl border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(30,41,59,0.72))] p-5 shadow-lg shadow-slate-950/20">
                   <h4 className="text-lg font-semibold text-white">{group.title}</h4>
                   <ul className="mt-4 space-y-2 text-sm text-slate-300">
                     {group.items.map((item) => (
-                      <li key={item} className="flex gap-3">
+                      <li key={item} className="flex gap-3 rounded-xl bg-white/[0.03] px-3 py-2">
                         <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-300" />
                         <span>{item}</span>
                       </li>
