@@ -6,53 +6,53 @@ import { Button } from '../../components/Button';
 const featureRows = [
   {
     feature: 'Structured emergency intake',
-    advantage: 'Captures safety status, location, injuries, hazards, household size, and resource needs in a consistent workflow',
-    benefit: 'Faster triage, clearer field decisions, and fewer missed details during high-stress events',
+    advantage: 'Captures safety status, location, injuries, hazards, household size, and resource needs in one consistent workflow',
+    benefit: 'Speeds triage, improves field decisions, and reduces missed details during high-stress events',
   },
   {
     feature: 'AI-assisted triage support',
-    advantage: 'Helps prioritize incoming requests and surface urgency signals quickly',
-    benefit: 'Reduces response delays and helps teams focus first on the highest-risk households',
+    advantage: 'Flags urgency signals quickly and helps teams prioritize incoming requests',
+    benefit: 'Cuts response delays and keeps attention on the highest-risk households first',
   },
   {
     feature: 'Offline-first operation',
-    advantage: 'Supports store-and-forward reporting with sync when connectivity returns',
-    benefit: 'Keeps communities operational when networks are overloaded or down',
+    advantage: 'Supports store-and-forward reporting and syncs automatically when connectivity returns',
+    benefit: 'Keeps communities operating when networks are overloaded, weak, or down',
   },
   {
     feature: 'Role-based dashboards',
-    advantage: 'Gives admins, organization leaders, responders, and residents views tailored to their responsibilities',
-    benefit: 'Less confusion, stronger accountability, and quicker action by every user group',
+    advantage: 'Gives admins, organization leaders, responders, and residents views matched to their responsibilities',
+    benefit: 'Reduces confusion, strengthens accountability, and speeds action across every user group',
   },
   {
     feature: 'Community hub coordination',
     advantage: 'Connects churches, NGOs, and local institutions through trusted community structures',
-    benefit: 'Enables hyper-local response using organizations people already know and trust',
+    benefit: 'Enables local response through organizations people already know and trust',
   },
   {
     feature: 'Member safety check and status tracking',
-    advantage: 'Makes it easy to see who is safe, who needs help, and who has not responded',
-    benefit: 'Improves situational awareness and reduces time spent chasing incomplete status updates',
+    advantage: 'Shows who is safe, who needs help, and who has not responded',
+    benefit: 'Improves situational awareness and reduces time spent chasing incomplete updates',
   },
   {
     feature: 'Broadcast alerts and targeted communication',
     advantage: 'Supports system-wide or organization-level messaging',
-    benefit: 'Delivers clear instructions quickly and helps reduce misinformation during incidents',
+    benefit: 'Delivers clear instructions quickly and reduces misinformation during incidents',
   },
   {
     feature: 'Inventory and replenishment management',
-    advantage: 'Tracks supply levels and requests for items like water, food, blankets, and medical kits',
+    advantage: 'Tracks supply levels and requests for water, food, blankets, medical kits, and more',
     benefit: 'Prevents shortages, improves logistics visibility, and supports faster resupply',
   },
   {
     feature: 'Household and vulnerability profiles',
-    advantage: 'Stores important readiness factors such as mobility limits, medical dependency, and transportation access',
+    advantage: 'Stores readiness factors such as mobility limits, medical dependency, and transportation access',
     benefit: 'Helps teams identify high-risk households before and during an event',
   },
   {
     feature: 'Preparedness and recovery support',
-    advantage: 'Extends beyond immediate response into kit readiness, recovery tracking, and financial assistance workflows',
-    benefit: 'Makes AERA useful before, during, and after disaster—not only at the moment of crisis',
+    advantage: 'Extends beyond response into kit readiness, recovery tracking, and financial assistance workflows',
+    benefit: 'Keeps AERA useful before, during, and after disaster—not only at the moment of crisis',
   },
   {
     feature: 'Multi-language support',
@@ -62,26 +62,26 @@ const featureRows = [
   {
     feature: 'Mobile-first experience',
     advantage: 'Designed for rapid use in the field and on personal devices',
-    benefit: 'Increases usability for both affected residents and operational teams',
+    benefit: 'Improves usability for both affected residents and operational teams',
   },
 ];
 
 const standoutSections = [
   {
     title: 'Built for real disaster conditions',
-    body: 'AERA is designed for environments where time is limited, information is incomplete, and connectivity may fail. Its offline-first and mobile-first approach keeps operations practical when conventional workflows break down.',
+    body: 'AERA is built for moments when time is limited, information is incomplete, and connectivity may fail. Its offline-first, mobile-first approach keeps operations moving when conventional workflows break down.',
   },
   {
     title: 'Connects institutions and households',
-    body: 'AERA creates a shared operating picture across households, churches, NGOs, organization administrators, responders, and public leaders.',
+    body: 'AERA creates one shared operating picture across households, churches, NGOs, organization leaders, responders, and public officials.',
   },
   {
     title: 'Supports preparedness, response, and recovery',
-    body: 'The platform stays useful before, during, and after an incident through onboarding, alerts, triage, logistics, and financial recovery support.',
+    body: 'The platform stays useful before, during, and after an incident through onboarding, alerts, triage, logistics, and recovery support.',
   },
   {
     title: 'Turns trusted networks into response assets',
-    body: 'Community organizations can operate as digital hubs that accelerate communication, accountability, and help distribution.',
+    body: 'Community organizations operate as digital hubs that accelerate communication, accountability, and help distribution.',
   },
 ];
 
@@ -167,7 +167,7 @@ export const PresentationLayout: React.FC<{ setView: (v: ViewState) => void }> =
                 <p className="text-sm font-semibold uppercase tracking-[0.28em] text-amber-300">AERA at a glance</p>
                   <h2 className="max-w-4xl text-[1.9rem] font-semibold leading-tight tracking-tight text-white sm:text-4xl md:text-6xl md:leading-[1.05]">Prepared communities. Faster decisions. Stronger recovery.</h2>
                   <p className="max-w-3xl text-sm leading-6 text-slate-300 sm:text-base sm:leading-7 md:text-lg">
-                  AERA is a mobile-first emergency coordination platform that helps households, trusted organizations, responders, and public-sector leaders prepare, communicate, respond, and recover faster during disasters.
+                  AERA gives households, trusted organizations, responders, and public-sector leaders one mobile-first system to prepare, communicate, respond, and recover faster during disasters.
                 </p>
               </div>
 
@@ -188,6 +188,13 @@ export const PresentationLayout: React.FC<{ setView: (v: ViewState) => void }> =
               <div className="relative mt-6 rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5 text-emerald-50 shadow-inner shadow-emerald-950/20 sm:mt-8 sm:p-6">
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-300">Core value proposition</p>
                 <p className="mt-2 max-w-4xl text-lg font-medium leading-7 sm:text-xl sm:leading-8 md:text-2xl">AERA helps communities move from chaos to coordinated action by giving every stakeholder the right information, at the right time, in the right format.</p>
+                <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                  {['See needs faster', 'Coordinate trusted networks', 'Keep recovery moving'].map((item) => (
+                    <div key={item} className="rounded-2xl bg-white/10 px-3 py-2 text-sm font-semibold text-emerald-50">
+                      {item}
+                    </div>
+                  ))}
+                </div>
             </div>
           </section>
 
@@ -195,7 +202,7 @@ export const PresentationLayout: React.FC<{ setView: (v: ViewState) => void }> =
             <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-300">Feature matrix</p>
-                <h3 className="text-2xl font-semibold text-white md:text-3xl">What AERA does, why it matters, and what it changes</h3>
+                <h3 className="text-2xl font-semibold text-white md:text-3xl">What AERA delivers</h3>
               </div>
             </div>
 
@@ -208,11 +215,11 @@ export const PresentationLayout: React.FC<{ setView: (v: ViewState) => void }> =
                   </div>
                     <div className="mt-4 space-y-3 text-sm leading-6">
                     <div className="rounded-2xl bg-white/[0.03] p-3">
-                      <p className="font-semibold text-amber-300">Advantage</p>
+                      <p className="font-semibold text-amber-300">What it does</p>
                       <p className="text-slate-300">{row.advantage}</p>
                     </div>
                     <div className="rounded-2xl bg-white/[0.03] p-3">
-                      <p className="font-semibold text-emerald-300">Benefit</p>
+                      <p className="font-semibold text-emerald-300">Why it matters</p>
                       <p className="text-slate-300">{row.benefit}</p>
                     </div>
                   </div>
