@@ -4309,7 +4309,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             onChange={(e) => updateProfile('consentPreparednessPlanning', e.target.checked)}
           />
           <span className="text-sm text-slate-700 font-semibold">
-            I understand this data is used only for preparedness planning and can be deleted anytime.
+            I understand this data is used for preparedness planning and service operations, and that AERA also uses Google Analytics on its web experience to measure usage. My data can be deleted anytime.
           </span>
         </label>
 
@@ -4559,6 +4559,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           </div>
         </div>
         <div className="space-y-1">
+          <p className="text-xs text-slate-500">AERA uses the Google tag / Google Analytics on its web experience to measure traffic and product usage.</p>
           <button
             type="button"
             onClick={() => {

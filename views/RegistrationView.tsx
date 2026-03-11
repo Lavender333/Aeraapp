@@ -600,7 +600,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
                    onChange={(e) => updateForm('consentPreparednessPlanning', e.target.checked)}
                  />
                  <span className="text-sm text-emerald-900 font-semibold">
-                   I understand this data is used only for preparedness planning and can be deleted anytime.
+                     I understand this data is used for preparedness planning and service operations, and that AERA also uses Google Analytics on its web experience to measure usage. My data can be deleted anytime.
                  </span>
                </label>
                <p className="text-xs text-slate-500 italic">This information is only shared with responders during an emergency.</p>

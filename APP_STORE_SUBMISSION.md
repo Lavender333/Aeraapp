@@ -41,11 +41,12 @@ This repository is a **web app (React + Vite)** and **Node API**. To ship on the
 You must declare the data you collect and why:
 - Location (precise) for SOS and responder mapping
 - Contact info (email/phone) if required by your auth flow
-- Device identifiers (if used for analytics)
+- Device identifiers or usage data (if used for analytics such as the Google tag / Google Analytics)
 
 **Artifacts required:**
 - Privacy policy URL
 - Data collection disclosure answers in App Store Connect
+- Analytics disclosure that reflects the Google tag measurement configuration in the web experience
 
 ### Permissions (Info.plist)
 If you access any iOS capability, you must add a usage string:

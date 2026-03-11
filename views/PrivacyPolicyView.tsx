@@ -21,7 +21,7 @@ export const PrivacyPolicyView: React.FC<PrivacyPolicyViewProps> = ({ setView })
           </button>
           <div>
             <h1 className="text-xl font-bold text-slate-900">Proof of Consent & Privacy Policy</h1>
-            <p className="text-xs text-slate-500">Last updated: February 8, 2026</p>
+            <p className="text-xs text-slate-500">Last updated: March 11, 2026</p>
           </div>
         </div>
         <div className="p-2 rounded-full border border-slate-200 text-slate-700 bg-white">
@@ -39,6 +39,7 @@ export const PrivacyPolicyView: React.FC<PrivacyPolicyViewProps> = ({ setView })
           <li>Account Information: Name, email address, and authentication details</li>
           <li>Household Data: Information you choose to provide about household members and their safety status</li>
           <li>Emergency Contact Information: Contact details for the emergency contact you designate</li>
+          <li>Usage Analytics: Limited website and app usage information collected through our Google tag implementation (Google Analytics) such as page views, approximate device/browser details, and interaction trends</li>
         </ul>
       </section>
 
@@ -49,6 +50,7 @@ export const PrivacyPolicyView: React.FC<PrivacyPolicyViewProps> = ({ setView })
           <li>User Input: Information you provide when creating an account, updating your profile, managing household details, or submitting a help request</li>
           <li>Device Permissions: Location data collected only after you grant permission through your device settings</li>
           <li>Background Services: Continuous location tracking occurs only when you explicitly activate safety monitoring features</li>
+          <li>Website Analytics Tags: When you load AERA web pages, our Google tag may automatically record standard analytics events such as page visits, referrers, session activity, and general device/browser metadata</li>
         </ul>
         <p className="text-sm text-slate-700">AERA does not collect location data without your direct action or consent.</p>
       </section>
@@ -60,8 +62,9 @@ export const PrivacyPolicyView: React.FC<PrivacyPolicyViewProps> = ({ setView })
           <li>Safety Monitoring: Displaying your location during active monitoring sessions that you initiate</li>
           <li>Assistance Coordination: Facilitating situational awareness and communication when you request help</li>
           <li>App Functionality: Enabling features such as household safety tracking, alerts, and inventory tools</li>
+          <li>Service Measurement: Understanding adoption, page usage, and product performance so we can improve reliability, onboarding, and support</li>
         </ul>
-        <p className="text-sm text-slate-700">AERA does not use your data for advertising, marketing, profiling, or any purpose unrelated to safety or disaster-related support.</p>
+        <p className="text-sm text-slate-700">AERA does not use your data for ad personalization, third-party advertising sales, marketing profiling, or any purpose unrelated to safety, disaster-related support, or service improvement.</p>
       </section>
 
       <section className="space-y-3">
@@ -73,6 +76,7 @@ export const PrivacyPolicyView: React.FC<PrivacyPolicyViewProps> = ({ setView })
           <li>Emergency Contact: Your safety status and relevant information may be shared with the emergency contact you designate.</li>
           <li>AERA may send notifications or messages via text or in-app to your emergency contact to inform them of your status or requests for help.</li>
           <li>Organization Visibility: Information you choose to share (such as household or status updates) may be visible to members of your connected organization, based on your actions and settings.</li>
+          <li>Analytics Provider: Limited web usage data may be processed by Google through our Google tag / Google Analytics configuration to provide aggregate traffic and engagement reporting.</li>
           <li>AERA does not sell personal data, does not share data with advertisers, and does not share data with external third parties except where required by law.</li>
         </ul>
       </section>
@@ -87,6 +91,7 @@ export const PrivacyPolicyView: React.FC<PrivacyPolicyViewProps> = ({ setView })
           <li>Permissions can be managed through your device settings</li>
           <li>You choose which organization to connect to and which emergency contact to designate</li>
           <li>You consent to messages or notifications sent to your emergency contact or organization administrator as described above</li>
+          <li>You can limit some analytics collection through browser privacy controls, content blockers, cookie controls, or Google’s available opt-out tools, though doing so may affect some reporting accuracy</li>
         </ul>
       </section>
 
@@ -168,6 +173,12 @@ export const PrivacyPolicyView: React.FC<PrivacyPolicyViewProps> = ({ setView })
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-slate-900">17. Changes to This Policy</h2>
         <p className="text-sm text-slate-700">This policy may be updated as AERA evolves. Material changes will be communicated through the app or via email. Continued use of the app after updates indicates acceptance of the revised policy.</p>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-slate-900">18. Google Tag Notice</h2>
+        <p className="text-sm text-slate-700">AERA currently uses a Google tag with measurement ID G-V5CQN2XZFL on supported web entry pages. This tag helps us understand overall traffic and product usage patterns on https://appandwebsitetesting.site.</p>
+        <p className="text-sm text-slate-700">The Google tag is used for analytics reporting only. It is not intended to identify you personally through advertising profiles, and we do not use it to sell your personal information.</p>
       </section>
     </div>
   );
