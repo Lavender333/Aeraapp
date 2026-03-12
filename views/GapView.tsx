@@ -80,6 +80,10 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
   const [queueSortBy, setQueueSortBy] = useState<'NEWEST' | 'HIGHEST_AMOUNT'>('NEWEST');
   const [documentUrlById, setDocumentUrlById] = useState<Record<string, string>>({});
   const [documentOpenError, setDocumentOpenError] = useState('');
+  const [networkCommunityIds, setNetworkCommunityIds] = useState<string[]>(() => {
+    const initialCommunityId = String(profile.communityId || '').trim();
+    return initialCommunityId ? [initialCommunityId] : [];
+  });
   const [formMode, setFormMode] = useState<'HARDSHIP' | 'ADVANCE'>('HARDSHIP');
   const [formStep, setFormStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [isSubmittingForm, setIsSubmittingForm] = useState(false);
@@ -127,6 +131,43 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
     }
   }, [reviewActions, reviewerScopeKey]);
 
+  useEffect(() => {
+    let active = true;
+    const baseCommunityId = String(profile.communityId || '').trim();
+
+    if (!baseCommunityId || !isOrgAdmin) {
+      setNetworkCommunityIds(baseCommunityId ? [baseCommunityId] : []);
+      return () => {
+        active = false;
+      };
+    }
+
+    const loadNetworkCommunities = async () => {
+      try {
+        const localChildren = StorageService.getChildOrganizations(baseCommunityId) as any[];
+        const localCodes = localChildren.map((org) => String(org?.orgCode || org?.id || '').trim()).filter(Boolean);
+        if (active) {
+          setNetworkCommunityIds(Array.from(new Set([baseCommunityId, ...localCodes])));
+        }
+
+        const { orgs } = await StorageService.fetchChildOrganizationsRemote(baseCommunityId);
+        if (!active) return;
+        const remoteCodes = (orgs as any[]).map((org) => String(org?.orgCode || org?.id || '').trim()).filter(Boolean);
+        setNetworkCommunityIds(Array.from(new Set([baseCommunityId, ...remoteCodes])));
+      } catch (error) {
+        if (!active) return;
+        console.warn('Unable to load GAP org network', error);
+        setNetworkCommunityIds([baseCommunityId]);
+      }
+    };
+
+    loadNetworkCommunities();
+
+    return () => {
+      active = false;
+    };
+  }, [isOrgAdmin, profile.communityId]);
+
   const isCoreAdmin = role === 'ADMIN';
   const isOrgAdmin = role === 'ORG_ADMIN' || role === 'INSTITUTION_ADMIN';
   const isMemberView = !isCoreAdmin && !isOrgAdmin;
@@ -141,6 +182,8 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
   };
 
   const orgScopeId = String(profile.communityId || '').trim();
+  const scopedCommunityIds = networkCommunityIds.length > 0 ? networkCommunityIds : (orgScopeId ? [orgScopeId] : []);
+  const scopedCommunitySet = new Set(scopedCommunityIds);
   const orgMembers = orgScopeId ? StorageService.getOrgMembers(orgScopeId) : [];
   const orgMemberById = new Map(orgMembers.map((member) => [member.id, member.name]));
 
@@ -150,7 +193,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
   const memberPendingRequests = memberRequests.filter((req) => pendingStatuses.has(String(req.status || '').toUpperCase()));
   const memberResolvedRequests = memberRequests.filter((req) => resolvedStatuses.has(String(req.status || '').toUpperCase()));
   const orgRequests = isOrgAdmin
-    ? allRequests.filter((req) => resolveOrgForRequest(req) === orgScopeId)
+    ? allRequests.filter((req) => scopedCommunitySet.has(resolveOrgForRequest(req)))
     : [];
 
   const pendingOrgRequests = orgRequests.filter((req) => pendingStatuses.has(String(req.status || '').toUpperCase()));
@@ -211,12 +254,27 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
     });
   }
 
-  const scopedFunding = orgScopeId ? communityFundingById.get(orgScopeId) : undefined;
-  const participationPct = scopedFunding?.participationPct || 0;
-  const pooledFund = scopedFunding?.pooledFund || 0;
-  const allocationCapacity = scopedFunding?.allocationCapacity || 0;
-  const amountDisbursed = scopedFunding?.amountDisbursed || 0;
-  const remainingBalance = scopedFunding?.remainingBalance || 0;
+  const scopedFundingSummary = scopedCommunityIds.reduce(
+    (summary, communityId) => {
+      const item = communityFundingById.get(communityId);
+      if (!item) return summary;
+      summary.connectedUsers += item.connectedUsers;
+      summary.participatingUsers += item.participatingUsers;
+      summary.pooledFund += item.pooledFund;
+      summary.allocationCapacity += item.allocationCapacity;
+      summary.amountDisbursed += item.amountDisbursed;
+      summary.remainingBalance += item.remainingBalance;
+      return summary;
+    },
+    { connectedUsers: 0, participatingUsers: 0, pooledFund: 0, allocationCapacity: 0, amountDisbursed: 0, remainingBalance: 0 },
+  );
+  const participationPct = scopedFundingSummary.connectedUsers > 0
+    ? Math.round((scopedFundingSummary.participatingUsers / scopedFundingSummary.connectedUsers) * 100)
+    : 0;
+  const pooledFund = scopedFundingSummary.pooledFund;
+  const allocationCapacity = scopedFundingSummary.allocationCapacity;
+  const amountDisbursed = scopedFundingSummary.amountDisbursed;
+  const remainingBalance = scopedFundingSummary.remainingBalance;
 
   const totalConnectedUsers = Array.from(communityFundingById.values()).reduce((sum, item) => sum + item.connectedUsers, 0);
   const totalParticipatingUsers = Array.from(communityFundingById.values()).reduce((sum, item) => sum + item.participatingUsers, 0);

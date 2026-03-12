@@ -503,6 +503,53 @@ export const StorageService = {
         };
         this.saveProfile(mergedLocalProfile, { skipRemoteSync: true });
 
+        try {
+          const [remoteProfile, remoteVitals] = await Promise.all([
+            fetchProfileForUser(),
+            fetchVitalsForUser(),
+          ]);
+
+          const latest = this.getProfile();
+          if (latest?.id === resp.user.id) {
+            const hasRemoteVitals = !!remoteVitals;
+            const hydratedProfile: UserProfile = {
+              ...latest,
+              fullName: remoteProfile?.fullName || latest.fullName || resp.user.fullName || '',
+              email: remoteProfile?.email || latest.email || resp.user.email || '',
+              phone: remoteProfile?.phone || latest.phone || resp.user.phone || '',
+              address: remoteProfile?.address || latest.address || '',
+              householdMembers: remoteVitals?.householdMembers || latest.householdMembers || 1,
+              household: remoteVitals?.household || latest.household || [],
+              petDetails: remoteVitals?.petDetails || latest.petDetails || '',
+              medicalNeeds: remoteVitals?.medicalNeeds || latest.medicalNeeds || '',
+              emergencyContactName: remoteProfile?.emergencyContactName || latest.emergencyContactName || '',
+              emergencyContactPhone: remoteProfile?.emergencyContactPhone || latest.emergencyContactPhone || '',
+              emergencyContactRelation: remoteProfile?.emergencyContactRelation || latest.emergencyContactRelation || '',
+              communityId: remoteProfile?.communityId || latest.communityId || resp.user.orgId || '',
+              onboardComplete:
+                latest.onboardComplete ||
+                hasRemoteVitals ||
+                inferOnboardingComplete(
+                  {
+                    ...latest,
+                    ...remoteProfile,
+                    ...remoteVitals,
+                  },
+                  hasRemoteVitals,
+                ),
+            };
+
+            this.saveProfile(hydratedProfile, { skipRemoteSync: true });
+
+            const remoteAvatar = String((remoteProfile as any)?.avatarDataUrl || '').trim();
+            if (isValidProfileImageSource(remoteAvatar)) {
+              this.saveProfileImageDataUrl(remoteAvatar, hydratedProfile.id, { skipRemoteSync: true });
+            }
+          }
+        } catch (hydrateBeforeReturnErr) {
+          console.warn('Immediate login profile hydration failed', hydrateBeforeReturnErr);
+        }
+
         // Post-login hydration (profile/vitals/household) can be slow on some networks.
         // Do it in the background so navigation after login is snappy.
         (async () => {

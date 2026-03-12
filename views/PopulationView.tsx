@@ -5,13 +5,17 @@ import type { PathOptions } from 'leaflet';
 import { ViewState, UserRole } from '../types';
 import { ArrowLeft, Layers, Users, Map as MapIcon, List, AlertTriangle, Activity, Loader2 } from 'lucide-react';
 import { StorageService } from '../services/storage';
+import { listChildOrganizations } from '../services/api';
 import {
   getCurrentMapScope,
   listActiveStateAlerts,
   listLatestRegionSnapshots,
   listMapRegions,
+  listOrganizationPopulationRollup,
+  listOrganizationPopulationRollups,
   listStateHouseholdJoinActivity,
   type MapRegionRecord,
+  type OrganizationPopulationRollupRecord,
   type RegionSnapshotLatestRecord,
   type StateHouseholdJoinActivityRecord,
   type StateAlertRecord,
@@ -27,6 +31,20 @@ const getDriftColor = (driftStatus?: string): string => {
   return '#22c55e';
 };
 
+const getRiskDriftStatus = (avgRiskScore: number): 'ACCELERATING' | 'ESCALATING' | 'STABLE' => {
+  if (avgRiskScore >= 8) return 'ACCELERATING';
+  if (avgRiskScore >= 5) return 'ESCALATING';
+  return 'STABLE';
+};
+
+type PopulationSnapshotRow = RegionSnapshotLatestRecord & {
+  linkedMemberCount?: number;
+  evacuationAssistCount?: number;
+  transportationGapCount?: number;
+  mobilityLimitedCount?: number;
+  source: 'region' | 'org-members';
+};
+
 export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const [viewMode, setViewMode] = useState<'MAP' | 'LIST'>('MAP');
   const [loading, setLoading] = useState(true);
@@ -35,6 +53,7 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
   const [snapshots, setSnapshots] = useState<RegionSnapshotLatestRecord[]>([]);
   const [alerts, setAlerts] = useState<StateAlertRecord[]>([]);
   const [householdJoinActivity, setHouseholdJoinActivity] = useState<StateHouseholdJoinActivityRecord[]>([]);
+  const [orgPopulationRollups, setOrgPopulationRollups] = useState<OrganizationPopulationRollupRecord[]>([]);
   const [mapScope, setMapScope] = useState<{ role?: UserRole; org_id?: string | null; county_id?: string | null; state_id?: string | null } | null>(null);
 
   const localProfile = useMemo(() => StorageService.getProfile(), []);
@@ -46,12 +65,35 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     setLoading(true);
     setLoadError(null);
     try {
-      const [scope, regionRows, snapshotRows, alertRows, joinRows] = await Promise.all([
-        getCurrentMapScope(),
+      const scope = await getCurrentMapScope();
+      const scopedRole = (scope?.role || localProfile.role || 'GENERAL_USER') as UserRole;
+      let scopedOrgIds: string[] = [];
+
+      if (scope?.org_id) {
+        scopedOrgIds = [scope.org_id];
+
+        if (scopedRole === 'INSTITUTION_ADMIN' && localProfile.communityId) {
+          try {
+            const childRows = await listChildOrganizations(localProfile.communityId);
+            scopedOrgIds = Array.from(
+              new Set([scope.org_id, ...(childRows || []).map((row: any) => String(row?.id || '').trim()).filter(Boolean)]),
+            );
+          } catch (childLookupError) {
+            console.warn('Unable to resolve child orgs for population rollup', childLookupError);
+          }
+        }
+      }
+
+      const [regionRows, snapshotRows, alertRows, joinRows, orgRollupRows] = await Promise.all([
         listMapRegions(),
         listLatestRegionSnapshots(),
         listActiveStateAlerts(100),
         listStateHouseholdJoinActivity(),
+        scopedOrgIds.length > 1
+          ? listOrganizationPopulationRollups(scopedOrgIds)
+          : scope?.org_id
+            ? listOrganizationPopulationRollup(scope.org_id)
+            : Promise.resolve([]),
       ]);
 
       setMapScope(scope as any);
@@ -59,6 +101,7 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
       setSnapshots(snapshotRows);
       setAlerts(alertRows);
       setHouseholdJoinActivity(joinRows);
+      setOrgPopulationRollups(orgRollupRows);
     } catch (err: any) {
       setLoadError(err?.message || 'Unable to load map layers.');
     } finally {
@@ -82,6 +125,12 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
       .on('postgres_changes', { event: '*', schema: 'public', table: 'geography_regions' }, () => {
         loadPopulationData();
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vulnerability_profiles' }, () => {
+        loadPopulationData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        loadPopulationData();
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'household_join_requests' }, () => {
         loadPopulationData();
       })
@@ -92,19 +141,75 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     };
   }, [loadPopulationData]);
 
-  const visibleSnapshots = useMemo(() => {
-    if (canSeeAggregate) return snapshots;
-
+  const visibleSnapshots = useMemo<PopulationSnapshotRow[]>(() => {
     if (effectiveRole === 'COUNTY_ADMIN' && mapScope?.county_id) {
-      return snapshots.filter((row) => row.county_id === mapScope.county_id);
+      return snapshots
+        .filter((row) => row.county_id === mapScope.county_id)
+        .map((row) => ({ ...row, source: 'region' as const }));
+    }
+
+    if (canSeeAggregate) {
+      return snapshots.map((row) => ({ ...row, source: 'region' as const }));
     }
 
     if (canSeeOrgDetail && mapScope?.org_id) {
-      return snapshots.filter((row) => row.organization_id === mapScope.org_id);
+      if (orgPopulationRollups.length > 0) {
+        const snapshotByKey = new Map<string, RegionSnapshotLatestRecord>();
+
+        for (const row of snapshots) {
+          const key = `${row.state_id}::${row.county_id}`;
+          const current = snapshotByKey.get(key);
+          const rowMatchesOrg = row.organization_id === mapScope.org_id;
+          const currentMatchesOrg = current?.organization_id === mapScope.org_id;
+
+          if (!current || (rowMatchesOrg && !currentMatchesOrg)) {
+            snapshotByKey.set(key, row);
+          }
+        }
+
+        return orgPopulationRollups.map((rollup) => {
+          const key = `${rollup.state_id}::${rollup.county_id}`;
+          const snapshot = snapshotByKey.get(key);
+          const avgRiskScore = snapshot ? Number(snapshot.avg_risk_score || rollup.avg_risk_score) : rollup.avg_risk_score;
+          const driftStatus = snapshot?.drift_status || getRiskDriftStatus(rollup.avg_risk_score);
+
+          return {
+            id: snapshot?.id || `org-members-${key}`,
+            snapshot_date: snapshot?.snapshot_date || new Date().toISOString().slice(0, 10),
+            organization_id: mapScope.org_id,
+            county_id: rollup.county_id,
+            state_id: rollup.state_id,
+            region_id: snapshot?.region_id || null,
+            profile_count: rollup.profile_count,
+            avg_risk_score: avgRiskScore,
+            max_risk_score: snapshot ? Number(snapshot.max_risk_score || rollup.max_risk_score) : rollup.max_risk_score,
+            min_risk_score: snapshot ? Number(snapshot.min_risk_score || rollup.min_risk_score) : rollup.min_risk_score,
+            risk_growth_pct: Number(snapshot?.risk_growth_pct || 0),
+            drift_value: Number(snapshot?.drift_value || 0),
+            drift_status: driftStatus,
+            kmeans_cluster: snapshot?.kmeans_cluster ?? null,
+            dbscan_cluster: snapshot?.dbscan_cluster ?? null,
+            anomaly_count: Number(snapshot?.anomaly_count || 0),
+            projection_14d: snapshot?.projection_14d ?? null,
+            model_version: snapshot?.model_version || 'org-member-rollup',
+            pipeline_run_id: snapshot?.pipeline_run_id || null,
+            created_at: snapshot?.created_at,
+            linkedMemberCount: rollup.profile_count,
+            evacuationAssistCount: rollup.evacuation_assist_count,
+            transportationGapCount: rollup.transportation_gap_count,
+            mobilityLimitedCount: rollup.mobility_limited_count,
+            source: 'org-members' as const,
+          };
+        });
+      }
+
+      return snapshots
+        .filter((row) => row.organization_id === mapScope.org_id)
+        .map((row) => ({ ...row, source: 'region' as const }));
     }
 
     return [];
-  }, [canSeeAggregate, canSeeOrgDetail, effectiveRole, mapScope?.county_id, mapScope?.org_id, snapshots]);
+  }, [canSeeAggregate, canSeeOrgDetail, effectiveRole, mapScope?.county_id, mapScope?.org_id, orgPopulationRollups, snapshots]);
 
   const snapshotByRegionKey = useMemo(() => {
     const map = new Map<string, RegionSnapshotLatestRecord>();
@@ -116,10 +221,17 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
   }, [visibleSnapshots]);
 
   const featureCollection = useMemo(() => {
+    const visibleRegionKeys = new Set(visibleSnapshots.map((row) => `${row.state_id}::${row.county_id}`));
+    const shouldScopeRegions = effectiveRole === 'COUNTY_ADMIN' || (canSeeOrgDetail && Boolean(mapScope?.org_id));
+
     return {
       type: 'FeatureCollection',
       features: regions
-        .filter((r) => !!r.geojson)
+        .filter((r) => {
+          if (!r.geojson) return false;
+          if (!shouldScopeRegions) return true;
+          return visibleRegionKeys.has(`${r.state_id}::${r.county_id}`);
+        })
         .map((r) => ({
           type: 'Feature',
           geometry: r.geojson,
@@ -132,7 +244,7 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
           },
         })),
     } as any;
-  }, [regions]);
+  }, [canSeeOrgDetail, effectiveRole, mapScope?.org_id, regions, visibleSnapshots]);
 
   const mapStyle = useCallback(
     (feature: any): PathOptions => {
@@ -153,7 +265,7 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
   const roleMessage = useMemo(() => {
     if (effectiveRole === 'STATE_ADMIN' || effectiveRole === 'ADMIN') return 'State-wide aggregate risk overlays enabled';
     if (effectiveRole === 'COUNTY_ADMIN') return 'County aggregate overlays enabled';
-    if (effectiveRole === 'ORG_ADMIN' || effectiveRole === 'INSTITUTION_ADMIN') return 'Organization-scoped overlays enabled';
+    if (effectiveRole === 'ORG_ADMIN' || effectiveRole === 'INSTITUTION_ADMIN') return 'Organization member-linked overlays enabled';
     if (effectiveRole === 'MEMBER' || effectiveRole === 'GENERAL_USER') return 'Member view: alerts and limited area status';
     return 'Role-based map visibility applied';
   }, [effectiveRole]);
@@ -169,6 +281,18 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     const submitted24h = householdJoinActivity.reduce((sum, row) => sum + Number(row.submitted_last_24h || 0), 0);
     return { pending, approved24h, submitted24h };
   }, [householdJoinActivity]);
+
+  const orgPopulationSummary = useMemo(() => {
+    return orgPopulationRollups.reduce(
+      (summary, row) => {
+        summary.trackedMembers += Number(row.profile_count || 0);
+        summary.highRisk += Number(row.high_risk_count || 0);
+        summary.evacuationAssist += Number(row.evacuation_assist_count || 0);
+        return summary;
+      },
+      { trackedMembers: 0, highRisk: 0, evacuationAssist: 0 },
+    );
+  }, [orgPopulationRollups]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col pb-safe animate-fade-in">
@@ -205,6 +329,16 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
           <span className="px-3 py-1 bg-amber-50 border border-amber-200 text-amber-700 rounded-full text-xs font-medium whitespace-nowrap">Escalating</span>
           <span className="px-3 py-1 bg-green-50 border border-green-200 text-green-700 rounded-full text-xs font-medium whitespace-nowrap">Stable</span>
           <span className="px-3 py-1 bg-blue-50 border border-blue-200 text-blue-700 rounded-full text-xs font-medium whitespace-nowrap">Active Alerts: {alerts.length}</span>
+          {canSeeOrgDetail && mapScope?.org_id && (
+            <span className="px-3 py-1 bg-cyan-50 border border-cyan-200 text-cyan-700 rounded-full text-xs font-medium whitespace-nowrap">
+              Linked Members: {orgPopulationSummary.trackedMembers}
+            </span>
+          )}
+          {canSeeOrgDetail && mapScope?.org_id && (
+            <span className="px-3 py-1 bg-rose-50 border border-rose-200 text-rose-700 rounded-full text-xs font-medium whitespace-nowrap">
+              Evac Assist: {orgPopulationSummary.evacuationAssist}
+            </span>
+          )}
           <span className="px-3 py-1 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-full text-xs font-medium whitespace-nowrap">Join Requests Pending: {joinActivitySummary.pending}</span>
           <span className="px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-full text-xs font-medium whitespace-nowrap">Join Approvals 24h: {joinActivitySummary.approved24h}</span>
         </div>
@@ -236,8 +370,10 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                       const drift = snapshot?.drift_status || 'STABLE';
                       const avgRisk = Number(snapshot?.avg_risk_score || 0).toFixed(2);
                       const growth = Number(snapshot?.risk_growth_pct || 0) * 100;
+                      const linkedMembers = Number(snapshot?.linkedMemberCount || snapshot?.profile_count || 0);
+                      const evacAssist = Number(snapshot?.evacuationAssistCount || 0);
                       layer.bindPopup(
-                        `<strong>${title}</strong><br/>Drift: ${drift}<br/>Avg Risk: ${avgRisk}<br/>Growth: ${growth.toFixed(1)}%`,
+                        `<strong>${title}</strong><br/>Drift: ${drift}<br/>Avg Risk: ${avgRisk}<br/>Growth: ${growth.toFixed(1)}%<br/>Linked Members: ${linkedMembers}<br/>Evac Assist: ${evacAssist}`,
                       );
                     }}
                   />
@@ -249,7 +385,10 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                   <div>
                     <p className="text-xs font-bold text-slate-500 uppercase">Map Summary</p>
                     <p className="text-base font-bold text-slate-900">{visibleSnapshots.length} region snapshot(s)</p>
-                    <p className="text-sm text-slate-600">{alerts.length} active alert(s) • {joinActivitySummary.submitted24h} join submissions in 24h • realtime enabled</p>
+                    <p className="text-sm text-slate-600">
+                      {alerts.length} active alert(s) • {joinActivitySummary.submitted24h} join submissions in 24h • realtime enabled
+                      {canSeeOrgDetail && mapScope?.org_id ? ` • ${orgPopulationSummary.trackedMembers} linked org members` : ''}
+                    </p>
                   </div>
                   <Layers className="text-slate-400" />
                 </div>
@@ -273,11 +412,14 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                         <div>
                           <p className="font-bold text-slate-900">{row.county_id}, {row.state_id}</p>
                           <p className="text-xs text-slate-500">
-                            Avg Risk {Number(row.avg_risk_score || 0).toFixed(2)} • Profiles {row.profile_count}
+                            Avg Risk {Number(row.avg_risk_score || 0).toFixed(2)} • Profiles {row.linkedMemberCount || row.profile_count}
                           </p>
                           <p className="text-xs text-slate-500 flex items-center gap-1">
                             <Activity size={12} /> Growth {(Number(row.risk_growth_pct || 0) * 100).toFixed(1)}%
                           </p>
+                          {Number(row.evacuationAssistCount || 0) > 0 && (
+                            <p className="text-xs text-rose-600">Evac assistance needed: {row.evacuationAssistCount}</p>
+                          )}
                         </div>
                       </div>
                       <span className="px-2 py-1 rounded text-xs font-bold text-white" style={{ backgroundColor: driftColor }}>

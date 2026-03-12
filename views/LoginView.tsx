@@ -7,7 +7,7 @@ import { StorageService } from '../services/storage';
 import { DEMO_COMMUNITY_QR_SEEDS, getPendingCommunityInvite } from '../services/communityInvite';
 import { supabase } from '../services/supabase';
 import { t } from '../services/translations';
-import { LogIn, AlertOctagon, Mail, KeyRound, HelpCircle } from 'lucide-react';
+import { LogIn, AlertOctagon, Mail, KeyRound, HelpCircle, FileDown } from 'lucide-react';
 
 const IS_PRODUCTION = import.meta.env.PROD;
 
@@ -45,6 +45,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
   const [recoveryPassword, setRecoveryPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [isDownloadingAbout, setIsDownloadingAbout] = useState(false);
   const [pendingCommunityId, setPendingCommunityId] = useState('');
   const pendingCommunityName = pendingCommunityId
     ? StorageService.getOrganization(pendingCommunityId)?.name || DEMO_COMMUNITY_QR_SEEDS.find((seed) => seed.communityId === pendingCommunityId)?.name || pendingCommunityId
@@ -172,6 +173,125 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
     }
   };
 
+  const handleAboutAeraDownload = async () => {
+    setError('');
+    setInfo('');
+    try {
+      setIsDownloadingAbout(true);
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 54;
+      const contentWidth = pageWidth - margin * 2;
+
+      const drawParagraph = (text: string, y: number, fontSize = 11, lineHeight = 16) => {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(fontSize);
+        const lines = doc.splitTextToSize(text, contentWidth);
+        doc.text(lines, margin, y);
+        return y + lines.length * lineHeight;
+      };
+
+      let y = 64;
+      doc.setFillColor(15, 23, 42);
+      doc.rect(0, 0, pageWidth, 120, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(24);
+      doc.text('About AERA', margin, y);
+      y += 28;
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Accelerated Emergency Response Application', margin, y);
+
+      doc.setTextColor(15, 23, 42);
+      y = 156;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(15);
+      doc.text('What AERA Does', margin, y);
+      y += 24;
+
+      y = drawParagraph(
+        'AERA is a mobile-first emergency coordination platform that helps households, trusted organizations, responders, and public leaders prepare, communicate, respond, and recover faster during disasters.',
+        y,
+      );
+      y += 10;
+      y = drawParagraph(
+        'It connects people in need, community organizations, and decision-makers through role-based operations, structured intake, offline resilience, and real-time coordination in one platform.',
+        y,
+      );
+
+      const sections = [
+        {
+          title: 'Core Capabilities',
+          bullets: [
+            'Household readiness, emergency contacts, and vulnerability tracking.',
+            'Organization dashboards for member status, inventory, and broadcasts.',
+            'Population tracking, alerts, and geographic risk overlays for operations teams.',
+            'Assessments, recovery workflows, and G.A.P. support intake for documented need.',
+          ],
+        },
+        {
+          title: 'Why It Matters',
+          bullets: [
+            'Reduces confusion with role-specific views for residents, org leaders, and responders.',
+            'Uses trusted community structures such as churches, nonprofits, and local institutions.',
+            'Improves coordination speed before, during, and after incidents.',
+            'Supports broader reach through scalable community-code and parent-child org networks.',
+          ],
+        },
+        {
+          title: 'Who Uses It',
+          bullets: [
+            'Households and residents preparing for emergencies.',
+            'Churches, NGOs, community hubs, and institution administrators.',
+            'Emergency managers, first responders, and public-sector operations teams.',
+          ],
+        },
+      ];
+
+      for (const section of sections) {
+        if (y > pageHeight - 120) {
+          doc.addPage();
+          y = 64;
+        }
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.text(section.title, margin, y);
+        y += 18;
+
+        for (const bullet of section.bullets) {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(11);
+          const lines = doc.splitTextToSize(`• ${bullet}`, contentWidth - 12);
+          doc.text(lines, margin + 8, y);
+          y += lines.length * 16 + 4;
+        }
+        y += 10;
+      }
+
+      if (y > pageHeight - 96) {
+        doc.addPage();
+        y = 64;
+      }
+
+      doc.setDrawColor(203, 213, 225);
+      doc.line(margin, y, pageWidth - margin, y);
+      y += 22;
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(10);
+      doc.text('Prepared from the current AERA product overview.', margin, y);
+
+      doc.save('About-AERA.pdf');
+    } catch (downloadError) {
+      console.error('About AERA PDF export failed', downloadError);
+      setError('Unable to download the About Aera PDF right now.');
+    } finally {
+      setIsDownloadingAbout(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col p-6 animate-fade-in pb-safe justify-center max-w-sm mx-auto w-full">
       <div className="text-center mb-8">
@@ -232,9 +352,10 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
           fullWidth
           variant="secondary"
           size="sm"
-          onClick={() => window.location.assign('/presentation')}
+          onClick={handleAboutAeraDownload}
+          disabled={isDownloadingAbout}
         >
-          Open Presentation Mode
+          <FileDown size={16} className="mr-2" /> {isDownloadingAbout ? 'Preparing PDF…' : 'About Aera'}
         </Button>
         <button className="text-sm text-brand-600 font-semibold underline" onClick={() => setShowReset(!showReset)}>
           Forgot password?

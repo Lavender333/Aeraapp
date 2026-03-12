@@ -1,10 +1,10 @@
 
 import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { BottomNav } from './components/BottomNav';
-import { ViewState } from './types';
+import { ViewState, UserProfile } from './types';
 import { StorageService } from './services/storage';
 import { capturePendingCommunityInviteFromUrl, getPendingCommunityInvite } from './services/communityInvite';
-import { getPeopleRegisteredCount as fetchPeopleRegisteredCount } from './services/api';
+import { fetchProfileForUser, fetchVitalsForUser, getPeopleRegisteredCount as fetchPeopleRegisteredCount } from './services/api';
 import { hasSupabaseConfig, supabaseConfigMessage, supabase } from './services/supabase';
 
 const lazyWithRetry = <T extends React.ComponentType<any>>(
@@ -114,6 +114,15 @@ export default function App() {
   const isPresentationPath = typeof window !== 'undefined' && window.location.pathname === '/presentation';
   const isPresentationView = currentView === 'PRESENTATION' || isPresentationPath;
 
+  const resolveAuthenticatedLandingView = (profile: Partial<UserProfile> | null | undefined): ViewState => {
+    const role = String(profile?.role || 'GENERAL_USER').toUpperCase();
+    const onboardComplete = Boolean(profile?.onboardComplete);
+
+    if (!onboardComplete) return 'ACCOUNT_SETUP';
+    if (role === 'INSTITUTION_ADMIN' || role === 'ORG_ADMIN') return 'ORG_DASHBOARD';
+    return 'DASHBOARD';
+  };
+
   useEffect(() => {
     StorageService.startOfflineSyncListener();
   }, []);
@@ -155,6 +164,63 @@ export default function App() {
         } else if (isRecoveryUrl) {
           setPostSplashView('RESET_PASSWORD');
           setView('RESET_PASSWORD');
+        } else if (data?.session?.user) {
+          const localProfile = StorageService.getProfile();
+          if (localProfile?.id && localProfile.id !== 'guest') {
+            const nextView = resolveAuthenticatedLandingView(localProfile);
+            setPostSplashView(nextView);
+            setView(nextView);
+          } else {
+            const [remoteProfile, remoteVitals] = await Promise.all([
+              fetchProfileForUser().catch(() => null),
+              fetchVitalsForUser().catch(() => null),
+            ]);
+
+            const sessionUser = data.session.user;
+            const hydratedProfile: UserProfile = {
+              id: sessionUser.id,
+              fullName: remoteProfile?.fullName || '',
+              email: remoteProfile?.email || sessionUser.email || '',
+              phone: remoteProfile?.phone || '',
+              address: remoteProfile?.address || '',
+              addressLine1: remoteProfile?.addressLine1,
+              addressLine2: remoteProfile?.addressLine2,
+              city: remoteProfile?.city,
+              state: remoteProfile?.state,
+              zipCode: remoteProfile?.zipCode,
+              latitude: remoteProfile?.latitude,
+              longitude: remoteProfile?.longitude,
+              googlePlaceId: remoteProfile?.googlePlaceId,
+              addressVerified: remoteProfile?.addressVerified,
+              addressVerifiedAt: remoteProfile?.addressVerifiedAt,
+              householdMembers: remoteVitals?.householdMembers || 1,
+              household: remoteVitals?.household || [],
+              petDetails: remoteVitals?.petDetails || '',
+              medicalNeeds: remoteVitals?.medicalNeeds || '',
+              medicationDependency: remoteVitals?.medicationDependency,
+              insulinDependency: remoteVitals?.insulinDependency,
+              oxygenPoweredDevice: remoteVitals?.oxygenPoweredDevice,
+              mobilityLimitation: remoteVitals?.mobilityLimitation,
+              transportationAccess: remoteVitals?.transportationAccess,
+              financialStrain: remoteVitals?.financialStrain,
+              consentPreparednessPlanning: remoteVitals?.consentPreparednessPlanning,
+              consentTimestamp: remoteVitals?.consentTimestamp,
+              emergencyContactName: remoteProfile?.emergencyContactName || '',
+              emergencyContactPhone: remoteProfile?.emergencyContactPhone || '',
+              emergencyContactRelation: remoteProfile?.emergencyContactRelation || '',
+              communityId: remoteProfile?.communityId || '',
+              role: remoteProfile?.role || 'GENERAL_USER',
+              language: 'en',
+              active: true,
+              onboardComplete: Boolean(remoteVitals || localProfile?.onboardComplete),
+              notifications: { push: true, sms: true, email: true },
+            };
+
+            StorageService.saveProfile(hydratedProfile, { skipRemoteSync: true });
+            const nextView = resolveAuthenticatedLandingView(hydratedProfile);
+            setPostSplashView(nextView);
+            setView(nextView);
+          }
         } else if (pendingInvite?.communityId) {
           setPostSplashView('REGISTRATION');
           setView('SPLASH');

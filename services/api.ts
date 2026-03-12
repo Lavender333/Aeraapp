@@ -57,7 +57,7 @@ const safeLogActivity = async (entry: {
 const getProfileById = async (userId: string) => {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, org_id, full_name, role, email, phone')
+    .select('id, org_id, full_name, role, email, phone, county_id, state_id')
     .eq('id', userId)
     .single();
   if (error || !data) return null;
@@ -657,6 +657,18 @@ export async function updateProfileForUser(payload: {
     .eq('id', authData.user.id);
 
   if (error) throw error;
+
+  const { error: syncVpError } = await supabase
+    .from('vulnerability_profiles')
+    .update({
+      organization_id: orgId,
+      updated_by: authData.user.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('profile_id', authData.user.id);
+
+  if (syncVpError) throw syncVpError;
+
   await safeLogActivity({
     action: 'UPDATE',
     entityType: 'profiles',
@@ -2377,8 +2389,8 @@ export async function updateVitalsForUser(payload: {
   const vulnerabilityUpsertPayload: Record<string, unknown> = {
     profile_id: authData.user.id,
     organization_id: profile?.org_id || null,
-    county_id: null,
-    state_id: null,
+    county_id: profile?.county_id || null,
+    state_id: profile?.state_id || null,
     household_size: householdSize,
     consent_preparedness_planning: true,
     consent_timestamp: new Date().toISOString(),
@@ -3475,17 +3487,31 @@ export async function listDamageAssessmentsForCurrentUser(limit = 75): Promise<D
   if (canViewOrg) {
     if (!profile?.org_id) return [];
 
+    let networkOrgIds = [String(profile.org_id)];
+    if (role === 'INSTITUTION_ADMIN') {
+      const { data: childOrgs, error: childOrgError } = await supabase
+        .from('organizations')
+        .select('id')
+        .eq('parent_org_id', profile.org_id);
+
+      if (childOrgError) error = childOrgError;
+      networkOrgIds = Array.from(new Set([
+        String(profile.org_id),
+        ...((childOrgs || []).map((org: any) => String(org.id || '')).filter(Boolean)),
+      ]));
+    }
+
     const [{ data: directRows, error: directError }, { data: orgProfiles, error: orgProfilesError }] = await Promise.all([
       supabase
         .from('damage_assessments')
         .select('id, profile_id, org_id, damage_type, severity, description, photo_path, location, created_at')
-        .eq('org_id', profile.org_id)
+        .in('org_id', networkOrgIds)
         .order('created_at', { ascending: false })
         .limit(safeLimit),
       supabase
         .from('profiles')
         .select('id')
-        .eq('org_id', profile.org_id),
+        .in('org_id', networkOrgIds),
     ]);
 
     if (directError) error = directError;

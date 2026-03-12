@@ -12,6 +12,7 @@ import { Textarea } from '../components/Input';
 import { GoogleGenAI } from "../services/mockGenAI";
 
 type OrgDashboardTab = 'MEMBERS' | 'PREPAREDNESS' | 'INVENTORY';
+type OrgSelectorOption = { id: string; org_code: string; name: string };
 
 const mergeReplenishmentRequests = (remoteRequests: ReplenishmentRequest[], localRequests: ReplenishmentRequest[]) => {
   const merged = new Map<string, ReplenishmentRequest>();
@@ -127,6 +128,37 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     setActiveTab(initialTab);
   }, [initialTab]);
 
+  const currentOrgOption: OrgSelectorOption | null = React.useMemo(() => {
+    const normalizedCode = normalizeOrgCode(communityId);
+    if (!normalizedCode) return null;
+
+    const org = StorageService.getOrganization(normalizedCode);
+    return {
+      id: String(org?.id || normalizedCode),
+      org_code: normalizedCode,
+      name: String(org?.name || parentOrgName || normalizedCode),
+    };
+  }, [communityId, parentOrgName]);
+
+  const networkOrgs = React.useMemo(() => {
+    const options: OrgSelectorOption[] = [];
+    const seen = new Set<string>();
+
+    if (currentOrgOption) {
+      options.push(currentOrgOption);
+      seen.add(normalizeOrgCode(currentOrgOption.org_code));
+    }
+
+    for (const org of childOrgs) {
+      const code = normalizeOrgCode(org.org_code);
+      if (!code || seen.has(code)) continue;
+      options.push({ ...org, org_code: code });
+      seen.add(code);
+    }
+
+    return options;
+  }, [childOrgs, currentOrgOption]);
+
   useEffect(() => {
     const profile = StorageService.getProfile();
     const id = communityIdOverride || profile.communityId || 'CH-9921';
@@ -171,12 +203,12 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
         setChildOrgs(rows as any[]);
         if (rows && rows.length > 0) {
           // compute aggregates
-          const codes = (rows as any[]).map(r => r.org_code as string);
+          const codes = [candidate, ...(rows as any[]).map(r => r.org_code as string)];
           try {
             const agg = await aggregateOrgStats(codes);
             setAggStats(agg as any);
             setIsAggregateView(true);
-            setSelectedBroadcastTargets((rows as any[]).map(r => String(r.org_code || '').toUpperCase().trim()));
+            setSelectedBroadcastTargets(codes.map(code => String(code || '').toUpperCase().trim()));
           } catch (e) {
             console.warn('aggregateOrgStats failed', e);
           }
@@ -388,7 +420,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     setModerationError(null);
     if (isAggregateView) {
       // default to all child orgs when composing
-      setSelectedBroadcastTargets(childOrgs.map(o => normalizeOrgCode(o.org_code)));
+      setSelectedBroadcastTargets(networkOrgs.map(o => normalizeOrgCode(o.org_code)));
     }
     setShowBroadcastModal(true);
   };
@@ -686,7 +718,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                     <div className="mb-2">
                       <p className="text-xs font-semibold">Select target organizations:</p>
                       <div className="max-h-32 overflow-y-auto border border-slate-200 rounded p-2">
-                        {childOrgs.map(o => (
+                        {networkOrgs.map(o => (
                           <label key={o.id} className="flex items-center gap-2 text-sm">
                             <input
                               type="checkbox"
@@ -699,7 +731,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                                 }
                               }}
                             />
-                            {o.name}
+                            {o.name} ({normalizeOrgCode(o.org_code)})
                           </label>
                         ))}
                       </div>
@@ -805,7 +837,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
         </div>
 
         {/* child organization selector */}
-        {childOrgs.length > 0 && (
+        {networkOrgs.length > 1 && (
           <div className="mb-2 flex items-center gap-2">
             <label className="text-xs font-semibold">View:</label>
             <select
@@ -813,9 +845,9 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
               onChange={e => setViewOrgId(e.target.value as string)}
               className="text-sm border border-slate-300 rounded px-2 py-1"
             >
-              <option value="ALL">All ({childOrgs.length})</option>
-              {childOrgs.map(o => (
-                <option key={o.id} value={normalizeOrgCode(o.org_code)}>{o.name}</option>
+              <option value="ALL">All ({networkOrgs.length})</option>
+              {networkOrgs.map(o => (
+                <option key={o.id} value={normalizeOrgCode(o.org_code)}>{o.name} ({normalizeOrgCode(o.org_code)})</option>
               ))}
             </select>
           </div>

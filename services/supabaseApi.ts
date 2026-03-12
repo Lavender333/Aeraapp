@@ -62,6 +62,20 @@ export type StateHouseholdJoinActivityRecord = {
   last_activity_at: string | null;
 };
 
+export type OrganizationPopulationRollupRecord = {
+  organization_id: string;
+  state_id: string;
+  county_id: string;
+  profile_count: number;
+  avg_risk_score: number;
+  max_risk_score: number;
+  min_risk_score: number;
+  high_risk_count: number;
+  evacuation_assist_count: number;
+  transportation_gap_count: number;
+  mobility_limited_count: number;
+};
+
 export async function getCurrentMapScope() {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData?.user) throw new Error('Not authenticated');
@@ -119,6 +133,76 @@ export async function listStateHouseholdJoinActivity(): Promise<StateHouseholdJo
 
   if (error) throw error;
   return (data || []) as StateHouseholdJoinActivityRecord[];
+}
+
+export async function listOrganizationPopulationRollups(orgIds: string[]): Promise<OrganizationPopulationRollupRecord[]> {
+  const normalizedOrgIds = Array.from(new Set((orgIds || []).map((value) => String(value || '').trim()).filter(Boolean)));
+  if (normalizedOrgIds.length === 0) return [];
+
+  const query = supabase
+    .from('vulnerability_profiles')
+    .select('organization_id, state_id, county_id, risk_score, mobility_limitation, transportation_access')
+    .not('state_id', 'is', null)
+    .not('county_id', 'is', null);
+
+  const { data, error } = normalizedOrgIds.length === 1
+    ? await query.eq('organization_id', normalizedOrgIds[0])
+    : await query.in('organization_id', normalizedOrgIds);
+
+  if (error) throw error;
+
+  const grouped = new Map<string, OrganizationPopulationRollupRecord>();
+
+  for (const row of data || []) {
+    const stateId = String((row as any).state_id || '').trim();
+    const countyId = String((row as any).county_id || '').trim();
+
+    if (!stateId || !countyId) continue;
+
+    const key = `${stateId}::${countyId}`;
+    const riskScore = Number((row as any).risk_score || 0);
+    const mobilityLimited = Boolean((row as any).mobility_limitation);
+    const transportationAccess = Boolean((row as any).transportation_access ?? true);
+
+    const current = grouped.get(key) || {
+      organization_id: normalizedOrgIds[0],
+      state_id: stateId,
+      county_id: countyId,
+      profile_count: 0,
+      avg_risk_score: 0,
+      max_risk_score: 0,
+      min_risk_score: 0,
+      high_risk_count: 0,
+      evacuation_assist_count: 0,
+      transportation_gap_count: 0,
+      mobility_limited_count: 0,
+    };
+
+    const nextCount = current.profile_count + 1;
+    const nextRiskTotal = current.avg_risk_score * current.profile_count + riskScore;
+
+    current.profile_count = nextCount;
+    current.avg_risk_score = nextRiskTotal / nextCount;
+    current.max_risk_score = nextCount === 1 ? riskScore : Math.max(current.max_risk_score, riskScore);
+    current.min_risk_score = nextCount === 1 ? riskScore : Math.min(current.min_risk_score, riskScore);
+
+    if (riskScore >= 8) current.high_risk_count += 1;
+    if (mobilityLimited) current.mobility_limited_count += 1;
+    if (!transportationAccess) current.transportation_gap_count += 1;
+    if (mobilityLimited || !transportationAccess) current.evacuation_assist_count += 1;
+
+    grouped.set(key, current);
+  }
+
+  return Array.from(grouped.values()).sort((a, b) => {
+    if (b.profile_count !== a.profile_count) return b.profile_count - a.profile_count;
+    return b.avg_risk_score - a.avg_risk_score;
+  });
+}
+
+export async function listOrganizationPopulationRollup(orgId: string): Promise<OrganizationPopulationRollupRecord[]> {
+  if (!orgId) return [];
+  return listOrganizationPopulationRollups([orgId]);
 }
 
 const resolveOrgId = async (orgCode: string) => {

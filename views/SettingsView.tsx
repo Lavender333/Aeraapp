@@ -4591,7 +4591,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           </div>
         </div>
         <div className="space-y-1">
-          <p className="text-xs text-slate-500">AERA uses the Google tag / Google Analytics on its web experience to measure traffic and product usage.</p>
           <button
             type="button"
             onClick={() => {
@@ -4600,7 +4599,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             }}
             className="block w-full text-left text-xs text-slate-500 hover:text-slate-700 hover:underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 rounded"
           >
-            Privacy Notice
+            Privacy Notice &amp; Analytics Disclosure
           </button>
           <button
             type="button"
