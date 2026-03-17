@@ -187,6 +187,8 @@ export interface OrganizationProfile {
   name: string;
   type: 'CHURCH' | 'NGO' | 'COMMUNITY_CENTER' | 'LOCAL_GOV';
   address: string;
+  latitude?: number;
+  longitude?: number;
   adminContact: string;
   adminPhone: string;
   replenishmentProvider: string; // Who fulfills their requests (e.g. "FEMA Region 4", "Diocese HQ")

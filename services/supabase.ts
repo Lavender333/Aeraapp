@@ -30,6 +30,8 @@ export type OrgLookup = {
   orgId: string;
   orgCode: string;
   orgName?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 export async function getOrgByCode(orgCode: string): Promise<OrgLookup | null> {
@@ -41,12 +43,18 @@ export async function getOrgByCode(orgCode: string): Promise<OrgLookup | null> {
   if (!normalized) return null;
   const { data, error } = await supabase
     .from('organizations')
-    .select('id, org_code, name')
+    .select('id, org_code, name, latitude, longitude')
     .eq('org_code', normalized)
     .single();
 
   if (error || !data) return null;
-  return { orgId: data.id, orgCode: data.org_code, orgName: data.name };
+  return {
+    orgId: data.id,
+    orgCode: data.org_code,
+    orgName: data.name,
+    latitude: data.latitude == null ? null : Number(data.latitude),
+    longitude: data.longitude == null ? null : Number(data.longitude),
+  };
 }
 
 export async function getOrgIdByCode(orgCode: string): Promise<string | null> {

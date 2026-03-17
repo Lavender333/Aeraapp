@@ -548,6 +548,55 @@ export async function setOrganizationParentByCode(payload: {
   };
 }
 
+export async function updateOrganizationByCode(payload: {
+  orgCode: string;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+}) {
+  const org = await getOrgByCode(payload.orgCode);
+  if (!org?.orgId) throw new Error('Organization not found');
+
+  const updates: Record<string, any> = {
+    address: payload.address == null ? null : String(payload.address).trim() || null,
+  };
+
+  if (Object.prototype.hasOwnProperty.call(payload, 'latitude')) {
+    const lat = payload.latitude;
+    updates.latitude = typeof lat === 'number' && Number.isFinite(lat) ? lat : null;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(payload, 'longitude')) {
+    const lng = payload.longitude;
+    updates.longitude = typeof lng === 'number' && Number.isFinite(lng) ? lng : null;
+  }
+
+  const { data, error } = await supabase
+    .from('organizations')
+    .update(updates)
+    .eq('id', org.orgId)
+    .select('id, org_code, address, latitude, longitude')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message || 'Unable to update organization');
+  }
+
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'organizations',
+    entityId: data.id,
+    orgCode: data.org_code || payload.orgCode,
+    details: {
+      address: data.address,
+      latitude: data.latitude,
+      longitude: data.longitude,
+    },
+  });
+
+  return data;
+}
+
 export async function updateProfile(profile: Partial<UserProfile> & { id: string }) {
   const orgId = profile.communityId ? await getOrgIdByCode(profile.communityId) : null;
 

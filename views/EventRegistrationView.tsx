@@ -23,6 +23,8 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
 import { ViewState } from '../types';
+import { fetchProfileForUser } from '../services/api';
+import { supabase } from '../services/supabase';
 import {
   getEvent,
   registerParticipant,
@@ -55,6 +57,8 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
   const [event, setEvent] = useState<DistributionEvent | null>(null);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [isConnectedUser, setIsConnectedUser] = useState(false);
+  const [useProfileInfo, setUseProfileInfo] = useState(true);
 
   // Form fields
   const [fullName, setFullName] = useState('');
@@ -68,6 +72,14 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
   const [outreachOptIn, setOutreachOptIn] = useState(false);
   const [locationGranted, setLocationGranted] = useState(false);
   const [locationLatLng, setLocationLatLng] = useState<{ lat: number; lng: number } | null>(null);
+  const [profileDefaults, setProfileDefaults] = useState<{
+    fullName: string;
+    zipCode: string;
+    phone: string;
+    email: string;
+    outreachOptIn: boolean;
+    location: { lat: number; lng: number } | null;
+  } | null>(null);
 
   // Result
   const [registration, setRegistration] = useState<EventRegistration | null>(null);
@@ -87,6 +99,72 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
       .catch(() => setStep('event_not_found'));
   }, [resolvedEventId]);
 
+  useEffect(() => {
+    let active = true;
+
+    const loadConnectedUserDefaults = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!active || !data?.session?.user) return;
+
+        const profile = await fetchProfileForUser();
+        if (!active || !profile) return;
+
+        const defaults = {
+          fullName: String(profile.fullName || '').trim(),
+          zipCode: String(profile.zipCode || '').trim(),
+          phone: String(profile.phone || '').trim(),
+          email: String(profile.email || '').trim(),
+          outreachOptIn: Boolean(profile.geofencedOutreachOptIn),
+          location:
+            typeof profile.latitude === 'number' && typeof profile.longitude === 'number'
+              ? { lat: profile.latitude, lng: profile.longitude }
+              : null,
+        };
+
+        setIsConnectedUser(true);
+        setProfileDefaults(defaults);
+        if (defaults.fullName) setFullName(defaults.fullName);
+        if (defaults.zipCode) setZipCode(defaults.zipCode);
+        if (defaults.phone) setPhone(defaults.phone);
+        if (defaults.email) setEmail(defaults.email);
+        if (defaults.outreachOptIn) setOutreachOptIn(true);
+        if (defaults.location) {
+          setLocationLatLng(defaults.location);
+          setLocationGranted(true);
+        }
+      } catch {
+        // Event registration also supports anonymous/public users.
+      }
+    };
+
+    loadConnectedUserDefaults();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const applyProfileDefaults = () => {
+    if (!profileDefaults) return;
+    setFullName(profileDefaults.fullName || '');
+    setZipCode(profileDefaults.zipCode || '');
+    setPhone(profileDefaults.phone || '');
+    setEmail(profileDefaults.email || '');
+    setOutreachOptIn(profileDefaults.outreachOptIn);
+    setLocationLatLng(profileDefaults.location);
+    setLocationGranted(Boolean(profileDefaults.location));
+  };
+
+  const effectiveFields = () => {
+    const useSaved = isConnectedUser && useProfileInfo && profileDefaults;
+    return {
+      fullName: useSaved ? profileDefaults.fullName : fullName,
+      zipCode: useSaved ? profileDefaults.zipCode : zipCode,
+      phone: useSaved ? profileDefaults.phone : phone,
+      email: useSaved ? profileDefaults.email : email,
+    };
+  };
+
   const requestLocation = () => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
@@ -105,9 +183,18 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
 
   const handleFormNext = () => {
     setError('');
-    if (!fullName.trim()) { setError('Please enter your name.'); return; }
+    const fields = effectiveFields();
+    if (!fields.fullName.trim()) {
+      if (isConnectedUser && useProfileInfo) {
+        setUseProfileInfo(false);
+        setError('Your saved profile is missing a name. Please complete your details below.');
+      } else {
+        setError('Please enter your name.');
+      }
+      return;
+    }
     if (additionalMembers < 0) { setError('Additional members cannot be negative.'); return; }
-    if (zipCode && !/^\d{5}(-\d{4})?$/.test(zipCode.trim())) {
+    if (fields.zipCode && !/^\d{5}(-\d{4})?$/.test(fields.zipCode.trim())) {
       setError('Please enter a valid ZIP code.'); return;
     }
     setStep('consent');
@@ -118,15 +205,16 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
     setSubmitting(true);
     setError('');
     try {
+      const fields = effectiveFields();
       const reg = await registerParticipant({
         eventId: event.id,
         eventName: event.name,
-        fullName,
+        fullName: fields.fullName,
         householdSize: totalHousehold,
         additionalMembers,
-        zipCode: zipCode || undefined,
-        phone: phone || undefined,
-        email: email || undefined,
+        zipCode: fields.zipCode || undefined,
+        phone: fields.phone || undefined,
+        email: fields.email || undefined,
         outreachOptIn,
         latitude: locationLatLng?.lat,
         longitude: locationLatLng?.lng,
@@ -324,6 +412,37 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
         <h2 className="text-[22px] font-bold text-slate-900 mb-0.5">Register</h2>
         <p className="text-[14px] text-slate-500 mb-6">{event?.name} · {event?.distribution_date}</p>
 
+        {isConnectedUser && (
+          <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+            <p className="text-[13px] font-semibold text-emerald-900">Using your saved AERA profile</p>
+            <p className="text-[12px] text-emerald-800 mt-1">
+              Connected users can use saved profile details by default and only answer event-specific questions.
+            </p>
+
+            <label className="mt-3 flex items-center gap-2 text-[12px] font-semibold text-emerald-900">
+              <input
+                type="checkbox"
+                checked={useProfileInfo}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setUseProfileInfo(checked);
+                  if (checked) applyProfileDefaults();
+                }}
+              />
+              Use profile info
+            </label>
+
+            {useProfileInfo && profileDefaults && (
+              <div className="mt-2 rounded-md border border-emerald-200 bg-white p-2 text-[12px] text-emerald-900">
+                <p>{profileDefaults.fullName || 'Name missing in profile'}</p>
+                <p>{profileDefaults.phone || 'No phone on file'}</p>
+                <p>{profileDefaults.email || 'No email on file'}</p>
+                <p>{profileDefaults.zipCode || 'No ZIP on file'}</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {error && (
           <div className="mb-4 flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3">
             <AlertTriangle size={15} className="text-red-500 mt-0.5 shrink-0" />
@@ -332,35 +451,37 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
         )}
 
         <div className="space-y-4">
-          <Card className="p-4 space-y-3">
-            <p className="text-[13px] font-semibold text-slate-700">Your Info</p>
-            <Input
-              label="Full Name *"
-              placeholder="First and last name"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-            />
-            <Input
-              label="ZIP Code"
-              placeholder="90210"
-              value={zipCode}
-              onChange={(e) => setZipCode(e.target.value)}
-            />
-            <Input
-              label="Phone (optional)"
-              placeholder="(555) 555-5555"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              type="tel"
-            />
-            <Input
-              label="Email (optional)"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              type="email"
-            />
-          </Card>
+          {(!isConnectedUser || !useProfileInfo) && (
+            <Card className="p-4 space-y-3">
+              <p className="text-[13px] font-semibold text-slate-700">Your Info</p>
+              <Input
+                label="Full Name *"
+                placeholder="First and last name"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+              />
+              <Input
+                label="ZIP Code"
+                placeholder="90210"
+                value={zipCode}
+                onChange={(e) => setZipCode(e.target.value)}
+              />
+              <Input
+                label="Phone (optional)"
+                placeholder="(555) 555-5555"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                type="tel"
+              />
+              <Input
+                label="Email (optional)"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                type="email"
+              />
+            </Card>
+          )}
 
           <Card className="p-4 space-y-3">
             <div className="flex items-center justify-between">

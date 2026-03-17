@@ -123,6 +123,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
   const [outreachPanelLoading, setOutreachPanelLoading] = useState(false);
   const [outreachPanelError, setOutreachPanelError] = useState<string | null>(null);
   const [loggingTargetId, setLoggingTargetId] = useState<string | null>(null);
+  const [outreachOrgCenter, setOutreachOrgCenter] = useState<{ lat: number; lng: number } | null>(null);
 
   // Broadcast State
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
@@ -310,11 +311,17 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
         if (!active) return;
         setOutreachCandidates(candidates);
         setOutreachAuditLogs(logs);
+        if (typeof org.latitude === 'number' && typeof org.longitude === 'number') {
+          setOutreachOrgCenter({ lat: org.latitude, lng: org.longitude });
+        } else {
+          setOutreachOrgCenter(null);
+        }
       } catch (e: any) {
         if (!active) return;
         setOutreachPanelError(e?.message || 'Unable to load outreach panel.');
         setOutreachCandidates([]);
         setOutreachAuditLogs([]);
+        setOutreachOrgCenter(null);
       } finally {
         if (active) setOutreachPanelLoading(false);
       }
@@ -565,6 +572,26 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     } finally {
       setLoggingTargetId(null);
     }
+  };
+
+  const outreachRadiusMiles = 3;
+  const projectCandidatePoint = (candidate: OrgOutreachCandidate) => {
+    if (!outreachOrgCenter) return null;
+
+    const dLatMiles = (candidate.latitude - outreachOrgCenter.lat) * 69;
+    const lngScale = Math.max(0.15, Math.cos((outreachOrgCenter.lat * Math.PI) / 180));
+    const dLngMiles = (candidate.longitude - outreachOrgCenter.lng) * 69 * lngScale;
+
+    const x = ((dLngMiles + outreachRadiusMiles) / (outreachRadiusMiles * 2)) * 100;
+    const y = ((outreachRadiusMiles - dLatMiles) / (outreachRadiusMiles * 2)) * 100;
+    const clampedX = Math.max(4, Math.min(96, x));
+    const clampedY = Math.max(4, Math.min(96, y));
+
+    return {
+      x: clampedX,
+      y: clampedY,
+      intensity: Math.max(0.2, 1 - Math.min(1, Number(candidate.distance_miles || outreachRadiusMiles) / outreachRadiusMiles)),
+    };
   };
 
   const handlePingMember = async () => {
@@ -1175,6 +1202,46 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
               {outreachPanelError && (
                 <div className="bg-white border border-red-200 rounded-lg p-3 text-sm text-red-700">
                   {outreachPanelError}
+                </div>
+              )}
+
+              {outreachOrgCenter && outreachCandidates.length > 0 && (
+                <div className="bg-white border border-emerald-100 rounded-lg p-4 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-sm font-bold text-slate-900">Contact Density Heatmap</h4>
+                    <span className="text-[11px] font-bold uppercase text-slate-500">Radius {outreachRadiusMiles} mi</span>
+                  </div>
+                  <div className="relative h-56 rounded-xl border border-slate-200 bg-gradient-to-b from-emerald-50 to-white overflow-hidden">
+                    <div className="absolute inset-4 rounded-full border border-emerald-200/80" />
+                    <div className="absolute left-1/2 top-1/2 w-3 h-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-700 ring-2 ring-white" title="Organization center" />
+                    {outreachCandidates.map((candidate) => {
+                      const point = projectCandidatePoint(candidate);
+                      if (!point) return null;
+                      const glowSize = 48 + Math.round(44 * point.intensity);
+                      return (
+                        <React.Fragment key={`heat-${candidate.profile_id}`}>
+                          <div
+                            className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
+                            style={{
+                              left: `${point.x}%`,
+                              top: `${point.y}%`,
+                              width: `${glowSize}px`,
+                              height: `${glowSize}px`,
+                              background: `radial-gradient(circle, rgba(239,68,68,${0.38 * point.intensity}) 0%, rgba(251,146,60,${0.24 * point.intensity}) 42%, rgba(255,255,255,0) 75%)`,
+                            }}
+                          />
+                          <div
+                            className="absolute -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-red-500 border border-white shadow"
+                            style={{ left: `${point.x}%`, top: `${point.y}%` }}
+                            title={`${candidate.full_name || 'Nearby App User'} · ${candidate.distance_miles} miles`}
+                          />
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Darker clusters indicate more nearby opted-in users who are not yet connected.
+                  </p>
                 </div>
               )}
 

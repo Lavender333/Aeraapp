@@ -223,7 +223,7 @@ export async function listOrganizations(options?: { activeOnly?: boolean }) {
   let query = supabase
     .from('organizations')
     .select(
-      'id, org_code, name, type, address, is_active, contact_person, contact_phone, email, phone, replenishment_provider, replenishment_email, replenishment_phone, verified, registered_population, parent_org_id'
+      'id, org_code, name, type, address, latitude, longitude, is_active, contact_person, contact_phone, email, phone, replenishment_provider, replenishment_email, replenishment_phone, verified, registered_population, parent_org_id'
     )
     .order('name');
 
