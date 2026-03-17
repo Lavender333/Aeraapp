@@ -84,6 +84,9 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
     const initialCommunityId = String(profile.communityId || '').trim();
     return initialCommunityId ? [initialCommunityId] : [];
   });
+  const isCoreAdmin = role === 'ADMIN';
+  const isOrgAdmin = role === 'ORG_ADMIN' || role === 'INSTITUTION_ADMIN';
+  const isMemberView = !isCoreAdmin && !isOrgAdmin;
   const [formMode, setFormMode] = useState<'HARDSHIP' | 'ADVANCE'>('HARDSHIP');
   const [formStep, setFormStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [isSubmittingForm, setIsSubmittingForm] = useState(false);
@@ -167,10 +170,6 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
       active = false;
     };
   }, [isOrgAdmin, profile.communityId]);
-
-  const isCoreAdmin = role === 'ADMIN';
-  const isOrgAdmin = role === 'ORG_ADMIN' || role === 'INSTITUTION_ADMIN';
-  const isMemberView = !isCoreAdmin && !isOrgAdmin;
 
   const users = db.users || [];
   const allRequests = (db.requests || []).slice().sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
