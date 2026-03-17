@@ -593,6 +593,9 @@ export async function updateProfileForUser(payload: {
   emergencyContactRelation?: string;
   communityId?: string;
   role?: string;
+  geofencedOutreachOptIn?: boolean;
+  geofencedOutreachRadiusMiles?: number;
+  geofencedOutreachConsentAt?: string;
 }) {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData?.user) throw new Error('Not authenticated');
@@ -649,6 +652,16 @@ export async function updateProfileForUser(payload: {
   }
   if (Object.prototype.hasOwnProperty.call(payload, 'addressVerifiedAt')) {
     profileUpdate.address_verified_at = payload.addressVerifiedAt || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'geofencedOutreachOptIn')) {
+    profileUpdate.geofenced_outreach_opt_in = Boolean(payload.geofencedOutreachOptIn);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'geofencedOutreachRadiusMiles')) {
+    const radius = Number(payload.geofencedOutreachRadiusMiles);
+    profileUpdate.geofenced_outreach_radius_miles = Number.isFinite(radius) && radius > 0 ? radius : 3;
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'geofencedOutreachConsentAt')) {
+    profileUpdate.geofenced_outreach_consent_at = payload.geofencedOutreachConsentAt || null;
   }
 
   const { error } = await supabase
@@ -2686,7 +2699,7 @@ export async function fetchProfileForUser(): Promise<Partial<UserProfile> | null
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('full_name, phone, mobile_phone, email, role, org_id, home_address, address_line_1, address_line_2, city, state, zip, latitude, longitude, google_place_id, address_verified, address_verified_at, emergency_contact, avatar_url, organizations(org_code)')
+    .select('full_name, phone, mobile_phone, email, role, org_id, home_address, address_line_1, address_line_2, city, state, zip, latitude, longitude, google_place_id, address_verified, address_verified_at, emergency_contact, avatar_url, geofenced_outreach_opt_in, geofenced_outreach_radius_miles, geofenced_outreach_consent_at, organizations(org_code)')
     .eq('id', authData.user.id)
     .single();
 
@@ -2714,6 +2727,9 @@ export async function fetchProfileForUser(): Promise<Partial<UserProfile> | null
     googlePlaceId: data.google_place_id || '',
     addressVerified: Boolean(data.address_verified),
     addressVerifiedAt: data.address_verified_at || undefined,
+    geofencedOutreachOptIn: Boolean((data as any).geofenced_outreach_opt_in),
+    geofencedOutreachRadiusMiles: Number((data as any).geofenced_outreach_radius_miles || 3),
+    geofencedOutreachConsentAt: (data as any).geofenced_outreach_consent_at || undefined,
     emergencyContactName: data.emergency_contact?.name || '',
     emergencyContactPhone: data.emergency_contact?.phone || '',
     emergencyContactRelation: data.emergency_contact?.relation || '',

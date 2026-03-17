@@ -58,6 +58,10 @@ const BuildKitView = lazyWithRetry(() => import('./views/BuildKitView').then((m)
 const ReadinessView = lazyWithRetry(() => import('./views/ReadinessView').then((m) => ({ default: m.ReadinessView })));
 const ReadinessGapView = lazyWithRetry(() => import('./views/ReadinessGapView').then((m) => ({ default: m.ReadinessGapView })));
 const PresentationLayout = lazyWithRetry(() => import('./src/presentation/PresentationLayout').then((m) => ({ default: m.PresentationLayout })));
+const EventSetupView = lazyWithRetry(() => import('./views/EventSetupView').then((m) => ({ default: m.EventSetupView })));
+const EventRegistrationView = lazyWithRetry(() => import('./views/EventRegistrationView').then((m) => ({ default: m.EventRegistrationView })));
+const VolunteerScanView = lazyWithRetry(() => import('./views/VolunteerScanView').then((m) => ({ default: m.VolunteerScanView })));
+const EventDashboardView = lazyWithRetry(() => import('./views/EventDashboardView').then((m) => ({ default: m.EventDashboardView })));
 
 class ViewErrorBoundary extends React.Component<
   { onRecover: () => void; children: React.ReactNode },
@@ -151,10 +155,12 @@ export default function App() {
       const pendingInvite = pendingInviteFromUrl || getPendingCommunityInvite();
       const hash = window.location.hash || '';
       const search = window.location.search || '';
+      const eventIdFromUrl = new URLSearchParams(search).get('event');
       const isRecoveryPath = window.location.pathname.includes('reset-password');
       const isRecoveryHash = hash.includes('type=recovery') || search.includes('type=recovery') || hash.includes('reset-password');
       const isRecoveryUrl = isRecoveryPath || isRecoveryHash;
       const isPresentationUrl = window.location.pathname === '/presentation';
+      const isEventRegistrationUrl = Boolean(eventIdFromUrl);
       try {
         const { data } = await supabase.auth.getSession();
         if (!active) return;
@@ -164,6 +170,9 @@ export default function App() {
         } else if (isRecoveryUrl) {
           setPostSplashView('RESET_PASSWORD');
           setView('RESET_PASSWORD');
+        } else if (isEventRegistrationUrl) {
+          setPostSplashView('EVENT_REGISTRATION');
+          setView('SPLASH');
         } else if (data?.session?.user) {
           const localProfile = StorageService.getProfile();
           if (localProfile?.id && localProfile.id !== 'guest') {
@@ -236,6 +245,9 @@ export default function App() {
         } else if (isRecoveryUrl) {
           setPostSplashView('RESET_PASSWORD');
           setView('RESET_PASSWORD');
+        } else if (isEventRegistrationUrl) {
+          setPostSplashView('EVENT_REGISTRATION');
+          setView('SPLASH');
         } else if (pendingInvite?.communityId) {
           setPostSplashView('REGISTRATION');
           setView('SPLASH');
@@ -338,6 +350,14 @@ export default function App() {
         return canAccessOrgDashboard ? <OrgDashboardView setView={setView} /> : <DashboardView setView={setView} />;
       case 'PRIVACY_POLICY':
         return <PrivacyPolicyView setView={setView} />;
+      case 'EVENT_SETUP':
+        return canAccessOrgDashboard ? <EventSetupView setView={setView} /> : <DashboardView setView={setView} />;
+      case 'EVENT_REGISTRATION':
+        return <EventRegistrationView setView={setView} />;
+      case 'VOLUNTEER_SCAN':
+        return canAccessAdvancedViews ? <VolunteerScanView setView={setView} /> : <DashboardView setView={setView} />;
+      case 'EVENT_DASHBOARD':
+        return canAccessOrgDashboard ? <EventDashboardView setView={setView} /> : <DashboardView setView={setView} />;
       default:
         return <DashboardView setView={setView} />;
     }
@@ -355,7 +375,11 @@ export default function App() {
                   currentView !== 'READINESS' &&
                   currentView !== 'READINESS_GAP' &&
                   currentView !== 'ORG_DASHBOARD' &&
-                  currentView !== 'PRIVACY_POLICY';
+                  currentView !== 'PRIVACY_POLICY' &&
+                  currentView !== 'EVENT_SETUP' &&
+                  currentView !== 'EVENT_REGISTRATION' &&
+                  currentView !== 'VOLUNTEER_SCAN' &&
+                  currentView !== 'EVENT_DASHBOARD';
 
   const useWideLayout = [
     'DASHBOARD',
@@ -369,6 +393,9 @@ export default function App() {
     'LOGISTICS',
     'ORG_DASHBOARD',
     'NEW_SIGNUPS',
+    'EVENT_SETUP',
+    'EVENT_DASHBOARD',
+    'VOLUNTEER_SCAN',
   ].includes(currentView);
   const shellFrameClass = useWideLayout
     ? 'shadow-none md:border-0'

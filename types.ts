@@ -1,5 +1,5 @@
 
-export type ViewState = 'SPLASH' | 'LOGIN' | 'REGISTRATION' | 'ACCOUNT_SETUP' | 'DASHBOARD' | 'HELP_WIZARD' | 'SETTINGS' | 'NEW_SIGNUPS' | 'MAP' | 'ALERTS' | 'GAP' | 'ASSESSMENT' | 'POPULATION' | 'RECOVERY' | 'DRONE' | 'LOGISTICS' | 'ORG_DASHBOARD' | 'PRESENTATION' | 'PRIVACY_POLICY' | 'RESET_PASSWORD' | 'BUILD_KIT' | 'READINESS' | 'READINESS_GAP';
+export type ViewState = 'SPLASH' | 'LOGIN' | 'REGISTRATION' | 'ACCOUNT_SETUP' | 'DASHBOARD' | 'HELP_WIZARD' | 'SETTINGS' | 'NEW_SIGNUPS' | 'MAP' | 'ALERTS' | 'GAP' | 'ASSESSMENT' | 'POPULATION' | 'RECOVERY' | 'DRONE' | 'LOGISTICS' | 'ORG_DASHBOARD' | 'PRESENTATION' | 'PRIVACY_POLICY' | 'RESET_PASSWORD' | 'BUILD_KIT' | 'READINESS' | 'READINESS_GAP' | 'EVENT_SETUP' | 'EVENT_REGISTRATION' | 'VOLUNTEER_SCAN' | 'EVENT_DASHBOARD';
 
 export interface GapDocumentAttachment {
   id: string;
@@ -137,6 +137,9 @@ export interface UserProfile {
   googlePlaceId?: string;
   addressVerified?: boolean;
   addressVerifiedAt?: string;
+  geofencedOutreachOptIn?: boolean;
+  geofencedOutreachRadiusMiles?: number;
+  geofencedOutreachConsentAt?: string;
   householdMembers: number; // Legacy count (kept for backward compat, derived from household array)
   household: HouseholdMember[]; // Detailed list
   petDetails: string; // E.g. "2 Dogs"

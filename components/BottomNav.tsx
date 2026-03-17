@@ -1,7 +1,8 @@
 
 import React from 'react';
-import { Home, AlertCircle, Settings } from 'lucide-react';
+import { Home, AlertCircle, Settings, CalendarCheck } from 'lucide-react';
 import { ViewState } from '../types';
+import { StorageService } from '../services/storage';
 
 interface BottomNavProps {
   currentView: ViewState;
@@ -9,9 +10,16 @@ interface BottomNavProps {
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({ currentView, setView }) => {
+  const profile = StorageService.getProfile();
+  const role = String(profile?.role || 'GENERAL_USER').toUpperCase();
+  const canAccessEvents = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN', 'FIRST_RESPONDER', 'LOCAL_AUTHORITY'].includes(role);
+
   const navItems = [
     { id: 'DASHBOARD' as ViewState, icon: <Home size={24} />, label: 'Home' },
     { id: 'HELP_WIZARD' as ViewState, icon: <AlertCircle size={24} />, label: 'Report' },
+    ...(canAccessEvents
+      ? [{ id: 'EVENT_DASHBOARD' as ViewState, icon: <CalendarCheck size={24} />, label: 'Events' }]
+      : []),
     { id: 'SETTINGS' as ViewState, icon: <Settings size={24} />, label: 'Settings' },
   ];
 

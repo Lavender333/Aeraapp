@@ -430,6 +430,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const showCommunityBlocks = !isGeneralUser;
   const showCommunityAnnouncements = hasCommunity;
   const showLogisticsHome = userRole === 'FIRST_RESPONDER' || userRole === 'LOCAL_AUTHORITY' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN' || isContractor;
+  const showEventDistribution = ['ADMIN','STATE_ADMIN','COUNTY_ADMIN','ORG_ADMIN','INSTITUTION_ADMIN','FIRST_RESPONDER','LOCAL_AUTHORITY'].includes(userRole);
   const depotCoverageBase = orgMemberCount || orgPopulation;
   const depotStatus = orgInventory
     ? getInventoryStatuses(orgInventory, depotCoverageBase)
@@ -1343,6 +1344,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                 </div>
               </div>
               <ChevronRight className="w-5 h-5 text-slate-400 group-hover:translate-x-1 transition-transform flex-shrink-0" />
+            </div>
+          </Card>
+        )}
+
+        {showEventDistribution && (
+          <Card
+            className="col-span-2 bg-white/95 border-slate-200 cursor-pointer"
+            onClick={() => setView('EVENT_DASHBOARD')}
+          >
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-emerald-50 rounded-xl shadow-sm">
+                <Calendar size={24} className="text-[#2F7A64]" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-slate-900">Event Distribution</h3>
+                <p className="text-sm text-slate-600">QR check-in, supply tracking &amp; real-time dashboard</p>
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">QR Scan</span>
+                  <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">4-Digit Backup</span>
+                  <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Live Inventory</span>
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-slate-400 flex-shrink-0" />
             </div>
           </Card>
         )}

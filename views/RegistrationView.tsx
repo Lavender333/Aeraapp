@@ -41,6 +41,8 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     state: '',
     zipCode: '',
     addressVerified: false,
+    geofencedOutreachOptIn: false,
+    geofencedOutreachRadiusMiles: 3,
     householdMembers: 1,
     household: [],
     petDetails: '',
@@ -75,6 +77,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
   const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [pendingCommunityId, setPendingCommunityId] = useState('');
+  const [outreachLocationStatus, setOutreachLocationStatus] = useState<string | null>(null);
   const pendingCommunityName = pendingCommunityId
     ? StorageService.getOrganization(pendingCommunityId)?.name || DEMO_COMMUNITY_QR_SEEDS.find((seed) => seed.communityId === pendingCommunityId)?.name || pendingCommunityId
     : '';
@@ -98,6 +101,9 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
          phone: profile.phone || prev.phone,
          communityId: profile.communityId || pendingInvite?.communityId || prev.communityId,
          role: profile.role || prev.role,
+         geofencedOutreachOptIn: Boolean(profile.geofencedOutreachOptIn),
+         geofencedOutreachRadiusMiles: profile.geofencedOutreachRadiusMiles || 3,
+         geofencedOutreachConsentAt: profile.geofencedOutreachConsentAt,
        }));
     } else if (pendingInvite?.communityId) {
       setFormData(prev => ({ ...prev, communityId: prev.communityId || pendingInvite.communityId }));
@@ -118,6 +124,44 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     if (key === 'address' || key === 'city' || key === 'state' || key === 'zipCode') {
       setAddressStatus('IDLE');
       setAddressFeedback('');
+    }
+  };
+
+  const requestOutreachLocation = () => {
+    if (!navigator.geolocation) {
+      setOutreachLocationStatus('Location access is unavailable on this device.');
+      return;
+    }
+
+    setOutreachLocationStatus('Getting your location for nearby community outreach…');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setFormData((prev) => ({
+          ...prev,
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        }));
+        setOutreachLocationStatus('Location saved. Nearby org leaders can only see you within 3 miles if you opt in.');
+      },
+      () => {
+        setOutreachLocationStatus('Location was not shared. Outreach consent is saved, but matching works best once your address is verified.');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 },
+    );
+  };
+
+  const handleOutreachConsentChange = (checked: boolean) => {
+    setFormData((prev) => ({
+      ...prev,
+      geofencedOutreachOptIn: checked,
+      geofencedOutreachRadiusMiles: 3,
+      geofencedOutreachConsentAt: checked ? new Date().toISOString() : undefined,
+    }));
+
+    if (checked) {
+      requestOutreachLocation();
+    } else {
+      setOutreachLocationStatus(null);
     }
   };
 
@@ -187,7 +231,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     const payload = { ...formData, onboardComplete: true };
     const memberValidation = validateHouseholdMembers(payload.household || []);
     if (!memberValidation.ok) {
-      setAuthError(memberValidation.error);
+      setAuthError('error' in memberValidation ? memberValidation.error : 'Household validation failed.');
       return;
     }
     if (!payload.consentPreparednessPlanning) {
@@ -227,6 +271,9 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
         emergencyContactRelation: payload.emergencyContactRelation,
         communityId: payload.communityId,
         role: payload.role,
+        geofencedOutreachOptIn: Boolean(payload.geofencedOutreachOptIn),
+        geofencedOutreachRadiusMiles: payload.geofencedOutreachRadiusMiles || 3,
+        geofencedOutreachConsentAt: payload.geofencedOutreachOptIn ? (payload.geofencedOutreachConsentAt || new Date().toISOString()) : undefined,
       });
       
       // Save preparedness/vitals data
@@ -470,6 +517,27 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
                   className="text-slate-900 placeholder:text-slate-400 font-medium"
                 />
                 <p className="text-xs text-slate-500 mt-1">Optional during signup. You can join or disconnect anytime in Settings.</p>
+              </div>
+
+              <div className="border-t border-slate-200 pt-4 space-y-3">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Community Outreach</p>
+                <label className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                  <input
+                    className="mt-1"
+                    type="checkbox"
+                    checked={Boolean(formData.geofencedOutreachOptIn)}
+                    onChange={(e) => handleOutreachConsentChange(e.target.checked)}
+                  />
+                  <span className="text-sm text-emerald-900 font-semibold">
+                    I consent to outreach from nearby organization leaders if I am within 3 miles, have the app, and I am not already connected to a trusted network.
+                  </span>
+                </label>
+                <p className="text-xs text-slate-500">
+                  This is optional. You can change it later in Settings. Nearby outreach only uses your saved location and consent.
+                </p>
+                {outreachLocationStatus && (
+                  <p className="text-xs text-slate-600 font-medium">{outreachLocationStatus}</p>
+                )}
               </div>
             </div>
 

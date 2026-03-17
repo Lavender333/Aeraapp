@@ -6,8 +6,10 @@ import { StorageService } from '../services/storage';
 import { listRequests, createRequest, updateRequestStatus, fetchOrgOutreachFlags, fetchOrgMemberPreparednessNeeds, listChildOrganizations, aggregateOrgStats, broadcastToOrgs } from '../services/api';
 import { REQUEST_ITEM_MAP } from '../services/validation';
 import { getInventoryStatuses, getRecommendedResupply } from '../services/inventoryStatus';
+import { getOrgByCode } from '../services/supabase';
+import { getOrgLeaderOutreachCandidates, listOrgOutreachAuditLogs, logOrgOutreachContact, OrgOutreachCandidate, OrgOutreachAuditLog, OutreachContactMethod } from '../services/eventDistribution';
 import { t } from '../services/translations';
-import { Building2, CheckCircle, AlertTriangle, HelpCircle, Package, ArrowLeft, Send, Truck, Copy, Save, Phone, MapPin, User, HeartPulse, BellRing, X, AlertOctagon, Loader2, Wand2, ShieldCheck, WifiOff, FileText, Printer } from 'lucide-react';
+import { Building2, CheckCircle, AlertTriangle, HelpCircle, Package, ArrowLeft, Send, Truck, Copy, Save, Phone, MapPin, User, HeartPulse, BellRing, X, AlertOctagon, Loader2, Wand2, ShieldCheck, WifiOff, FileText, Printer, Mail, LocateFixed } from 'lucide-react';
 import { Textarea } from '../components/Input';
 import { GoogleGenAI } from "../services/mockGenAI";
 
@@ -116,6 +118,11 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
   const [outreachFlags, setOutreachFlags] = useState<OutreachFlagRow[]>([]);
   const [memberNeeds, setMemberNeeds] = useState<MemberPreparednessNeedRow[]>([]);
   const [memberSearch, setMemberSearch] = useState('');
+  const [outreachCandidates, setOutreachCandidates] = useState<OrgOutreachCandidate[]>([]);
+  const [outreachAuditLogs, setOutreachAuditLogs] = useState<OrgOutreachAuditLog[]>([]);
+  const [outreachPanelLoading, setOutreachPanelLoading] = useState(false);
+  const [outreachPanelError, setOutreachPanelError] = useState<string | null>(null);
+  const [loggingTargetId, setLoggingTargetId] = useState<string | null>(null);
 
   // Broadcast State
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
@@ -283,6 +290,41 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
       .then((rows) => setMemberNeeds(rows as MemberPreparednessNeedRow[]))
       .catch(() => setMemberNeeds([]));
   }, [communityId, viewOrgId, childOrgs, parentOrgName]);
+
+  useEffect(() => {
+    if (activeTab !== 'PREPAREDNESS' || !activeOrgCode) return;
+
+    let active = true;
+    const loadOutreachPanel = async () => {
+      setOutreachPanelLoading(true);
+      setOutreachPanelError(null);
+      try {
+        const org = await getOrgByCode(activeOrgCode);
+        if (!org?.orgId) throw new Error('Organization lookup failed');
+
+        const [candidates, logs] = await Promise.all([
+          getOrgLeaderOutreachCandidates(org.orgId, 3),
+          listOrgOutreachAuditLogs(org.orgId, 20),
+        ]);
+
+        if (!active) return;
+        setOutreachCandidates(candidates);
+        setOutreachAuditLogs(logs);
+      } catch (e: any) {
+        if (!active) return;
+        setOutreachPanelError(e?.message || 'Unable to load outreach panel.');
+        setOutreachCandidates([]);
+        setOutreachAuditLogs([]);
+      } finally {
+        if (active) setOutreachPanelLoading(false);
+      }
+    };
+
+    loadOutreachPanel();
+    return () => {
+      active = false;
+    };
+  }, [activeTab, activeOrgCode]);
 
   useEffect(() => {
     if (!activeOrgCode) return;
@@ -489,6 +531,40 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
       alert(`Broadcast sent to all members linked to ${orgName}.`);
     }
     setShowBroadcastModal(false);
+  };
+
+  const handleLogOutreach = async (candidate: OrgOutreachCandidate, method: OutreachContactMethod) => {
+    setLoggingTargetId(candidate.profile_id);
+    try {
+      const org = await getOrgByCode(activeOrgCode);
+      if (!org?.orgId) throw new Error('Organization lookup failed');
+
+      if (method === 'PHONE_CALL' && candidate.phone) {
+        window.location.href = `tel:${candidate.phone}`;
+      }
+      if (method === 'EMAIL' && candidate.email) {
+        window.location.href = `mailto:${candidate.email}`;
+      }
+
+      const notes = window.prompt('Optional outreach note:', '') || '';
+      await logOrgOutreachContact({
+        organizationId: org.orgId,
+        targetProfileId: candidate.profile_id,
+        targetName: candidate.full_name,
+        targetPhone: candidate.phone,
+        targetEmail: candidate.email,
+        contactMethod: method,
+        distanceMiles: candidate.distance_miles,
+        notes,
+      });
+
+      const refreshedLogs = await listOrgOutreachAuditLogs(org.orgId, 20);
+      setOutreachAuditLogs(refreshedLogs);
+    } catch (e: any) {
+      alert(e?.message || 'Failed to log outreach.');
+    } finally {
+      setLoggingTargetId(null);
+    }
   };
 
   const handlePingMember = async () => {
@@ -1082,6 +1158,112 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
 
         {activeTab === 'PREPAREDNESS' && (
           <div className="space-y-3">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-emerald-900">Nearby Outreach Panel</h3>
+                  <p className="text-xs text-emerald-800 mt-1">
+                    Opted-in app users within 3 miles who are not yet connected to a trusted network.
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[11px] uppercase font-bold text-emerald-700">Candidates</p>
+                  <p className="text-lg font-black text-emerald-900">{outreachCandidates.length}</p>
+                </div>
+              </div>
+
+              {outreachPanelError && (
+                <div className="bg-white border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                  {outreachPanelError}
+                </div>
+              )}
+
+              {outreachPanelLoading ? (
+                <div className="bg-white border border-emerald-100 rounded-lg p-4 text-sm text-slate-600">
+                  Loading nearby outreach candidates…
+                </div>
+              ) : outreachCandidates.length > 0 ? (
+                <div className="space-y-2">
+                  {outreachCandidates.slice(0, 12).map((candidate) => (
+                    <div key={candidate.profile_id} className="bg-white border border-emerald-100 rounded-lg p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">{candidate.full_name || 'Nearby App User'}</p>
+                          <p className="text-xs text-slate-500">
+                            {candidate.distance_miles} miles away
+                            {candidate.phone ? ` • ${candidate.phone}` : ''}
+                            {candidate.email ? ` • ${candidate.email}` : ''}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap justify-end">
+                          {candidate.phone && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleLogOutreach(candidate, 'PHONE_CALL')}
+                              disabled={loggingTargetId === candidate.profile_id}
+                            >
+                              <Phone size={14} className="mr-1" /> Call
+                            </Button>
+                          )}
+                          {candidate.email && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleLogOutreach(candidate, 'EMAIL')}
+                              disabled={loggingTargetId === candidate.profile_id}
+                            >
+                              <Mail size={14} className="mr-1" /> Email
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            onClick={() => handleLogOutreach(candidate, 'MANUAL_OUTREACH')}
+                            disabled={loggingTargetId === candidate.profile_id}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                          >
+                            <LocateFixed size={14} className="mr-1" /> Log Outreach
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white border border-emerald-100 rounded-lg p-4 text-sm text-slate-600">
+                  No opted-in, unconnected app users are currently within 3 miles.
+                </div>
+              )}
+
+              <div className="bg-white border border-emerald-100 rounded-lg p-4">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <h4 className="text-sm font-bold text-slate-900">Recent Outreach Audit</h4>
+                  <span className="text-[11px] font-bold uppercase text-slate-500">Last 20</span>
+                </div>
+                {outreachAuditLogs.length > 0 ? (
+                  <div className="space-y-2">
+                    {outreachAuditLogs.slice(0, 8).map((log) => (
+                      <div key={log.id} className="rounded-lg border border-slate-200 p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-bold text-slate-900">{log.target_name}</p>
+                          <span className="text-[10px] px-2 py-1 rounded bg-slate-100 text-slate-700 font-bold uppercase">
+                            {log.contact_method.replace('_', ' ')}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">
+                          {new Date(log.created_at).toLocaleString()}
+                          {log.distance_miles != null ? ` • ${log.distance_miles} miles` : ''}
+                        </p>
+                        {log.notes && <p className="text-xs text-slate-700 mt-2">{log.notes}</p>}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-600">No outreach has been logged yet.</p>
+                )}
+              </div>
+            </div>
+
             {outreachFlags.length > 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                 <h3 className="text-sm font-bold text-amber-900 mb-2">{t('org.outreach.title')}</h3>
