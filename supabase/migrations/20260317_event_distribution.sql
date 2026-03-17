@@ -308,7 +308,7 @@ BEGIN
     RAISE EXCEPTION 'Forbidden';
   END IF;
 
-  SELECT latitude, longitude
+  SELECT organizations.latitude, organizations.longitude
   INTO v_org_lat, v_org_lng
   FROM organizations
   WHERE id = v_target_org_id;

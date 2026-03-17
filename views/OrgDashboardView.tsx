@@ -78,6 +78,51 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
 
   const normalizeMembers = (list: any[]): OrgMember[] => (Array.isArray(list) ? list.map(normalizeMember) : []);
 
+  const mergeMemberStatuses = (baseMembers: OrgMember[], statusMembers: OrgMember[]): OrgMember[] => {
+    const byId = new Map<string, OrgMember>();
+    const byName = new Map<string, string>();
+
+    for (const member of baseMembers) {
+      const id = String(member.id || '').trim();
+      if (!id) continue;
+      byId.set(id, { ...member });
+      byName.set(String(member.name || '').trim().toLowerCase(), id);
+    }
+
+    for (const statusMember of statusMembers) {
+      const statusId = String(statusMember.id || '').trim();
+      const statusNameKey = String(statusMember.name || '').trim().toLowerCase();
+      const matchedId = statusId || byName.get(statusNameKey) || '';
+
+      if (matchedId && byId.has(matchedId)) {
+        const existing = byId.get(matchedId)!;
+        byId.set(matchedId, {
+          ...existing,
+          status: statusMember.status || existing.status,
+          lastUpdate: statusMember.lastUpdate || existing.lastUpdate,
+        });
+      } else if (statusId) {
+        byId.set(statusId, {
+          ...statusMember,
+          id: statusId,
+        });
+      }
+    }
+
+    return Array.from(byId.values());
+  };
+
+  const computeStatusCounts = (list: OrgMember[]) =>
+    list.reduce(
+      (acc, member) => {
+        if (member.status === 'SAFE') acc.safe += 1;
+        else if (member.status === 'DANGER') acc.danger += 1;
+        else acc.unknown += 1;
+        return acc;
+      },
+      { safe: 0, danger: 0, unknown: 0 }
+    );
+
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [inventory, setInventory] = useState<OrgInventory>({ water: 0, food: 0, blankets: 0, medicalKits: 0 });
   const [activeTab, setActiveTab] = useState<OrgDashboardTab>(initialTab);
@@ -256,9 +301,20 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
 
     // live data fetch same as before but using dynamic id
     setMembers(normalizeMembers(StorageService.getOrgMembers(id) as any[]));
-    StorageService.fetchOrgMembersRemote(id).then(({ members, fromCache }) => {
-      setMembers(normalizeMembers(members as any[]));
+    StorageService.fetchOrgMembersRemote(id).then(async ({ members, fromCache }) => {
+      const baseMembers = normalizeMembers(members as any[]);
       setMembersFallback(fromCache);
+
+      try {
+        const resp = await StorageService.fetchMemberStatus(id);
+        const statusMembers = normalizeMembers(resp?.members as any[]);
+        const mergedMembers = mergeMemberStatuses(baseMembers, statusMembers);
+        setMembers(mergedMembers);
+        setStatusCounts(computeStatusCounts(mergedMembers));
+      } catch {
+        setMembers(baseMembers);
+        setStatusCounts(computeStatusCounts(baseMembers));
+      }
     }).catch(() => setMembersFallback(true));
 
     StorageService.fetchOrgInventoryRemote(id).then(({ inventory, fromCache }) => {
@@ -277,11 +333,6 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
         setRequestsFallback(true);
         setRequests(localRequests);
       });
-
-    StorageService.fetchMemberStatus(id).then((resp) => {
-      if (resp?.counts) setStatusCounts(resp.counts);
-      if (resp?.members?.length) setMembers(normalizeMembers(resp.members as any[]));
-    });
 
     fetchOrgOutreachFlags(id)
       .then((rows) => setOutreachFlags(rows as OutreachFlagRow[]))
@@ -598,6 +649,18 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     if (selectedMember) {
       const success = await StorageService.sendPing(selectedMember.id, selectedMember.name, activeOrgCode);
       if (success) {
+        setMembers((prev) => {
+          const updated = prev.map((member) =>
+            member.id === selectedMember.id
+              ? { ...member, status: 'UNKNOWN', lastUpdate: new Date().toISOString() }
+              : member
+          );
+          setStatusCounts(computeStatusCounts(updated));
+          return updated;
+        });
+        setSelectedMember((prev) =>
+          prev ? { ...prev, status: 'UNKNOWN', lastUpdate: new Date().toISOString() } : prev
+        );
         alert(`Ping sent to ${selectedMember.name}. They will see a status check prompt on their dashboard.`);
       } else {
         alert("Failed to ping member.");
@@ -689,12 +752,31 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
       return;
     }
 
-    const stockedQty = req.stockedQuantity ?? req.quantity;
+    const formatDateSafe = (value?: string) => {
+      if (!value) return 'N/A';
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return 'N/A';
+      return parsed.toLocaleString();
+    };
+
+    const stockedQty = Number.isFinite(req.stockedQuantity as number)
+      ? Number(req.stockedQuantity)
+      : Number(req.quantity || 0);
     const statusTime = req.stockedAt || req.receivedAt || req.signedAt || req.timestamp;
+    const safeOrgName = req.orgName || 'Unknown Organization';
+    const safeOrgId = req.orgId || 'N/A';
+    const safeItem = req.item || 'Supply Item';
+    const safeStatus = req.status || 'UNKNOWN';
+    const safeProvider = req.provider || 'Central Warehouse';
+    const safeRequestDate = formatDateSafe(req.timestamp);
+    const safeFulfillmentDate = formatDateSafe(statusTime);
+    const safeReleaseSig = req.signature ? escapeHtml(req.signature) : '';
+    const safeReceiveSig = req.receivedSignature ? escapeHtml(req.receivedSignature) : '';
     const html = `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>AERA Receipt ${escapeHtml(req.id)}</title>
     <style>
       body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #0f172a; margin: 24px; }
@@ -715,23 +797,23 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
       <p class="sub">AERA Replenishment Confirmation</p>
       <table>
         <tr><th>Receipt / Order ID</th><td>${escapeHtml(req.id)}</td></tr>
-        <tr><th>Organization</th><td>${escapeHtml(req.orgName)} (${escapeHtml(req.orgId)})</td></tr>
-        <tr><th>Item</th><td>${escapeHtml(req.item)}</td></tr>
-        <tr><th>Requested Qty</th><td>${escapeHtml(String(req.quantity))}</td></tr>
+        <tr><th>Organization</th><td>${escapeHtml(safeOrgName)} (${escapeHtml(safeOrgId)})</td></tr>
+        <tr><th>Item</th><td>${escapeHtml(safeItem)}</td></tr>
+        <tr><th>Requested Qty</th><td>${escapeHtml(String(Number(req.quantity || 0)))}</td></tr>
         <tr><th>Delivered / Stocked Qty</th><td>${escapeHtml(String(stockedQty))}</td></tr>
-        <tr><th>Status</th><td>${escapeHtml(req.status)}</td></tr>
-        <tr><th>Request Date</th><td>${escapeHtml(new Date(req.timestamp).toLocaleString())}</td></tr>
-        <tr><th>Fulfillment Date</th><td>${escapeHtml(new Date(statusTime).toLocaleString())}</td></tr>
-        <tr><th>Provider</th><td>${escapeHtml(req.provider || 'Central Warehouse')}</td></tr>
+        <tr><th>Status</th><td>${escapeHtml(safeStatus)}</td></tr>
+        <tr><th>Request Date</th><td>${escapeHtml(safeRequestDate)}</td></tr>
+        <tr><th>Fulfillment Date</th><td>${escapeHtml(safeFulfillmentDate)}</td></tr>
+        <tr><th>Provider</th><td>${escapeHtml(safeProvider)}</td></tr>
       </table>
 
       <div class="row">
         <strong>Released By Signature:</strong><br/>
-        ${req.signature ? `<img class="sign" src="${req.signature}" alt="Released signature" />` : 'Not provided'}
+        ${safeReleaseSig ? `<img class="sign" src="${safeReleaseSig}" alt="Released signature" />` : 'Not provided'}
       </div>
       <div class="row">
         <strong>Received By Signature:</strong><br/>
-        ${req.receivedSignature ? `<img class="sign" src="${req.receivedSignature}" alt="Received signature" />` : 'Not provided'}
+        ${safeReceiveSig ? `<img class="sign" src="${safeReceiveSig}" alt="Received signature" />` : 'Not provided'}
       </div>
     </div>
     <div class="no-print">
