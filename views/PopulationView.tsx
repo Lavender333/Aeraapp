@@ -37,6 +37,9 @@ const getRiskDriftStatus = (avgRiskScore: number): 'ACCELERATING' | 'ESCALATING'
   return 'STABLE';
 };
 
+const buildScopeKey = (stateId?: string | null, countyId?: string | null): string =>
+  `${String(stateId || '').trim().toUpperCase()}::${String(countyId || '').trim().toUpperCase()}`;
+
 type PopulationSnapshotRow = RegionSnapshotLatestRecord & {
   linkedMemberCount?: number;
   evacuationAssistCount?: number;
@@ -157,7 +160,7 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
         const snapshotByKey = new Map<string, RegionSnapshotLatestRecord>();
 
         for (const row of snapshots) {
-          const key = `${row.state_id}::${row.county_id}`;
+          const key = buildScopeKey(row.state_id, row.county_id);
           const current = snapshotByKey.get(key);
           const rowMatchesOrg = row.organization_id === mapScope.org_id;
           const currentMatchesOrg = current?.organization_id === mapScope.org_id;
@@ -168,7 +171,7 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
         }
 
         return orgPopulationRollups.map((rollup) => {
-          const key = `${rollup.state_id}::${rollup.county_id}`;
+          const key = buildScopeKey(rollup.state_id, rollup.county_id);
           const snapshot = snapshotByKey.get(key);
           const avgRiskScore = snapshot ? Number(snapshot.avg_risk_score || rollup.avg_risk_score) : rollup.avg_risk_score;
           const driftStatus = snapshot?.drift_status || getRiskDriftStatus(rollup.avg_risk_score);
@@ -212,16 +215,16 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
   }, [canSeeAggregate, canSeeOrgDetail, effectiveRole, mapScope?.county_id, mapScope?.org_id, orgPopulationRollups, snapshots]);
 
   const snapshotByRegionKey = useMemo(() => {
-    const map = new Map<string, RegionSnapshotLatestRecord>();
+    const map = new Map<string, PopulationSnapshotRow>();
     for (const row of visibleSnapshots) {
-      const key = `${row.state_id}::${row.county_id}`;
+      const key = buildScopeKey(row.state_id, row.county_id);
       if (!map.has(key)) map.set(key, row);
     }
     return map;
   }, [visibleSnapshots]);
 
   const featureCollection = useMemo(() => {
-    const visibleRegionKeys = new Set(visibleSnapshots.map((row) => `${row.state_id}::${row.county_id}`));
+    const visibleRegionKeys = new Set(visibleSnapshots.map((row) => buildScopeKey(row.state_id, row.county_id)));
     const shouldScopeRegions = effectiveRole === 'COUNTY_ADMIN' || (canSeeOrgDetail && Boolean(mapScope?.org_id));
 
     return {
@@ -230,7 +233,7 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
         .filter((r) => {
           if (!r.geojson) return false;
           if (!shouldScopeRegions) return true;
-          return visibleRegionKeys.has(`${r.state_id}::${r.county_id}`);
+          return visibleRegionKeys.has(buildScopeKey(r.state_id, r.county_id));
         })
         .map((r) => ({
           type: 'Feature',
@@ -248,8 +251,16 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
 
   const mapStyle = useCallback(
     (feature: any): PathOptions => {
-      const key = `${feature?.properties?.state_id || ''}::${feature?.properties?.county_id || ''}`;
+      const key = buildScopeKey(feature?.properties?.state_id, feature?.properties?.county_id);
       const snapshot = snapshotByRegionKey.get(key);
+      if (!snapshot) {
+        return {
+          color: '#94a3b8',
+          weight: 1,
+          fillColor: '#cbd5e1',
+          fillOpacity: 0.12,
+        };
+      }
       const color = getDriftColor(snapshot?.drift_status);
       const fillOpacity = snapshot?.drift_status === 'ACCELERATING' ? 0.45 : snapshot?.drift_status === 'ESCALATING' ? 0.35 : 0.2;
       return {
@@ -364,16 +375,25 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                     data={featureCollection as any}
                     style={mapStyle}
                     onEachFeature={(feature, layer) => {
-                      const key = `${feature?.properties?.state_id || ''}::${feature?.properties?.county_id || ''}`;
+                      const key = buildScopeKey(feature?.properties?.state_id, feature?.properties?.county_id);
                       const snapshot = snapshotByRegionKey.get(key);
                       const title = feature?.properties?.region_name || 'Region';
-                      const drift = snapshot?.drift_status || 'STABLE';
-                      const avgRisk = Number(snapshot?.avg_risk_score || 0).toFixed(2);
-                      const growth = Number(snapshot?.risk_growth_pct || 0) * 100;
-                      const linkedMembers = Number(snapshot?.linkedMemberCount || snapshot?.profile_count || 0);
-                      const evacAssist = Number(snapshot?.evacuationAssistCount || 0);
+                      if (!snapshot) {
+                        layer.bindTooltip(`${title}: No snapshot data`, { sticky: true });
+                        layer.bindPopup(`<strong>${title}</strong><br/>No snapshot data is currently available for this region.`);
+                        return;
+                      }
+
+                      const drift = snapshot.drift_status || 'STABLE';
+                      const avgRisk = Number(snapshot.avg_risk_score || 0).toFixed(2);
+                      const growth = Number(snapshot.risk_growth_pct || 0) * 100;
+                      const linkedMembers = Number(snapshot.linkedMemberCount || snapshot.profile_count || 0);
+                      const evacAssist = Number(snapshot.evacuationAssistCount || 0);
+                      const sourceLabel = snapshot.source === 'org-members' ? 'Organization Members' : 'Region Snapshot';
+
+                      layer.bindTooltip(`${title}: ${drift} · Risk ${avgRisk}`, { sticky: true });
                       layer.bindPopup(
-                        `<strong>${title}</strong><br/>Drift: ${drift}<br/>Avg Risk: ${avgRisk}<br/>Growth: ${growth.toFixed(1)}%<br/>Linked Members: ${linkedMembers}<br/>Evac Assist: ${evacAssist}`,
+                        `<strong>${title}</strong><br/>Source: ${sourceLabel}<br/>Drift: ${drift}<br/>Avg Risk: ${avgRisk}<br/>Growth: ${growth.toFixed(1)}%<br/>Linked Members: ${linkedMembers}<br/>Evac Assist: ${evacAssist}`,
                       );
                     }}
                   />

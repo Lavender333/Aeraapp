@@ -680,6 +680,41 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     }
   };
 
+  const handlePingAllMembers = async () => {
+    if (members.length === 0) {
+      alert('No members available to ping.');
+      return;
+    }
+
+    const confirmed = window.confirm(`Are you sure you want to ping all ${members.length} members?`);
+    if (!confirmed) return;
+
+    let sentCount = 0;
+    for (const member of members) {
+      const success = await StorageService.sendPing(member.id, member.name, activeOrgCode);
+      if (success) sentCount += 1;
+    }
+
+    const nowIso = new Date().toISOString();
+    if (sentCount > 0) {
+      setMembers((prev) => {
+        const updated = prev.map((member) => ({ ...member, status: 'UNKNOWN', lastUpdate: nowIso }));
+        setStatusCounts(computeStatusCounts(updated));
+        return updated;
+      });
+
+      setSelectedMember((prev) =>
+        prev ? { ...prev, status: 'UNKNOWN', lastUpdate: nowIso } : prev
+      );
+    }
+
+    if (sentCount === members.length) {
+      alert(`Ping sent to all ${sentCount} members.`);
+    } else {
+      alert(`Ping sent to ${sentCount} of ${members.length} members.`);
+    }
+  };
+
   const handleSubmitRequest = async () => {
     try {
       // Try API first, but fall back to local storage
@@ -1218,7 +1253,12 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
             // List View
             <div className="space-y-3">
                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Search Members</label>
+                 <div className="flex items-center justify-between gap-2 mb-2">
+                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Search Members</label>
+                   <Button size="sm" onClick={handlePingAllMembers} className="bg-purple-600 hover:bg-purple-700 text-white">
+                     <BellRing size={14} className="mr-1" /> Ping All
+                   </Button>
+                 </div>
                  <input
                    value={memberSearch}
                    onChange={(e) => setMemberSearch(e.target.value)}

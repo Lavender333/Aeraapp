@@ -581,23 +581,105 @@ export interface EventStats {
   checkInNeedsHelp: number;
   checkInNoResponse: number;
   supplyItems: EventSupplyItem[];
+  requestedSupplySummary: Array<{
+    supply_item_id: string;
+    supply_label: string;
+    requested_quantity: number;
+    requesting_households: number;
+    distributed_quantity: number;
+    remaining_demand: number;
+    available_now: number;
+  }>;
 }
 
 export async function getEventStats(eventId: string): Promise<EventStats> {
   const [{ data: regs }, { data: logs }, supplyItems] = await Promise.all([
     supabase.from('event_registrations').select('*').eq('event_id', eventId),
-    supabase.from('event_distribution_logs').select('quantity').eq('event_id', eventId),
+    supabase.from('event_distribution_logs').select('quantity, supply_item_id').eq('event_id', eventId),
     getSupplyItems(eventId),
   ]);
 
   const allRegs = (regs ?? []) as EventRegistration[];
   const servedRegs = allRegs.filter((r) => r.served);
+  const logRows = (logs ?? []) as Array<{ quantity: number; supply_item_id: string | null }>;
+
+  const bySupplyItem = new Map<
+    string,
+    {
+      supply_item_id: string;
+      supply_label: string;
+      requested_quantity: number;
+      requesting_households: number;
+      distributed_quantity: number;
+      remaining_demand: number;
+      available_now: number;
+    }
+  >();
+
+  for (const item of supplyItems) {
+    bySupplyItem.set(item.id, {
+      supply_item_id: item.id,
+      supply_label: item.supply_label,
+      requested_quantity: 0,
+      requesting_households: 0,
+      distributed_quantity: 0,
+      remaining_demand: 0,
+      available_now: Number(item.current_count || 0),
+    });
+  }
+
+  for (const reg of allRegs) {
+    const requested = Array.isArray(reg.requested_supplies) ? reg.requested_supplies : [];
+    const seenInHousehold = new Set<string>();
+
+    for (const request of requested) {
+      const supplyItemId = String(request?.supply_item_id || '').trim();
+      if (!supplyItemId) continue;
+
+      const quantity = Math.max(0, Math.round(Number(request?.quantity || 0)));
+      if (quantity <= 0) continue;
+
+      const current = bySupplyItem.get(supplyItemId) || {
+        supply_item_id: supplyItemId,
+        supply_label: String(request?.supply_label || 'Requested Item'),
+        requested_quantity: 0,
+        requesting_households: 0,
+        distributed_quantity: 0,
+        remaining_demand: 0,
+        available_now: 0,
+      };
+
+      current.requested_quantity += quantity;
+      if (!seenInHousehold.has(supplyItemId)) {
+        current.requesting_households += 1;
+        seenInHousehold.add(supplyItemId);
+      }
+      bySupplyItem.set(supplyItemId, current);
+    }
+  }
+
+  for (const logRow of logRows) {
+    const supplyItemId = String(logRow?.supply_item_id || '').trim();
+    if (!supplyItemId) continue;
+    const current = bySupplyItem.get(supplyItemId);
+    if (!current) continue;
+    current.distributed_quantity += Math.max(0, Number(logRow?.quantity || 0));
+    bySupplyItem.set(supplyItemId, current);
+  }
+
+  const requestedSupplySummary = Array.from(bySupplyItem.values())
+    .map((row) => ({
+      ...row,
+      remaining_demand: Math.max(0, row.requested_quantity - row.distributed_quantity),
+    }))
+    .filter((row) => row.requested_quantity > 0 || row.distributed_quantity > 0)
+    .sort((a, b) => b.requested_quantity - a.requested_quantity);
 
   return {
     registrations: allRegs.length,
     householdsServed: servedRegs.length,
     peopleServed: servedRegs.reduce((sum, r) => sum + r.household_size, 0),
-    suppliesDistributed: (logs ?? []).reduce(
+    suppliesDistributed: logRows.reduce(
       (sum: number, l: { quantity: number }) => sum + l.quantity,
       0
     ),
@@ -605,6 +687,7 @@ export async function getEventStats(eventId: string): Promise<EventStats> {
     checkInNeedsHelp: allRegs.filter((r) => r.check_in_status === 'NEEDS_HELP').length,
     checkInNoResponse: allRegs.filter((r) => r.check_in_status === 'NO_RESPONSE').length,
     supplyItems,
+    requestedSupplySummary,
   };
 }
 

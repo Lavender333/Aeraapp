@@ -151,6 +151,13 @@ export const EventDashboardView: React.FC<EventDashboardViewProps> = ({ setView,
           (s) => `  ${s.supply_label}: ${s.current_count} remaining / ${s.starting_count} starting`
         ),
         '',
+        'Requested Supplies (Demand vs Distribution):',
+        'Item,Requested Qty,Households Requesting,Distributed Qty,Remaining Demand,Available Now',
+        ...report.stats.requestedSupplySummary.map(
+          (row) =>
+            `"${row.supply_label}",${row.requested_quantity},${row.requesting_households},${row.distributed_quantity},${row.remaining_demand},${row.available_now}`
+        ),
+        '',
         'Registrations:',
         'Name,Ticket,Code,Household,Served,Check-in',
         ...report.registrations.map(
@@ -388,6 +395,38 @@ export const EventDashboardView: React.FC<EventDashboardViewProps> = ({ setView,
                     </div>
                   );
                 })}
+              </Card>
+            )}
+
+            {stats.requestedSupplySummary.length > 0 && (
+              <Card className="p-4 space-y-3">
+                <p className="text-[14px] font-semibold text-slate-800">Registered Needs (Auto Calculated)</p>
+                <p className="text-[12px] text-slate-500">
+                  Totals are calculated from participant registration requests and live distribution logs.
+                </p>
+                <div className="space-y-2">
+                  {stats.requestedSupplySummary.map((row) => {
+                    const fulfillmentPct = row.requested_quantity > 0
+                      ? Math.min(100, Math.round((row.distributed_quantity / row.requested_quantity) * 100))
+                      : 100;
+                    return (
+                      <div key={row.supply_item_id} className="rounded-xl border border-slate-200 p-3 bg-white">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[13px] font-semibold text-slate-900">{row.supply_label}</p>
+                          <span className="text-[11px] text-slate-600 font-medium">
+                            {row.requesting_households} household{row.requesting_households === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                        <p className="text-[12px] text-slate-600 mt-1">
+                          Requested {row.requested_quantity} • Distributed {row.distributed_quantity} • Remaining Need {row.remaining_demand} • In Stock {row.available_now}
+                        </p>
+                        <div className="mt-2">
+                          <ProgressBar value={fulfillmentPct} color={fulfillmentPct >= 80 ? 'green' : fulfillmentPct >= 50 ? 'yellow' : 'red'} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </Card>
             )}
 
