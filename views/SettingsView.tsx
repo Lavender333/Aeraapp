@@ -283,25 +283,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [isDisconnectingOrg, setIsDisconnectingOrg] = useState(false);
   const connectedOrgLabel = connectedOrg || String(profile.communityId || '').trim() || null;
-  const orgLocationConfigured = Boolean(
-    String(orgAddressDraft || '').trim() &&
-    Number.isFinite(Number(orgLatitudeDraft)) &&
-    Number.isFinite(Number(orgLongitudeDraft))
-  );
-
-  useEffect(() => {
-    if (!isOrgScopedAdmin) return;
-
-    if (orgLocationConfigured) {
-      hasPromptedMissingOrgLocationRef.current = false;
-      return;
-    }
-
-    if (hasPromptedMissingOrgLocationRef.current) return;
-
-    setExpandedSections((prev) => (prev.community ? prev : { ...prev, community: true }));
-    hasPromptedMissingOrgLocationRef.current = true;
-  }, [isOrgScopedAdmin, orgLocationConfigured]);
 
   const [parentOrgCodeInput, setParentOrgCodeInput] = useState('');
   const [isLinkingParentOrg, setIsLinkingParentOrg] = useState(false);
@@ -355,6 +336,25 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [orgLocationError, setOrgLocationError] = useState<string | null>(null);
   const [orgLocationSavedMessage, setOrgLocationSavedMessage] = useState<string | null>(null);
   const lastOrgLocationHydratedCodeRef = useRef('');
+  const orgLocationConfigured = Boolean(
+    String(orgAddressDraft || '').trim() &&
+    Number.isFinite(Number(orgLatitudeDraft)) &&
+    Number.isFinite(Number(orgLongitudeDraft))
+  );
+
+  useEffect(() => {
+    if (!isOrgScopedAdmin) return;
+
+    if (orgLocationConfigured) {
+      hasPromptedMissingOrgLocationRef.current = false;
+      return;
+    }
+
+    if (hasPromptedMissingOrgLocationRef.current) return;
+
+    setExpandedSections((prev) => (prev.community ? prev : { ...prev, community: true }));
+    hasPromptedMissingOrgLocationRef.current = true;
+  }, [isOrgScopedAdmin, orgLocationConfigured]);
 
   // Master Inventory State
   const [inventoryRequests, setInventoryRequests] = useState<ReplenishmentRequest[]>([]);

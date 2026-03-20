@@ -549,15 +549,13 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
                 <div key={item.id} className="flex items-center justify-between gap-2 border border-slate-200 rounded-lg px-3 py-2">
                   <div>
                     <p className="text-[13px] font-medium text-slate-800">{item.supply_label}</p>
-                    <p className="text-[11px] text-slate-500">Available at event: {item.current_count}</p>
                   </div>
                   <input
                     type="number"
                     min={0}
-                    max={Math.max(0, item.current_count)}
                     value={requestedBySupplyId[item.id] ?? 0}
                     onChange={(e) => {
-                      const next = Math.max(0, Math.min(item.current_count, Number(e.target.value) || 0));
+                      const next = Math.max(0, Math.round(Number(e.target.value) || 0));
                       setRequestedBySupplyId((prev) => ({ ...prev, [item.id]: next }));
                     }}
                     className="w-20 border border-slate-300 rounded-lg px-2 py-1.5 text-[13px]"
