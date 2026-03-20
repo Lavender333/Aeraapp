@@ -15,6 +15,9 @@ import {
   CheckCircle,
   ChevronRight,
   AlertTriangle,
+  Share2,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -70,6 +73,7 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
   const [error, setError] = useState('');
   const [savedEvent, setSavedEvent] = useState<DistributionEvent | null>(null);
   const [qrUrl, setQrUrl] = useState('');
+  const [copiedEventId, setCopiedEventId] = useState<string | null>(null);
 
   // Form state
   const [name, setName] = useState('');
@@ -85,6 +89,33 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
       .catch(() => setEvents([]))
       .finally(() => setLoading(false));
   }, [orgId]);
+
+  const getRegistrationLink = (eventId: string) => `${window.location.origin}?event=${eventId}`;
+
+  const copyRegistrationLink = async (eventId: string) => {
+    const link = getRegistrationLink(eventId);
+    await navigator.clipboard.writeText(link);
+    setCopiedEventId(eventId);
+    window.setTimeout(() => {
+      setCopiedEventId((current) => (current === eventId ? null : current));
+    }, 1800);
+  };
+
+  const shareRegistrationLink = async (event: DistributionEvent) => {
+    const link = getRegistrationLink(event.id);
+    const shareText = `Register for ${event.name} on ${event.distribution_date}${event.location_name ? ` at ${event.location_name}` : ''}`;
+
+    if (navigator.share) {
+      await navigator.share({
+        title: `${event.name} Registration`,
+        text: shareText,
+        url: link,
+      });
+      return;
+    }
+
+    await copyRegistrationLink(event.id);
+  };
 
   const addSupplyRow = () => setSupplies((prev) => [...prev, defaultSupply()]);
 
@@ -222,6 +253,20 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
                 >
                   Download QR PNG
                 </a>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => copyRegistrationLink(savedEvent.id)}
+                    className="flex items-center justify-center gap-1.5 rounded-lg border border-emerald-300 bg-white text-emerald-700 text-[12px] font-semibold py-2"
+                  >
+                    {copiedEventId === savedEvent.id ? <Check size={14} /> : <Copy size={14} />} Copy Link
+                  </button>
+                  <button
+                    onClick={() => shareRegistrationLink(savedEvent)}
+                    className="flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 text-white text-[12px] font-semibold py-2"
+                  >
+                    <Share2 size={14} /> Share
+                  </button>
+                </div>
                 <button
                   onClick={() => { setSavedEvent(null); setQrUrl(''); }}
                   className="mt-2 w-full text-center text-[12px] text-slate-500"
@@ -274,6 +319,32 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
                       className="text-[12px] font-medium px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600"
                     >
                       {ev.status === 'ACTIVE' ? 'Mark Completed' : 'Reopen'}
+                    </button>
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        try {
+                          await copyRegistrationLink(ev.id);
+                        } catch {
+                          setError('Could not copy registration link.');
+                        }
+                      }}
+                      className="text-[12px] font-medium px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 inline-flex items-center gap-1"
+                    >
+                      {copiedEventId === ev.id ? <Check size={12} /> : <Copy size={12} />} Link
+                    </button>
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        try {
+                          await shareRegistrationLink(ev);
+                        } catch {
+                          setError('Could not open share options.');
+                        }
+                      }}
+                      className="text-[12px] font-medium px-3 py-1.5 rounded-lg bg-[#2F7A64] hover:bg-[#296A57] text-white inline-flex items-center gap-1"
+                    >
+                      <Share2 size={12} /> Share
                     </button>
                   </div>
                 </Card>

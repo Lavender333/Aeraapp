@@ -19,6 +19,9 @@ import {
   Heart,
   HelpCircle,
   ShieldAlert,
+  Share2,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -51,6 +54,7 @@ export const EventDashboardView: React.FC<EventDashboardViewProps> = ({ setView,
   const [recentRegs, setRecentRegs] = useState<EventRegistration[]>([]);
   const [loadingStats, setLoadingStats] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // Load events on mount
@@ -164,6 +168,34 @@ export const EventDashboardView: React.FC<EventDashboardViewProps> = ({ setView,
     } catch {}
   };
 
+  const getRegistrationLink = () =>
+    selectedEvent ? `${window.location.origin}?event=${selectedEvent.id}` : '';
+
+  const handleCopyRegistrationLink = async () => {
+    const link = getRegistrationLink();
+    if (!link) return;
+    await navigator.clipboard.writeText(link);
+    setLinkCopied(true);
+    window.setTimeout(() => setLinkCopied(false), 1800);
+  };
+
+  const handleShareRegistrationLink = async () => {
+    if (!selectedEvent) return;
+    const link = getRegistrationLink();
+    const shareText = `Register for ${selectedEvent.name} on ${selectedEvent.distribution_date}${selectedEvent.location_name ? ` at ${selectedEvent.location_name}` : ''}`;
+
+    if (navigator.share) {
+      await navigator.share({
+        title: `${selectedEvent.name} Registration`,
+        text: shareText,
+        url: link,
+      });
+      return;
+    }
+
+    await handleCopyRegistrationLink();
+  };
+
   const checkInColor = (status: CheckInStatus) => {
     if (status === 'SAFE') return 'text-emerald-600 bg-emerald-50 border-emerald-200';
     if (status === 'NEEDS_HELP') return 'text-red-600 bg-red-50 border-red-200';
@@ -236,12 +268,39 @@ export const EventDashboardView: React.FC<EventDashboardViewProps> = ({ setView,
 
       {/* Volunteer quick-action */}
       <div className="bg-[#2F7A64] px-4 py-3">
-        <button
-          onClick={() => setView('VOLUNTEER_SCAN' as ViewState)}
-          className="flex items-center justify-center gap-2 w-full bg-white/20 hover:bg-white/30 rounded-xl py-2.5 text-white text-[14px] font-semibold"
-        >
-          <Radio size={17} /> Open Volunteer Scanner
-        </button>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <button
+            onClick={() => setView('VOLUNTEER_SCAN' as ViewState)}
+            className="flex items-center justify-center gap-2 w-full bg-white/20 hover:bg-white/30 rounded-xl py-2.5 text-white text-[14px] font-semibold"
+          >
+            <Radio size={17} /> Open Volunteer Scanner
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                await handleCopyRegistrationLink();
+              } catch {
+                // no-op
+              }
+            }}
+            className="flex items-center justify-center gap-2 w-full bg-white/20 hover:bg-white/30 rounded-xl py-2.5 text-white text-[14px] font-semibold"
+          >
+            {linkCopied ? <Check size={17} /> : <Copy size={17} />}
+            {linkCopied ? 'Copied Link' : 'Copy Signup Link'}
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                await handleShareRegistrationLink();
+              } catch {
+                // no-op
+              }
+            }}
+            className="flex items-center justify-center gap-2 w-full bg-white/20 hover:bg-white/30 rounded-xl py-2.5 text-white text-[14px] font-semibold"
+          >
+            <Share2 size={17} /> Share Signup Link
+          </button>
+        </div>
       </div>
 
       <div className="max-w-lg mx-auto px-4 py-4 pb-28 space-y-4">
