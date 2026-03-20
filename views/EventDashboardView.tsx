@@ -168,8 +168,13 @@ export const EventDashboardView: React.FC<EventDashboardViewProps> = ({ setView,
     } catch {}
   };
 
-  const getRegistrationLink = () =>
-    selectedEvent ? `${window.location.origin}?event=${selectedEvent.id}` : '';
+  const getRegistrationLink = () => {
+    if (!selectedEvent) return '';
+    const url = new URL(window.location.href);
+    url.searchParams.set('event', selectedEvent.id);
+    url.hash = '';
+    return url.toString();
+  };
 
   const handleCopyRegistrationLink = async () => {
     const link = getRegistrationLink();

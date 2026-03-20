@@ -12,6 +12,7 @@ const SYNC_ID_MAP_KEY = 'aera_sync_id_map_v1';
 const STORAGE_STATE_KEY = 'aera_storage_state_v1';
 const ROLE_DEFINITIONS_KEY = 'aera_role_definitions_v1';
 const PROFILE_IMAGE_MAP_KEY = 'aera_profile_image_map_v1';
+const ORG_OUTREACH_RADIUS_MAP_KEY = 'aera_org_outreach_radius_map_v1';
 const MAX_CACHED_REQUESTS = 200;
 const MAX_CACHED_REPLENISHMENTS = 200;
 const IS_PRODUCTION = import.meta.env.PROD;
@@ -1843,6 +1844,40 @@ export const StorageService = {
       this.saveDB(db);
       window.dispatchEvent(new Event('ticker-update'));
     }
+  },
+
+  getOrgOutreachRadiusMiles(orgId: string, fallback: number = 3): number {
+    const normalizedId = String(orgId || '').trim().toUpperCase();
+    if (!normalizedId) return fallback;
+
+    try {
+      const raw = safeGetItem(ORG_OUTREACH_RADIUS_MAP_KEY);
+      if (!raw) return fallback;
+      const parsed = JSON.parse(raw) as Record<string, number>;
+      const stored = Number(parsed?.[normalizedId]);
+      if (!Number.isFinite(stored)) return fallback;
+      return Math.max(1, Math.min(25, Math.round(stored)));
+    } catch {
+      return fallback;
+    }
+  },
+
+  setOrgOutreachRadiusMiles(orgId: string, miles: number): number {
+    const normalizedId = String(orgId || '').trim().toUpperCase();
+    const clamped = Math.max(1, Math.min(25, Math.round(Number(miles) || 3)));
+    if (!normalizedId) return clamped;
+
+    let map: Record<string, number> = {};
+    try {
+      const raw = safeGetItem(ORG_OUTREACH_RADIUS_MAP_KEY);
+      map = raw ? (JSON.parse(raw) as Record<string, number>) : {};
+    } catch {
+      map = {};
+    }
+
+    map[normalizedId] = clamped;
+    safeSetItem(ORG_OUTREACH_RADIUS_MAP_KEY, JSON.stringify(map));
+    return clamped;
   },
 
   // --- Offline Sync Logic ---

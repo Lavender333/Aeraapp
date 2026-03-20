@@ -58,6 +58,7 @@ const BuildKitView = lazyWithRetry(() => import('./views/BuildKitView').then((m)
 const ReadinessView = lazyWithRetry(() => import('./views/ReadinessView').then((m) => ({ default: m.ReadinessView })));
 const ReadinessGapView = lazyWithRetry(() => import('./views/ReadinessGapView').then((m) => ({ default: m.ReadinessGapView })));
 const PresentationLayout = lazyWithRetry(() => import('./src/presentation/PresentationLayout').then((m) => ({ default: m.PresentationLayout })));
+const EventsView = lazyWithRetry(() => import('./views/EventsView').then((m) => ({ default: m.EventsView })));
 const EventSetupView = lazyWithRetry(() => import('./views/EventSetupView').then((m) => ({ default: m.EventSetupView })));
 const EventRegistrationView = lazyWithRetry(() => import('./views/EventRegistrationView').then((m) => ({ default: m.EventRegistrationView })));
 const VolunteerScanView = lazyWithRetry(() => import('./views/VolunteerScanView').then((m) => ({ default: m.VolunteerScanView })));
@@ -118,6 +119,16 @@ export default function App() {
   const isPresentationPath = typeof window !== 'undefined' && window.location.pathname === '/presentation';
   const isPresentationView = currentView === 'PRESENTATION' || isPresentationPath;
 
+  const getEventIdFromUrl = () => {
+    const searchId = new URLSearchParams(window.location.search).get('event');
+    if (searchId) return searchId;
+
+    const hash = window.location.hash || '';
+    const hashQuery = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
+    const hashId = hashQuery ? new URLSearchParams(hashQuery).get('event') : null;
+    return hashId || '';
+  };
+
   const resolveAuthenticatedLandingView = (profile: Partial<UserProfile> | null | undefined): ViewState => {
     const role = String(profile?.role || 'GENERAL_USER').toUpperCase();
     const onboardComplete = Boolean(profile?.onboardComplete);
@@ -155,7 +166,7 @@ export default function App() {
       const pendingInvite = pendingInviteFromUrl || getPendingCommunityInvite();
       const hash = window.location.hash || '';
       const search = window.location.search || '';
-      const eventIdFromUrl = new URLSearchParams(search).get('event');
+      const eventIdFromUrl = getEventIdFromUrl();
       const isRecoveryPath = window.location.pathname.includes('reset-password');
       const isRecoveryHash = hash.includes('type=recovery') || search.includes('type=recovery') || hash.includes('reset-password');
       const isRecoveryUrl = isRecoveryPath || isRecoveryHash;
@@ -350,6 +361,8 @@ export default function App() {
         return canAccessOrgDashboard ? <OrgDashboardView setView={setView} /> : <DashboardView setView={setView} />;
       case 'PRIVACY_POLICY':
         return <PrivacyPolicyView setView={setView} />;
+      case 'EVENTS':
+        return <EventsView setView={setView} />;
       case 'EVENT_SETUP':
         return canAccessOrgDashboard ? <EventSetupView setView={setView} /> : <DashboardView setView={setView} />;
       case 'EVENT_REGISTRATION':
@@ -393,6 +406,7 @@ export default function App() {
     'LOGISTICS',
     'ORG_DASHBOARD',
     'NEW_SIGNUPS',
+    'EVENTS',
     'EVENT_SETUP',
     'EVENT_DASHBOARD',
     'VOLUNTEER_SCAN',

@@ -169,6 +169,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
   const [outreachPanelError, setOutreachPanelError] = useState<string | null>(null);
   const [loggingTargetId, setLoggingTargetId] = useState<string | null>(null);
   const [outreachOrgCenter, setOutreachOrgCenter] = useState<{ lat: number; lng: number } | null>(null);
+  const [outreachRadiusMiles, setOutreachRadiusMiles] = useState<number>(3);
 
   // Broadcast State
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
@@ -283,6 +284,12 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     ? normalizeOrgCode(communityId)
     : normalizeOrgCode(String(viewOrgId));
 
+  useEffect(() => {
+    if (!activeOrgCode) return;
+    const storedRadius = StorageService.getOrgOutreachRadiusMiles(activeOrgCode, 3);
+    setOutreachRadiusMiles(storedRadius);
+  }, [activeOrgCode]);
+
   // load data for the currently viewed organization (or aggregate)
   useEffect(() => {
     if (!communityId) return;
@@ -355,7 +362,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
         if (!org?.orgId) throw new Error('Organization lookup failed');
 
         const [candidates, logs] = await Promise.all([
-          getOrgLeaderOutreachCandidates(org.orgId, 3),
+          getOrgLeaderOutreachCandidates(org.orgId, outreachRadiusMiles),
           listOrgOutreachAuditLogs(org.orgId, 20),
         ]);
 
@@ -382,7 +389,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     return () => {
       active = false;
     };
-  }, [activeTab, activeOrgCode]);
+  }, [activeTab, activeOrgCode, outreachRadiusMiles]);
 
   useEffect(() => {
     if (!activeOrgCode) return;
@@ -625,7 +632,6 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     }
   };
 
-  const outreachRadiusMiles = 3;
   const projectCandidatePoint = (candidate: OrgOutreachCandidate) => {
     if (!outreachOrgCenter) return null;
 
@@ -643,6 +649,12 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
       y: clampedY,
       intensity: Math.max(0.2, 1 - Math.min(1, Number(candidate.distance_miles || outreachRadiusMiles) / outreachRadiusMiles)),
     };
+  };
+
+  const saveOutreachRadius = () => {
+    const saved = StorageService.setOrgOutreachRadiusMiles(activeOrgCode, outreachRadiusMiles);
+    setOutreachRadiusMiles(saved);
+    alert(`Outreach radius saved at ${saved} miles for ${orgName}.`);
   };
 
   const handlePingMember = async () => {
@@ -1272,12 +1284,34 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                 <div>
                   <h3 className="text-sm font-bold text-emerald-900">Nearby Outreach Panel</h3>
                   <p className="text-xs text-emerald-800 mt-1">
-                    Opted-in app users within 3 miles who are not yet connected to a trusted network.
+                    Opted-in app users not connected to an organization/trusted network.
                   </p>
                 </div>
                 <div className="text-right">
                   <p className="text-[11px] uppercase font-bold text-emerald-700">Candidates</p>
                   <p className="text-lg font-black text-emerald-900">{outreachCandidates.length}</p>
+                </div>
+              </div>
+
+              <div className="bg-white border border-emerald-100 rounded-lg p-3">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="text-xs font-bold uppercase text-slate-600">Outreach Radius</p>
+                    <p className="text-[11px] text-slate-500">Saved per organization.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      max={25}
+                      value={outreachRadiusMiles}
+                      onChange={(e) => setOutreachRadiusMiles(Math.max(1, Math.min(25, Number(e.target.value) || 1)))}
+                      className="w-20 border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+                    />
+                    <Button size="sm" variant="outline" onClick={saveOutreachRadius}>
+                      <Save size={14} className="mr-1" /> Save
+                    </Button>
+                  </div>
                 </div>
               </div>
 
@@ -1380,7 +1414,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                 </div>
               ) : (
                 <div className="bg-white border border-emerald-100 rounded-lg p-4 text-sm text-slate-600">
-                  No opted-in, unconnected app users are currently within 3 miles.
+                  No opted-in, unconnected app users are currently within {outreachRadiusMiles} miles.
                 </div>
               )}
 

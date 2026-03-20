@@ -90,7 +90,12 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
       .finally(() => setLoading(false));
   }, [orgId]);
 
-  const getRegistrationLink = (eventId: string) => `${window.location.origin}?event=${eventId}`;
+  const getRegistrationLink = (eventId: string) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('event', eventId);
+    url.hash = '';
+    return url.toString();
+  };
 
   const copyRegistrationLink = async (eventId: string) => {
     const link = getRegistrationLink(eventId);
@@ -163,7 +168,7 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
       }
 
       // Generate registration QR link that encodes the event ID
-      const regLink = `${window.location.origin}?event=${event.id}`;
+      const regLink = getRegistrationLink(event.id);
       const url = await generateQrDataUrl(regLink);
       setQrUrl(url);
       setSavedEvent(event);

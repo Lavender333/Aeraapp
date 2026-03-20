@@ -334,6 +334,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [orgLocationBusy, setOrgLocationBusy] = useState(false);
   const [orgLocationError, setOrgLocationError] = useState<string | null>(null);
   const [orgLocationSavedMessage, setOrgLocationSavedMessage] = useState<string | null>(null);
+  const lastOrgLocationHydratedCodeRef = useRef('');
 
   // Master Inventory State
   const [inventoryRequests, setInventoryRequests] = useState<ReplenishmentRequest[]>([]);
@@ -972,6 +973,92 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setOrgLocationError(null);
     setOrgLocationSavedMessage(null);
   }, [selectedOrgDetails]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!isOrgScopedAdmin || selectedOrgDetails?.id) {
+      return () => {
+        active = false;
+      };
+    }
+
+    const normalizedOrgCode = formatCommunityIdInput(String(profile.communityId || '').trim());
+    if (!normalizedOrgCode) {
+      lastOrgLocationHydratedCodeRef.current = '';
+      setOrgAddressDraft('');
+      setOrgLatitudeDraft('');
+      setOrgLongitudeDraft('');
+      return () => {
+        active = false;
+      };
+    }
+
+    if (lastOrgLocationHydratedCodeRef.current === normalizedOrgCode) {
+      return () => {
+        active = false;
+      };
+    }
+
+    const hydrateOrgLocationDrafts = async () => {
+      const localOrg = orgList.find((org) => String(org.id || '').toUpperCase() === normalizedOrgCode)
+        || StorageService.getOrganization(normalizedOrgCode);
+
+      if (localOrg) {
+        if (!active) return;
+        setOrgAddressDraft(String(localOrg.address || ''));
+        setOrgLatitudeDraft(
+          typeof localOrg.latitude === 'number' && Number.isFinite(localOrg.latitude)
+            ? String(localOrg.latitude)
+            : ''
+        );
+        setOrgLongitudeDraft(
+          typeof localOrg.longitude === 'number' && Number.isFinite(localOrg.longitude)
+            ? String(localOrg.longitude)
+            : ''
+        );
+        setOrgLocationError(null);
+        setOrgLocationSavedMessage(null);
+        lastOrgLocationHydratedCodeRef.current = normalizedOrgCode;
+        return;
+      }
+
+      try {
+        const remoteOrgs = await listOrganizationsSupabase({ activeOnly: false });
+        if (!active) return;
+
+        const match = (remoteOrgs || []).find(
+          (org: any) => String(org.org_code || '').toUpperCase() === normalizedOrgCode
+        );
+
+        setOrgAddressDraft(String(match?.address || ''));
+        setOrgLatitudeDraft(
+          typeof match?.latitude === 'number' && Number.isFinite(match.latitude)
+            ? String(match.latitude)
+            : ''
+        );
+        setOrgLongitudeDraft(
+          typeof match?.longitude === 'number' && Number.isFinite(match.longitude)
+            ? String(match.longitude)
+            : ''
+        );
+        setOrgLocationError(null);
+        setOrgLocationSavedMessage(null);
+      } catch {
+        if (!active) return;
+      } finally {
+        if (active) {
+          lastOrgLocationHydratedCodeRef.current = normalizedOrgCode;
+        }
+      }
+    };
+
+    void hydrateOrgLocationDrafts();
+
+    return () => {
+      active = false;
+    };
+  }, [isOrgScopedAdmin, selectedOrgDetails?.id, profile.communityId, orgList]);
 
   const validatePhone = (phone: string): boolean => {
     const phoneRegex = /^[\+]?[(]?[0-9]{3}[)]?[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4,6}$/;
@@ -2044,6 +2131,32 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setOrgList(prev => prev.map(o => o.id === orgId ? { ...o, currentBroadcast: undefined } : o));
   };
 
+  const geocodeOrgAddress = async (addressInput: string): Promise<{ lat: number; lng: number }> => {
+    const query = String(addressInput || '').trim();
+    if (!query) {
+      throw new Error('Enter an organization address first.');
+    }
+
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`,
+      { headers: { Accept: 'application/json' } }
+    );
+    if (!response.ok) throw new Error('Geocoding lookup failed');
+
+    const data = await response.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      throw new Error('No coordinates found for this address. Try adding city/state.');
+    }
+
+    const lat = Number(data[0]?.lat);
+    const lng = Number(data[0]?.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      throw new Error('Geocoding returned invalid coordinates.');
+    }
+
+    return { lat, lng };
+  };
+
   const handleGeocodeOrgAddress = async () => {
     const query = String(orgAddressDraft || '').trim();
     if (!query) {
@@ -2055,22 +2168,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setOrgLocationError(null);
     setOrgLocationSavedMessage(null);
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`,
-        { headers: { Accept: 'application/json' } }
-      );
-      if (!response.ok) throw new Error('Geocoding lookup failed');
-
-      const data = await response.json();
-      if (!Array.isArray(data) || data.length === 0) {
-        throw new Error('No coordinates found for this address. Try adding city/state.');
-      }
-
-      const lat = Number(data[0]?.lat);
-      const lng = Number(data[0]?.lon);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-        throw new Error('Geocoding returned invalid coordinates.');
-      }
+      const { lat, lng } = await geocodeOrgAddress(query);
 
       setOrgLatitudeDraft(String(lat));
       setOrgLongitudeDraft(String(lng));
@@ -2083,18 +2181,21 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const handleSaveOrgLocation = async () => {
-    if (!selectedOrgDetails?.id) return;
+    const targetOrgCode = formatCommunityIdInput(
+      String(selectedOrgDetails?.id || profile.communityId || '').trim()
+    );
+
+    if (!targetOrgCode) {
+      setOrgLocationError('Set your Organization ID first so we know where to save this address.');
+      return;
+    }
 
     const address = String(orgAddressDraft || '').trim();
-    const lat = Number(orgLatitudeDraft);
-    const lng = Number(orgLongitudeDraft);
+    const manualLat = Number(orgLatitudeDraft);
+    const manualLng = Number(orgLongitudeDraft);
 
     if (!address) {
       setOrgLocationError('Organization address is required.');
-      return;
-    }
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      setOrgLocationError('Valid latitude and longitude are required.');
       return;
     }
 
@@ -2102,8 +2203,20 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setOrgLocationError(null);
     setOrgLocationSavedMessage(null);
     try {
+      let lat = Number.isFinite(manualLat) ? manualLat : null;
+      let lng = Number.isFinite(manualLng) ? manualLng : null;
+
+      // Address is the only required input. If coordinates are missing, derive them.
+      if (lat == null || lng == null) {
+        const geocoded = await geocodeOrgAddress(address);
+        lat = geocoded.lat;
+        lng = geocoded.lng;
+        setOrgLatitudeDraft(String(geocoded.lat));
+        setOrgLongitudeDraft(String(geocoded.lng));
+      }
+
       await updateOrganizationByCode({
-        orgCode: selectedOrgDetails.id,
+        orgCode: targetOrgCode,
         address,
         latitude: lat,
         longitude: lng,
@@ -2111,19 +2224,19 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
       setOrgList((prev) =>
         prev.map((org) =>
-          org.id === selectedOrgDetails.id
+          org.id === targetOrgCode
             ? { ...org, address, latitude: lat, longitude: lng }
             : org
         )
       );
 
       setSelectedOrgDetails((prev) =>
-        prev
+        prev && prev.id === targetOrgCode
           ? { ...prev, address, latitude: lat, longitude: lng }
           : prev
       );
 
-      setOrgLocationSavedMessage('Organization location saved. Nearby Outreach Panel can now use this location.');
+      setOrgLocationSavedMessage('Organization address saved. Coordinates were updated for Nearby Outreach.');
     } catch (err: any) {
       setOrgLocationError(err?.message || 'Unable to save organization location.');
     } finally {
@@ -4745,6 +4858,53 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               </div>
             )}
           </>
+        )}
+
+        {isOrgScopedAdmin && (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 space-y-3 relative z-10">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Organization Address</p>
+              <p className="text-sm font-semibold text-emerald-900">Address is required. Coordinates are generated automatically on save.</p>
+            </div>
+
+            <Input
+              label="Organization Address"
+              value={orgAddressDraft}
+              onChange={(e) => {
+                setOrgAddressDraft(e.target.value);
+                setOrgLocationSavedMessage(null);
+                setOrgLocationError(null);
+              }}
+              placeholder="123 Main St, City, State ZIP"
+            />
+
+            {orgLocationError && (
+              <p className="text-xs font-semibold text-red-700">{orgLocationError}</p>
+            )}
+            {orgLocationSavedMessage && (
+              <p className="text-xs font-semibold text-emerald-700">{orgLocationSavedMessage}</p>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleGeocodeOrgAddress}
+                disabled={orgLocationBusy || !profile.communityId}
+              >
+                {orgLocationBusy ? <Loader2 size={16} className="mr-2 animate-spin" /> : <MapPin size={16} className="mr-2" />}
+                Geocode Address
+              </Button>
+              <Button
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={handleSaveOrgLocation}
+                disabled={orgLocationBusy || !profile.communityId}
+              >
+                <Save size={16} className="mr-2" /> Save Organization Address
+              </Button>
+            </div>
+          </div>
         )}
 
         <button

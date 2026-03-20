@@ -42,6 +42,7 @@ export interface EventSupplyItem {
 export interface EventRegistration {
   id: string;
   event_id: string;
+  profile_id: string | null;
   ticket_id: string;
   participant_code: string;
   full_name: string;
@@ -62,6 +63,7 @@ export interface EventRegistration {
   latitude: number | null;
   longitude: number | null;
   consent_timestamp: string | null;
+  requested_supplies: Array<{ supply_item_id: string; supply_label: string; quantity: number }>;
   created_at: string;
 }
 
@@ -257,15 +259,115 @@ export interface RegisterParticipantInput {
   outreachOptIn?: boolean;
   latitude?: number;
   longitude?: number;
+  profileId?: string;
+  requestedSupplies?: Array<{ supplyItemId: string; supplyLabel: string; quantity: number }>;
+}
+
+function normalizePhone(phone?: string): string | null {
+  const digits = String(phone || '').replace(/\D/g, '');
+  return digits.length ? digits : null;
+}
+
+function normalizeEmail(email?: string): string | null {
+  const cleaned = String(email || '').trim().toLowerCase();
+  return cleaned.length ? cleaned : null;
+}
+
+async function findExistingRegistration(input: RegisterParticipantInput): Promise<EventRegistration | null> {
+  const profileId = input.profileId || null;
+  const normalizedPhone = normalizePhone(input.phone);
+  const normalizedEmail = normalizeEmail(input.email);
+
+  if (profileId) {
+    const { data, error } = await supabase
+      .from('event_registrations')
+      .select('*')
+      .eq('event_id', input.eventId)
+      .eq('profile_id', profileId)
+      .maybeSingle();
+    if (!error && data) return data as EventRegistration;
+  }
+
+  if (normalizedPhone) {
+    const { data, error } = await supabase
+      .from('event_registrations')
+      .select('*')
+      .eq('event_id', input.eventId)
+      .eq('phone', normalizedPhone)
+      .maybeSingle();
+    if (!error && data) return data as EventRegistration;
+  }
+
+  if (normalizedEmail) {
+    const { data, error } = await supabase
+      .from('event_registrations')
+      .select('*')
+      .eq('event_id', input.eventId)
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+    if (!error && data) return data as EventRegistration;
+  }
+
+  return null;
 }
 
 export async function registerParticipant(
   input: RegisterParticipantInput
 ): Promise<EventRegistration> {
+  let profileId = input.profileId ?? null;
+  if (!profileId) {
+    const { data: auth } = await supabase.auth.getUser();
+    profileId = auth?.user?.id ?? null;
+  }
+
+  const existing = await findExistingRegistration({ ...input, profileId: profileId ?? undefined });
+
+  const normalizedPhone = normalizePhone(input.phone);
+  const normalizedEmail = normalizeEmail(input.email);
+
+  if (existing) {
+    if (!profileId) {
+      // Anonymous users can only keep their original registration; edits require auth.
+      return existing;
+    }
+
+    const updatePayload = {
+      profile_id: existing.profile_id ?? profileId,
+      full_name: input.fullName.trim(),
+      household_size: input.householdSize,
+      additional_members: input.additionalMembers,
+      free_member_limit: FREE_HOUSEHOLD_LIMIT,
+      zip_code: input.zipCode ?? null,
+      phone: normalizedPhone,
+      email: normalizedEmail,
+      outreach_opt_in: input.outreachOptIn ?? false,
+      latitude: input.latitude ?? null,
+      longitude: input.longitude ?? null,
+      consent_timestamp: input.outreachOptIn ? new Date().toISOString() : null,
+      requested_supplies: (input.requestedSupplies ?? [])
+        .filter((s) => Number(s.quantity) > 0)
+        .map((s) => ({
+          supply_item_id: s.supplyItemId,
+          supply_label: s.supplyLabel,
+          quantity: Math.max(1, Math.round(Number(s.quantity))),
+        })),
+    };
+
+    const { data, error } = await supabase
+      .from('event_registrations')
+      .update(updatePayload)
+      .eq('id', existing.id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return data as EventRegistration;
+  }
+
   const { code, ticketId } = await generateUniqueCode(input.eventId, input.eventName);
 
   const payload = {
     event_id: input.eventId,
+    profile_id: profileId,
     ticket_id: ticketId,
     participant_code: code,
     full_name: input.fullName.trim(),
@@ -273,12 +375,19 @@ export async function registerParticipant(
     additional_members: input.additionalMembers,
     free_member_limit: FREE_HOUSEHOLD_LIMIT,
     zip_code: input.zipCode ?? null,
-    phone: input.phone ?? null,
-    email: input.email ?? null,
+    phone: normalizedPhone,
+    email: normalizedEmail,
     outreach_opt_in: input.outreachOptIn ?? false,
     latitude: input.latitude ?? null,
     longitude: input.longitude ?? null,
     consent_timestamp: input.outreachOptIn ? new Date().toISOString() : null,
+    requested_supplies: (input.requestedSupplies ?? [])
+      .filter((s) => Number(s.quantity) > 0)
+      .map((s) => ({
+        supply_item_id: s.supplyItemId,
+        supply_label: s.supplyLabel,
+        quantity: Math.max(1, Math.round(Number(s.quantity))),
+      })),
   };
 
   const { data, error } = await supabase
@@ -288,6 +397,57 @@ export async function registerParticipant(
     .single();
   if (error) throw new Error(error.message);
   return data as EventRegistration;
+}
+
+export interface EventRegistrationWithEvent extends EventRegistration {
+  event: DistributionEvent | null;
+}
+
+export async function listPublicActiveEvents(): Promise<DistributionEvent[]> {
+  const { data, error } = await supabase
+    .from('distribution_events')
+    .select('*')
+    .eq('status', 'ACTIVE')
+    .order('distribution_date', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as DistributionEvent[];
+}
+
+export async function listMyEventRegistrations(profileId?: string): Promise<EventRegistrationWithEvent[]> {
+  let resolvedProfileId = profileId;
+  if (!resolvedProfileId) {
+    const { data: auth } = await supabase.auth.getUser();
+    resolvedProfileId = auth?.user?.id;
+  }
+  if (!resolvedProfileId) return [];
+
+  const { data, error } = await supabase
+    .from('event_registrations')
+    .select('*, event:distribution_events(*)')
+    .eq('profile_id', resolvedProfileId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as EventRegistrationWithEvent[];
+}
+
+export async function getMyEventRegistration(eventId: string, profileId?: string): Promise<EventRegistration | null> {
+  let resolvedProfileId = profileId;
+  if (!resolvedProfileId) {
+    const { data: auth } = await supabase.auth.getUser();
+    resolvedProfileId = auth?.user?.id;
+  }
+  if (!resolvedProfileId) return null;
+
+  const { data, error } = await supabase
+    .from('event_registrations')
+    .select('*')
+    .eq('event_id', eventId)
+    .eq('profile_id', resolvedProfileId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return (data ?? null) as EventRegistration | null;
 }
 
 // ─────────────────────────────────────────
