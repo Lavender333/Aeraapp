@@ -7,6 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 RUNNER_SCRIPT="$PROJECT_ROOT/scripts/run-nightly-level3.sh"
+LOOP_SCRIPT="$PROJECT_ROOT/scripts/run-level3-loop.sh"
 LOG_DIR="$PROJECT_ROOT/logs"
 LOG_FILE="$LOG_DIR/level3-nightly.log"
 
@@ -15,7 +16,13 @@ CRON_HOUR="${CRON_HOUR:-2}"
 CRON_ENTRY="$CRON_MINUTE $CRON_HOUR * * * cd $PROJECT_ROOT && $RUNNER_SCRIPT >> $LOG_FILE 2>&1"
 
 mkdir -p "$LOG_DIR"
-chmod +x "$RUNNER_SCRIPT"
+
+if ! command -v crontab >/dev/null 2>&1; then
+  echo "crontab is not available in this environment."
+  bash "$LOOP_SCRIPT" start
+  echo "Installed loop fallback scheduler instead of cron."
+  exit 0
+fi
 
 EXISTING_CRON="$(crontab -l 2>/dev/null || true)"
 

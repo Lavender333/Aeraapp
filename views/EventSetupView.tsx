@@ -137,6 +137,7 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
     setError('');
     if (!name.trim()) { setError('Event name is required.'); return; }
     if (!date) { setError('Distribution date is required.'); return; }
+    if (!locationName.trim()) { setError('Event location address is required.'); return; }
     const hasBlankLabel = supplies.some((s) => !s.supply_label.trim());
     if (hasBlankLabel) { setError('All supply items need a label.'); return; }
     const hasZeroCount = supplies.some((s) => !s.starting_count || Number(s.starting_count) < 1);
@@ -397,8 +398,8 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
                 </div>
               </div>
               <Input
-                label="Location / Address"
-                placeholder="Community center, park, etc."
+                label="Location Address *"
+                placeholder="123 Main St, City, State ZIP"
                 value={locationName}
                 onChange={(e) => setLocationName(e.target.value)}
               />

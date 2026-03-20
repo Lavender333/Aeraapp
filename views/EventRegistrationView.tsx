@@ -385,10 +385,12 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
 
           <Card className="p-4 mb-4 border border-emerald-200 bg-emerald-50">
             <p className="text-[11px] uppercase font-bold text-emerald-700">Registering For</p>
-            <p className="text-[15px] font-bold text-emerald-900">{event?.name}</p>
+            <p className="text-[15px] font-bold text-emerald-900">Event Name: {event?.name}</p>
             <p className="text-[12px] text-emerald-800 mt-1">
-              {event?.distribution_date}
-              {event?.location_name ? ` · ${event.location_name}` : ''}
+              Date: {event?.distribution_date}
+            </p>
+            <p className="text-[12px] text-emerald-800 mt-1">
+              Location Address: {event?.location_name || 'Not provided yet'}
             </p>
           </Card>
 
@@ -454,10 +456,12 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
 
         <Card className="p-4 mb-4 border border-emerald-200 bg-emerald-50">
           <p className="text-[11px] uppercase font-bold text-emerald-700">You Are Registering For</p>
-          <p className="text-[16px] font-bold text-emerald-900">{event?.name}</p>
+          <p className="text-[16px] font-bold text-emerald-900">Event Name: {event?.name}</p>
           <p className="text-[12px] text-emerald-800 mt-1">
-            {event?.distribution_date}
-            {event?.location_name ? ` · ${event.location_name}` : ''}
+            Date: {event?.distribution_date}
+          </p>
+          <p className="text-[12px] text-emerald-800 mt-1">
+            Location Address: {event?.location_name || 'Not provided yet'}
           </p>
         </Card>
 

@@ -121,11 +121,10 @@ export const EventsView: React.FC<EventsViewProps> = ({ setView }) => {
                     <p className="text-[12px] text-slate-500">
                       <CalendarDays size={12} className="inline mr-1" />
                       {reg.event?.distribution_date || 'TBD'}
-                      {reg.event?.location_name ? (
-                        <>
-                          {' '}· <MapPin size={12} className="inline mr-1" />{reg.event.location_name}
-                        </>
-                      ) : null}
+                    </p>
+                    <p className="text-[12px] text-slate-600 mt-1">
+                      <MapPin size={12} className="inline mr-1" />
+                      Location Address: {reg.event?.location_name || 'Not provided yet'}
                     </p>
                   </div>
                   <span className="text-[10px] font-bold uppercase px-2 py-1 rounded bg-emerald-50 text-emerald-700">Saved</span>
@@ -175,11 +174,10 @@ export const EventsView: React.FC<EventsViewProps> = ({ setView }) => {
                 <p className="text-[12px] text-slate-500 mt-1">
                   <CalendarDays size={12} className="inline mr-1" />
                   {ev.distribution_date}
-                  {ev.location_name ? (
-                    <>
-                      {' '}· <MapPin size={12} className="inline mr-1" />{ev.location_name}
-                    </>
-                  ) : null}
+                </p>
+                <p className="text-[12px] text-slate-600 mt-1">
+                  <MapPin size={12} className="inline mr-1" />
+                  Location Address: {ev.location_name || 'Not provided yet'}
                 </p>
                 <Button
                   fullWidth
