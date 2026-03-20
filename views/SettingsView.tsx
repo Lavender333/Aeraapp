@@ -170,6 +170,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const contactsSectionRef = useRef<HTMLElement | null>(null);
   const householdSectionRef = useRef<HTMLElement | null>(null);
   const securitySectionRef = useRef<HTMLElement | null>(null);
+  const hasPromptedMissingOrgLocationRef = useRef(false);
 
   type SettingsAccordionKey = 'profile' | 'household' | 'contacts' | 'community' | 'security';
   const [expandedSections, setExpandedSections] = useState<Record<SettingsAccordionKey, boolean>>({
@@ -282,6 +283,25 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [isDisconnectingOrg, setIsDisconnectingOrg] = useState(false);
   const connectedOrgLabel = connectedOrg || String(profile.communityId || '').trim() || null;
+  const orgLocationConfigured = Boolean(
+    String(orgAddressDraft || '').trim() &&
+    Number.isFinite(Number(orgLatitudeDraft)) &&
+    Number.isFinite(Number(orgLongitudeDraft))
+  );
+
+  useEffect(() => {
+    if (!isOrgScopedAdmin) return;
+
+    if (orgLocationConfigured) {
+      hasPromptedMissingOrgLocationRef.current = false;
+      return;
+    }
+
+    if (hasPromptedMissingOrgLocationRef.current) return;
+
+    setExpandedSections((prev) => (prev.community ? prev : { ...prev, community: true }));
+    hasPromptedMissingOrgLocationRef.current = true;
+  }, [isOrgScopedAdmin, orgLocationConfigured]);
 
   const [parentOrgCodeInput, setParentOrgCodeInput] = useState('');
   const [isLinkingParentOrg, setIsLinkingParentOrg] = useState(false);
@@ -4637,6 +4657,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {isOrgScopedAdmin && !orgLocationConfigured && (
+              <span className="text-[11px] font-bold px-2 py-1 rounded-full bg-red-100 text-red-700">
+                Location needed
+              </span>
+            )}
             <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${communityReady ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
               {communityReady ? 'Connected' : 'Not connected'}
             </span>
@@ -4644,6 +4669,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <ChevronDown size={20} className={`text-slate-600 transition-transform ${expandedSections.community ? 'rotate-180' : ''}`} />
           </div>
         </button>
+        {!expandedSections.community && isOrgScopedAdmin && !orgLocationConfigured && (
+          <div className="mt-2 rounded-2xl border border-red-200 bg-red-50 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-red-700">Organization location missing</p>
+            <p className="text-sm font-semibold text-red-900">Open this section to add your organization address. Coordinates are generated automatically when you save.</p>
+          </div>
+        )}
         {!expandedSections.community && isOrgScopedAdmin && (
           communityInviteUrl ? (
             <div className="mt-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
