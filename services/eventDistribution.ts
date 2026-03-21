@@ -1216,6 +1216,102 @@ export interface OrgOutreachAuditLog {
   created_at: string;
 }
 
+const mergeOutreachCandidates = (base: OrgOutreachCandidate[], extra: OrgOutreachCandidate[]) => {
+  const byId = new Map<string, OrgOutreachCandidate>();
+
+  for (const row of [...base, ...extra]) {
+    const id = String(row?.profile_id || '').trim();
+    if (!id) continue;
+
+    const current = byId.get(id);
+    if (!current) {
+      byId.set(id, row);
+      continue;
+    }
+
+    const keep = Number(row.distance_miles || 0) < Number(current.distance_miles || 0) ? row : current;
+    byId.set(id, keep);
+  }
+
+  return Array.from(byId.values()).sort((a, b) => {
+    if (a.distance_miles !== b.distance_miles) return a.distance_miles - b.distance_miles;
+    return a.full_name.localeCompare(b.full_name);
+  });
+};
+
+const listSameOrgNearbyCandidates = async (
+  targetOrgId: string,
+  radiusMiles: number,
+): Promise<OrgOutreachCandidate[]> => {
+  if (!targetOrgId) return [];
+
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user?.id) return [];
+
+  const { data: actorProfile } = await supabase
+    .from('profiles')
+    .select('id, latitude, longitude')
+    .eq('id', authData.user.id)
+    .maybeSingle();
+
+  const { data: orgRow } = await supabase
+    .from('organizations')
+    .select('latitude, longitude')
+    .eq('id', targetOrgId)
+    .maybeSingle();
+
+  let orgLat = Number((orgRow as any)?.latitude);
+  let orgLng = Number((orgRow as any)?.longitude);
+  if (!Number.isFinite(orgLat) || !Number.isFinite(orgLng)) {
+    orgLat = Number((actorProfile as any)?.latitude);
+    orgLng = Number((actorProfile as any)?.longitude);
+  }
+  if (!Number.isFinite(orgLat) || !Number.isFinite(orgLng)) return [];
+
+  const { data: rows, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, mobile_phone, phone, email, latitude, longitude, org_id, is_active')
+    .eq('is_active', true)
+    .eq('org_id', targetOrgId)
+    .neq('id', authData.user.id);
+
+  if (error) return [];
+
+  const candidates: OrgOutreachCandidate[] = [];
+  const normalizedRadius = Math.max(1, Number(radiusMiles) || 3);
+
+  for (const row of rows || []) {
+    const profileId = String((row as any)?.id || '').trim();
+    if (!profileId) continue;
+
+    let lat = Number((row as any)?.latitude);
+    let lng = Number((row as any)?.longitude);
+
+    // Same-org users without coordinates are plotted at org center for outreach visibility.
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      lat = orgLat;
+      lng = orgLng;
+    }
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
+    const dist = haversineDistanceMiles(orgLat, orgLng, lat, lng);
+    if (dist > normalizedRadius) continue;
+
+    candidates.push({
+      profile_id: profileId,
+      full_name: String((row as any)?.full_name || ''),
+      phone: String((row as any)?.mobile_phone || (row as any)?.phone || ''),
+      email: String((row as any)?.email || ''),
+      latitude: lat,
+      longitude: lng,
+      distance_miles: Number(dist.toFixed(2)),
+    });
+  }
+
+  return candidates;
+};
+
 export async function generateEventReport(eventId: string, sessionId?: string): Promise<EventReport> {
   const [event, stats, { data: regs }] = await Promise.all([
     getEvent(eventId),
@@ -1238,6 +1334,7 @@ export async function getOrgLeaderOutreachCandidates(
   organizationId?: string,
   radiusMiles: number = 3
 ): Promise<OrgOutreachCandidate[]> {
+  const normalizedRequestedRadius = Math.max(1, Number(radiusMiles) || 3);
   const { data, error } = await supabase.rpc('get_org_outreach_candidates', {
     p_org_id: organizationId ?? null,
     p_radius_miles: radiusMiles,
@@ -1316,7 +1413,6 @@ export async function getOrgLeaderOutreachCandidates(
       }
     }
 
-    const normalizedRequestedRadius = Math.max(1, Number(radiusMiles) || 3);
     const rows: OrgOutreachCandidate[] = [];
 
     for (const row of profileRows || []) {
@@ -1336,8 +1432,14 @@ export async function getOrgLeaderOutreachCandidates(
         if (trustedIds.has(profileId)) continue;
       }
 
-      const lat = Number((row as any)?.latitude);
-      const lng = Number((row as any)?.longitude);
+      let lat = Number((row as any)?.latitude);
+      let lng = Number((row as any)?.longitude);
+
+      if ((!Number.isFinite(lat) || !Number.isFinite(lng)) && rowOrgId === targetOrgId) {
+        lat = orgLat;
+        lng = orgLng;
+      }
+
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
 
       const allowedRadius = Math.max(1, Number((row as any)?.geofenced_outreach_radius_miles) || 3);
@@ -1361,9 +1463,19 @@ export async function getOrgLeaderOutreachCandidates(
       return a.full_name.localeCompare(b.full_name);
     });
 
-    return rows;
+    const sameOrgSupplement = await listSameOrgNearbyCandidates(targetOrgId, normalizedRequestedRadius);
+    return mergeOutreachCandidates(rows, sameOrgSupplement);
   }
-  return (data ?? []) as OrgOutreachCandidate[];
+
+  const rpcRows = (data ?? []) as OrgOutreachCandidate[];
+  if (!organizationId) return rpcRows;
+
+  try {
+    const sameOrgSupplement = await listSameOrgNearbyCandidates(organizationId, normalizedRequestedRadius);
+    return mergeOutreachCandidates(rpcRows, sameOrgSupplement);
+  } catch {
+    return rpcRows;
+  }
 }
 
 export async function listOrgOutreachAuditLogs(
