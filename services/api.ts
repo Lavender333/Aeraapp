@@ -615,15 +615,18 @@ export async function updateOrganizationByCode(payload: {
     updates.longitude = typeof lng === 'number' && Number.isFinite(lng) ? lng : null;
   }
 
-  const { data, error } = await supabase
+  const { data: rows, error } = await supabase
     .from('organizations')
     .update(updates)
     .eq('id', org.orgId)
-    .select('id, org_code, address, latitude, longitude')
-    .single();
+    .select('id, org_code, address, latitude, longitude');
 
-  if (error || !data) {
-    throw new Error(error?.message || 'Unable to update organization');
+  if (error) {
+    throw new Error(error.message || 'Unable to update organization');
+  }
+  const data = rows?.[0];
+  if (!data) {
+    throw new Error('Organization not found or you do not have permission to update it.');
   }
 
   await safeLogActivity({
