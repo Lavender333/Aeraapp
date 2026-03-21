@@ -564,16 +564,15 @@ export async function setOrganizationParentByCode(payload: {
     throw new Error('Parent organization cannot be the same as the child');
   }
 
-  const { data, error } = await supabase
+  const { data: rows, error } = await supabase
     .from('organizations')
     .update({ parent_org_id: parent.orgId })
     .eq('id', child.orgId)
-    .select('id, org_code, parent_org_id')
-    .single();
+    .select('id, org_code, parent_org_id');
 
-  if (error || !data) {
-    throw new Error(error?.message || 'Unable to update parent organization');
-  }
+  if (error) throw new Error(error.message || 'Unable to update parent organization');
+  const data = rows?.[0];
+  if (!data) throw new Error('Organization not found or you do not have permission to update it.');
 
   await safeLogActivity({
     action: 'UPDATE',
@@ -895,14 +894,15 @@ export async function updateHelpRequestData(id: string, payload: {
   if (payload.status) updates.status = payload.status;
   if (payload.data) updates.data = payload.data;
 
-  const { data, error } = await supabase
+  const { data: rows, error } = await supabase
     .from('help_requests')
     .update(updates)
     .eq('id', id)
-    .select('id, user_id, status, priority, data, location, created_at')
-    .single();
+    .select('id, user_id, status, priority, data, location, created_at');
 
-  if (error || !data) throw new Error('Failed to update help request');
+  if (error) throw new Error(error.message || 'Failed to update help request');
+  const data = rows?.[0];
+  if (!data) throw new Error('Help request not found or you do not have permission to update it.');
 
   await safeLogActivity({
     action: 'UPDATE',
@@ -2438,7 +2438,7 @@ export async function resolveHouseholdExpansionRequest(
       )
     : null;
 
-  const { data: updated, error: updateError } = await supabase
+  const { data: updatedRows, error: updateError } = await supabase
     .from('household_expansion_requests')
     .update({
       status: normalizedAction,
@@ -2449,10 +2449,11 @@ export async function resolveHouseholdExpansionRequest(
       updated_at: new Date().toISOString(),
     })
     .eq('id', normalizedRequestId)
-    .select('*')
-    .single();
+    .select('*');
 
   if (updateError) throw updateError;
+  const updated = updatedRows?.[0];
+  if (!updated) throw new Error('Expansion request not found or you do not have permission to review it.');
 
   await supabase.from('notifications').insert({
     user_id: existing.requester_profile_id,
@@ -3468,17 +3469,18 @@ export async function createRequest(orgCode: string, payload: { item: string; qu
 
 export async function updateRequestStatus(id: string, payload: { status: string; deliveredQuantity?: number }) {
   const normalized = normalizeRequestStatus(payload.status);
-  const { data, error } = await supabase
+  const { data: rows, error } = await supabase
     .from('replenishment_requests')
     .update({
       status: normalized,
       delivered_quantity: payload.deliveredQuantity ?? undefined,
     })
     .eq('id', id)
-    .select('id, org_id, org_name, item, quantity, status, provider, created_at, delivered_quantity')
-    .single();
+    .select('id, org_id, org_name, item, quantity, status, provider, created_at, delivered_quantity');
 
-  if (error || !data) throw new Error('Failed to update request');
+  if (error) throw new Error(error.message || 'Failed to update request');
+  const data = rows?.[0];
+  if (!data) throw new Error('Replenishment request not found or you do not have permission to update it.');
 
   const orgCode = data.org_id ? await getOrgCodeById(data.org_id) : null;
   await safeLogActivity({
@@ -4312,7 +4314,7 @@ export async function updateMember(orgCode: string, memberId: string, payload: a
   const orgId = await getOrgIdByCode(orgCode);
   if (!orgId) throw new Error('Organization not found');
 
-  const { data, error } = await supabase
+  const { data: rows, error } = await supabase
     .from('members')
     .update({
       name: payload.name,
@@ -4328,10 +4330,11 @@ export async function updateMember(orgCode: string, memberId: string, payload: a
     })
     .eq('id', memberId)
     .eq('org_id', orgId)
-    .select('id, name, status, location, last_update, needs, phone, address, emergency_contact_name, emergency_contact_phone, emergency_contact_relation')
-    .single();
+    .select('id, name, status, location, last_update, needs, phone, address, emergency_contact_name, emergency_contact_phone, emergency_contact_relation');
 
-  if (error || !data) throw new Error('Failed to update member');
+  if (error) throw new Error(error.message || 'Failed to update member');
+  const data = rows?.[0];
+  if (!data) throw new Error('Member not found or you do not have permission to update them.');
   await safeLogActivity({
     action: 'UPDATE',
     entityType: 'members',
