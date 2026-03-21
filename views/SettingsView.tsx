@@ -2200,6 +2200,15 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setCurrentSection('MASTER_INVENTORY');
   };
 
+  const openOrganizationAddressSettings = () => {
+    setCurrentSection('MAIN');
+    setExpandedSections((prev) => ({ ...prev, community: true }));
+    window.requestAnimationFrame(() => {
+      const section = document.getElementById('settings-community-section');
+      section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
   const openEventManagement = async () => {
     if (!isAdmin) return;
     setEventListBusy(true);
@@ -3688,11 +3697,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                         value={selectedUser.role}
                         onChange={(e) => updateUserRole(selectedUser.id, e.target.value as UserRole)}
                         className={`text-sm p-2 rounded border bg-white font-medium ${selectedUser.active === false ? 'opacity-50 cursor-not-allowed' : 'border-slate-300'}`}
-                        disabled={selectedUser.active === false}
+                        disabled={selectedUser.active === false || isOrgScopedAdmin}
                       >
                         {visibleManageRoles.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
                       </select>
                    </div>
+                   {isOrgScopedAdmin && (
+                     <p className="text-xs text-slate-500">Role changes are managed by platform administrators. You can still manage member status and directory records here.</p>
+                   )}
 
                    <div className="flex items-center justify-between pt-2 border-t border-slate-200">
                       <span className="text-sm font-medium text-slate-700">Account Status</span>
@@ -4049,7 +4061,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 onClick={openAccessControl} 
                 className="bg-brand-600 hover:bg-brand-500 text-white border-0 w-full justify-between"
               >
-                <span>{t('settings.user_directory_access')}</span>
+                <span>{isOrgScopedAdmin ? 'Member Directory' : t('settings.user_directory_access')}</span>
                 <Users size={18} />
               </Button>
               {isPlatformAdmin && (
@@ -4074,14 +4086,23 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 onClick={openOrgDirectory} 
                 className="bg-sky-600 hover:bg-sky-500 text-white border-0 w-full justify-between"
               >
-                <span>{t('settings.organization_directory')}</span>
+                <span>{isOrgScopedAdmin ? 'Organization Profile' : t('settings.organization_directory')}</span>
                 <Building2 size={18} />
               </Button>
+              {isOrgScopedAdmin && (
+                <Button
+                  onClick={openOrganizationAddressSettings}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white border-0 w-full justify-between"
+                >
+                  <span>Organization Address</span>
+                  <MapPin size={18} />
+                </Button>
+              )}
               <Button 
                 onClick={openMasterInventory} 
                 className="bg-teal-600 hover:bg-teal-500 text-white border-0 w-full justify-between"
               >
-                <span>{t('settings.master_inventory')}</span>
+                <span>{isOrgScopedAdmin ? 'Hub Inventory' : t('settings.master_inventory')}</span>
                 <FileText size={18} />
               </Button>
               <Button 
@@ -5156,7 +5177,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {/* Community Onboarding */}
-      <section ref={trustedCommunityRef} className="bg-white/95 p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 order-5">
+      <section id="settings-community-section" ref={trustedCommunityRef} className="bg-white/95 p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 order-5">
         <button
           id={accordionButtonIds.community}
           type="button"
