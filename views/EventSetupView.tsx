@@ -206,14 +206,14 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
         setEvents(loadedEvents);
         
         // Check if there's an event ID to edit stored from navigation
-        const storedEventId = StorageService.getItem('eventIdToEdit');
+        const storedEventId = sessionStorage.getItem('eventIdToEdit');
         if (storedEventId) {
           const eventToEdit = loadedEvents.find((e) => e.id === storedEventId);
           if (eventToEdit) {
             setEditingEventId(storedEventId);
             setTab('create');
           }
-          StorageService.removeItem('eventIdToEdit');
+          sessionStorage.removeItem('eventIdToEdit');
         }
       })
       .catch(() => setEvents([]))

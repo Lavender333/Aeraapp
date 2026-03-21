@@ -3134,7 +3134,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 <Button 
                   onClick={() => {
                     if (event.id) {
-                      StorageService.saveItem('eventIdToEdit', event.id);
+                      sessionStorage.setItem('eventIdToEdit', event.id);
                     }
                     setView('EVENT_SETUP');
                   }}
