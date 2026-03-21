@@ -1042,7 +1042,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               <span className={`text-[11px] font-bold px-2 py-1 rounded-full ${inventoryReady ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                 {inventoryReady ? 'Ready' : 'Loading'}
               </span>
-              <Button size="sm" variant="outline" onClick={() => setView('ORG_DASHBOARD')}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  sessionStorage.setItem('orgDashboardInitialTab', 'INVENTORY');
+                  setView('ORG_DASHBOARD');
+                }}
+              >
                 Manage Inventory
               </Button>
               <Button size="sm" variant="outline" onClick={() => setView('POPULATION')}>
@@ -1056,7 +1063,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
           <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-[11px] uppercase font-bold text-indigo-700">Connected Members</p>
-              <Button size="sm" variant="ghost" className="text-indigo-700" onClick={() => setView('ORG_DASHBOARD')}>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-indigo-700"
+                onClick={() => {
+                  sessionStorage.setItem('orgDashboardInitialTab', 'MEMBERS');
+                  setView('ORG_DASHBOARD');
+                }}
+              >
                 Manage Membership
               </Button>
             </div>

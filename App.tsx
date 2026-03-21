@@ -358,7 +358,16 @@ export default function App() {
       case 'LOGISTICS':
         return canAccessAdvancedViews ? <LogisticsView setView={setView} /> : <DashboardView setView={setView} />;
       case 'ORG_DASHBOARD':
-        return canAccessOrgDashboard ? <OrgDashboardView setView={setView} /> : <DashboardView setView={setView} />;
+        {
+          const requestedTab = sessionStorage.getItem('orgDashboardInitialTab');
+          const initialOrgDashboardTab = requestedTab === 'INVENTORY' || requestedTab === 'PREPAREDNESS' || requestedTab === 'MEMBERS'
+            ? requestedTab
+            : 'MEMBERS';
+          sessionStorage.removeItem('orgDashboardInitialTab');
+          return canAccessOrgDashboard
+            ? <OrgDashboardView setView={setView} initialTab={initialOrgDashboardTab} />
+            : <DashboardView setView={setView} />;
+        }
       case 'PRIVACY_POLICY':
         return <PrivacyPolicyView setView={setView} />;
       case 'EVENTS':
