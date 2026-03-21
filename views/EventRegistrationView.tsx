@@ -448,7 +448,7 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
             <p className="text-[12px] text-slate-500 mt-3">
               Household size: <strong>{registration.household_size}</strong>
               {' '}· Session: <strong>{formatSessionDate(selectedSession)}</strong>
-              {selectedSession?.location_name && <> · <MapPin size={12} className="inline" /> {selectedSession.location_name}</>}
+              {(selectedSession?.location_name || event?.address) && <> · <MapPin size={12} className="inline" /> {selectedSession?.location_name || event?.address}</>}
             </p>
           </Card>
 
@@ -477,7 +477,7 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
               Session: {formatSessionDate(selectedSession)}
             </p>
             <p className="text-[12px] text-emerald-800 mt-1">
-              Location Address: {selectedSession?.location_name || 'Not provided yet'}
+              Location Address: {selectedSession?.location_name || event?.address || 'Not provided yet'}
             </p>
           </Card>
 
@@ -548,7 +548,7 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
             Session: {formatSessionDate(selectedSession)}
           </p>
           <p className="text-[12px] text-emerald-800 mt-1">
-            Location Address: {selectedSession?.location_name || 'Not provided yet'}
+            Location Address: {selectedSession?.location_name || event?.address || 'Not provided yet'}
           </p>
         </Card>
 
@@ -572,7 +572,7 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
                   >
                     <p className="text-[13px] font-semibold text-slate-900">{session.session_name}</p>
                     <p className="text-[12px] text-slate-600 mt-1">{formatSessionDate(session)}</p>
-                    <p className="text-[12px] text-slate-500 mt-1">{session.location_name || 'Location not provided yet'}</p>
+                    <p className="text-[12px] text-slate-500 mt-1">{session.location_name || event?.address || 'Location not provided yet'}</p>
                   </button>
                 );
               })}

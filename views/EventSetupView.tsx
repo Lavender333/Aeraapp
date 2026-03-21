@@ -313,6 +313,7 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
   const handleCreate = async () => {
     setError('');
     if (!name.trim()) { setError('Event name is required.'); return; }
+    if (!eventAddress.trim()) { setError('Event address is required.'); return; }
     const invalidSession = sessions.find((session) => {
       const startAt = combineLocalDateTime(session.start_date, session.start_time);
       const endAt = combineLocalDateTime(session.end_date || session.start_date, session.end_time);
@@ -651,7 +652,7 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
                 onChange={(e) => setName(e.target.value)}
               />
               <Input
-                label="Event Address"
+                label="Event Address *"
                 placeholder="e.g. 123 Main St, City, State ZIP"
                 value={eventAddress}
                 onChange={(e) => setEventAddress(e.target.value)}
