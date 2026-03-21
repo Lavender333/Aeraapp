@@ -791,6 +791,82 @@ export async function updateOrganizationByCode(payload: {
   return data;
 }
 
+export async function updateOrganizationActiveByCode(payload: {
+  orgCode: string;
+  isActive: boolean;
+}) {
+  const org = await getOrgByCode(payload.orgCode);
+  if (!org?.orgId) throw new Error('Organization not found');
+
+  const { data: rows, error } = await supabase
+    .from('organizations')
+    .update({ is_active: Boolean(payload.isActive) })
+    .eq('id', org.orgId)
+    .select('id, org_code, is_active');
+
+  if (error) {
+    throw new Error(error.message || 'Unable to update organization status');
+  }
+
+  const data = rows?.[0] as any;
+  if (!data) {
+    throw new Error('Organization not found or you do not have permission to update it.');
+  }
+
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'organizations',
+    entityId: data.id,
+    orgCode: data.org_code || payload.orgCode,
+    details: { is_active: Boolean(data.is_active) },
+  });
+
+  return {
+    orgCode: data.org_code || payload.orgCode,
+    isActive: Boolean(data.is_active),
+  };
+}
+
+export async function getGlobalSystemAlert(): Promise<string> {
+  const { data, error } = await supabase
+    .from('app_settings')
+    .select('value_text')
+    .eq('key', 'global_system_alert')
+    .maybeSingle();
+
+  if (error) throw new Error(error.message || 'Unable to load global system alert');
+  return String((data as any)?.value_text || '');
+}
+
+export async function setGlobalSystemAlert(message: string): Promise<string> {
+  const { data: authData } = await supabase.auth.getUser();
+  const userId = authData?.user?.id || null;
+  const normalizedMessage = String(message || '');
+
+  const { data: rows, error } = await supabase
+    .from('app_settings')
+    .upsert({
+      key: 'global_system_alert',
+      value_text: normalizedMessage,
+      updated_by: userId,
+    }, { onConflict: 'key' })
+    .select('key, value_text')
+    .single();
+
+  if (error || !rows) {
+    throw new Error(error?.message || 'Unable to save global system alert');
+  }
+
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'app_settings',
+    entityId: 'global_system_alert',
+    details: { value_text: normalizedMessage },
+  });
+
+  return String((rows as any).value_text || '');
+}
+
 export async function getOrganizationOutreachRadiusByCode(orgCode: string, fallback: number = 3): Promise<number> {
   const org = await getOrgByCode(orgCode);
   if (!org?.orgId) return Math.max(1, Math.min(25, Math.round(Number(fallback) || 3)));
@@ -3694,6 +3770,105 @@ export async function updateRequestStatus(id: string, payload: { status: string;
     deliveredQuantity: data.delivered_quantity || 0,
     synced: true,
   };
+}
+
+export async function stockReplenishmentRequest(id: string, deliveredQuantity: number) {
+  const qty = Math.max(0, Math.round(Number(deliveredQuantity) || 0));
+
+  const { data: existingRow, error: existingError } = await supabase
+    .from('replenishment_requests')
+    .select('id, org_id, org_name, item, quantity, status, provider, created_at, delivered_quantity')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (existingError) throw new Error(existingError.message || 'Failed to load request');
+  if (!existingRow?.org_id) throw new Error('Replenishment request not found');
+
+  const now = new Date().toISOString();
+  const { data: rows, error } = await supabase
+    .from('replenishment_requests')
+    .update({
+      status: 'STOCKED',
+      delivered_quantity: qty,
+      stocked: true,
+      stocked_at: now,
+      stocked_quantity: qty,
+      fulfilled_at: now,
+    })
+    .eq('id', id)
+    .select('id, org_id, org_name, item, quantity, status, provider, created_at, delivered_quantity, stocked_quantity');
+
+  if (error) throw new Error(error.message || 'Failed to stock request');
+  const data = rows?.[0] as any;
+  if (!data?.org_id) throw new Error('Replenishment request not found or you do not have permission to update it.');
+
+  const currentInventory = await getInventory(await getOrgCodeById(data.org_id) || '');
+  const itemLabel = String(data.item || '').toLowerCase();
+  const nextInventory: OrgInventory = {
+    water: currentInventory.water,
+    food: currentInventory.food,
+    blankets: currentInventory.blankets,
+    medicalKits: currentInventory.medicalKits,
+  };
+
+  if (itemLabel.includes('water')) nextInventory.water += qty;
+  else if (itemLabel.includes('food')) nextInventory.food += qty;
+  else if (itemLabel.includes('blanket')) nextInventory.blankets += qty;
+  else nextInventory.medicalKits += qty;
+
+  const orgCode = await getOrgCodeById(data.org_id);
+  if (orgCode) {
+    await saveInventory(orgCode, nextInventory);
+  }
+
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'replenishment_requests',
+    entityId: data.id,
+    orgCode: orgCode || null,
+    details: { status: 'STOCKED', deliveredQuantity: qty, stocked_quantity: qty },
+  });
+
+  return {
+    id: data.id,
+    orgId: orgCode || '',
+    orgName: data.org_name || '',
+    item: data.item,
+    quantity: data.quantity,
+    status: normalizeRequestStatus(data.status),
+    timestamp: data.created_at,
+    provider: data.provider || '',
+    deliveredQuantity: data.delivered_quantity || 0,
+    stockedQuantity: data.stocked_quantity || qty,
+    synced: true,
+  };
+}
+
+export async function saveReplenishmentSignature(id: string, signatureData: string, type: 'RELEASE' | 'RECEIVE' = 'RELEASE') {
+  const updates = type === 'RELEASE'
+    ? { signature: signatureData, signed_at: new Date().toISOString() }
+    : { received_signature: signatureData, received_at: new Date().toISOString() };
+
+  const { data: rows, error } = await supabase
+    .from('replenishment_requests')
+    .update(updates)
+    .eq('id', id)
+    .select('id, org_id');
+
+  if (error) throw new Error(error.message || 'Failed to save signature');
+  const data = rows?.[0] as any;
+  if (!data) throw new Error('Replenishment request not found or you do not have permission to update it.');
+
+  const orgCode = data.org_id ? await getOrgCodeById(data.org_id) : null;
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'replenishment_requests',
+    entityId: id,
+    orgCode: orgCode || null,
+    details: { signature_type: type },
+  });
+
+  return { ok: true };
 }
 
 // Member Status

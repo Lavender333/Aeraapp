@@ -1,7 +1,7 @@
 
 import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, RoleDefinition } from '../types';
 import { REQUEST_ITEM_MAP } from './validation';
-import { ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, fetchProfileForUser, fetchVitalsForUser, createHouseholdSafetyNotificationsForCurrentUser, listChildOrganizations, sendMemberPing, uploadProfileAvatarDataUrl, uploadGapDocumentForCurrentUser, getGapDocumentSignedUrl, updateHelpRequestData, getPendingPingForCurrentUser as getPendingPingForCurrentUserApi } from './api';
+import { ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, fetchProfileForUser, fetchVitalsForUser, createHouseholdSafetyNotificationsForCurrentUser, listChildOrganizations, sendMemberPing, uploadProfileAvatarDataUrl, uploadGapDocumentForCurrentUser, getGapDocumentSignedUrl, updateHelpRequestData, getPendingPingForCurrentUser as getPendingPingForCurrentUserApi, createRequest, updateRequestStatus, stockReplenishmentRequest, saveReplenishmentSignature, updateOrganizationActiveByCode, setGlobalSystemAlert, getGlobalSystemAlert } from './api';
 import { getMemberStatus, setMemberStatus } from './api';
 
 const DB_KEY = 'aera_backend_db_v4'; // Force fresh database
@@ -19,7 +19,7 @@ const IS_PRODUCTION = import.meta.env.PROD;
 
 type OfflineOperation = {
   id: string;
-  type: 'createHelpRequest' | 'updateHelpRequestLocation';
+  type: 'createHelpRequest' | 'updateHelpRequestLocation' | 'createReplenishmentRequest' | 'updateReplenishmentRequestStatus' | 'stockReplenishmentRequest' | 'signReplenishmentRequest' | 'setOrganizationStatus' | 'setBroadcast' | 'setGlobalSystemAlert';
   timestamp: string;
   localRequestId?: string;
   payload: any;
@@ -371,6 +371,37 @@ export const StorageService = {
       const existingIdx = queue.findIndex(
         (q) => q.type === 'updateHelpRequestLocation' && q.payload?.requestId === operation.payload.requestId
       );
+      if (existingIdx >= 0) {
+        queue[existingIdx] = operation;
+        this.saveOfflineQueue(queue);
+        return;
+      }
+    }
+
+    if (operation.type === 'setOrganizationStatus' && operation.payload?.orgId) {
+      const existingIdx = queue.findIndex(
+        (q) => q.type === 'setOrganizationStatus' && q.payload?.orgId === operation.payload.orgId
+      );
+      if (existingIdx >= 0) {
+        queue[existingIdx] = operation;
+        this.saveOfflineQueue(queue);
+        return;
+      }
+    }
+
+    if (operation.type === 'setBroadcast' && operation.payload?.orgId) {
+      const existingIdx = queue.findIndex(
+        (q) => q.type === 'setBroadcast' && q.payload?.orgId === operation.payload.orgId
+      );
+      if (existingIdx >= 0) {
+        queue[existingIdx] = operation;
+        this.saveOfflineQueue(queue);
+        return;
+      }
+    }
+
+    if (operation.type === 'setGlobalSystemAlert') {
+      const existingIdx = queue.findIndex((q) => q.type === 'setGlobalSystemAlert');
       if (existingIdx >= 0) {
         queue[existingIdx] = operation;
         this.saveOfflineQueue(queue);
@@ -1029,15 +1060,6 @@ export const StorageService = {
     return true;
   },
   
-  updateOrgStatus(orgId: string, active: boolean) {
-    const db = this.getDB();
-    const idx = db.organizations.findIndex(o => o.id === orgId);
-    if (idx >= 0) {
-      db.organizations[idx].active = active;
-      this.saveDB(db);
-    }
-  },
-
   generateOrgId(type: string): string {
     const prefix = type === 'CHURCH' ? 'CH' : type === 'NGO' ? 'NGO' : 'ORG';
     const randomNum = Math.floor(1000 + Math.random() * 9000); 
@@ -1202,6 +1224,25 @@ export const StorageService = {
     if (!db.replenishmentRequests) db.replenishmentRequests = [];
     db.replenishmentRequests.unshift(request);
     this.saveDB(db);
+
+    this.enqueueOfflineOperation({
+      type: 'createReplenishmentRequest',
+      localRequestId: request.id,
+      payload: {
+        orgId,
+        request: {
+          item: payload.item,
+          quantity: payload.quantity,
+          provider: payload.provider,
+          orgName: payload.orgName || org.name,
+        },
+      },
+    });
+
+    if (navigator.onLine) {
+      this.syncPendingData().catch((e) => console.warn('Replenishment sync failed', e));
+    }
+
     return true;
   },
 
@@ -1303,6 +1344,16 @@ export const StorageService = {
     db.replenishmentRequests[reqIdx].status = 'STOCKED';
     this.updateOrgInventory(request.orgId, updatedInventory);
     this.saveDB(db);
+    this.enqueueOfflineOperation({
+      type: 'stockReplenishmentRequest',
+      payload: {
+        requestId,
+        deliveredQuantity: db.replenishmentRequests[reqIdx].stockedQuantity || Object.values(delivered).reduce((sum, v) => sum + (Number(v) || 0), 0),
+      },
+    });
+    if (navigator.onLine) {
+      this.syncPendingData().catch((e) => console.warn('Replenishment stock sync failed', e));
+    }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('inventory-update'));
     }
@@ -1314,12 +1365,23 @@ export const StorageService = {
     return this.stockReplenishmentRequest(requestId, delivered as any);
   },
 
-  updateReplenishmentRequestStatus(id: string, status: 'PENDING' | 'APPROVED' | 'FULFILLED') {
+  updateReplenishmentRequestStatus(id: string, status: 'PENDING' | 'APPROVED' | 'FULFILLED', deliveredQuantity?: number) {
     const db = this.getDB();
     const idx = db.replenishmentRequests.findIndex(r => r.id === id);
     if (idx >= 0) {
       db.replenishmentRequests[idx].status = status;
+      if (typeof deliveredQuantity === 'number' && Number.isFinite(deliveredQuantity)) {
+        db.replenishmentRequests[idx].deliveredQuantity = deliveredQuantity;
+      }
       this.saveDB(db);
+    }
+
+    this.enqueueOfflineOperation({
+      type: 'updateReplenishmentRequestStatus',
+      payload: { id, status, deliveredQuantity },
+    });
+    if (navigator.onLine) {
+      this.syncPendingData().catch((e) => console.warn('Replenishment status sync failed', e));
     }
   },
 
@@ -1335,6 +1397,14 @@ export const StorageService = {
         db.replenishmentRequests[idx].receivedAt = new Date().toISOString();
       }
       this.saveDB(db);
+    }
+
+    this.enqueueOfflineOperation({
+      type: 'signReplenishmentRequest',
+      payload: { id, signatureData, type },
+    });
+    if (navigator.onLine) {
+      this.syncPendingData().catch((e) => console.warn('Replenishment signature sync failed', e));
     }
   },
 
@@ -1745,16 +1815,19 @@ export const StorageService = {
     }
   },
 
-  respondToPing(isSafe: boolean) {
+  async respondToPing(isSafe: boolean) {
     const db = this.getDB();
     if (!db.currentUser) return;
-    
-    const currentUser = db.currentUser;
-    const isOnline = navigator.onLine;
-    const profile = db.users.find(u => u.id === currentUser);
 
-    const record: HelpRequestRecord = {
-      isSafe: isSafe,
+    const currentUser = db.currentUser;
+    const userIdx = db.users.findIndex(u => u.id === currentUser);
+    if (userIdx >= 0) {
+      delete db.users[userIdx].pendingStatusRequest;
+      this.saveDB(db);
+    }
+
+    await this.submitRequest({
+      isSafe,
       location: 'Status Check Response',
       emergencyType: isSafe ? 'Check-in' : 'General Emergency',
       isInjured: false,
@@ -1775,27 +1848,7 @@ export const StorageService = {
       medicalConditions: '',
       damageType: '',
       consentToShare: true,
-      id: Date.now().toString(),
-      userId: currentUser,
-      timestamp: new Date().toISOString(),
-      status: 'RECEIVED',
-      priority: isSafe ? 'LOW' : 'HIGH',
-      synced: isOnline
-    };
-
-    db.requests.unshift(record);
-    
-    const userIdx = db.users.findIndex(u => u.id === currentUser);
-    if (userIdx >= 0) {
-      delete db.users[userIdx].pendingStatusRequest;
-    }
-
-    this.saveDB(db);
-    // Best-effort remote status update
-    if (profile?.communityId && profile?.fullName) {
-      const status = isSafe ? 'SAFE' : 'DANGER';
-      this.saveMemberStatus(profile.communityId, profile.id, profile.fullName, status as any);
-    }
+    });
   },
 
   // --- Ticker / Broadcast (Scoped) ---
@@ -1819,11 +1872,34 @@ export const StorageService = {
     return "Evacuation Order in Zone 4 • Shelter capacity at 85% • High water levels reported on Main St. •";
   },
 
+  async fetchGlobalSystemAlert(): Promise<string> {
+    try {
+      const message = await getGlobalSystemAlert();
+      const db = this.getDB();
+      db.tickerMessage = message;
+      this.saveDB(db);
+      return message;
+    } catch (e) {
+      console.warn('Failed to fetch global system alert remotely', e);
+      return this.getDB().tickerMessage || '';
+    }
+  },
+
   updateSystemTicker(message: string) {
     const db = this.getDB();
     db.tickerMessage = message;
     this.saveDB(db);
-    window.dispatchEvent(new Event('ticker-update'));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('ticker-update'));
+    }
+
+    this.enqueueOfflineOperation({
+      type: 'setGlobalSystemAlert',
+      payload: { message },
+    });
+    if (navigator.onLine) {
+      this.syncPendingData().catch((e) => console.warn('Global system alert sync failed', e));
+    }
   },
 
   updateOrgBroadcast(orgId: string, message: string) {
@@ -1834,7 +1910,14 @@ export const StorageService = {
       db.organizations[idx].lastBroadcastTime = new Date().toISOString();
       this.saveDB(db);
       window.dispatchEvent(new Event('ticker-update'));
-      setBroadcast(orgId, message).catch((e) => console.warn('Broadcast API failed', e));
+
+      this.enqueueOfflineOperation({
+        type: 'setBroadcast',
+        payload: { orgId, message },
+      });
+      if (navigator.onLine) {
+        this.syncPendingData().catch((e) => console.warn('Broadcast sync failed', e));
+      }
     }
   },
   
@@ -1845,6 +1928,14 @@ export const StorageService = {
       db.organizations[idx].currentBroadcast = undefined;
       this.saveDB(db);
       window.dispatchEvent(new Event('ticker-update'));
+    }
+
+    this.enqueueOfflineOperation({
+      type: 'setBroadcast',
+      payload: { orgId, message: '' },
+    });
+    if (navigator.onLine) {
+      this.syncPendingData().catch((e) => console.warn('Broadcast clear sync failed', e));
     }
   },
 
@@ -1880,6 +1971,23 @@ export const StorageService = {
     map[normalizedId] = clamped;
     safeSetItem(ORG_OUTREACH_RADIUS_MAP_KEY, JSON.stringify(map));
     return clamped;
+  },
+
+  updateOrgStatus(orgId: string, active: boolean) {
+    const db = this.getDB();
+    const idx = db.organizations.findIndex(o => o.id === orgId);
+    if (idx >= 0) {
+      db.organizations[idx].active = active;
+      this.saveDB(db);
+    }
+
+    this.enqueueOfflineOperation({
+      type: 'setOrganizationStatus',
+      payload: { orgId, active },
+    });
+    if (navigator.onLine) {
+      this.syncPendingData().catch((e) => console.warn('Organization status sync failed', e));
+    }
   },
 
   // --- Offline Sync Logic ---
@@ -1949,6 +2057,99 @@ export const StorageService = {
             throw new Error('Invalid updateHelpRequestLocation payload');
           }
           await updateHelpRequestLocation(requestId, location);
+          processed++;
+          continue;
+        }
+
+        if (op.type === 'createReplenishmentRequest') {
+          const { orgId, request } = op.payload || {};
+          if (!orgId || !request?.item || !request?.quantity) {
+            throw new Error('Invalid createReplenishmentRequest payload');
+          }
+          const remote = await createRequest(orgId, request);
+          const localId = op.localRequestId;
+          if (localId) {
+            idMap.set(localId, remote.id);
+            syncMap[localId] = remote.id;
+            const idx = db.replenishmentRequests.findIndex((requestRow) => requestRow.id === localId);
+            if (idx >= 0) {
+              db.replenishmentRequests[idx] = {
+                ...db.replenishmentRequests[idx],
+                id: remote.id,
+                synced: true,
+                timestamp: remote.timestamp || db.replenishmentRequests[idx].timestamp,
+              } as any;
+            }
+          }
+          processed++;
+          continue;
+        }
+
+        if (op.type === 'updateReplenishmentRequestStatus') {
+          let { id, status, deliveredQuantity } = op.payload || {};
+          if (id && idMap.has(id)) {
+            id = idMap.get(id);
+            op.payload.id = id;
+          }
+          if (!id || !status) {
+            throw new Error('Invalid updateReplenishmentRequestStatus payload');
+          }
+          await updateRequestStatus(id, { status, deliveredQuantity });
+          processed++;
+          continue;
+        }
+
+        if (op.type === 'stockReplenishmentRequest') {
+          let { requestId, deliveredQuantity } = op.payload || {};
+          if (requestId && idMap.has(requestId)) {
+            requestId = idMap.get(requestId);
+            op.payload.requestId = requestId;
+          }
+          if (!requestId) {
+            throw new Error('Invalid stockReplenishmentRequest payload');
+          }
+          await stockReplenishmentRequest(requestId, Number(deliveredQuantity) || 0);
+          processed++;
+          continue;
+        }
+
+        if (op.type === 'signReplenishmentRequest') {
+          let { id, signatureData, type } = op.payload || {};
+          if (id && idMap.has(id)) {
+            id = idMap.get(id);
+            op.payload.id = id;
+          }
+          if (!id || !signatureData) {
+            throw new Error('Invalid signReplenishmentRequest payload');
+          }
+          await saveReplenishmentSignature(id, signatureData, type || 'RELEASE');
+          processed++;
+          continue;
+        }
+
+        if (op.type === 'setOrganizationStatus') {
+          const { orgId, active } = op.payload || {};
+          if (!orgId || typeof active !== 'boolean') {
+            throw new Error('Invalid setOrganizationStatus payload');
+          }
+          await updateOrganizationActiveByCode({ orgCode: orgId, isActive: active });
+          processed++;
+          continue;
+        }
+
+        if (op.type === 'setBroadcast') {
+          const { orgId, message } = op.payload || {};
+          if (!orgId) {
+            throw new Error('Invalid setBroadcast payload');
+          }
+          await setBroadcast(orgId, String(message || ''));
+          processed++;
+          continue;
+        }
+
+        if (op.type === 'setGlobalSystemAlert') {
+          const { message } = op.payload || {};
+          await setGlobalSystemAlert(String(message || ''));
           processed++;
           continue;
         }

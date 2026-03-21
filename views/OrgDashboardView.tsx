@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ViewState, OrgMember, OrgInventory, ReplenishmentRequest } from '../types';
 import { Button } from '../components/Button';
 import { StorageService } from '../services/storage';
-import { listRequests, createRequest, updateRequestStatus, fetchOrgOutreachFlags, fetchOrgMemberPreparednessNeeds, listChildOrganizations, aggregateOrgStats, broadcastToOrgs, getOrganizationOutreachRadiusByCode, saveOrganizationOutreachRadiusByCode } from '../services/api';
+import { listRequests, createRequest, updateRequestStatus, stockReplenishmentRequest as stockReplenishmentRequestRemote, fetchOrgOutreachFlags, fetchOrgMemberPreparednessNeeds, listChildOrganizations, aggregateOrgStats, broadcastToOrgs, getOrganizationOutreachRadiusByCode, saveOrganizationOutreachRadiusByCode } from '../services/api';
 import { REQUEST_ITEM_MAP } from '../services/validation';
 import { getInventoryStatuses, getRecommendedResupply } from '../services/inventoryStatus';
 import { getOrgByCode } from '../services/supabase';
@@ -16,12 +16,20 @@ import { GoogleGenAI } from "../services/mockGenAI";
 type OrgDashboardTab = 'MEMBERS' | 'PREPAREDNESS' | 'INVENTORY';
 type OrgSelectorOption = { id: string; org_code: string; name: string };
 
+const normalizeReplenishmentStatus = (status: string | undefined): ReplenishmentRequest['status'] => {
+  if (status === 'APPROVED' || status === 'FULFILLED' || status === 'STOCKED') return status;
+  return 'PENDING';
+};
+
 const mergeReplenishmentRequests = (remoteRequests: ReplenishmentRequest[], localRequests: ReplenishmentRequest[]) => {
   const merged = new Map<string, ReplenishmentRequest>();
 
   [...localRequests, ...remoteRequests].forEach((request) => {
     if (!request?.id) return;
-    merged.set(request.id, request);
+    merged.set(request.id, {
+      ...request,
+      status: normalizeReplenishmentStatus(request.status),
+    });
   });
 
   return Array.from(merged.values()).sort(
@@ -218,7 +226,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     const profile = StorageService.getProfile();
     const id = communityIdOverride || profile.communityId || 'CH-9921';
     setCommunityId(id);
-    setParentOrgName(profile.communityName || 'Community Organization');
+    setParentOrgName(profile.communityId || 'Community Organization');
 
     // Load Org Data (parent only)
     const org = StorageService.getOrganization(id);
@@ -351,7 +359,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     listRequests(id)
       .then((data) => {
         setRequestsFallback(false);
-        setRequests(mergeReplenishmentRequests(data, localRequests));
+        setRequests(mergeReplenishmentRequests(data as ReplenishmentRequest[], localRequests));
       })
       .catch(() => {
         setRequestsFallback(true);
@@ -419,7 +427,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
         .then((data) => {
           if (cancelled) return;
           setRequestsFallback(false);
-          setRequests(mergeReplenishmentRequests(data, localRequests));
+          setRequests(mergeReplenishmentRequests(data as ReplenishmentRequest[], localRequests));
         })
         .catch(() => {
           if (cancelled) return;
@@ -746,7 +754,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
       try {
         await createRequest(activeOrgCode, { item: selectedItem, quantity: requestAmount, provider: replenishmentProvider, orgName });
         const refreshed = await listRequests(activeOrgCode);
-        setRequests(mergeReplenishmentRequests(refreshed, StorageService.getOrgReplenishmentRequests(activeOrgCode)));
+        setRequests(mergeReplenishmentRequests(refreshed as ReplenishmentRequest[], StorageService.getOrgReplenishmentRequests(activeOrgCode)));
       } catch (apiError) {
         console.warn('API request failed, using local storage:', apiError);
         // Use local storage as fallback
@@ -784,7 +792,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     setStockLoading(true);
     
     // Try API first, fall back to local storage
-    updateRequestStatus(req.id, { status: 'STOCKED', deliveredQuantity: qty })
+    stockReplenishmentRequestRemote(req.id, qty)
       .then(async () => {
         const refreshedReqs = await listRequests(activeOrgCode);
         setRequests(refreshedReqs);

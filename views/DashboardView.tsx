@@ -186,6 +186,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   };
 
   useEffect(() => {
+    const refreshTickerMessage = async (userProfile: UserProfile) => {
+      setTickerMessage(StorageService.getTicker(userProfile));
+
+      try {
+        const globalAlert = await StorageService.fetchGlobalSystemAlert();
+        if (globalAlert) {
+          setTickerMessage(`[SYSTEM ALERT] ${globalAlert}`);
+          return;
+        }
+      } catch {
+        // Keep local fallback message.
+      }
+
+      if (!userProfile.communityId) return;
+
+      try {
+        const resp = await getBroadcast(userProfile.communityId);
+        if (resp?.message) {
+          const org = StorageService.getOrganization(userProfile.communityId);
+          const orgName = org?.name || userProfile.communityId;
+          setTickerMessage(`[${orgName} Update] ${resp.message}`);
+        }
+      } catch {
+        // Keep local fallback message.
+      }
+    };
+
     // Load Profile Data
     const profile = StorageService.getProfile();
     refreshChecklistCompletion().catch(() => {});
@@ -228,8 +255,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     // Load Active Request
     StorageService.getActiveRequest().then(setActiveRequest);
     
-    // Load Ticker with user context for scoped broadcasts
-    setTickerMessage(StorageService.getTicker(profile));
+    refreshTickerMessage(profile).catch(() => {});
 
     const handleOnline = () => {
       setIsOnline(true);
@@ -254,7 +280,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
       setMissingProfileFields(getMissingProfileFields(updatedProfile));
       setIsOnboardingComplete(Boolean(updatedProfile.onboardComplete));
       setHouseholdMemberCount(Array.isArray(updatedProfile.household) ? updatedProfile.household.length : 0);
-       setTickerMessage(StorageService.getTicker(updatedProfile));
+      refreshTickerMessage(updatedProfile).catch(() => {});
       setPendingPing(updatedProfile.pendingStatusRequest);
       refreshPendingPing().catch(() => {});
        StorageService.getActiveRequest().then(setActiveRequest);
@@ -284,7 +310,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     // Listen for custom ticker update event (same-window)
     const handleTickerUpdate = () => {
        const updatedProfile = StorageService.getProfile();
-       setTickerMessage(StorageService.getTicker(updatedProfile));
+       refreshTickerMessage(updatedProfile).catch(() => {});
     };
 
     const handleProfileImageUpdate = () => {
@@ -325,15 +351,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     window.addEventListener('finance-open', openFinanceIfFlagged);
     window.addEventListener('focus', refreshPingIfVisible);
     document.addEventListener('visibilitychange', refreshPingIfVisible);
-    if (profile.communityId) {
-      const orgId = profile.communityId;
-      getBroadcast(orgId)
-        .then((resp) => {
-          if (resp?.message) setTickerMessage(`[${connectedOrg || orgId} Update] ${resp.message}`);
-        })
-        .catch(() => {});
-    }
-
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
@@ -415,10 +432,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     setIsConnectingCommunity(false);
   };
 
-  const respondToPing = (isSafe: boolean) => {
-    StorageService.respondToPing(isSafe);
+  const respondToPing = async (isSafe: boolean) => {
+    await StorageService.respondToPing(isSafe);
     setPendingPing(undefined);
-    // Refresh active request state as submitting a status creates a request record
     StorageService.getActiveRequest().then(setActiveRequest);
   };
 
