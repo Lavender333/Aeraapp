@@ -5004,8 +5004,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               <HeartPulse size={24} />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-slate-800">Preparedness</h2>
-              <p className="text-xs text-slate-500">Health and mobility planning details.</p>
+              <h2 className="text-lg font-semibold text-slate-800">Household Profile</h2>
+              <p className="text-xs text-slate-500">Planning details that personalize your supplies checklist.</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -5120,9 +5120,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           onChange={(e) => updateProfile('petDetails', e.target.value)}
         />
 
+        <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 mb-4">
+          <p className="text-xs font-bold text-sky-700 uppercase tracking-wide">How this works</p>
+          <p className="text-sm text-slate-700 mt-1">You only fill this out once. AERA uses your household profile to personalize the supplies checklist in Be Ready.</p>
+        </div>
+
         <div className="border-t border-slate-200 pt-4">
           <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wide">Final Step</p>
-          <p className="text-sm font-bold text-slate-800 mt-1">Confirm preparedness consent</p>
+          <p className="text-sm font-bold text-slate-800 mt-1">Confirm household planning consent</p>
         </div>
         <label className="flex items-start gap-3 rounded-lg border border-[#D6E0DD] bg-white p-3">
           <input
@@ -5132,7 +5137,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             onChange={(e) => updateProfile('consentPreparednessPlanning', e.target.checked)}
           />
           <span className="text-sm text-slate-700 font-semibold">
-            I understand this data is used for preparedness planning and service operations, and that AERA also uses Google Analytics on its web experience to measure usage. My data can be deleted anytime.
+            I understand this data is used to personalize my household planning and service operations, and that AERA also uses Google Analytics on its web experience to measure usage. My data can be deleted anytime.
           </span>
         </label>
 
@@ -5490,7 +5495,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             }}
             className="block w-full text-left text-xs text-slate-500 hover:text-slate-700 hover:underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 rounded"
           >
-            Preparedness Data Consent
+            Household Planning Consent
           </button>
         </div>
       </section>

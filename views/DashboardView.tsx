@@ -459,7 +459,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const isProfileComplete = missingProfileFields.length === 0;
   const onboardingChecklistItems = [
     { label: 'Join your community (Community ID)', done: hasCommunity },
-    { label: 'Complete Preparedness profile', done: isProfileComplete },
+    { label: 'Complete your household profile', done: isProfileComplete },
     { label: 'Add household members (optional now, editable anytime)', done: householdMemberCount > 0 },
   ];
   const onboardingChecklistDone = onboardingChecklistItems.filter((item) => item.done).length;
@@ -956,7 +956,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         <div className="flex items-center justify-between gap-3 mb-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Dashboard Overview</p>
-            <p className="text-lg font-bold text-slate-900 mt-1">Readiness: {checklistCompletionPct}%</p>
+            <p className="text-lg font-bold text-slate-900 mt-1">Be Ready: {checklistCompletionPct}%</p>
           </div>
           <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${checklistCompletionPct >= 100 ? 'bg-emerald-100 text-emerald-700' : checklistCompletionPct >= 50 ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-700'}`}>
             {checklistCompletionPct >= 100 ? 'Complete' : checklistCompletionPct >= 50 ? 'In progress' : 'Needs setup'}
@@ -1223,8 +1223,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
       {isGeneralUser && (
         <>
           <div className="mt-4">
-            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Home & Safety</h3>
-            <p className="text-xs text-slate-500 mt-1">Your readiness, household, and emergency settings in one place</p>
+            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Be Ready</h3>
+            <p className="text-xs text-slate-500 mt-1">One place for your household profile and emergency supplies checklist.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
               <button
                 type="button"
@@ -1235,10 +1235,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                   <ClipboardCheck size={18} />
                 </div>
                 <div className="flex items-center gap-2">
-                  <h4 className="font-semibold text-slate-900 text-sm">Readiness Checklist</h4>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">Checklist</span>
+                  <h4 className="font-semibold text-slate-900 text-sm">Supplies Checklist</h4>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">Step 2</span>
                 </div>
-                <p className="text-[11px] text-slate-500 mt-2">Build and track your kit with quantity guidance.</p>
+                <p className="text-[11px] text-slate-500 mt-2">Track your emergency kit. Quantities adjust using your household profile.</p>
               </button>
               <button
                 type="button"
@@ -1249,15 +1249,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                   <Phone size={18} />
                 </div>
                 <div className="flex items-center gap-2">
-                  <h4 className="font-semibold text-slate-900 text-sm">Home & Profile</h4>
+                  <h4 className="font-semibold text-slate-900 text-sm">Household Profile</h4>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isProfileComplete ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                    {isProfileComplete ? 'Complete' : 'Needs info'}
+                    {isProfileComplete ? 'Step 1 done' : 'Step 1'}
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-500 mt-2">Household members, emergency contacts, and org connection.</p>
+                <p className="text-[11px] text-slate-500 mt-2">Household, medical, and planning details used to personalize your checklist.</p>
                 {isProfileComplete ? (
                   <p className="text-[11px] text-slate-700 font-semibold mt-2 inline-flex items-center gap-1 bg-white border border-slate-200 rounded px-2 py-1">
-                    <Check size={12} /> Profile complete
+                    <Check size={12} /> Household profile complete
                   </p>
                 ) : (
                   <p className="text-[11px] text-amber-700 font-semibold mt-2 inline-flex items-center gap-1 bg-amber-50 border border-amber-200 rounded px-2 py-1">

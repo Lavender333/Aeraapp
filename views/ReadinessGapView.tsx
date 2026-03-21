@@ -45,20 +45,20 @@ export const ReadinessGapView: React.FC<{ setView: (v: ViewState) => void }> = (
             <ArrowLeft size={24} />
           </button>
           <div>
-            <h1 className="font-bold text-lg text-slate-900">Readiness Gaps</h1>
-            <p className="text-xs text-slate-500">What to prioritize next for your household.</p>
+            <h1 className="font-bold text-lg text-slate-900">Next Supply Priorities</h1>
+            <p className="text-xs text-slate-500">What to prioritize next in your household supplies checklist.</p>
           </div>
         </div>
       </div>
 
       <div className="p-4 space-y-4">
         {loading ? (
-          <p className="text-sm text-slate-500">Loading readiness guidance…</p>
+          <p className="text-sm text-slate-500">Loading your next supply priorities…</p>
         ) : (
           <>
             <div className="grid grid-cols-3 gap-2">
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-center">
-                <p className="text-[10px] uppercase font-bold text-emerald-700">Readiness</p>
+                <p className="text-[10px] uppercase font-bold text-emerald-700">Checklist</p>
                 <p className="text-lg font-black text-emerald-900">{Math.round(Number(guidance?.readiness_score || 0))}%</p>
               </div>
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-center">
@@ -74,7 +74,7 @@ export const ReadinessGapView: React.FC<{ setView: (v: ViewState) => void }> = (
             <div className="bg-white border border-red-200 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <AlertTriangle size={16} className="text-red-600" />
-                <h2 className="text-sm font-bold text-red-700 uppercase">Critical Missing Items</h2>
+                <h2 className="text-sm font-bold text-red-700 uppercase">Critical Missing Supplies</h2>
               </div>
               {missing.length === 0 ? (
                 <p className="text-sm text-emerald-700 flex items-center gap-2"><CheckCircle2 size={16} /> No critical gaps found.</p>
@@ -93,7 +93,7 @@ export const ReadinessGapView: React.FC<{ setView: (v: ViewState) => void }> = (
             <div className="bg-white border border-slate-200 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <ShieldCheck size={16} className="text-slate-700" />
-                <h2 className="text-sm font-bold text-slate-700 uppercase">Recommended Additions</h2>
+                <h2 className="text-sm font-bold text-slate-700 uppercase">Recommended Supplies</h2>
               </div>
               {additions.length === 0 ? (
                 <p className="text-sm text-slate-500">No additional items recommended right now.</p>
@@ -112,7 +112,7 @@ export const ReadinessGapView: React.FC<{ setView: (v: ViewState) => void }> = (
               onClick={() => setView('READINESS')}
               className="w-full rounded-xl bg-slate-900 text-white py-3 text-sm font-semibold"
             >
-              Open Readiness Checklist
+              Open Supplies Checklist
             </button>
           </>
         )}

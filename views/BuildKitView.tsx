@@ -219,7 +219,7 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         item: 'Medication backup pouch (labeled doses + refill contacts)',
         category: 'health',
         priority: 'critical',
-        explanation: 'Added because medication dependency is enabled in Preparedness.',
+        explanation: 'Added because medication dependency is enabled in your household profile.',
       });
     }
 
@@ -229,7 +229,7 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         item: 'Insulin cooling case + glucose monitoring supplies',
         category: 'health',
         priority: 'critical',
-        explanation: 'Added because insulin dependency is enabled in Preparedness.',
+        explanation: 'Added because insulin dependency is enabled in your household profile.',
       });
     }
 
@@ -239,7 +239,7 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         item: 'Oxygen equipment backup plan + power backup details',
         category: 'power',
         priority: 'critical',
-        explanation: 'Added because oxygen-powered device dependency is enabled in Preparedness.',
+        explanation: 'Added because oxygen-powered device dependency is enabled in your household profile.',
       });
     }
 
@@ -249,7 +249,7 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         item: 'Accessibility go-pack (mobility aids, transfer tools, support contacts)',
         category: 'health',
         priority: 'high',
-        explanation: 'Added because mobility limitation is enabled in Preparedness.',
+        explanation: 'Added because mobility limitation is enabled in your household profile.',
       });
     }
 
@@ -259,7 +259,7 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         item: 'Evacuation transportation plan (driver numbers + pickup locations)',
         category: 'papers',
         priority: 'high',
-        explanation: 'Added because transportation access is limited in Preparedness.',
+        explanation: 'Added because transportation access is limited in your household profile.',
       });
     }
 
@@ -395,7 +395,7 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       lines.push('Profile-Based Required Additions');
       dynamicItems.forEach((item) => {
         const checked = checkedItems[item.id];
-        lines.push(`${checked ? '✓' : '•'} ${item.item} - ${item.explanation || 'Added from preparedness profile.'}`);
+        lines.push(`${checked ? '✓' : '•'} ${item.item} - ${item.explanation || 'Added from your household profile.'}`);
       });
       lines.push('');
     }
@@ -617,22 +617,35 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <ArrowLeft size={18} className="text-slate-800" />
           </button>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-slate-800">Build Your Ready Kit</h1>
-            <p className="text-sm text-slate-600">Gather helpful items to have on hand when you need them</p>
+            <h1 className="text-2xl font-bold text-slate-800">Be Ready: Supplies Checklist</h1>
+            <p className="text-sm text-slate-600">Step 2 of 2. Track the supplies your household needs on hand.</p>
           </div>
+        </div>
+      </div>
+
+      <div className="mx-4 mt-4 bg-sky-50 border border-sky-200 rounded-2xl p-4 shadow-sm">
+        <p className="text-xs font-bold uppercase tracking-wide text-sky-700">Step 1 feeds Step 2</p>
+        <p className="text-sm text-slate-700 mt-1">Your household profile in Settings is reused here to personalize quantities and required items, so you do not need to enter the same information twice.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={() => setView('SETTINGS')}>
+            Update Household Profile
+          </Button>
+          <Button size="sm" onClick={() => setView('READINESS_GAP')}>
+            View Next Priorities
+          </Button>
         </div>
       </div>
 
       <div className="bg-white px-5 py-4 border-b border-slate-200">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-bold text-slate-900">What You’ve Gathered</h3>
+          <h3 className="text-sm font-bold text-slate-900">Your Supplies Progress</h3>
           <span className="text-xs font-bold text-emerald-600">{checkedCount} of {totalItems} items</span>
         </div>
         <button
           onClick={() => setView('READINESS_GAP')}
           className="text-[11px] font-semibold text-brand-600 hover:underline mb-2"
         >
-          View readiness gaps
+          View next priorities
         </button>
         <p className="text-[11px] text-slate-500 mb-2">
           Quantities auto-scaled for {householdScale.people} household member{householdScale.people === 1 ? '' : 's'}.
@@ -645,8 +658,8 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       {guidance && (
         <div className="mx-4 mt-4 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
-            <h3 className="text-sm font-bold text-slate-900">Personalized Preparedness Guidance</h3>
-            <p className="text-xs text-slate-500">Based on your profile, we recommend the following:</p>
+            <h3 className="text-sm font-bold text-slate-900">Personalized From Your Household Profile</h3>
+            <p className="text-xs text-slate-500">Based on the details you already provided, we recommend the following:</p>
           </div>
           <div className="p-4 space-y-3">
             <div className="grid grid-cols-3 gap-2 text-center">
@@ -655,7 +668,7 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 <p className="text-lg font-black text-blue-900">{guidance.recommended_duration_days}d</p>
               </div>
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2">
-                <p className="text-[10px] text-emerald-700 font-bold uppercase">Readiness</p>
+                <p className="text-[10px] text-emerald-700 font-bold uppercase">Checklist</p>
                 <p className="text-lg font-black text-emerald-900">{Math.round(guidance.readiness_score)}%</p>
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
@@ -666,13 +679,13 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
             {guidance.critical_missing_items.length > 0 && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-3">
-                <p className="text-xs font-bold text-red-700 uppercase mb-1">Critical Items Needed</p>
+                <p className="text-xs font-bold text-red-700 uppercase mb-1">Critical Supplies Needed</p>
                 <ul className="space-y-1">
                   {guidance.critical_missing_items.map((item) => (
                     <li key={item.id} className="text-sm text-red-900">• {item.item}</li>
                   ))}
                 </ul>
-                <p className="text-xs text-red-700 mt-2">Readiness is currently capped at {Math.round(guidance.readiness_cap)}% until these are completed.</p>
+                <p className="text-xs text-red-700 mt-2">Your checklist is currently capped at {Math.round(guidance.readiness_cap)}% until these are completed.</p>
               </div>
             )}
 
@@ -693,8 +706,8 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       {dynamicItems.length > 0 && (
         <div className="mx-4 mt-4 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-4 py-3 bg-amber-50 border-b border-amber-200">
-            <h3 className="text-sm font-bold text-amber-900">Profile-Based Required Additions</h3>
-            <p className="text-xs text-amber-700">These items were added automatically based on your profile.</p>
+            <h3 className="text-sm font-bold text-amber-900">Household Profile Additions</h3>
+            <p className="text-xs text-amber-700">These items were added automatically using your household profile.</p>
           </div>
           <div>
             {dynamicItems.map((item) => {
@@ -710,7 +723,7 @@ export const BuildKitView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                   </div>
                   <div className={`flex-1 text-left ${checked ? 'opacity-60 line-through' : ''}`}>
                     <div className="text-sm font-semibold text-slate-900">{item.item}</div>
-                    <div className="text-xs text-slate-500">{item.explanation || 'Added from intake rule engine.'}</div>
+                    <div className="text-xs text-slate-500">{item.explanation || 'Added automatically from your household profile.'}</div>
                   </div>
                   <span className={`text-[10px] px-2 py-1 rounded uppercase font-bold ${String(item.priority).toLowerCase() === 'critical' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                     {item.priority}
