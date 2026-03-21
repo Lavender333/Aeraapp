@@ -3863,6 +3863,19 @@ export async function loginAuth(payload: { email?: string; phone?: string; passw
   if (error) throw error;
 
   const userId = data.user?.id || '';
+
+  if (userId) {
+    // Keep login resilient: timestamp update failures should never block sign-in.
+    const { error: lastLoginError } = await supabase
+      .from('profiles')
+      .update({ last_login_at: new Date().toISOString() })
+      .eq('id', userId);
+
+    if (lastLoginError) {
+      console.warn('Failed to update last_login_at on login', lastLoginError);
+    }
+  }
+
   const profile = userId ? await getProfileById(userId) : null;
   const orgCode = profile?.org_id ? await getOrgCodeById(profile.org_id) : null;
 
@@ -4353,13 +4366,28 @@ export async function listMembers(orgCode: string) {
 
   const { data: profileRows, error: profileError } = await supabase
     .from('profiles')
-    .select('id, full_name, email, phone, mobile_phone, home_address, emergency_contact, created_at')
+    .select('id, full_name, email, phone, mobile_phone, home_address, emergency_contact, last_login_at, created_at')
     .eq('org_id', orgId)
     .order('created_at', { ascending: false });
 
   if (profileError) {
     return memberRows;
   }
+
+  const profileById = new Map<string, any>();
+  for (const row of profileRows || []) {
+    const id = String((row as any)?.id || '');
+    if (!id) continue;
+    profileById.set(id, row);
+  }
+
+  const memberRowsWithLastLogin = memberRows.map((member: any) => {
+    const profile = profileById.get(String(member?.id || ''));
+    return {
+      ...member,
+      last_login_at: profile?.last_login_at || null,
+    };
+  });
 
   const profileBackfill = (profileRows || [])
     .filter((profile: any) => profile?.id && !existingIds.has(profile.id))
@@ -4375,9 +4403,10 @@ export async function listMembers(orgCode: string) {
       emergency_contact_name: profile.emergency_contact?.name || null,
       emergency_contact_phone: profile.emergency_contact?.phone || null,
       emergency_contact_relation: profile.emergency_contact?.relation || null,
+      last_login_at: profile.last_login_at || null,
     }));
 
-  return [...memberRows, ...profileBackfill];
+  return [...memberRowsWithLastLogin, ...profileBackfill];
 }
 
 export async function addMember(orgCode: string, payload: any) {

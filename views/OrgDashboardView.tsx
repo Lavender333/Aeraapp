@@ -67,6 +67,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     name: String(member?.name || 'Unknown Member'),
     status: (member?.status || 'UNKNOWN') as OrgMember['status'],
     lastUpdate: String(member?.lastUpdate || member?.last_update || 'Unknown'),
+    lastLoginAt: String(member?.lastLoginAt || member?.last_login_at || ''),
     location: String(member?.location || 'Unknown'),
     needs: Array.isArray(member?.needs) ? member.needs : [],
     phone: String(member?.phone || ''),
@@ -1231,6 +1232,10 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                                <p className="text-xs text-slate-500 font-bold uppercase">Last Update</p>
                                <p className="text-slate-900">{selectedMember.lastUpdate}</p>
                             </div>
+                             <div>
+                               <p className="text-xs text-slate-500 font-bold uppercase">Last Login</p>
+                               <p className="text-slate-900">{selectedMember.lastLoginAt ? new Date(selectedMember.lastLoginAt).toLocaleString() : 'Never'}</p>
+                             </div>
                             {selectedMember.needs.length > 0 && (
                                <div>
                                   <p className="text-xs text-slate-500 font-bold uppercase mb-1">Reported Needs</p>

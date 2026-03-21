@@ -259,6 +259,7 @@ export interface OrgMember {
   name: string;
   status: 'SAFE' | 'DANGER' | 'UNKNOWN';
   lastUpdate: string;
+  lastLoginAt?: string;
   location: string;
   needs: string[];
   phone: string;
