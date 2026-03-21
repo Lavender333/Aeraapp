@@ -3073,11 +3073,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
               <div className="flex gap-2">
                 <Button 
-                  onClick={() => setView('EVENT_SETUP')}
+                  onClick={() => {
+                    if (event.id) {
+                      StorageService.saveItem('eventIdToEdit', event.id);
+                    }
+                    setView('EVENT_SETUP');
+                  }}
                   size="sm"
                   className="bg-brand-600 hover:bg-brand-500 text-white border-0 flex-1"
                 >
-                  View Details
+                  Edit Event
                 </Button>
                 <Button 
                   onClick={() => setView('EVENT_DASHBOARD')}
