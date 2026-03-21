@@ -200,6 +200,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     zipCode: '',
     petDetails: '',
     medicalNeeds: '',
+    fireMeetLocation: '',
+    severeWeatherMeetLocation: '',
     medicationDependency: false,
     insulinDependency: false,
     oxygenPoweredDevice: false,
@@ -650,6 +652,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     if (typeof loaded.transportationAccess !== 'boolean') loaded.transportationAccess = true;
     if (typeof loaded.financialStrain !== 'boolean') loaded.financialStrain = false;
     if (typeof loaded.consentPreparednessPlanning !== 'boolean') loaded.consentPreparednessPlanning = false;
+    if (typeof loaded.fireMeetLocation !== 'string') loaded.fireMeetLocation = '';
+    if (typeof loaded.severeWeatherMeetLocation !== 'string') loaded.severeWeatherMeetLocation = '';
     setProfile(loaded);
     
     if (loaded.communityId && loaded.role !== 'INSTITUTION_ADMIN') {
@@ -1206,6 +1210,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         householdMembers: profile.householdMembers,
         petDetails: profile.petDetails,
         medicalNeeds: profile.medicalNeeds,
+        fireMeetLocation: profile.fireMeetLocation,
+        severeWeatherMeetLocation: profile.severeWeatherMeetLocation,
         zipCode: profile.zipCode,
         medicationDependency: Boolean(profile.medicationDependency),
         insulinDependency: Boolean(profile.insulinDependency),
@@ -1256,6 +1262,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       'householdMembers',
       'petDetails',
       'medicalNeeds',
+      'fireMeetLocation',
+      'severeWeatherMeetLocation',
       'medicationDependency',
       'insulinDependency',
       'oxygenPoweredDevice',
@@ -1331,6 +1339,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               householdMembers: snapshot.householdMembers,
               petDetails: snapshot.petDetails,
               medicalNeeds: snapshot.medicalNeeds,
+              fireMeetLocation: snapshot.fireMeetLocation,
+              severeWeatherMeetLocation: snapshot.severeWeatherMeetLocation,
               zipCode: snapshot.zipCode,
               medicationDependency: Boolean(snapshot.medicationDependency),
               insulinDependency: Boolean(snapshot.insulinDependency),

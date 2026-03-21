@@ -2858,6 +2858,8 @@ export async function updateVitalsForUser(payload: {
   householdMembers: number;
   petDetails: string;
   medicalNeeds: string;
+  fireMeetLocation?: string;
+  severeWeatherMeetLocation?: string;
   zipCode?: string;
   medicationDependency?: boolean;
   insulinDependency?: boolean;
@@ -2897,6 +2899,8 @@ export async function updateVitalsForUser(payload: {
   const vitalsUpsertPayload: Record<string, unknown> = {
     profile_id: authData.user.id,
     medical_needs: payload.medicalNeeds || null,
+    fire_meet_location: String(payload.fireMeetLocation || '').trim() || null,
+    severe_weather_meet_location: String(payload.severeWeatherMeetLocation || '').trim() || null,
     household: payload.household || [],
     pet_details: payload.petDetails || null,
     household_size: Math.max(1, Number(payload.householdMembers) || (payload.household || []).length || 1),
@@ -3295,6 +3299,8 @@ export async function fetchVitalsForUser(): Promise<Partial<UserProfile> | null>
     householdMembers: Number(data.household_size || (data.household || []).length || 1),
     petDetails: data.pet_details || '',
     medicalNeeds: data.medical_needs || '',
+    fireMeetLocation: data.fire_meet_location || '',
+    severeWeatherMeetLocation: data.severe_weather_meet_location || '',
     medicationDependency: Boolean(data.medication_dependency),
     insulinDependency: Boolean(data.insulin_dependency),
     oxygenPoweredDevice: Boolean(data.oxygen_powered_device),

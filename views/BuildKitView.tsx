@@ -93,6 +93,8 @@ const CATEGORIES: KitCategory[] = [
       { id: 'ids', title: 'Copies of IDs', description: "Driver's license, passport, birth certificate", quantity: 'Photocopies' },
       { id: 'cash', title: 'Cash', description: "Small bills in case cards don't work", quantity: '$200-300' },
       { id: 'contacts', title: 'Contact list', description: 'Phone numbers written down on paper', quantity: '1 list' },
+      { id: 'fire-meet-location', title: 'Fire Meet Location', description: 'Outside meeting point away from the house', quantity: 'Set location' },
+      { id: 'storm-safe-meet-location', title: 'Hurricane/Tornado Safe Meet Location', description: 'Interior room/area away from windows and falling objects', quantity: 'Set location' },
       { id: 'insurance', title: 'Insurance papers', description: 'Copies of your insurance info', quantity: 'Photocopies' },
       { id: 'map', title: 'Local map', description: 'Paper map of your area', quantity: '1x' },
       { id: 'usb', title: 'USB drive', description: 'Digital copies of important files', quantity: '1x' },
