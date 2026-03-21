@@ -63,7 +63,6 @@ interface DashboardViewProps {
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
-  const SHELTER_MAP_URL = 'https://www.arcgis.com/apps/webappviewer/index.html?id=a5da083275bb4bc7bfb7c032891a9d6e';
   const PING_REFRESH_INTERVAL_MS = 15000;
   const ONBOARDING_WELCOME_SNOOZE_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
   const ONBOARDING_BANNER_SNOOZE_MS = 1000 * 60 * 60 * 24; // 1 day
@@ -493,8 +492,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   };
 
   const openShelterMap = () => {
-    const popup = window.open(SHELTER_MAP_URL, '_blank', 'noopener,noreferrer');
-    if (!popup) window.location.href = SHELTER_MAP_URL;
+    setView('SHELTER_LOCATOR');
   };
 
   const handleCloseWelcomeVideoModal = () => {

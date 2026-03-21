@@ -63,6 +63,7 @@ const EventSetupView = lazyWithRetry(() => import('./views/EventSetupView').then
 const EventRegistrationView = lazyWithRetry(() => import('./views/EventRegistrationView').then((m) => ({ default: m.EventRegistrationView })));
 const VolunteerScanView = lazyWithRetry(() => import('./views/VolunteerScanView').then((m) => ({ default: m.VolunteerScanView })));
 const EventDashboardView = lazyWithRetry(() => import('./views/EventDashboardView').then((m) => ({ default: m.EventDashboardView })));
+const ShelterLocatorView = lazyWithRetry(() => import('./views/ShelterLocatorView').then((m) => ({ default: m.ShelterLocatorView })));
 
 class ViewErrorBoundary extends React.Component<
   { onRecover: () => void; children: React.ReactNode },
@@ -380,6 +381,8 @@ export default function App() {
         return canAccessAdvancedViews ? <VolunteerScanView setView={setView} /> : <DashboardView setView={setView} />;
       case 'EVENT_DASHBOARD':
         return canAccessOrgDashboard ? <EventDashboardView setView={setView} /> : <DashboardView setView={setView} />;
+      case 'SHELTER_LOCATOR':
+        return <ShelterLocatorView setView={setView} />;
       default:
         return <DashboardView setView={setView} />;
     }
@@ -419,6 +422,7 @@ export default function App() {
     'EVENT_SETUP',
     'EVENT_DASHBOARD',
     'VOLUNTEER_SCAN',
+    'SHELTER_LOCATOR',
   ].includes(currentView);
   const shellFrameClass = useWideLayout
     ? 'shadow-none md:border-0'

@@ -34,6 +34,7 @@ import {
   generateQrDataUrl,
   getEventPrimarySession,
 } from '../services/eventDistribution';
+import { getOrgIdByCode } from '../services/supabase';
 import { StorageService } from '../services/storage';
 
 interface EventSetupViewProps {
@@ -141,7 +142,15 @@ const formatSessionSummary = (event: DistributionEvent) => {
 
 export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
   const profile = StorageService.getProfile();
-  const orgId = (profile as any)?.organizationId ?? null;
+  const normalizedRole = String((profile as any)?.role || '').toUpperCase();
+  const isOrgScopedAdmin = normalizedRole === 'ORG_ADMIN' || normalizedRole === 'INSTITUTION_ADMIN';
+  const rawOrgScope = String((profile as any)?.organizationId || profile.communityId || '').trim();
+
+  const [orgId, setOrgId] = useState<string | null>(() => {
+    if (!rawOrgScope) return null;
+    const looksLikeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawOrgScope);
+    return looksLikeUuid ? rawOrgScope : null;
+  });
 
   const [tab, setTab] = useState<'list' | 'create'>('list');
   const [events, setEvents] = useState<DistributionEvent[]>([]);
@@ -163,6 +172,34 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
   const isEditing = Boolean(editingEventId);
 
   useEffect(() => {
+    let active = true;
+    const resolveOrgScope = async () => {
+      if (!rawOrgScope) {
+        if (active) setOrgId(null);
+        return;
+      }
+      const looksLikeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawOrgScope);
+      if (looksLikeUuid) {
+        if (active) setOrgId(rawOrgScope);
+        return;
+      }
+      const resolved = await getOrgIdByCode(rawOrgScope);
+      if (active) setOrgId(resolved || null);
+    };
+
+    void resolveOrgScope();
+    return () => {
+      active = false;
+    };
+  }, [rawOrgScope]);
+
+  useEffect(() => {
+    if (isOrgScopedAdmin && !orgId) {
+      setEvents([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     listEvents(orgId ?? undefined)
       .then((loadedEvents) => {
@@ -181,7 +218,7 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
       })
       .catch(() => setEvents([]))
       .finally(() => setLoading(false));
-  }, [orgId]);
+  }, [isOrgScopedAdmin, orgId]);
 
   const getRegistrationLink = (eventId: string) => {
     const url = new URL(window.location.href);
@@ -312,6 +349,10 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
 
   const handleCreate = async () => {
     setError('');
+    if (isOrgScopedAdmin && !orgId) {
+      setError('Your account is not linked to an organization. Add your Organization ID in Settings and try again.');
+      return;
+    }
     if (!name.trim()) { setError('Event name is required.'); return; }
     if (!eventAddress.trim()) { setError('Event address is required.'); return; }
     const invalidSession = sessions.find((session) => {

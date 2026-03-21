@@ -8,7 +8,7 @@ import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
 import { buildCommunityInviteUrl, generateCommunityInviteQrDataUrl } from '../services/communityInvite';
 import { AppNotificationRecord, cancelMyHouseholdJoinRequest, ConnectedHouseholdMember, createHouseholdExpansionRequest, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestStatus, updateVitalsForUser } from '../services/api';
-import { getOrgByCode } from '../services/supabase';
+import { getOrgByCode, getOrgIdByCode } from '../services/supabase';
 import { listOrganizations as listOrganizationsSupabase } from '../services/supabaseApi';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
 import { listEvents, DistributionEvent } from '../services/eventDistribution';
@@ -43,6 +43,9 @@ const maskPhoneNumber = (value: string) => {
   const last4 = digits.slice(-4);
   return `***-***-${last4}`;
 };
+
+const isUuid = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '').trim());
 
 // --- Mock Data for Access Control ---
 const DEFAULT_ROLES: RoleDefinition[] = [
@@ -2214,10 +2217,26 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setEventListBusy(true);
     setEventLoadError(null);
     try {
-      const allEvents = await listEvents();
-      const scopedEvents = isOrgScopedAdmin
-        ? allEvents.filter((evt) => String(evt.org_id || '') === orgScopeId)
-        : allEvents;
+      let scopedOrganizationId: string | undefined;
+      if (isOrgScopedAdmin) {
+        if (!orgScopeId) {
+          setEvents([]);
+          setSelectedEventId(null);
+          return;
+        }
+
+        scopedOrganizationId = isUuid(orgScopeId)
+          ? orgScopeId
+          : (await getOrgIdByCode(orgScopeId)) || undefined;
+
+        if (!scopedOrganizationId) {
+          setEvents([]);
+          setSelectedEventId(null);
+          return;
+        }
+      }
+
+      const scopedEvents = await listEvents(scopedOrganizationId);
       setEvents(scopedEvents);
       setSelectedEventId(scopedEvents.length > 0 ? scopedEvents[0].id : null);
     } catch (err) {
