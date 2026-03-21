@@ -5,7 +5,7 @@ import type { PathOptions } from 'leaflet';
 import { ViewState, UserRole } from '../types';
 import { ArrowLeft, Layers, Users, Map as MapIcon, List, AlertTriangle, Activity, Loader2 } from 'lucide-react';
 import { StorageService } from '../services/storage';
-import { listChildOrganizations } from '../services/api';
+import { getConnectedMemberCountByOrgIds, listChildOrganizations } from '../services/api';
 import {
   getCurrentMapScope,
   listActiveStateAlerts,
@@ -57,6 +57,7 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
   const [alerts, setAlerts] = useState<StateAlertRecord[]>([]);
   const [householdJoinActivity, setHouseholdJoinActivity] = useState<StateHouseholdJoinActivityRecord[]>([]);
   const [orgPopulationRollups, setOrgPopulationRollups] = useState<OrganizationPopulationRollupRecord[]>([]);
+  const [connectedMemberTotal, setConnectedMemberTotal] = useState(0);
   const [mapScope, setMapScope] = useState<{ role?: UserRole; org_id?: string | null; county_id?: string | null; state_id?: string | null } | null>(null);
 
   const localProfile = useMemo(() => StorageService.getProfile(), []);
@@ -99,12 +100,22 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
             : Promise.resolve([]),
       ]);
 
+      let connectedTotal = 0;
+      if (ORG_ROLES.includes(scopedRole) && scopedOrgIds.length > 0) {
+        try {
+          connectedTotal = await getConnectedMemberCountByOrgIds(scopedOrgIds);
+        } catch (countError) {
+          console.warn('Unable to load connected member count for map scope', countError);
+        }
+      }
+
       setMapScope(scope as any);
       setRegions(regionRows);
       setSnapshots(snapshotRows);
       setAlerts(alertRows);
       setHouseholdJoinActivity(joinRows);
       setOrgPopulationRollups(orgRollupRows);
+      setConnectedMemberTotal(connectedTotal);
     } catch (err: any) {
       setLoadError(err?.message || 'Unable to load map layers.');
     } finally {
@@ -342,7 +353,7 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
           <span className="px-3 py-1 bg-blue-50 border border-blue-200 text-blue-700 rounded-full text-xs font-medium whitespace-nowrap">Active Alerts: {alerts.length}</span>
           {canSeeOrgDetail && mapScope?.org_id && (
             <span className="px-3 py-1 bg-cyan-50 border border-cyan-200 text-cyan-700 rounded-full text-xs font-medium whitespace-nowrap">
-              Linked Members: {orgPopulationSummary.trackedMembers}
+              Linked Members: {connectedMemberTotal}
             </span>
           )}
           {canSeeOrgDetail && mapScope?.org_id && (
@@ -407,7 +418,7 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                     <p className="text-base font-bold text-slate-900">{visibleSnapshots.length} region snapshot(s)</p>
                     <p className="text-sm text-slate-600">
                       {alerts.length} active alert(s) • {joinActivitySummary.submitted24h} join submissions in 24h • realtime enabled
-                      {canSeeOrgDetail && mapScope?.org_id ? ` • ${orgPopulationSummary.trackedMembers} linked org members` : ''}
+                      {canSeeOrgDetail && mapScope?.org_id ? ` • ${connectedMemberTotal} linked org members` : ''}
                     </p>
                   </div>
                   <Layers className="text-slate-400" />

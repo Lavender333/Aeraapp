@@ -64,6 +64,135 @@ const getProfileById = async (userId: string) => {
   return data;
 };
 
+type ConnectedMemberDirectoryRecord = {
+  orgId: string;
+  id: string;
+  name: string;
+  phone: string;
+  address: string;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+  emergencyContactRelation: string;
+  status: 'SAFE' | 'DANGER' | 'UNKNOWN';
+  lastCheckIn: string;
+};
+
+const buildConnectedMembersByOrgIds = async (orgIds: string[]): Promise<Map<string, ConnectedMemberDirectoryRecord[]>> => {
+  const normalizedOrgIds = Array.from(new Set((orgIds || []).map((value) => String(value || '').trim()).filter(Boolean)));
+  const byOrg = new Map<string, Map<string, ConnectedMemberDirectoryRecord>>();
+
+  if (normalizedOrgIds.length === 0) return new Map();
+
+  const profilesQuery = supabase
+    .from('profiles')
+    .select('id, org_id, full_name, phone, mobile_phone, home_address, emergency_contact')
+    .in('org_id', normalizedOrgIds);
+  const membersQuery = supabase
+    .from('members')
+    .select('id, org_id, name, phone, address, emergency_contact_name, emergency_contact_phone, emergency_contact_relation')
+    .in('org_id', normalizedOrgIds);
+  const statusesQuery = supabase
+    .from('member_statuses')
+    .select('org_id, member_id, name, status, last_check_in')
+    .in('org_id', normalizedOrgIds);
+
+  const [{ data: profiles, error: profileError }, { data: members, error: memberError }, { data: statuses, error: statusError }] = await Promise.all([
+    profilesQuery,
+    membersQuery,
+    statusesQuery,
+  ]);
+
+  if (profileError) throw profileError;
+  if (memberError) throw memberError;
+  if (statusError) throw statusError;
+
+  const ensureOrgMap = (orgId: string) => {
+    if (!byOrg.has(orgId)) byOrg.set(orgId, new Map<string, ConnectedMemberDirectoryRecord>());
+    return byOrg.get(orgId)!;
+  };
+
+  for (const row of profiles || []) {
+    const orgId = String((row as any).org_id || '').trim();
+    const id = String((row as any).id || '').trim();
+    if (!orgId || !id) continue;
+
+    const orgMap = ensureOrgMap(orgId);
+    const existing = orgMap.get(id);
+    orgMap.set(id, {
+      orgId,
+      id,
+      name: String((row as any).full_name || existing?.name || 'Unknown Member'),
+      phone: String((row as any).mobile_phone || (row as any).phone || existing?.phone || ''),
+      address: String((row as any).home_address || existing?.address || ''),
+      emergencyContactName: String((row as any)?.emergency_contact?.name || existing?.emergencyContactName || ''),
+      emergencyContactPhone: String((row as any)?.emergency_contact?.phone || existing?.emergencyContactPhone || ''),
+      emergencyContactRelation: String((row as any)?.emergency_contact?.relation || existing?.emergencyContactRelation || ''),
+      status: existing?.status || 'UNKNOWN',
+      lastCheckIn: existing?.lastCheckIn || '',
+    });
+  }
+
+  for (const row of members || []) {
+    const orgId = String((row as any).org_id || '').trim();
+    const id = String((row as any).id || '').trim();
+    if (!orgId || !id) continue;
+
+    const orgMap = ensureOrgMap(orgId);
+    const existing = orgMap.get(id);
+    orgMap.set(id, {
+      orgId,
+      id,
+      name: String(existing?.name || (row as any).name || 'Unknown Member'),
+      phone: String(existing?.phone || (row as any).phone || ''),
+      address: String(existing?.address || (row as any).address || ''),
+      emergencyContactName: String(existing?.emergencyContactName || (row as any).emergency_contact_name || ''),
+      emergencyContactPhone: String(existing?.emergencyContactPhone || (row as any).emergency_contact_phone || ''),
+      emergencyContactRelation: String(existing?.emergencyContactRelation || (row as any).emergency_contact_relation || ''),
+      status: existing?.status || 'UNKNOWN',
+      lastCheckIn: existing?.lastCheckIn || '',
+    });
+  }
+
+  for (const row of statuses || []) {
+    const orgId = String((row as any).org_id || '').trim();
+    const id = String((row as any).member_id || '').trim();
+    if (!orgId || !id) continue;
+
+    const orgMap = ensureOrgMap(orgId);
+    const existing = orgMap.get(id);
+    const nextStatus = (String((row as any).status || 'UNKNOWN').toUpperCase() as ConnectedMemberDirectoryRecord['status']);
+
+    orgMap.set(id, {
+      orgId,
+      id,
+      name: String(existing?.name || (row as any).name || 'Unknown Member'),
+      phone: String(existing?.phone || ''),
+      address: String(existing?.address || ''),
+      emergencyContactName: String(existing?.emergencyContactName || ''),
+      emergencyContactPhone: String(existing?.emergencyContactPhone || ''),
+      emergencyContactRelation: String(existing?.emergencyContactRelation || ''),
+      status: nextStatus === 'SAFE' || nextStatus === 'DANGER' ? nextStatus : 'UNKNOWN',
+      lastCheckIn: String((row as any).last_check_in || existing?.lastCheckIn || ''),
+    });
+  }
+
+  const result = new Map<string, ConnectedMemberDirectoryRecord[]>();
+  for (const orgId of normalizedOrgIds) {
+    const list = Array.from((byOrg.get(orgId) || new Map()).values()).sort((a, b) => a.name.localeCompare(b.name));
+    result.set(orgId, list);
+  }
+  return result;
+};
+
+export async function getConnectedMemberCountByOrgIds(orgIds: string[]): Promise<number> {
+  const byOrg = await buildConnectedMembersByOrgIds(orgIds);
+  let total = 0;
+  for (const rows of byOrg.values()) {
+    total += rows.length;
+  }
+  return total;
+}
+
 const dataUrlToBlob = async (dataUrl: string): Promise<Blob> => {
   const response = await fetch(dataUrl);
   return response.blob();
@@ -304,23 +433,8 @@ export async function fetchOrgMemberPreparednessNeeds(orgCode: string) {
   const orgId = await getOrgIdByCode(orgCode);
   if (!orgId) throw new Error('Organization not found');
 
-  const { data: profiles, error: profileError } = await supabase
-    .from('profiles')
-    .select('id, full_name, phone')
-    .eq('org_id', orgId)
-    .order('created_at', { ascending: false })
-    .limit(500);
-
-  if (profileError) throw profileError;
-
-  const { data: members, error: memberError } = await supabase
-    .from('members')
-    .select('id, name, phone')
-    .eq('org_id', orgId)
-    .order('created_at', { ascending: false })
-    .limit(500);
-
-  if (memberError) throw memberError;
+  const connectedByOrg = await buildConnectedMembersByOrgIds([orgId]);
+  const connectedMembers = connectedByOrg.get(orgId) || [];
 
   const { data: recs, error: recError } = await supabase
     .from('kit_recommendations')
@@ -331,19 +445,12 @@ export async function fetchOrgMemberPreparednessNeeds(orgCode: string) {
 
   if (recError) throw recError;
   const profileMap = new Map<string, { full_name: string | null; phone: string | null }>();
-  for (const row of profiles || []) {
-    profileMap.set(String((row as any).id), {
-      full_name: (row as any).full_name || null,
-      phone: (row as any).phone || null,
-    });
-  }
-
-  for (const row of members || []) {
-    const memberId = String((row as any).id || '');
-    if (!memberId || profileMap.has(memberId)) continue;
+  for (const row of connectedMembers) {
+    const memberId = String(row.id || '');
+    if (!memberId) continue;
     profileMap.set(memberId, {
-      full_name: (row as any).name || 'Unknown Member',
-      phone: (row as any).phone || null,
+      full_name: row.name || 'Unknown Member',
+      phone: row.phone || null,
     });
   }
 
@@ -352,10 +459,7 @@ export async function fetchOrgMemberPreparednessNeeds(orgCode: string) {
     byProfileId.set(String((row as any).profile_id), row);
   }
 
-  const allProfileIds = Array.from(new Set([
-    ...Array.from(profileMap.keys()),
-    ...(recs || []).map((r: any) => String(r.profile_id || '')).filter(Boolean),
-  ]));
+  const allProfileIds = Array.from(profileMap.keys());
 
   const rows = allProfileIds.map((profileId) => {
     const row = byProfileId.get(profileId);
@@ -424,19 +528,18 @@ export async function aggregateOrgStats(orgCodes: string[]) {
     inventory: { water: 0, food: 0, blankets: 0, medicalKits: 0 }
   };
 
-  // members
-  const { data: memRows, error: memErr } = await supabase
-    .from('members')
-    .select('status')
-    .in('org_id', ids);
-  if (memErr) throw memErr;
+  // members (canonical connected-member directory)
+  const membersByOrg = await buildConnectedMembersByOrgIds(ids);
   const counts = { total: 0, safe: 0, danger: 0, unknown: 0 };
-  (memRows || []).forEach((r: any) => {
-    counts.total += 1;
-    if (r.status === 'SAFE') counts.safe += 1;
-    else if (r.status === 'DANGER') counts.danger += 1;
-    else counts.unknown += 1;
-  });
+  for (const orgId of ids) {
+    const rows = membersByOrg.get(orgId) || [];
+    for (const row of rows) {
+      counts.total += 1;
+      if (row.status === 'SAFE') counts.safe += 1;
+      else if (row.status === 'DANGER') counts.danger += 1;
+      else counts.unknown += 1;
+    }
+  }
 
   // inventory
   const { data: invRows, error: invErr } = await supabase
@@ -3509,18 +3612,17 @@ export async function getMemberStatus(orgCode: string) {
   const orgId = await getOrgIdByCode(orgCode);
   if (!orgId) throw new Error('Organization not found');
 
-  const { data, error } = await supabase
-    .from('member_statuses')
-    .select('member_id, name, status, last_check_in')
-    .eq('org_id', orgId);
-
-  if (error) throw new Error('Failed to load member status');
-
-  const members = (data || []).map((row: any) => ({
-    id: row.member_id,
+  const byOrg = await buildConnectedMembersByOrgIds([orgId]);
+  const members = (byOrg.get(orgId) || []).map((row) => ({
+    id: row.id,
     name: row.name,
     status: row.status || 'UNKNOWN',
-    lastUpdate: row.last_check_in || '',
+    lastUpdate: row.lastCheckIn || '',
+    phone: row.phone || '',
+    address: row.address || '',
+    emergencyContactName: row.emergencyContactName || '',
+    emergencyContactPhone: row.emergencyContactPhone || '',
+    emergencyContactRelation: row.emergencyContactRelation || '',
   }));
 
   const counts = members.reduce(
