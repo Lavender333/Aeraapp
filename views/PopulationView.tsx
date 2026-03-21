@@ -328,6 +328,60 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     return withPoints;
   }, [centroidByScopeKey, linkedMembers]);
 
+  const clusteredLinkedMemberMarkers = useMemo(() => {
+    const gridSize = 0.06;
+    const grouped = new Map<string, {
+      latSum: number;
+      lngSum: number;
+      members: Array<ConnectedMemberMapRecord & { lat: number; lng: number }>;
+      dangerCount: number;
+      safeCount: number;
+      unknownCount: number;
+    }>();
+
+    for (const marker of linkedMemberMarkers) {
+      const latBucket = Math.round(marker.lat / gridSize);
+      const lngBucket = Math.round(marker.lng / gridSize);
+      const key = `${latBucket}:${lngBucket}`;
+      const current = grouped.get(key) || {
+        latSum: 0,
+        lngSum: 0,
+        members: [],
+        dangerCount: 0,
+        safeCount: 0,
+        unknownCount: 0,
+      };
+
+      current.latSum += marker.lat;
+      current.lngSum += marker.lng;
+      current.members.push(marker);
+
+      if (marker.status === 'DANGER') current.dangerCount += 1;
+      else if (marker.status === 'SAFE') current.safeCount += 1;
+      else current.unknownCount += 1;
+
+      grouped.set(key, current);
+    }
+
+    return Array.from(grouped.values()).map((group, idx) => {
+      const count = group.members.length;
+      const lat = group.latSum / Math.max(count, 1);
+      const lng = group.lngSum / Math.max(count, 1);
+      const dominantStatus = group.dangerCount > 0 ? 'DANGER' : group.unknownCount > 0 ? 'UNKNOWN' : 'SAFE';
+      return {
+        id: `cluster-${idx}-${lat.toFixed(4)}-${lng.toFixed(4)}`,
+        lat,
+        lng,
+        count,
+        members: group.members,
+        dangerCount: group.dangerCount,
+        safeCount: group.safeCount,
+        unknownCount: group.unknownCount,
+        dominantStatus,
+      };
+    });
+  }, [linkedMemberMarkers]);
+
   const mapStyle = useCallback(
     (feature: any): PathOptions => {
       const key = buildScopeKey(feature?.properties?.state_id, feature?.properties?.county_id);
@@ -430,7 +484,7 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
               onClick={() => setShowLinkedMembers((value) => !value)}
               className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap border ${showLinkedMembers ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
             >
-              Member Points: {showLinkedMembers ? 'On' : 'Off'} ({linkedMemberMarkers.length})
+              Member Points: {showLinkedMembers ? 'On' : 'Off'} ({linkedMemberMarkers.length} members / {clusteredLinkedMemberMarkers.length} clusters)
             </button>
           )}
           {canSeeOrgDetail && mapScope?.org_id && (
@@ -486,22 +540,27 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                     }}
                   />
                 )}
-                {canSeeOrgDetail && showLinkedMembers && linkedMemberMarkers.map((member) => {
-                  const color = member.status === 'DANGER' ? '#ef4444' : member.status === 'SAFE' ? '#22c55e' : '#3b82f6';
+                {canSeeOrgDetail && showLinkedMembers && clusteredLinkedMemberMarkers.map((cluster) => {
+                  const color = cluster.dominantStatus === 'DANGER' ? '#ef4444' : cluster.dominantStatus === 'SAFE' ? '#22c55e' : '#3b82f6';
+                  const radius = Math.min(12, 3 + Math.log2(cluster.count + 1) * 2);
+                  const previewMembers = cluster.members.slice(0, 8);
                   return (
                     <CircleMarker
-                      key={`member-${member.orgId}-${member.id}`}
-                      center={[member.lat, member.lng]}
-                      radius={4}
+                      key={cluster.id}
+                      center={[cluster.lat, cluster.lng]}
+                      radius={radius}
                       pathOptions={{ color, fillColor: color, fillOpacity: 0.85, weight: 1 }}
                     >
                       <Popup>
                         <div className="text-sm">
-                          <p><strong>{member.name}</strong></p>
-                          <p>Status: {member.status}</p>
-                          {member.phone && <p>Phone: {member.phone}</p>}
-                          {member.address && <p>Address: {member.address}</p>}
-                          {member.lastCheckIn && <p>Last Check-In: {new Date(member.lastCheckIn).toLocaleString()}</p>}
+                          <p><strong>Linked Members: {cluster.count}</strong></p>
+                          <p>Status mix: {cluster.dangerCount} danger, {cluster.unknownCount} unknown, {cluster.safeCount} safe</p>
+                          {previewMembers.map((member) => (
+                            <p key={`${member.orgId}-${member.id}`}>• {member.name} ({member.status})</p>
+                          ))}
+                          {cluster.count > previewMembers.length && (
+                            <p>• +{cluster.count - previewMembers.length} more</p>
+                          )}
                         </div>
                       </Popup>
                     </CircleMarker>
@@ -516,7 +575,7 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                     <p className="text-base font-bold text-slate-900">{visibleSnapshots.length} region snapshot(s)</p>
                     <p className="text-sm text-slate-600">
                       {alerts.length} active alert(s) • {joinActivitySummary.submitted24h} join submissions in 24h • realtime enabled
-                      {canSeeOrgDetail && mapScope?.org_id ? ` • ${connectedMemberTotal} linked org members (${linkedMemberMarkers.length} mapped)` : ''}
+                      {canSeeOrgDetail && mapScope?.org_id ? ` • ${connectedMemberTotal} linked org members (${linkedMemberMarkers.length} mapped, ${clusteredLinkedMemberMarkers.length} clusters)` : ''}
                     </p>
                   </div>
                   <Layers className="text-slate-400" />
