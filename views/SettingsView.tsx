@@ -2329,8 +2329,15 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     }
 
     const address = String(orgAddressDraft || '').trim();
-    const manualLat = Number(orgLatitudeDraft);
-    const manualLng = Number(orgLongitudeDraft);
+    const parseCoordinateDraft = (value: string): number | null => {
+      const trimmed = String(value || '').trim();
+      if (!trimmed) return null;
+      const parsed = Number(trimmed);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const manualLat = parseCoordinateDraft(orgLatitudeDraft);
+    const manualLng = parseCoordinateDraft(orgLongitudeDraft);
 
     if (!address) {
       setOrgLocationError('Organization address is required.');
@@ -2341,8 +2348,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setOrgLocationError(null);
     setOrgLocationSavedMessage(null);
     try {
-      let lat = Number.isFinite(manualLat) ? manualLat : null;
-      let lng = Number.isFinite(manualLng) ? manualLng : null;
+      let lat = manualLat;
+      let lng = manualLng;
 
       // Address is the only required input. If coordinates are missing, derive them.
       if (lat == null || lng == null) {
@@ -2359,6 +2366,17 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         latitude: lat,
         longitude: lng,
       });
+
+      const localOrg = StorageService.getOrganization(targetOrgCode);
+      if (localOrg) {
+        StorageService.saveOrganization({
+          ...localOrg,
+          id: targetOrgCode,
+          address,
+          latitude: lat ?? undefined,
+          longitude: lng ?? undefined,
+        });
+      }
 
       setOrgList((prev) =>
         prev.map((org) =>
