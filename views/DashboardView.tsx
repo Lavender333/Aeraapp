@@ -63,6 +63,7 @@ interface DashboardViewProps {
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
+  const SHELTER_MAP_URL = 'https://www.arcgis.com/apps/webappviewer/index.html?id=a5da083275bb4bc7bfb7c032891a9d6e';
   const PING_REFRESH_INTERVAL_MS = 15000;
   const ONBOARDING_WELCOME_SNOOZE_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
   const ONBOARDING_BANNER_SNOOZE_MS = 1000 * 60 * 60 * 24; // 1 day
@@ -489,6 +490,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const handleDismissOnboardingReminderBanner = () => {
     setShowOnboardingReminderBanner(false);
     localStorage.setItem(ONBOARDING_BANNER_KEY, String(Date.now() + ONBOARDING_BANNER_SNOOZE_MS));
+  };
+
+  const openShelterMap = () => {
+    const popup = window.open(SHELTER_MAP_URL, '_blank', 'noopener,noreferrer');
+    if (!popup) window.location.href = SHELTER_MAP_URL;
   };
 
   const handleCloseWelcomeVideoModal = () => {
@@ -1340,6 +1346,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         <>
           <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-2">Recovery & Resources</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+        <Card
+          className="col-span-1 hover:border-emerald-300 bg-white/95 border-slate-200"
+          onClick={openShelterMap}
+        >
+          <div className="flex flex-col items-start gap-3">
+            <div className="p-2 bg-emerald-100 border border-emerald-200 rounded-lg text-emerald-700">
+              <MapPin size={24} />
+            </div>
+            <div>
+              <h3 className="font-semibold text-slate-900">Find Shelters</h3>
+              <p className="text-xs text-slate-500 mt-1">Open the live shelter map to locate nearby shelter options.</p>
+              <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 mt-2">Live Map</span>
+            </div>
+          </div>
+        </Card>
 
         {/* Org Dashboard entry is provided in the Hub Inventory card via Manage button to avoid duplicate navigation */}
         
