@@ -170,6 +170,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
   const [loggingTargetId, setLoggingTargetId] = useState<string | null>(null);
   const [outreachOrgCenter, setOutreachOrgCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [outreachRadiusMiles, setOutreachRadiusMiles] = useState<number>(3);
+  const [receiptPreviewRequest, setReceiptPreviewRequest] = useState<ReplenishmentRequest | null>(null);
 
   // Broadcast State
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
@@ -791,6 +792,11 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
       .replace(/'/g, '&#39;');
 
   const openReceipt = (req: ReplenishmentRequest, autoPrint = false) => {
+    if (!autoPrint) {
+      setReceiptPreviewRequest(req);
+      return;
+    }
+
     const receiptWindow = window.open('', '_blank', 'noopener,noreferrer,width=900,height=1100');
     if (!receiptWindow) {
       alert('Please allow pop-ups to preview and print receipts.');
@@ -918,6 +924,104 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
           <span className="text-amber-500">Check API connection</span>
         </div>
       )}
+
+      {receiptPreviewRequest && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl border border-slate-200 max-h-[90vh] overflow-y-auto">
+            <div className="p-5 border-b border-slate-200 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Fulfillment Receipt</h3>
+                <p className="text-xs text-slate-500">AERA Replenishment Confirmation</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReceiptPreviewRequest(null)}
+                className="text-slate-500 hover:text-slate-800"
+                aria-label="Close receipt preview"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase">Receipt / Order ID</p>
+                  <p className="font-bold text-slate-900 mt-1">{receiptPreviewRequest.id}</p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase">Organization</p>
+                  <p className="font-bold text-slate-900 mt-1">{receiptPreviewRequest.orgName || 'Unknown Organization'}</p>
+                  <p className="text-xs text-slate-500">{receiptPreviewRequest.orgId || 'N/A'}</p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase">Item</p>
+                  <p className="font-bold text-slate-900 mt-1">{receiptPreviewRequest.item || 'Supply Item'}</p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase">Provider</p>
+                  <p className="font-bold text-slate-900 mt-1">{receiptPreviewRequest.provider || 'Central Warehouse'}</p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase">Requested Qty</p>
+                  <p className="font-bold text-slate-900 mt-1">{Number(receiptPreviewRequest.quantity || 0)}</p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase">Delivered / Stocked Qty</p>
+                  <p className="font-bold text-slate-900 mt-1">
+                    {Number.isFinite(receiptPreviewRequest.stockedQuantity as number)
+                      ? Number(receiptPreviewRequest.stockedQuantity)
+                      : Number(receiptPreviewRequest.quantity || 0)}
+                  </p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase">Request Date</p>
+                  <p className="font-bold text-slate-900 mt-1">
+                    {receiptPreviewRequest.timestamp ? new Date(receiptPreviewRequest.timestamp).toLocaleString() : 'N/A'}
+                  </p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase">Fulfillment Date</p>
+                  <p className="font-bold text-slate-900 mt-1">
+                    {receiptPreviewRequest.stockedAt || receiptPreviewRequest.receivedAt || receiptPreviewRequest.signedAt || receiptPreviewRequest.timestamp
+                      ? new Date(receiptPreviewRequest.stockedAt || receiptPreviewRequest.receivedAt || receiptPreviewRequest.signedAt || receiptPreviewRequest.timestamp || '').toLocaleString()
+                      : 'N/A'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase mb-2">Released By Signature</p>
+                  {receiptPreviewRequest.signature ? (
+                    <img src={receiptPreviewRequest.signature} alt="Released signature" className="max-h-20 border border-slate-200 rounded p-1 bg-white" />
+                  ) : (
+                    <p className="text-sm text-slate-500">Not provided</p>
+                  )}
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase mb-2">Received By Signature</p>
+                  {receiptPreviewRequest.receivedSignature ? (
+                    <img src={receiptPreviewRequest.receivedSignature} alt="Received signature" className="max-h-20 border border-slate-200 rounded p-1 bg-white" />
+                  ) : (
+                    <p className="text-sm text-slate-500">Not provided</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-5 border-t border-slate-200 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setReceiptPreviewRequest(null)}>
+                Close
+              </Button>
+              <Button onClick={() => openReceipt(receiptPreviewRequest, true)}>
+                <Printer size={14} className="mr-1" /> Print
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Broadcast Modal */}
       {showBroadcastModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
