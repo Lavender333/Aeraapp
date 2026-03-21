@@ -1243,7 +1243,115 @@ export async function getOrgLeaderOutreachCandidates(
     p_radius_miles: radiusMiles,
   });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    const isAmbiguousLatitude = /column reference\s+"?latitude"?\s+is\s+ambiguous/i.test(String(error.message || ''));
+    if (!isAmbiguousLatitude) {
+      throw new Error(error.message);
+    }
+
+    // Fallback when DB function has an ambiguous latitude reference.
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData?.user?.id) throw new Error('Not authenticated');
+
+    const { data: actorProfile, error: actorProfileError } = await supabase
+      .from('profiles')
+      .select('id, role, org_id, latitude, longitude')
+      .eq('id', authData.user.id)
+      .single();
+
+    if (actorProfileError || !actorProfile) throw new Error('Unable to load leader profile.');
+
+    const actorRole = String((actorProfile as any).role || '');
+    const actorOrgId = String((actorProfile as any).org_id || '').trim() || null;
+    const targetOrgId = String(organizationId || actorOrgId || '').trim() || null;
+
+    if (!targetOrgId) throw new Error('Organization is required');
+    if (actorRole !== 'ADMIN' && actorOrgId !== targetOrgId) throw new Error('Forbidden');
+
+    const { data: orgRow, error: orgError } = await supabase
+      .from('organizations')
+      .select('latitude, longitude')
+      .eq('id', targetOrgId)
+      .maybeSingle();
+
+    if (orgError) throw new Error(orgError.message);
+
+    let orgLat = Number((orgRow as any)?.latitude);
+    let orgLng = Number((orgRow as any)?.longitude);
+
+    if (!Number.isFinite(orgLat) || !Number.isFinite(orgLng)) {
+      orgLat = Number((actorProfile as any)?.latitude);
+      orgLng = Number((actorProfile as any)?.longitude);
+    }
+
+    if (!Number.isFinite(orgLat) || !Number.isFinite(orgLng)) {
+      throw new Error('Organization location is missing. Add org coordinates or save your profile location to use Nearby Outreach.');
+    }
+
+    const { data: profileRows, error: candidateError } = await supabase
+      .from('profiles')
+      .select('id, full_name, mobile_phone, phone, email, latitude, longitude, geofenced_outreach_radius_miles, geofenced_outreach_opt_in, org_id, is_active')
+      .eq('is_active', true)
+      .neq('id', authData.user.id)
+      .not('latitude', 'is', null)
+      .not('longitude', 'is', null)
+      .eq('geofenced_outreach_opt_in', true)
+      .is('org_id', null);
+
+    if (candidateError) throw new Error(candidateError.message);
+
+    const candidateIds = (profileRows || [])
+      .map((row: any) => String(row?.id || '').trim())
+      .filter(Boolean);
+
+    const trustedIds = new Set<string>();
+    if (candidateIds.length > 0) {
+      const { data: trustedRows, error: trustedError } = await supabase
+        .from('trusted_community_connections')
+        .select('profile_id')
+        .in('profile_id', candidateIds);
+
+      if (trustedError) throw new Error(trustedError.message);
+      for (const row of trustedRows || []) {
+        const profileId = String((row as any)?.profile_id || '').trim();
+        if (profileId) trustedIds.add(profileId);
+      }
+    }
+
+    const normalizedRequestedRadius = Math.max(1, Number(radiusMiles) || 3);
+    const rows: OrgOutreachCandidate[] = [];
+
+    for (const row of profileRows || []) {
+      const profileId = String((row as any)?.id || '').trim();
+      if (!profileId || trustedIds.has(profileId)) continue;
+
+      const lat = Number((row as any)?.latitude);
+      const lng = Number((row as any)?.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
+      const allowedRadius = Math.max(1, Number((row as any)?.geofenced_outreach_radius_miles) || 3);
+      const effectiveRadius = Math.min(normalizedRequestedRadius, allowedRadius);
+      const dist = haversineDistanceMiles(orgLat, orgLng, lat, lng);
+      if (dist > effectiveRadius) continue;
+
+      rows.push({
+        profile_id: profileId,
+        full_name: String((row as any)?.full_name || ''),
+        phone: String((row as any)?.mobile_phone || (row as any)?.phone || ''),
+        email: String((row as any)?.email || ''),
+        latitude: lat,
+        longitude: lng,
+        distance_miles: Number(dist.toFixed(2)),
+      });
+    }
+
+    rows.sort((a, b) => {
+      if (a.distance_miles !== b.distance_miles) return a.distance_miles - b.distance_miles;
+      return a.full_name.localeCompare(b.full_name);
+    });
+
+    return rows;
+  }
   return (data ?? []) as OrgOutreachCandidate[];
 }
 
