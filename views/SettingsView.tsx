@@ -7,7 +7,7 @@ import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
 import { buildCommunityInviteUrl, generateCommunityInviteQrDataUrl } from '../services/communityInvite';
-import { AppNotificationRecord, cancelMyHouseholdJoinRequest, ConnectedHouseholdMember, createHouseholdExpansionRequest, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestStatus, updateVitalsForUser } from '../services/api';
+import { AppNotificationRecord, cancelMyHouseholdJoinRequest, ConnectedHouseholdMember, createHouseholdExpansionRequest, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestStatus, updateVitalsForUser } from '../services/api';
 import { getOrgByCode } from '../services/supabase';
 import { listOrganizations as listOrganizationsSupabase } from '../services/supabaseApi';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
@@ -279,7 +279,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   ]);
   
   // UI States
-  const [currentSection, setCurrentSection] = useState<'MAIN' | 'ACCESS_CONTROL' | 'DB_VIEWER' | 'ORG_DIRECTORY' | 'BROADCAST_CONTROL' | 'MASTER_INVENTORY' | 'EVENT_MANAGEMENT'>('MAIN');
+  const [currentSection, setCurrentSection] = useState<'MAIN' | 'ACCESS_CONTROL' | 'DB_VIEWER' | 'ORG_DIRECTORY' | 'BROADCAST_CONTROL' | 'MASTER_INVENTORY' | 'EVENT_MANAGEMENT' | 'MEMBER_ACTIVITY'>('MAIN');
   const [isSaved, setIsSaved] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [connectedOrg, setConnectedOrg] = useState<string | null>(null);
@@ -363,6 +363,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [inventoryRequests, setInventoryRequests] = useState<ReplenishmentRequest[]>([]);
   const [printingRequest, setPrintingRequest] = useState<ReplenishmentRequest | null>(null);
   const [autoPrintOnOpen, setAutoPrintOnOpen] = useState(false);
+  const [memberActivity, setMemberActivity] = useState<OrgMembershipActivityRecord[]>([]);
+  const [memberActivityBusy, setMemberActivityBusy] = useState(false);
+  const [memberActivityError, setMemberActivityError] = useState<string | null>(null);
 
   // Event Management State
   const [events, setEvents] = useState<DistributionEvent[]>([]);
@@ -1416,7 +1419,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       };
 
       setProfile(nextProfile);
-      StorageService.saveProfile(nextProfile);
+      StorageService.saveProfile(nextProfile, { skipRemoteSync: true });
       setConnectedOrg(orgName);
 
       try {
@@ -1520,7 +1523,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         communityId: '',
       };
       setProfile(nextProfile);
-      StorageService.saveProfile(nextProfile);
+      StorageService.saveProfile(nextProfile, { skipRemoteSync: true });
       setConnectedOrg(null);
       setVerifyError(null);
     } catch (err: any) {
@@ -2215,6 +2218,30 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       setEventListBusy(false);
     }
     setCurrentSection('EVENT_MANAGEMENT');
+  };
+
+  const openMemberActivity = async () => {
+    if (!isAdmin) return;
+    if (isOrgScopedAdmin && !orgScopeId) {
+      setMemberActivity([]);
+      setMemberActivityError('Set your Organization ID first to view member activity.');
+      setCurrentSection('MEMBER_ACTIVITY');
+      return;
+    }
+
+    setMemberActivityBusy(true);
+    setMemberActivityError(null);
+    try {
+      const rows = await listOrganizationMembershipActivity(isOrgScopedAdmin ? orgScopeId : undefined, 100);
+      setMemberActivity(rows);
+    } catch (err: any) {
+      console.warn('Failed to load member activity from Supabase', err);
+      setMemberActivity([]);
+      setMemberActivityError(err?.message || 'Failed to load member activity. Please try again.');
+    } finally {
+      setMemberActivityBusy(false);
+    }
+    setCurrentSection('MEMBER_ACTIVITY');
   };
 
   // --- Access Control Handlers ---
@@ -3100,6 +3127,86 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             </div>
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (currentSection === 'MEMBER_ACTIVITY') {
+    const formatActivityTime = (value: string) => {
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return 'Unknown time';
+      return parsed.toLocaleString();
+    };
+
+    return (
+      <div className="p-6 pb-28 space-y-6 animate-fade-in bg-slate-50 min-h-screen">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-4 sticky top-0 bg-slate-50 z-10">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setCurrentSection('MAIN')} className="p-2 -ml-2 text-slate-500 hover:text-slate-800">
+              <ArrowLeft size={24} />
+            </button>
+            <div>
+              <h1 className="text-xl font-bold text-slate-900">Member Activity Log</h1>
+              <p className="text-xs text-slate-500">
+                {isOrgScopedAdmin
+                  ? `Organization connection history for ${orgScopeId || 'your organization'}`
+                  : 'Recent member connect and disconnect history across organizations'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {memberActivityError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
+            {memberActivityError}
+          </div>
+        )}
+
+        {memberActivityBusy ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm flex items-center justify-center text-slate-500 gap-3">
+            <Loader2 size={18} className="animate-spin" /> Loading member activity...
+          </div>
+        ) : memberActivity.length === 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm text-center text-slate-500">
+            No member connect or disconnect activity found yet.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {memberActivity.map((entry) => {
+              const isConnect = entry.action === 'ORG_CONNECT';
+              const primaryOrgLabel = entry.orgName || entry.orgCode || 'Organization';
+              const movementLabel = entry.previousOrgCode && entry.nextOrgCode && entry.previousOrgCode !== entry.nextOrgCode
+                ? `${entry.previousOrgName || entry.previousOrgCode} -> ${entry.nextOrgName || entry.nextOrgCode}`
+                : isConnect
+                  ? `Connected to ${entry.nextOrgName || entry.nextOrgCode || primaryOrgLabel}`
+                  : `Disconnected from ${entry.previousOrgName || entry.previousOrgCode || primaryOrgLabel}`;
+
+              return (
+                <div key={entry.id} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ${isConnect ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                          {isConnect ? 'CONNECTED' : 'DISCONNECTED'}
+                        </span>
+                        {!isOrgScopedAdmin && entry.orgCode && (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700">
+                            {entry.orgCode}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm font-bold text-slate-900">{entry.memberName}</p>
+                      <p className="text-sm text-slate-600">{movementLabel}</p>
+                    </div>
+                    <div className="text-right text-xs text-slate-500 whitespace-nowrap">
+                      {formatActivityTime(entry.createdAt)}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   }
@@ -3990,6 +4097,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               >
                 <span>{t('settings.manage_broadcasts')}</span>
                 <Radio size={18} />
+              </Button>
+              <Button
+                onClick={openMemberActivity}
+                className="bg-cyan-600 hover:bg-cyan-500 text-white border-0 w-full justify-between"
+              >
+                <span>Member Activity Log</span>
+                <Activity size={18} />
               </Button>
               {!isOrgScopedAdmin && (
                 <Button 

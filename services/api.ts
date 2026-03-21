@@ -28,6 +28,20 @@ const getOrgCodeById = async (orgId: string): Promise<string | null> => {
   return data.org_code;
 };
 
+const getOrgMetaById = async (orgId: string): Promise<{ orgCode: string | null; orgName: string | null } | null> => {
+  const { data, error } = await supabase
+    .from('organizations')
+    .select('org_code, name')
+    .eq('id', orgId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return {
+    orgCode: data.org_code || null,
+    orgName: data.name || null,
+  };
+};
+
 const safeLogActivity = async (entry: {
   action: string;
   entityType?: string;
@@ -63,6 +77,69 @@ const getProfileById = async (userId: string) => {
   if (error || !data) return null;
   return data;
 };
+
+export type OrgMembershipActivityRecord = {
+  id: string;
+  action: 'ORG_CONNECT' | 'ORG_DISCONNECT';
+  createdAt: string;
+  memberId: string;
+  memberName: string;
+  orgCode: string | null;
+  orgName: string | null;
+  previousOrgCode: string | null;
+  previousOrgName: string | null;
+  nextOrgCode: string | null;
+  nextOrgName: string | null;
+};
+
+export async function listOrganizationMembershipActivity(orgCode?: string, limit: number = 100): Promise<OrgMembershipActivityRecord[]> {
+  let query = supabase
+    .from('activity_log')
+    .select('id, org_id, user_id, action, entity_id, details, created_at')
+    .in('action', ['ORG_CONNECT', 'ORG_DISCONNECT'])
+    .order('created_at', { ascending: false })
+    .limit(Math.max(1, Math.min(Number(limit) || 100, 250)));
+
+  if (orgCode) {
+    const orgId = await getOrgIdByCode(orgCode);
+    if (!orgId) return [];
+    query = query.eq('org_id', orgId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const rows = (data || []) as any[];
+  const memberIds = Array.from(new Set(rows.map((row) => String(row.user_id || row.entity_id || '')).filter(Boolean)));
+  const { data: memberRows, error: memberError } = memberIds.length
+    ? await supabase.from('profiles').select('id, full_name').in('id', memberIds)
+    : { data: [], error: null as any };
+
+  if (memberError) throw memberError;
+
+  const memberMap = new Map<string, string>();
+  for (const row of memberRows || []) {
+    memberMap.set(String((row as any).id || ''), String((row as any).full_name || 'Unknown Member'));
+  }
+
+  return rows.map((row) => {
+    const details = ((row as any).details || {}) as Record<string, any>;
+    const memberId = String((row as any).user_id || (row as any).entity_id || details.memberId || '').trim();
+    return {
+      id: String((row as any).id || ''),
+      action: String((row as any).action || 'ORG_CONNECT') === 'ORG_DISCONNECT' ? 'ORG_DISCONNECT' : 'ORG_CONNECT',
+      createdAt: String((row as any).created_at || ''),
+      memberId,
+      memberName: String(details.memberName || memberMap.get(memberId) || 'Unknown Member'),
+      orgCode: String(details.orgCode || '').trim() || null,
+      orgName: String(details.orgName || '').trim() || null,
+      previousOrgCode: String(details.previousOrgCode || '').trim() || null,
+      previousOrgName: String(details.previousOrgName || '').trim() || null,
+      nextOrgCode: String(details.nextOrgCode || '').trim() || null,
+      nextOrgName: String(details.nextOrgName || '').trim() || null,
+    };
+  });
+}
 
 type ConnectedMemberDirectoryRecord = {
   orgId: string;
@@ -963,6 +1040,8 @@ export async function updateProfileForUser(payload: {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData?.user) throw new Error('Not authenticated');
 
+  const previousProfile = await getProfileById(authData.user.id);
+  const previousOrgId = String(previousProfile?.org_id || '').trim() || null;
   const orgId = payload.communityId ? await getOrgIdByCode(payload.communityId) : null;
 
   const emergencyContact = {
@@ -1051,6 +1130,52 @@ export async function updateProfileForUser(payload: {
     entityId: authData.user.id,
     orgCode: payload.communityId || null,
   });
+
+  if (previousOrgId !== (orgId || null)) {
+    const [previousOrgMeta, nextOrgMeta] = await Promise.all([
+      previousOrgId ? getOrgMetaById(previousOrgId) : Promise.resolve(null),
+      orgId ? getOrgMetaById(orgId) : Promise.resolve(null),
+    ]);
+
+    const memberName = String(payload.fullName || previousProfile?.full_name || 'Unknown Member');
+    const details = {
+      memberId: authData.user.id,
+      memberName,
+      previousOrgCode: previousOrgMeta?.orgCode || null,
+      previousOrgName: previousOrgMeta?.orgName || null,
+      nextOrgCode: nextOrgMeta?.orgCode || (payload.communityId ? String(payload.communityId) : null),
+      nextOrgName: nextOrgMeta?.orgName || null,
+    };
+
+    if (previousOrgMeta?.orgCode) {
+      await safeLogActivity({
+        action: 'ORG_DISCONNECT',
+        entityType: 'org_membership',
+        entityId: authData.user.id,
+        orgCode: previousOrgMeta.orgCode,
+        details: {
+          ...details,
+          orgCode: previousOrgMeta.orgCode,
+          orgName: previousOrgMeta.orgName || null,
+        },
+      });
+    }
+
+    if ((nextOrgMeta?.orgCode || payload.communityId) && orgId) {
+      await safeLogActivity({
+        action: 'ORG_CONNECT',
+        entityType: 'org_membership',
+        entityId: authData.user.id,
+        orgCode: nextOrgMeta?.orgCode || payload.communityId || null,
+        details: {
+          ...details,
+          orgCode: nextOrgMeta?.orgCode || payload.communityId || null,
+          orgName: nextOrgMeta?.orgName || null,
+        },
+      });
+    }
+  }
+
   return { ok: true };
 }
 
