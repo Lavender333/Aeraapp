@@ -68,6 +68,8 @@ AS $$
 $$;
 
 -- Check if current user is institution admin for their org
+-- (ORG_ADMIN is also included as the frontend treats it as equivalent
+--  to INSTITUTION_ADMIN for org-scoped operations)
 CREATE OR REPLACE FUNCTION public.is_institution_admin()
 RETURNS BOOLEAN
 LANGUAGE SQL
@@ -78,7 +80,7 @@ SET row_security = off
 AS $$
   SELECT EXISTS (
     SELECT 1 FROM profiles 
-    WHERE id = (select auth.uid()) AND role IN ('ADMIN', 'INSTITUTION_ADMIN')
+    WHERE id = (select auth.uid()) AND role IN ('ADMIN', 'INSTITUTION_ADMIN', 'ORG_ADMIN')
   );
 $$;
 

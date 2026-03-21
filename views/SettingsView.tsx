@@ -200,8 +200,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     zipCode: '',
     petDetails: '',
     medicalNeeds: '',
-    fireMeetLocation: '',
-    severeWeatherMeetLocation: '',
     medicationDependency: false,
     insulinDependency: false,
     oxygenPoweredDevice: false,
@@ -652,8 +650,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     if (typeof loaded.transportationAccess !== 'boolean') loaded.transportationAccess = true;
     if (typeof loaded.financialStrain !== 'boolean') loaded.financialStrain = false;
     if (typeof loaded.consentPreparednessPlanning !== 'boolean') loaded.consentPreparednessPlanning = false;
-    if (typeof loaded.fireMeetLocation !== 'string') loaded.fireMeetLocation = '';
-    if (typeof loaded.severeWeatherMeetLocation !== 'string') loaded.severeWeatherMeetLocation = '';
     setProfile(loaded);
     
     if (loaded.communityId && loaded.role !== 'INSTITUTION_ADMIN') {
@@ -1210,8 +1206,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         householdMembers: profile.householdMembers,
         petDetails: profile.petDetails,
         medicalNeeds: profile.medicalNeeds,
-        fireMeetLocation: profile.fireMeetLocation,
-        severeWeatherMeetLocation: profile.severeWeatherMeetLocation,
         zipCode: profile.zipCode,
         medicationDependency: Boolean(profile.medicationDependency),
         insulinDependency: Boolean(profile.insulinDependency),
@@ -1262,8 +1256,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       'householdMembers',
       'petDetails',
       'medicalNeeds',
-      'fireMeetLocation',
-      'severeWeatherMeetLocation',
       'medicationDependency',
       'insulinDependency',
       'oxygenPoweredDevice',
@@ -1339,8 +1331,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               householdMembers: snapshot.householdMembers,
               petDetails: snapshot.petDetails,
               medicalNeeds: snapshot.medicalNeeds,
-              fireMeetLocation: snapshot.fireMeetLocation,
-              severeWeatherMeetLocation: snapshot.severeWeatherMeetLocation,
               zipCode: snapshot.zipCode,
               medicationDependency: Boolean(snapshot.medicationDependency),
               insulinDependency: Boolean(snapshot.insulinDependency),
@@ -2226,7 +2216,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const handleExportUsers = () => {
-    const headers = ['ID', 'Name', 'Phone', 'Role', 'Status', 'Address', 'Community ID', 'Household Size', 'Fire Meet Location', 'Hurricane/Tornado Meet Location'];
+    const headers = ['ID', 'Name', 'Phone', 'Role', 'Status', 'Address', 'Community ID', 'Household Size'];
     const rows = users.map(u => [
       u.id,
       `"${u.fullName.replace(/"/g, '""')}"`,
@@ -2236,8 +2226,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       `"${u.address.replace(/"/g, '""')}"`,
       u.communityId || 'N/A',
       u.householdMembers,
-      `"${String((u as any).fireMeetLocation || '').replace(/"/g, '""')}"`,
-      `"${String((u as any).severeWeatherMeetLocation || '').replace(/"/g, '""')}"`,
     ]);
 
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -4848,25 +4836,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           value={profile.petDetails}
           onChange={(e) => updateProfile('petDetails', e.target.value)}
         />
-
-        <div className="space-y-3">
-          <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">Household Meet Locations</p>
-          <Input
-            label="Fire Meet Location"
-            placeholder="Outside meeting point away from the house"
-            value={profile.fireMeetLocation || ''}
-            onChange={(e) => updateProfile('fireMeetLocation', e.target.value)}
-          />
-          <Input
-            label="Hurricane/Tornado Safe Meet Location"
-            placeholder="Interior room/area away from windows and falling objects"
-            value={profile.severeWeatherMeetLocation || ''}
-            onChange={(e) => updateProfile('severeWeatherMeetLocation', e.target.value)}
-          />
-          <p className="text-[11px] text-slate-500">
-            These locations are included in your preparedness profile so households can quickly align on where to meet.
-          </p>
-        </div>
 
         <div className="border-t border-slate-200 pt-4">
           <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wide">Final Step</p>

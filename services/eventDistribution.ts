@@ -14,6 +14,24 @@ export type EventStatus = 'DRAFT' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
 export type SupplyType = 'FOOD_BOX' | 'WATER' | 'HYGIENE_KIT' | 'BABY_SUPPLIES' | 'OTHER';
 export type CheckInStatus = 'NO_RESPONSE' | 'SAFE' | 'NEEDS_HELP';
 
+export interface DistributionEventSession {
+  id: string;
+  event_id: string;
+  session_name: string;
+  start_at: string;
+  end_at: string | null;
+  registration_open_at: string | null;
+  registration_close_at: string | null;
+  location_name: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  max_registrants: number | null;
+  status: EventStatus;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DistributionEvent {
   id: string;
   organization_id: string | null;
@@ -31,6 +49,8 @@ export interface DistributionEvent {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  timezone?: string | null;
+  sessions?: DistributionEventSession[];
 }
 
 export interface EventSupplyItem {
@@ -48,6 +68,7 @@ export interface EventSupplyItem {
 export interface EventRegistration {
   id: string;
   event_id: string;
+  session_id: string;
   profile_id: string | null;
   ticket_id: string;
   participant_code: string;
@@ -89,6 +110,7 @@ export interface EventRegistration {
 export interface EventDistributionLog {
   id: string;
   event_id: string;
+  session_id: string;
   registration_id: string;
   supply_item_id: string | null;
   quantity: number;
@@ -101,6 +123,53 @@ export interface ScanResult {
   registration: EventRegistration;
   supplies: EventSupplyItem[];
   alreadyServed: boolean;
+}
+
+export interface CreateEventSessionInput {
+  session_name: string;
+  start_at: string;
+  end_at?: string | null;
+  registration_open_at?: string | null;
+  registration_close_at?: string | null;
+  location_name?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  max_registrants?: number | null;
+  status?: EventStatus;
+  sort_order?: number;
+}
+
+export interface CreateEventInput {
+  organization_id: string | null;
+  name: string;
+  event_notes?: string | null;
+  timezone?: string | null;
+  status: EventStatus;
+  created_by?: string | null;
+  sessions: CreateEventSessionInput[];
+}
+
+export interface UpdateEventSessionInput extends CreateEventSessionInput {
+  id?: string;
+}
+
+export interface UpdateEventInput {
+  eventId: string;
+  name: string;
+  event_notes?: string | null;
+  timezone?: string | null;
+  status?: EventStatus;
+  sessions: UpdateEventSessionInput[];
+}
+
+export interface UpdateSupplyItemInput {
+  id?: string;
+  supply_type: SupplyType;
+  supply_label: string;
+  unit_type: string;
+  pack_size: number;
+  starting_count: number;
+  low_stock_threshold: number;
 }
 
 // ─────────────────────────────────────────
@@ -134,6 +203,86 @@ export function generateTicketId(eventName: string, participantCode: string): st
 
 export const FREE_HOUSEHOLD_LIMIT = 2; // additional members beyond primary
 
+function sortSessions(sessions: DistributionEventSession[]): DistributionEventSession[] {
+  return [...sessions].sort((left, right) => {
+    const orderDelta = Number(left.sort_order || 0) - Number(right.sort_order || 0);
+    if (orderDelta !== 0) return orderDelta;
+    return new Date(left.start_at).getTime() - new Date(right.start_at).getTime();
+  });
+}
+
+function toLegacyEventFields(session: CreateEventSessionInput) {
+  const start = new Date(session.start_at);
+  const regOpen = session.registration_open_at ? new Date(session.registration_open_at) : null;
+  const regClose = session.registration_close_at ? new Date(session.registration_close_at) : null;
+  const end = session.end_at ? new Date(session.end_at) : null;
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const toTimeString = (date: Date | null) =>
+    date ? `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}` : null;
+
+  return {
+    distribution_date: start.toISOString().slice(0, 10),
+    distribution_time: toTimeString(start),
+    pickup_window_start: toTimeString(regOpen),
+    pickup_window_end: toTimeString(regClose || end),
+    location_name: session.location_name ?? null,
+    latitude: session.latitude ?? null,
+    longitude: session.longitude ?? null,
+    max_registrants: session.max_registrants ?? null,
+  };
+}
+
+async function fetchSessionsForEventIds(eventIds: string[]): Promise<Record<string, DistributionEventSession[]>> {
+  if (eventIds.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from('distribution_event_sessions')
+    .select('*')
+    .in('event_id', eventIds)
+    .order('sort_order', { ascending: true })
+    .order('start_at', { ascending: true });
+
+  if (error) throw new Error(error.message);
+
+  const grouped: Record<string, DistributionEventSession[]> = {};
+  for (const raw of (data ?? []) as DistributionEventSession[]) {
+    if (!grouped[raw.event_id]) grouped[raw.event_id] = [];
+    grouped[raw.event_id].push(raw);
+  }
+
+  for (const eventId of Object.keys(grouped)) {
+    grouped[eventId] = sortSessions(grouped[eventId]);
+  }
+
+  return grouped;
+}
+
+async function hydrateEventsWithSessions(events: DistributionEvent[]): Promise<DistributionEvent[]> {
+  const sessionsByEventId = await fetchSessionsForEventIds(events.map((event) => event.id));
+  return events.map((event) => ({
+    ...event,
+    sessions: sessionsByEventId[event.id] ?? [],
+  }));
+}
+
+export function getEventPrimarySession(event: DistributionEvent | null | undefined): DistributionEventSession | null {
+  const sessions = event?.sessions ?? [];
+  if (sessions.length === 0) return null;
+  return sessions.find((session) => session.status !== 'CANCELLED') ?? sessions[0];
+}
+
+export function resolveEventSession(
+  event: DistributionEvent | null | undefined,
+  sessionId?: string | null
+): DistributionEventSession | null {
+  if (!event) return null;
+  if (sessionId) {
+    const matched = (event.sessions ?? []).find((session) => session.id === sessionId);
+    if (matched) return matched;
+  }
+  return getEventPrimarySession(event);
+}
+
 export function validateHouseholdSize(additionalMembers: number): {
   valid: boolean;
   requiresAdminApproval: boolean;
@@ -154,15 +303,176 @@ export function validateHouseholdSize(additionalMembers: number): {
 // ─────────────────────────────────────────
 
 export async function createEvent(
-  data: Omit<DistributionEvent, 'id' | 'created_at' | 'updated_at'>
+  data: CreateEventInput
 ): Promise<DistributionEvent> {
+  const primarySession = data.sessions[0];
+  if (!primarySession) {
+    throw new Error('At least one event session is required.');
+  }
+
+  const legacyFields = toLegacyEventFields(primarySession);
+
   const { data: row, error } = await supabase
     .from('distribution_events')
-    .insert(data)
+    .insert({
+      organization_id: data.organization_id,
+      name: data.name,
+      event_notes: data.event_notes ?? null,
+      timezone: data.timezone ?? 'UTC',
+      status: data.status,
+      created_by: data.created_by ?? null,
+      ...legacyFields,
+    })
     .select()
     .single();
   if (error) throw new Error(error.message);
-  return row as DistributionEvent;
+
+  const event = row as DistributionEvent;
+  const sessionRows = data.sessions.map((session, index) => ({
+    event_id: event.id,
+    session_name: session.session_name.trim(),
+    start_at: session.start_at,
+    end_at: session.end_at ?? null,
+    registration_open_at: session.registration_open_at ?? null,
+    registration_close_at: session.registration_close_at ?? null,
+    location_name: session.location_name ?? null,
+    latitude: session.latitude ?? null,
+    longitude: session.longitude ?? null,
+    max_registrants: session.max_registrants ?? null,
+    status: session.status ?? data.status,
+    sort_order: session.sort_order ?? index,
+  }));
+
+  const { error: sessionError } = await supabase
+    .from('distribution_event_sessions')
+    .insert(sessionRows);
+
+  if (sessionError) throw new Error(sessionError.message);
+  return (await getEvent(event.id)) as DistributionEvent;
+}
+
+export async function updateEventDetails(
+  data: UpdateEventInput
+): Promise<DistributionEvent> {
+  const primarySession = data.sessions[0];
+  if (!primarySession) {
+    throw new Error('At least one event session is required.');
+  }
+
+  const legacyFields = toLegacyEventFields(primarySession);
+  const eventUpdatePayload: Record<string, unknown> = {
+    name: data.name,
+    event_notes: data.event_notes ?? null,
+    timezone: data.timezone ?? 'UTC',
+    ...legacyFields,
+  };
+  if (data.status) {
+    eventUpdatePayload.status = data.status;
+  }
+
+  const { error } = await supabase
+    .from('distribution_events')
+    .update(eventUpdatePayload)
+    .eq('id', data.eventId);
+
+  if (error) throw new Error(error.message);
+
+  const sessionsPayload = data.sessions.map((session, index) => ({
+    event_id: data.eventId,
+    session_name: session.session_name.trim(),
+    start_at: session.start_at,
+    end_at: session.end_at ?? null,
+    registration_open_at: session.registration_open_at ?? null,
+    registration_close_at: session.registration_close_at ?? null,
+    location_name: session.location_name ?? null,
+    latitude: session.latitude ?? null,
+    longitude: session.longitude ?? null,
+    max_registrants: session.max_registrants ?? null,
+    status: session.status ?? data.status ?? 'ACTIVE',
+    sort_order: session.sort_order ?? index,
+  }));
+
+  const newSessions = sessionsPayload.filter((session, index) => !data.sessions[index].id);
+
+  for (let index = 0; index < data.sessions.length; index += 1) {
+    const source = data.sessions[index];
+    if (!source.id) continue;
+    const payload = sessionsPayload[index];
+    const { error: sessionError } = await supabase
+      .from('distribution_event_sessions')
+      .update(payload)
+      .eq('id', source.id)
+      .eq('event_id', data.eventId);
+    if (sessionError) throw new Error(sessionError.message);
+  }
+
+  if (newSessions.length > 0) {
+    const { error: insertError } = await supabase
+      .from('distribution_event_sessions')
+      .insert(newSessions);
+    if (insertError) throw new Error(insertError.message);
+  }
+
+  return (await getEvent(data.eventId)) as DistributionEvent;
+}
+
+export async function updateEventSupplyItems(
+  eventId: string,
+  items: UpdateSupplyItemInput[]
+): Promise<EventSupplyItem[]> {
+  const existingItems = await getSupplyItems(eventId);
+  const existingById = new Map(existingItems.map((item) => [item.id, item]));
+  const inputIds = new Set(items.filter((item) => item.id).map((item) => item.id as string));
+
+  for (const item of items) {
+    if (item.id) {
+      const existing = existingById.get(item.id);
+      if (!existing) continue;
+      const delta = Math.max(0, item.starting_count) - Math.max(0, existing.starting_count);
+      const nextCurrentCount = Math.max(0, Number(existing.current_count || 0) + delta);
+      const { error } = await supabase
+        .from('event_supply_items')
+        .update({
+          supply_type: item.supply_type,
+          supply_label: item.supply_label,
+          unit_type: item.unit_type,
+          pack_size: item.pack_size,
+          starting_count: item.starting_count,
+          current_count: nextCurrentCount,
+          low_stock_threshold: item.low_stock_threshold,
+        })
+        .eq('id', item.id)
+        .eq('event_id', eventId);
+      if (error) throw new Error(error.message);
+      continue;
+    }
+
+    const { error } = await supabase
+      .from('event_supply_items')
+      .insert({
+        event_id: eventId,
+        supply_type: item.supply_type,
+        supply_label: item.supply_label,
+        unit_type: item.unit_type,
+        pack_size: item.pack_size,
+        starting_count: item.starting_count,
+        current_count: item.starting_count,
+        low_stock_threshold: item.low_stock_threshold,
+      });
+    if (error) throw new Error(error.message);
+  }
+
+  for (const existing of existingItems) {
+    if (inputIds.has(existing.id)) continue;
+    const { error } = await supabase
+      .from('event_supply_items')
+      .delete()
+      .eq('id', existing.id)
+      .eq('event_id', eventId);
+    if (error) throw new Error(error.message);
+  }
+
+  return getSupplyItems(eventId);
 }
 
 export async function listEvents(organizationId?: string): Promise<DistributionEvent[]> {
@@ -173,7 +483,7 @@ export async function listEvents(organizationId?: string): Promise<DistributionE
   if (organizationId) query = query.eq('organization_id', organizationId);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
-  return (data ?? []) as DistributionEvent[];
+  return hydrateEventsWithSessions((data ?? []) as DistributionEvent[]);
 }
 
 export async function getEvent(eventId: string): Promise<DistributionEvent | null> {
@@ -183,7 +493,8 @@ export async function getEvent(eventId: string): Promise<DistributionEvent | nul
     .eq('id', eventId)
     .single();
   if (error) return null;
-  return data as DistributionEvent;
+  const [hydrated] = await hydrateEventsWithSessions([data as DistributionEvent]);
+  return hydrated ?? null;
 }
 
 export async function updateEventStatus(eventId: string, status: EventStatus): Promise<void> {
@@ -192,6 +503,12 @@ export async function updateEventStatus(eventId: string, status: EventStatus): P
     .update({ status })
     .eq('id', eventId);
   if (error) throw new Error(error.message);
+
+  const { error: sessionError } = await supabase
+    .from('distribution_event_sessions')
+    .update({ status })
+    .eq('event_id', eventId);
+  if (sessionError) throw new Error(sessionError.message);
 }
 
 // ─────────────────────────────────────────
@@ -268,6 +585,7 @@ async function generateUniqueCode(eventId: string, eventName: string): Promise<{
 
 export interface RegisterParticipantInput {
   eventId: string;
+  sessionId: string;
   eventName: string;
   fullName: string;
   householdSize: number;
@@ -315,6 +633,7 @@ async function findExistingRegistration(input: RegisterParticipantInput): Promis
       .from('event_registrations')
       .select('*')
       .eq('event_id', input.eventId)
+      .eq('session_id', input.sessionId)
       .eq('profile_id', profileId)
       .maybeSingle();
     if (!error && data) return data as EventRegistration;
@@ -325,6 +644,7 @@ async function findExistingRegistration(input: RegisterParticipantInput): Promis
       .from('event_registrations')
       .select('*')
       .eq('event_id', input.eventId)
+      .eq('session_id', input.sessionId)
       .eq('phone', normalizedPhone)
       .maybeSingle();
     if (!error && data) return data as EventRegistration;
@@ -335,6 +655,7 @@ async function findExistingRegistration(input: RegisterParticipantInput): Promis
       .from('event_registrations')
       .select('*')
       .eq('event_id', input.eventId)
+      .eq('session_id', input.sessionId)
       .eq('email', normalizedEmail)
       .maybeSingle();
     if (!error && data) return data as EventRegistration;
@@ -365,6 +686,7 @@ export async function registerParticipant(
 
     const updatePayload = {
       profile_id: existing.profile_id ?? profileId,
+      session_id: input.sessionId,
       full_name: input.fullName.trim(),
       household_size: input.householdSize,
       additional_members: input.additionalMembers,
@@ -415,6 +737,7 @@ export async function registerParticipant(
 
   const payload = {
     event_id: input.eventId,
+    session_id: input.sessionId,
     profile_id: profileId,
     ticket_id: ticketId,
     participant_code: code,
@@ -465,6 +788,7 @@ export async function registerParticipant(
 
 export interface EventRegistrationWithEvent extends EventRegistration {
   event: DistributionEvent | null;
+  session: DistributionEventSession | null;
 }
 
 export async function listPublicActiveEvents(): Promise<DistributionEvent[]> {
@@ -474,7 +798,11 @@ export async function listPublicActiveEvents(): Promise<DistributionEvent[]> {
     .eq('status', 'ACTIVE')
     .order('distribution_date', { ascending: true });
   if (error) throw new Error(error.message);
-  return (data ?? []) as DistributionEvent[];
+  const events = await hydrateEventsWithSessions((data ?? []) as DistributionEvent[]);
+  return events.map((event) => ({
+    ...event,
+    sessions: (event.sessions ?? []).filter((session) => session.status === 'ACTIVE'),
+  }));
 }
 
 export async function listMyEventRegistrations(profileId?: string): Promise<EventRegistrationWithEvent[]> {
@@ -487,15 +815,23 @@ export async function listMyEventRegistrations(profileId?: string): Promise<Even
 
   const { data, error } = await supabase
     .from('event_registrations')
-    .select('*, event:distribution_events(*)')
+    .select('*, event:distribution_events(*), session:distribution_event_sessions(*)')
     .eq('profile_id', resolvedProfileId)
     .order('created_at', { ascending: false });
 
   if (error) throw new Error(error.message);
-  return (data ?? []) as EventRegistrationWithEvent[];
+  const regs = (data ?? []) as EventRegistrationWithEvent[];
+  return regs.map((reg) => ({
+    ...reg,
+    event: reg.event ? { ...reg.event, sessions: reg.session ? [reg.session] : reg.event.sessions ?? [] } : null,
+  }));
 }
 
-export async function getMyEventRegistration(eventId: string, profileId?: string): Promise<EventRegistration | null> {
+export async function getMyEventRegistration(
+  eventId: string,
+  profileId?: string,
+  sessionId?: string
+): Promise<EventRegistration | null> {
   let resolvedProfileId = profileId;
   if (!resolvedProfileId) {
     const { data: auth } = await supabase.auth.getUser();
@@ -503,59 +839,83 @@ export async function getMyEventRegistration(eventId: string, profileId?: string
   }
   if (!resolvedProfileId) return null;
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('event_registrations')
     .select('*')
     .eq('event_id', eventId)
-    .eq('profile_id', resolvedProfileId)
-    .maybeSingle();
+    .eq('profile_id', resolvedProfileId);
+
+  if (sessionId) {
+    query = query.eq('session_id', sessionId);
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false }).limit(1);
 
   if (error) throw new Error(error.message);
-  return (data ?? null) as EventRegistration | null;
+  return ((data ?? [])[0] ?? null) as EventRegistration | null;
 }
 
 // ─────────────────────────────────────────
 // Scan & Distribution
 // ─────────────────────────────────────────
 
-/** Parse QR payload: "eventId:participantCode" */
-export function parseQrPayload(raw: string): { eventId: string; participantCode: string } | null {
+/** Parse QR payload: "eventId:participantCode" or "eventId:sessionId:participantCode" */
+export function parseQrPayload(raw: string): { eventId: string; sessionId?: string; participantCode: string } | null {
   const parts = raw.split(':');
-  if (parts.length !== 2) return null;
-  const [eventId, participantCode] = parts;
-  if (!eventId || !participantCode) return null;
-  return { eventId, participantCode };
+  if (parts.length === 2) {
+    const [eventId, participantCode] = parts;
+    if (!eventId || !participantCode) return null;
+    return { eventId, participantCode };
+  }
+  if (parts.length === 3) {
+    const [eventId, sessionId, participantCode] = parts;
+    if (!eventId || !sessionId || !participantCode) return null;
+    return { eventId, sessionId, participantCode };
+  }
+  return null;
 }
 
 export async function lookupByCode(
   eventId: string,
-  participantCode: string
+  participantCode: string,
+  sessionId?: string
 ): Promise<ScanResult | null> {
   const cleanCode = participantCode.replace(/\D/g, '').slice(0, 4).padStart(4, '0');
-  const { data: reg, error } = await supabase
+  let query = supabase
     .from('event_registrations')
     .select('*')
     .eq('event_id', eventId)
-    .eq('participant_code', cleanCode)
-    .single();
+    .eq('participant_code', cleanCode);
+
+  if (sessionId) query = query.eq('session_id', sessionId);
+
+  const { data, error } = await query.limit(1);
+  const reg = (data ?? [])[0] as EventRegistration | undefined;
   if (error || !reg) return null;
+  if (sessionId && reg.session_id !== sessionId) return null;
   const supplies = await getSupplyItems(eventId);
   return {
-    registration: reg as EventRegistration,
+    registration: reg,
     supplies,
-    alreadyServed: (reg as EventRegistration).served,
+    alreadyServed: reg.served,
   };
 }
 
-export async function lookupByQr(rawQr: string, expectedEventId?: string): Promise<ScanResult | null> {
+export async function lookupByQr(
+  rawQr: string,
+  expectedEventId?: string,
+  expectedSessionId?: string
+): Promise<ScanResult | null> {
   const parsed = parseQrPayload(rawQr);
   if (!parsed) return null;
   if (expectedEventId && parsed.eventId !== expectedEventId) return null;
-  return lookupByCode(parsed.eventId, parsed.participantCode);
+  if (expectedSessionId && parsed.sessionId && parsed.sessionId !== expectedSessionId) return null;
+  return lookupByCode(parsed.eventId, parsed.participantCode, parsed.sessionId ?? expectedSessionId);
 }
 
 export interface RecordDistributionInput {
   eventId: string;
+  sessionId: string;
   registrationId: string;
   supplyItems: Array<{ supplyItemId: string; quantity: number }>;
   distributedBy?: string;
@@ -567,6 +927,7 @@ export async function recordDistribution(input: RecordDistributionInput): Promis
   // 1. Insert distribution log rows
   const logRows = input.supplyItems.map((s) => ({
     event_id: input.eventId,
+    session_id: input.sessionId,
     registration_id: input.registrationId,
     supply_item_id: s.supplyItemId,
     quantity: s.quantity,
@@ -637,6 +998,7 @@ export async function updateCheckIn(
 // ─────────────────────────────────────────
 
 export interface EventStats {
+  sessionId?: string;
   householdsServed: number;
   peopleServed: number;
   suppliesDistributed: number;
@@ -656,10 +1018,17 @@ export interface EventStats {
   }>;
 }
 
-export async function getEventStats(eventId: string): Promise<EventStats> {
+export async function getEventStats(eventId: string, sessionId?: string): Promise<EventStats> {
+  let regsQuery = supabase.from('event_registrations').select('*').eq('event_id', eventId);
+  let logsQuery = supabase.from('event_distribution_logs').select('quantity, supply_item_id').eq('event_id', eventId);
+  if (sessionId) {
+    regsQuery = regsQuery.eq('session_id', sessionId);
+    logsQuery = logsQuery.eq('session_id', sessionId);
+  }
+
   const [{ data: regs }, { data: logs }, supplyItems] = await Promise.all([
-    supabase.from('event_registrations').select('*').eq('event_id', eventId),
-    supabase.from('event_distribution_logs').select('quantity, supply_item_id').eq('event_id', eventId),
+    regsQuery,
+    logsQuery,
     getSupplyItems(eventId),
   ]);
 
@@ -740,6 +1109,7 @@ export async function getEventStats(eventId: string): Promise<EventStats> {
     .sort((a, b) => b.requested_quantity - a.requested_quantity);
 
   return {
+    sessionId,
     registrations: allRegs.length,
     householdsServed: servedRegs.length,
     peopleServed: servedRegs.reduce((sum, r) => sum + r.household_size, 0),
@@ -805,8 +1175,8 @@ export async function generateQrDataUrl(payload: string): Promise<string> {
   return QRCode.default.toDataURL(payload, { width: 256, margin: 2 });
 }
 
-export function buildQrPayload(eventId: string, participantCode: string): string {
-  return `${eventId}:${participantCode}`;
+export function buildQrPayload(eventId: string, participantCode: string, sessionId?: string): string {
+  return sessionId ? `${eventId}:${sessionId}:${participantCode}` : `${eventId}:${participantCode}`;
 }
 
 // ─────────────────────────────────────────
@@ -815,6 +1185,7 @@ export function buildQrPayload(eventId: string, participantCode: string): string
 
 export interface EventReport {
   event: DistributionEvent;
+  session: DistributionEventSession | null;
   stats: EventStats;
   registrations: EventRegistration[];
 }
@@ -845,15 +1216,19 @@ export interface OrgOutreachAuditLog {
   created_at: string;
 }
 
-export async function generateEventReport(eventId: string): Promise<EventReport> {
+export async function generateEventReport(eventId: string, sessionId?: string): Promise<EventReport> {
   const [event, stats, { data: regs }] = await Promise.all([
     getEvent(eventId),
-    getEventStats(eventId),
-    supabase.from('event_registrations').select('*').eq('event_id', eventId).order('created_at'),
+    getEventStats(eventId, sessionId),
+    (sessionId
+      ? supabase.from('event_registrations').select('*').eq('event_id', eventId).eq('session_id', sessionId).order('created_at')
+      : supabase.from('event_registrations').select('*').eq('event_id', eventId).order('created_at')),
   ]);
   if (!event) throw new Error('Event not found');
+  const session = resolveEventSession(event, sessionId);
   return {
     event,
+    session,
     stats,
     registrations: (regs ?? []) as EventRegistration[],
   };

@@ -144,8 +144,6 @@ export interface UserProfile {
   household: HouseholdMember[]; // Detailed list
   petDetails: string; // E.g. "2 Dogs"
   medicalNeeds: string; // Critical info (Oxygen, Dialysis, Mobility)
-  fireMeetLocation?: string;
-  severeWeatherMeetLocation?: string;
 
   // Structured vulnerability intake (state-ready)
   zipCode?: string;

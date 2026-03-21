@@ -1,7 +1,18 @@
--- Fix Nearby Outreach Panel failure when organization coordinates are missing.
--- Fallback: use signed-in leader profile coordinates if org coordinates are null.
+-- Fix: "structure of query does not match function result type" from get_org_outreach_candidates.
+--
+-- Root cause: The function RETURNS TABLE declared latitude/longitude as DECIMAL(10,8)/DECIMAL(11,8),
+-- but in PostgreSQL RETURN QUERY type-checking, if the actual profiles.latitude column is stored
+-- as DOUBLE PRECISION (FLOAT8) — which PostgREST/JavaScript clients write it as — there is
+-- no implicit cast from FLOAT8 → NUMERIC(10,8) in the RETURN QUERY context, causing the error.
+-- Additionally, ROUND(expr::NUMERIC, 2) returns NUMERIC (unqualified) but RETURNS TABLE
+-- declared NUMERIC(8,2), which can also trigger the mismatch.
+--
+-- Fix: Change RETURNS TABLE lat/lng to FLOAT8, cast them explicitly in the query,
+-- and cast distance_miles explicitly to NUMERIC.
 
-CREATE OR REPLACE FUNCTION public.get_org_outreach_candidates(
+DROP FUNCTION IF EXISTS public.get_org_outreach_candidates(UUID, INTEGER);
+
+CREATE FUNCTION public.get_org_outreach_candidates(
   p_org_id UUID DEFAULT NULL,
   p_radius_miles INTEGER DEFAULT 3
 )
@@ -111,3 +122,6 @@ BEGIN
   ORDER BY c.distance_miles ASC, c.full_name ASC;
 END;
 $$;
+
+REVOKE ALL ON FUNCTION public.get_org_outreach_candidates(UUID, INTEGER) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_org_outreach_candidates(UUID, INTEGER) TO authenticated;

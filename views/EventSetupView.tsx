@@ -5,12 +5,10 @@
 import React, { useEffect, useState } from 'react';
 import {
   Calendar,
-  Clock,
   MapPin,
   Package,
   Plus,
   Trash2,
-  QrCode,
   ArrowLeft,
   CheckCircle,
   ChevronRight,
@@ -25,14 +23,16 @@ import { Card } from '../components/Card';
 import { ViewState } from '../types';
 import {
   createEvent,
+  getSupplyItems,
+  updateEventSupplyItems,
   upsertSupplyItem,
   listEvents,
+  updateEventDetails,
   updateEventStatus,
   DistributionEvent,
-  EventSupplyItem,
   SupplyType,
   generateQrDataUrl,
-  buildQrPayload,
+  getEventPrimarySession,
 } from '../services/eventDistribution';
 import { StorageService } from '../services/storage';
 
@@ -49,24 +49,95 @@ const SUPPLY_TYPES: Array<{ value: SupplyType; label: string }> = [
 ];
 
 interface SupplyRow {
+  id?: string;
   supply_type: SupplyType;
   supply_label: string;
   unit_type: string;
   pack_size: string;
   starting_count: string;
   low_stock_threshold: string;
+  current_count?: number;
 }
 
 const UNIT_TYPES = ['UNIT', 'BOX', 'CASE', 'KIT', 'PACK', 'BAG'];
 
 const defaultSupply = (): SupplyRow => ({
+  id: undefined,
   supply_type: 'FOOD_BOX',
   supply_label: '',
   unit_type: 'UNIT',
   pack_size: '1',
   starting_count: '',
   low_stock_threshold: '10',
+  current_count: undefined,
 });
+
+interface SessionRow {
+  id?: string;
+  status?: DistributionEvent['status'];
+  session_name: string;
+  start_date: string;
+  start_time: string;
+  end_date: string;
+  end_time: string;
+  registration_open_date: string;
+  registration_open_time: string;
+  registration_close_date: string;
+  registration_close_time: string;
+  location_name: string;
+  max_registrants: string;
+}
+
+const defaultSession = (): SessionRow => ({
+  id: undefined,
+  status: 'ACTIVE',
+  session_name: '',
+  start_date: '',
+  start_time: '',
+  end_date: '',
+  end_time: '',
+  registration_open_date: '',
+  registration_open_time: '',
+  registration_close_date: '',
+  registration_close_time: '',
+  location_name: '',
+  max_registrants: '',
+});
+
+const combineLocalDateTime = (date: string, time: string) => {
+  if (!date || !time) return null;
+  return new Date(`${date}T${time}`).toISOString();
+};
+
+const toLocalDateInput = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const toLocalTimeInput = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+};
+
+const formatSessionSummary = (event: DistributionEvent) => {
+  const primary = getEventPrimarySession(event);
+  if (!primary) return 'No sessions';
+  const start = new Date(primary.start_at);
+  const label = start.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  if ((event.sessions?.length ?? 0) <= 1) return label;
+  return `${label} +${(event.sessions?.length ?? 1) - 1} more`;
+};
 
 export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
   const profile = StorageService.getProfile();
@@ -78,19 +149,17 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [savedEvent, setSavedEvent] = useState<DistributionEvent | null>(null);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [qrUrl, setQrUrl] = useState('');
   const [copiedEventId, setCopiedEventId] = useState<string | null>(null);
 
   // Form state
   const [name, setName] = useState('');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
-  const [locationName, setLocationName] = useState('');
-  const [maxRegistrants, setMaxRegistrants] = useState('');
-  const [pickupWindowStart, setPickupWindowStart] = useState('');
-  const [pickupWindowEnd, setPickupWindowEnd] = useState('');
   const [eventNotes, setEventNotes] = useState('');
+  const [sessions, setSessions] = useState<SessionRow[]>([defaultSession()]);
   const [supplies, setSupplies] = useState<SupplyRow[]>([defaultSupply()]);
+
+  const isEditing = Boolean(editingEventId);
 
   useEffect(() => {
     setLoading(true);
@@ -118,7 +187,8 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
 
   const shareRegistrationLink = async (event: DistributionEvent) => {
     const link = getRegistrationLink(event.id);
-    const shareText = `Register for ${event.name} on ${event.distribution_date}${event.location_name ? ` at ${event.location_name}` : ''}`;
+    const primarySession = getEventPrimarySession(event);
+    const shareText = `Register for ${event.name}${primarySession ? ` on ${new Date(primarySession.start_at).toLocaleString()}` : ''}${primarySession?.location_name ? ` at ${primarySession.location_name}` : ''}`;
 
     if (navigator.share) {
       await navigator.share({
@@ -134,6 +204,87 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
 
   const addSupplyRow = () => setSupplies((prev) => [...prev, defaultSupply()]);
 
+  const addSessionRow = () => setSessions((prev) => [...prev, defaultSession()]);
+
+  const resetForm = () => {
+    setEditingEventId(null);
+    setName('');
+    setEventNotes('');
+    setSessions([defaultSession()]);
+    setSupplies([defaultSupply()]);
+    setError('');
+  };
+
+  const startEditingEvent = (event: DistributionEvent) => {
+    void (async () => {
+      setLoading(true);
+      try {
+    setEditingEventId(event.id);
+    setName(event.name || '');
+    setEventNotes(event.event_notes || '');
+    setSavedEvent(null);
+    setQrUrl('');
+    setError('');
+    const mappedSessions = (event.sessions ?? []).map((session) => ({
+      id: session.id,
+      status: session.status,
+      session_name: session.session_name || '',
+      start_date: toLocalDateInput(session.start_at),
+      start_time: toLocalTimeInput(session.start_at),
+      end_date: toLocalDateInput(session.end_at || session.start_at),
+      end_time: toLocalTimeInput(session.end_at),
+      registration_open_date: toLocalDateInput(session.registration_open_at),
+      registration_open_time: toLocalTimeInput(session.registration_open_at),
+      registration_close_date: toLocalDateInput(session.registration_close_at),
+      registration_close_time: toLocalTimeInput(session.registration_close_at),
+      location_name: session.location_name || '',
+      max_registrants: session.max_registrants ? String(session.max_registrants) : '',
+    }));
+    setSessions(mappedSessions.length > 0 ? mappedSessions : [defaultSession()]);
+        const supplyItems = await getSupplyItems(event.id);
+        setSupplies(
+          supplyItems.length > 0
+            ? supplyItems.map((item) => ({
+                id: item.id,
+                supply_type: item.supply_type,
+                supply_label: item.supply_label,
+                unit_type: item.unit_type,
+                pack_size: String(item.pack_size),
+                starting_count: String(item.starting_count),
+                low_stock_threshold: String(item.low_stock_threshold),
+                current_count: item.current_count,
+              }))
+            : [defaultSupply()]
+        );
+    setTab('create');
+      } catch (e: any) {
+        setError(e?.message ?? 'Failed to load event details.');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  };
+
+  const removeSessionRow = (index: number) => {
+    setSessions((prev) => {
+      if (prev.length <= 1) return prev;
+      if (prev[index]?.id) return prev;
+      return prev.filter((_, idx) => idx !== index);
+    });
+  };
+
+  const updateSession = (index: number, field: keyof SessionRow, value: string) => {
+    setSessions((prev) => prev.map((session, idx) => (idx === index ? { ...session, [field]: value } : session)));
+  };
+
+  const toggleSessionStatus = (index: number) => {
+    setSessions((prev) => prev.map((session, idx) => {
+      if (idx !== index) return session;
+      const nextStatus = session.status === 'CANCELLED' ? 'ACTIVE' : 'CANCELLED';
+      return { ...session, status: nextStatus };
+    }));
+  };
+
   const removeSupplyRow = (i: number) =>
     setSupplies((prev) => prev.filter((_, idx) => idx !== i));
 
@@ -146,44 +297,95 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
   const handleCreate = async () => {
     setError('');
     if (!name.trim()) { setError('Event name is required.'); return; }
-    if (!date) { setError('Distribution date is required.'); return; }
-    if (!locationName.trim()) { setError('Event location address is required.'); return; }
+    const invalidSession = sessions.find((session) => {
+      const startAt = combineLocalDateTime(session.start_date, session.start_time);
+      const endAt = combineLocalDateTime(session.end_date || session.start_date, session.end_time);
+      return !session.location_name.trim() || !session.session_name.trim() || !startAt || !endAt || new Date(endAt) < new Date(startAt);
+    });
+    if (invalidSession) {
+      setError('Each session needs a name, start time, end time, and location.');
+      return;
+    }
     const hasBlankLabel = supplies.some((s) => !s.supply_label.trim());
     if (hasBlankLabel) { setError('All supply items need a label.'); return; }
-    const hasZeroCount = supplies.some((s) => !s.starting_count || Number(s.starting_count) < 1);
-    if (hasZeroCount) { setError('All supply items need a starting count ≥ 1.'); return; }
+    const hasInvalidStartingCount = supplies.some((s) => !s.starting_count || Number(s.starting_count) < 1);
+    if (hasInvalidStartingCount) { setError('All supply items need a starting count ≥ 1.'); return; }
     const invalidPackSize = supplies.some((s) => Number(s.pack_size) < 1 || !Number.isFinite(Number(s.pack_size)));
     if (invalidPackSize) { setError('All supply items need a pack size ≥ 1.'); return; }
 
     setSaving(true);
     try {
-      const event = await createEvent({
-        organization_id: orgId,
-        name: name.trim(),
-        distribution_date: date,
-        distribution_time: time || null,
-        location_name: locationName.trim() || null,
-        max_registrants: maxRegistrants ? Math.max(1, Math.round(Number(maxRegistrants))) : null,
-        pickup_window_start: pickupWindowStart || null,
-        pickup_window_end: pickupWindowEnd || null,
-        event_notes: eventNotes.trim() || null,
-        latitude: null,
-        longitude: null,
-        status: 'ACTIVE',
-        created_by: profile?.id ?? null,
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      const normalizedSessions = sessions.map((session, index) => {
+        const startAt = combineLocalDateTime(session.start_date, session.start_time) as string;
+        const endAt = combineLocalDateTime(session.end_date || session.start_date, session.end_time) as string;
+        const regOpenAt = combineLocalDateTime(
+          session.registration_open_date || session.start_date,
+          session.registration_open_time || session.start_time
+        );
+        const regCloseAt = combineLocalDateTime(
+          session.registration_close_date || session.end_date || session.start_date,
+          session.registration_close_time || session.end_time
+        );
+
+        return {
+          id: session.id,
+          status: session.status === 'CANCELLED' ? 'CANCELLED' : 'ACTIVE',
+          session_name: session.session_name.trim(),
+          start_at: startAt,
+          end_at: endAt,
+          registration_open_at: regOpenAt,
+          registration_close_at: regCloseAt,
+          location_name: session.location_name.trim() || null,
+          max_registrants: session.max_registrants ? Math.max(1, Math.round(Number(session.max_registrants))) : null,
+          sort_order: index,
+        };
       });
 
-      for (const s of supplies) {
-        await upsertSupplyItem({
-          event_id: event.id,
-          supply_type: s.supply_type,
-          supply_label: s.supply_label.trim(),
-          unit_type: s.unit_type,
-          pack_size: Math.max(1, Math.round(Number(s.pack_size) || 1)),
-          starting_count: Number(s.starting_count),
-          current_count: Number(s.starting_count),
-          low_stock_threshold: Number(s.low_stock_threshold) || 10,
-        });
+      const event = isEditing && editingEventId
+        ? await updateEventDetails({
+            eventId: editingEventId,
+            name: name.trim(),
+            event_notes: eventNotes.trim() || null,
+            timezone,
+            sessions: normalizedSessions,
+          })
+        : await createEvent({
+            organization_id: orgId,
+            name: name.trim(),
+            event_notes: eventNotes.trim() || null,
+            timezone,
+            status: 'ACTIVE',
+            created_by: profile?.id ?? null,
+            sessions: normalizedSessions,
+          });
+
+      if (!isEditing) {
+        for (const s of supplies) {
+          await upsertSupplyItem({
+            event_id: event.id,
+            supply_type: s.supply_type,
+            supply_label: s.supply_label.trim(),
+            unit_type: s.unit_type,
+            pack_size: Math.max(1, Math.round(Number(s.pack_size) || 1)),
+            starting_count: Number(s.starting_count),
+            current_count: Number(s.starting_count),
+            low_stock_threshold: Number(s.low_stock_threshold) || 10,
+          });
+        }
+      } else {
+        await updateEventSupplyItems(
+          event.id,
+          supplies.map((s) => ({
+            id: s.id,
+            supply_type: s.supply_type,
+            supply_label: s.supply_label.trim(),
+            unit_type: s.unit_type,
+            pack_size: Math.max(1, Math.round(Number(s.pack_size) || 1)),
+            starting_count: Math.max(0, Math.round(Number(s.starting_count) || 0)),
+            low_stock_threshold: Math.max(0, Math.round(Number(s.low_stock_threshold) || 0)),
+          }))
+        );
       }
 
       // Generate registration QR link that encodes the event ID
@@ -191,10 +393,18 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
       const url = await generateQrDataUrl(regLink);
       setQrUrl(url);
       setSavedEvent(event);
-      setEvents((prev) => [event, ...prev]);
+      setEvents((prev) => {
+        if (isEditing) {
+          return prev.map((existing) => (existing.id === event.id ? event : existing));
+        }
+        return [event, ...prev];
+      });
+      if (isEditing) {
+        setEditingEventId(null);
+      }
       setTab('list');
     } catch (e: any) {
-      setError(e?.message ?? 'Failed to create event.');
+      setError(e?.message ?? `Failed to ${isEditing ? 'update' : 'create'} event.`);
     } finally {
       setSaving(false);
     }
@@ -203,7 +413,15 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
   const handleStatusToggle = async (event: DistributionEvent) => {
     const next = event.status === 'ACTIVE' ? 'COMPLETED' : 'ACTIVE';
     await updateEventStatus(event.id, next);
-    setEvents((prev) => prev.map((e) => (e.id === event.id ? { ...e, status: next } : e)));
+    setEvents((prev) => prev.map((e) => (
+      e.id === event.id
+        ? {
+            ...e,
+            status: next,
+            sessions: (e.sessions ?? []).map((session) => ({ ...session, status: next })),
+          }
+        : e
+    )));
   };
 
   const statusBadge = (status: DistributionEvent['status']) => {
@@ -321,12 +539,12 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
                       <p className="text-[15px] font-semibold text-slate-900 truncate">{ev.name}</p>
                       <div className="flex items-center gap-1.5 mt-1">
                         <Calendar size={12} className="text-slate-400" />
-                        <span className="text-[12px] text-slate-500">{ev.distribution_date}</span>
-                        {ev.location_name && (
+                        <span className="text-[12px] text-slate-500">{formatSessionSummary(ev)}</span>
+                        {getEventPrimarySession(ev)?.location_name && (
                           <>
                             <span className="text-slate-300">·</span>
                             <MapPin size={12} className="text-slate-400" />
-                            <span className="text-[12px] text-slate-500 truncate">{ev.location_name}</span>
+                            <span className="text-[12px] text-slate-500 truncate">{getEventPrimarySession(ev)?.location_name}</span>
                           </>
                         )}
                       </div>
@@ -342,7 +560,16 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
                       onClick={(e) => { e.stopPropagation(); handleStatusToggle(ev); }}
                       className="text-[12px] font-medium px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600"
                     >
-                      {ev.status === 'ACTIVE' ? 'Mark Completed' : 'Reopen'}
+                      {ev.status === 'ACTIVE' ? 'End Event' : 'Reopen'}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startEditingEvent(ev);
+                      }}
+                      className="text-[12px] font-medium px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600"
+                    >
+                      Edit
                     </button>
                     <button
                       onClick={async (e) => {
@@ -388,67 +615,23 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
             )}
 
             <Card className="p-4 space-y-3">
-              <p className="text-[14px] font-semibold text-slate-800">Event Details</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[14px] font-semibold text-slate-800">{isEditing ? 'Edit Event Details' : 'Event Details'}</p>
+                {isEditing && (
+                  <button
+                    onClick={resetForm}
+                    className="text-[12px] font-medium text-slate-500 hover:text-slate-700"
+                  >
+                    Cancel Edit
+                  </button>
+                )}
+              </div>
               <Input
                 label="Event Name"
                 placeholder="e.g. April Food Distribution"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[12px] font-medium text-slate-600 mb-1 block">Date</label>
-                  <input
-                    type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
-                  />
-                </div>
-                <div>
-                  <label className="text-[12px] font-medium text-slate-600 mb-1 block">Time</label>
-                  <input
-                    type="time"
-                    value={time}
-                    onChange={(e) => setTime(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
-                  />
-                </div>
-              </div>
-              <Input
-                label="Location Address *"
-                placeholder="123 Main St, City, State ZIP"
-                value={locationName}
-                onChange={(e) => setLocationName(e.target.value)}
-              />
-              <Input
-                label="Max Registrants (optional)"
-                type="number"
-                min={1}
-                placeholder="e.g. 300"
-                value={maxRegistrants}
-                onChange={(e) => setMaxRegistrants(e.target.value)}
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[12px] font-medium text-slate-600 mb-1 block">Pickup Window Start (optional)</label>
-                  <input
-                    type="time"
-                    value={pickupWindowStart}
-                    onChange={(e) => setPickupWindowStart(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
-                  />
-                </div>
-                <div>
-                  <label className="text-[12px] font-medium text-slate-600 mb-1 block">Pickup Window End (optional)</label>
-                  <input
-                    type="time"
-                    value={pickupWindowEnd}
-                    onChange={(e) => setPickupWindowEnd(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
-                  />
-                </div>
-              </div>
               <div>
                 <label className="text-[12px] font-medium text-slate-600 mb-1 block">Event Notes (optional)</label>
                 <textarea
@@ -460,14 +643,162 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
               </div>
             </Card>
 
-            {/* Supply inventory */}
+            <Card className="p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-[14px] font-semibold text-slate-800">Sessions</p>
+                  <p className="text-[12px] text-slate-500">Add one or more distribution time slots under this event.</p>
+                </div>
+                <button
+                  onClick={addSessionRow}
+                  className="flex items-center gap-2 text-[#2F7A64] text-[13px] font-medium hover:underline"
+                >
+                  <Plus size={15} /> Add session
+                </button>
+              </div>
+
+              {sessions.map((session, index) => (
+                <div key={index} className="border border-slate-200 rounded-xl p-3 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <Input
+                      label={`Session ${index + 1} Name`}
+                      placeholder="e.g. Saturday Morning Pickup"
+                      value={session.session_name}
+                      onChange={(e) => updateSession(index, 'session_name', e.target.value)}
+                    />
+                    {sessions.length > 1 && (
+                      <button
+                        onClick={() => removeSessionRow(index)}
+                        disabled={Boolean(session.id)}
+                        className="mt-7 p-1.5 hover:bg-red-50 rounded-lg text-red-400 shrink-0"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] text-slate-500">
+                      {session.id
+                        ? session.status === 'CANCELLED'
+                          ? 'Session is cancelled. It will stay hidden from active registration until restored.'
+                          : 'Existing session. You can update or cancel it here.'
+                        : 'New session. Remove it before saving if you do not want to keep it.'}
+                    </p>
+                    {session.id && (
+                      <button
+                        type="button"
+                        onClick={() => toggleSessionStatus(index)}
+                        className={`text-[11px] font-semibold px-2 py-1 rounded ${session.status === 'CANCELLED' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}
+                      >
+                        {session.status === 'CANCELLED' ? 'Restore Session' : 'Cancel Session'}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[12px] font-medium text-slate-600 mb-1 block">Start Date</label>
+                      <input
+                        type="date"
+                        value={session.start_date}
+                        onChange={(e) => updateSession(index, 'start_date', e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-medium text-slate-600 mb-1 block">Start Time</label>
+                      <input
+                        type="time"
+                        value={session.start_time}
+                        onChange={(e) => updateSession(index, 'start_time', e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-medium text-slate-600 mb-1 block">End Date</label>
+                      <input
+                        type="date"
+                        value={session.end_date}
+                        onChange={(e) => updateSession(index, 'end_date', e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-medium text-slate-600 mb-1 block">End Time</label>
+                      <input
+                        type="time"
+                        value={session.end_time}
+                        onChange={(e) => updateSession(index, 'end_time', e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
+                      />
+                    </div>
+                  </div>
+
+                  <Input
+                    label="Session Location Address"
+                    placeholder="123 Main St, City, State ZIP"
+                    value={session.location_name}
+                    onChange={(e) => updateSession(index, 'location_name', e.target.value)}
+                  />
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[12px] font-medium text-slate-600 mb-1 block">Registration Opens</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="date"
+                          value={session.registration_open_date}
+                          onChange={(e) => updateSession(index, 'registration_open_date', e.target.value)}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-[13px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
+                        />
+                        <input
+                          type="time"
+                          value={session.registration_open_time}
+                          onChange={(e) => updateSession(index, 'registration_open_time', e.target.value)}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-[13px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-medium text-slate-600 mb-1 block">Registration Closes</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="date"
+                          value={session.registration_close_date}
+                          onChange={(e) => updateSession(index, 'registration_close_date', e.target.value)}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-[13px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
+                        />
+                        <input
+                          type="time"
+                          value={session.registration_close_time}
+                          onChange={(e) => updateSession(index, 'registration_close_time', e.target.value)}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-[13px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <Input
+                    label="Session Capacity (optional)"
+                    type="number"
+                    min={1}
+                    placeholder="e.g. 150"
+                    value={session.max_registrants}
+                    onChange={(e) => updateSession(index, 'max_registrants', e.target.value)}
+                  />
+                </div>
+              ))}
+            </Card>
+
             <Card className="p-4 space-y-3">
               <p className="text-[14px] font-semibold text-slate-800">Supply Inventory</p>
               <p className="text-[12px] text-slate-500">
-                Set starting counts. Inventory decreases as supplies are distributed.
+                {isEditing
+                  ? 'Update inventory, add new items, or remove items. Changing starting count preserves already-distributed quantities by adjusting current stock by the delta.'
+                  : 'Set starting counts. Inventory decreases as supplies are distributed.'}
               </p>
               {supplies.map((s, i) => (
-                <div key={i} className="border border-slate-200 rounded-xl p-3 space-y-2">
+                <div key={s.id || i} className="border border-slate-200 rounded-xl p-3 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <select
                       value={s.supply_type}
@@ -487,6 +818,9 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
                       </button>
                     )}
                   </div>
+                  {isEditing && typeof s.current_count === 'number' && (
+                    <p className="text-[11px] text-slate-500">Current remaining stock: {s.current_count}</p>
+                  )}
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-[11px] text-slate-500 block mb-1">Unit Type</label>
@@ -523,7 +857,7 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
                       <label className="text-[11px] text-slate-500 block mb-1">Starting Count</label>
                       <input
                         type="number"
-                        min="1"
+                        min={isEditing ? '0' : '1'}
                         placeholder="100"
                         value={s.starting_count}
                         onChange={(e) => updateSupply(i, 'starting_count', e.target.value)}
@@ -568,7 +902,7 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
               disabled={saving}
               className="bg-[#2F7A64] hover:bg-[#296A57] text-white"
             >
-              {saving ? 'Creating…' : 'Create Event & Generate QR'}
+              {saving ? (isEditing ? 'Saving…' : 'Creating…') : (isEditing ? 'Save Event Changes' : 'Create Event & Generate QR')}
             </Button>
           </div>
         )}

@@ -30,8 +30,10 @@ import {
   buildQrPayload,
   FREE_HOUSEHOLD_LIMIT,
   DistributionEvent,
+  DistributionEventSession,
   EventRegistration,
   EventSupplyItem,
+  resolveEventSession,
 } from '../services/eventDistribution';
 
 interface EventRegistrationViewProps {
@@ -54,10 +56,29 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
     return hashId || '';
   };
 
+  const getSessionIdFromUrl = () => {
+    const searchId = new URLSearchParams(window.location.search).get('session');
+    if (searchId) return searchId;
+    const hash = window.location.hash || '';
+    const hashQuery = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
+    const hashId = hashQuery ? new URLSearchParams(hashQuery).get('session') : null;
+    return hashId || '';
+  };
+
+  const updateSessionInUrl = (sessionId: string) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('event', resolvedEventId);
+    url.searchParams.set('session', sessionId);
+    url.hash = '';
+    window.history.replaceState({}, '', url.toString());
+  };
+
   const resolvedEventId = propEventId ?? getEventIdFromUrl() ?? '';
+  const initialSessionId = getSessionIdFromUrl();
 
   const [step, setStep] = useState<Step>('loading');
   const [event, setEvent] = useState<DistributionEvent | null>(null);
+  const [selectedSessionId, setSelectedSessionId] = useState(initialSessionId);
   const [supplyItems, setSupplyItems] = useState<EventSupplyItem[]>([]);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -100,6 +121,24 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
 
   const householdValidation = validateHouseholdSize(additionalMembers);
   const totalHousehold = 1 + additionalMembers;
+  const selectedSession = useMemo<DistributionEventSession | null>(
+    () => resolveEventSession(event, selectedSessionId),
+    [event, selectedSessionId]
+  );
+
+  const formatSessionDate = (session: DistributionEventSession | null) => {
+    if (!session) return 'Date not set';
+    const start = new Date(session.start_at);
+    const end = session.end_at ? new Date(session.end_at) : null;
+    const dateLabel = start.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    const startTime = start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const endTime = end ? end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null;
+    return endTime ? `${dateLabel} · ${startTime} - ${endTime}` : `${dateLabel} · ${startTime}`;
+  };
 
   useEffect(() => {
     let active = true;
@@ -116,6 +155,15 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
           return;
         }
         setEvent(ev);
+        const fallbackSessionId = ev.sessions?.find((session) => session.id === initialSessionId)?.id
+          || ev.sessions?.[0]?.id
+          || '';
+        if (fallbackSessionId) {
+          setSelectedSessionId(fallbackSessionId);
+          updateSessionInUrl(fallbackSessionId);
+        } else if (initialSessionId) {
+          setSelectedSessionId(initialSessionId);
+        }
         setStep('form');
 
         const items = await getSupplyItems(resolvedEventId);
@@ -180,9 +228,10 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
   useEffect(() => {
     let active = true;
     const loadExistingRegistration = async () => {
-      if (!resolvedEventId || !currentProfileId) return;
+      if (!resolvedEventId || !currentProfileId || !selectedSessionId) return;
       try {
-        const existing = await getMyEventRegistration(resolvedEventId, currentProfileId);
+        setEditingExisting(false);
+        const existing = await getMyEventRegistration(resolvedEventId, currentProfileId, selectedSessionId);
         if (!active || !existing) return;
 
         setEditingExisting(true);
@@ -222,7 +271,7 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
     return () => {
       active = false;
     };
-  }, [resolvedEventId, currentProfileId]);
+  }, [resolvedEventId, currentProfileId, selectedSessionId]);
 
   const applyProfileDefaults = () => {
     if (!profileDefaults) return;
@@ -268,6 +317,10 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
 
   const handleFormNext = () => {
     setError('');
+    if (!selectedSession) {
+      setError('Please select a session first.');
+      return;
+    }
     const fields = effectiveFields();
     if (!fields.fullName.trim()) {
       setError('Please enter your name.');
@@ -290,6 +343,7 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
     setError('');
 
     try {
+      if (!selectedSession) throw new Error('Please select a session first.');
       const fields = effectiveFields();
       const requestedSupplies = supplyItems
         .map((item) => ({
@@ -301,6 +355,7 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
 
       const reg = await registerParticipant({
         eventId: event.id,
+        sessionId: selectedSession.id,
         eventName: event.name,
         profileId: currentProfileId || undefined,
         fullName: fields.fullName,
@@ -330,7 +385,7 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
 
       setRegistration(reg);
       setEditingExisting(true);
-      const qrPayload = buildQrPayload(event.id, reg.participant_code);
+      const qrPayload = buildQrPayload(event.id, reg.participant_code, selectedSession.id);
       setQrUrl(await generateQrDataUrl(qrPayload));
       setStep('done');
     } catch (e: any) {
@@ -392,8 +447,8 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
 
             <p className="text-[12px] text-slate-500 mt-3">
               Household size: <strong>{registration.household_size}</strong>
-              {' '}· Date: <strong>{event?.distribution_date}</strong>
-              {event?.location_name && <> · <MapPin size={12} className="inline" /> {event.location_name}</>}
+              {' '}· Session: <strong>{formatSessionDate(selectedSession)}</strong>
+              {selectedSession?.location_name && <> · <MapPin size={12} className="inline" /> {selectedSession.location_name}</>}
             </p>
           </Card>
 
@@ -419,10 +474,10 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
             <p className="text-[11px] uppercase font-bold text-emerald-700">Registering For</p>
             <p className="text-[15px] font-bold text-emerald-900">Event Name: {event?.name}</p>
             <p className="text-[12px] text-emerald-800 mt-1">
-              Date: {event?.distribution_date}
+              Session: {formatSessionDate(selectedSession)}
             </p>
             <p className="text-[12px] text-emerald-800 mt-1">
-              Location Address: {event?.location_name || 'Not provided yet'}
+              Location Address: {selectedSession?.location_name || 'Not provided yet'}
             </p>
           </Card>
 
@@ -490,12 +545,40 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
           <p className="text-[11px] uppercase font-bold text-emerald-700">You Are Registering For</p>
           <p className="text-[16px] font-bold text-emerald-900">Event Name: {event?.name}</p>
           <p className="text-[12px] text-emerald-800 mt-1">
-            Date: {event?.distribution_date}
+            Session: {formatSessionDate(selectedSession)}
           </p>
           <p className="text-[12px] text-emerald-800 mt-1">
-            Location Address: {event?.location_name || 'Not provided yet'}
+            Location Address: {selectedSession?.location_name || 'Not provided yet'}
           </p>
         </Card>
+
+        {(event?.sessions?.length ?? 0) > 0 && (
+          <Card className="p-4 space-y-3">
+            <p className="text-[13px] font-semibold text-slate-700">Choose Session</p>
+            <div className="space-y-2">
+              {(event?.sessions ?? []).map((session) => {
+                const active = selectedSessionId === session.id;
+                return (
+                  <button
+                    key={session.id}
+                    onClick={() => {
+                      setSelectedSessionId(session.id);
+                      setEditingExisting(false);
+                      updateSessionInUrl(session.id);
+                    }}
+                    className={`w-full rounded-xl border p-3 text-left ${
+                      active ? 'border-[#2F7A64] bg-emerald-50' : 'border-slate-200 bg-white'
+                    }`}
+                  >
+                    <p className="text-[13px] font-semibold text-slate-900">{session.session_name}</p>
+                    <p className="text-[12px] text-slate-600 mt-1">{formatSessionDate(session)}</p>
+                    <p className="text-[12px] text-slate-500 mt-1">{session.location_name || 'Location not provided yet'}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
+        )}
 
         {editingExisting && (
           <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3">

@@ -7,21 +7,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Users,
-  Package,
-  Activity,
   Check,
   AlertTriangle,
-  Clock,
   RefreshCw,
   ChevronDown,
   Download,
   Radio,
-  Heart,
-  HelpCircle,
-  ShieldAlert,
   Share2,
   Copy,
-  Check,
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -32,11 +25,12 @@ import {
   getEventStats,
   generateEventReport,
   updateCheckIn,
-  getSupplyItems,
   DistributionEvent,
+  DistributionEventSession,
   EventStats,
   EventRegistration,
   CheckInStatus,
+  resolveEventSession,
 } from '../services/eventDistribution';
 import { supabase } from '../services/supabase';
 
@@ -49,6 +43,7 @@ interface EventDashboardViewProps {
 export const EventDashboardView: React.FC<EventDashboardViewProps> = ({ setView, eventId: propEventId }) => {
   const [events, setEvents] = useState<DistributionEvent[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<DistributionEvent | null>(null);
+  const [selectedSessionId, setSelectedSessionId] = useState<string>('');
   const [showEventPicker, setShowEventPicker] = useState(false);
   const [stats, setStats] = useState<EventStats | null>(null);
   const [recentRegs, setRecentRegs] = useState<EventRegistration[]>([]);
@@ -56,6 +51,19 @@ export const EventDashboardView: React.FC<EventDashboardViewProps> = ({ setView,
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const selectedSession = resolveEventSession(selectedEvent, selectedSessionId);
+
+  const formatSession = (session?: DistributionEventSession | null) => {
+    if (!session) return 'Select a session';
+    const start = new Date(session.start_at);
+    return start.toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
 
   // Load events on mount
   useEffect(() => {
@@ -64,29 +72,33 @@ export const EventDashboardView: React.FC<EventDashboardViewProps> = ({ setView,
       const target = propEventId
         ? evs.find((e) => e.id === propEventId)
         : evs.find((e) => e.status === 'ACTIVE') ?? evs[0];
-      if (target) setSelectedEvent(target);
+      if (target) {
+        setSelectedEvent(target);
+        setSelectedSessionId(target.sessions?.[0]?.id || '');
+      }
     });
   }, [propEventId]);
 
   // Fetch stats whenever selectedEvent changes
   useEffect(() => {
-    if (!selectedEvent) return;
-    fetchStats(selectedEvent.id);
-    subscribeRealtime(selectedEvent.id);
+    if (!selectedEvent || !selectedSession) return;
+    fetchStats(selectedEvent.id, selectedSession.id);
+    subscribeRealtime(selectedEvent.id, selectedSession.id);
     return () => {
       channelRef.current?.unsubscribe();
     };
-  }, [selectedEvent?.id]);
+  }, [selectedEvent?.id, selectedSession?.id]);
 
-  const fetchStats = async (eventId: string) => {
+  const fetchStats = async (eventId: string, sessionId: string) => {
     setLoadingStats(true);
     try {
       const [s, { data: regs }] = await Promise.all([
-        getEventStats(eventId),
+        getEventStats(eventId, sessionId),
         supabase
           .from('event_registrations')
           .select('*')
           .eq('event_id', eventId)
+          .eq('session_id', sessionId)
           .order('created_at', { ascending: false })
           .limit(20),
       ]);
@@ -100,41 +112,42 @@ export const EventDashboardView: React.FC<EventDashboardViewProps> = ({ setView,
     }
   };
 
-  const subscribeRealtime = (eventId: string) => {
+  const subscribeRealtime = (eventId: string, sessionId: string) => {
     channelRef.current?.unsubscribe();
     channelRef.current = supabase
-      .channel(`event-dashboard-${eventId}`)
+      .channel(`event-dashboard-${eventId}-${sessionId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'event_registrations', filter: `event_id=eq.${eventId}` },
-        () => fetchStats(eventId)
+        { event: '*', schema: 'public', table: 'event_registrations', filter: `session_id=eq.${sessionId}` },
+        () => fetchStats(eventId, sessionId)
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'event_supply_items', filter: `event_id=eq.${eventId}` },
-        () => fetchStats(eventId)
+        () => fetchStats(eventId, sessionId)
       )
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'event_distribution_logs', filter: `event_id=eq.${eventId}` },
-        () => fetchStats(eventId)
+        { event: 'INSERT', schema: 'public', table: 'event_distribution_logs', filter: `session_id=eq.${sessionId}` },
+        () => fetchStats(eventId, sessionId)
       )
       .subscribe();
   };
 
   const handleCheckIn = async (regId: string, status: CheckInStatus) => {
     await updateCheckIn(regId, status);
-    if (selectedEvent) fetchStats(selectedEvent.id);
+    if (selectedEvent && selectedSession) fetchStats(selectedEvent.id, selectedSession.id);
   };
 
   const handleExport = async () => {
-    if (!selectedEvent) return;
+    if (!selectedEvent || !selectedSession) return;
     try {
-      const report = await generateEventReport(selectedEvent.id);
+      const report = await generateEventReport(selectedEvent.id, selectedSession.id);
       const lines = [
         `AERA Event Report: ${report.event.name}`,
-        `Date: ${report.event.distribution_date}`,
-        `Location: ${report.event.location_name ?? 'N/A'}`,
+        `Session: ${report.session?.session_name ?? 'N/A'}`,
+        `Schedule: ${formatSession(report.session)}`,
+        `Location: ${report.session?.location_name ?? 'N/A'}`,
         '',
         `Households Served: ${report.stats.householdsServed}`,
         `People Served: ${report.stats.peopleServed}`,
@@ -179,6 +192,9 @@ export const EventDashboardView: React.FC<EventDashboardViewProps> = ({ setView,
     if (!selectedEvent) return '';
     const url = new URL(window.location.href);
     url.searchParams.set('event', selectedEvent.id);
+    if (selectedSession) {
+      url.searchParams.set('session', selectedSession.id);
+    }
     url.hash = '';
     return url.toString();
   };
@@ -192,9 +208,9 @@ export const EventDashboardView: React.FC<EventDashboardViewProps> = ({ setView,
   };
 
   const handleShareRegistrationLink = async () => {
-    if (!selectedEvent) return;
+    if (!selectedEvent || !selectedSession) return;
     const link = getRegistrationLink();
-    const shareText = `Register for ${selectedEvent.name} on ${selectedEvent.distribution_date}${selectedEvent.location_name ? ` at ${selectedEvent.location_name}` : ''}`;
+    const shareText = `Register for ${selectedEvent.name} (${selectedSession.session_name}) on ${formatSession(selectedSession)}${selectedSession.location_name ? ` at ${selectedSession.location_name}` : ''}`;
 
     if (navigator.share) {
       await navigator.share({
@@ -240,11 +256,12 @@ export const EventDashboardView: React.FC<EventDashboardViewProps> = ({ setView,
               <ChevronDown size={16} className="text-slate-400 shrink-0" />
             </button>
             <p className="text-[12px] text-slate-400">
-              {lastRefresh ? `Updated ${lastRefresh.toLocaleTimeString()}` : 'Loading…'}
+              {selectedSession ? formatSession(selectedSession) : 'Select a session'}
+              {lastRefresh ? ` • Updated ${lastRefresh.toLocaleTimeString()}` : ''}
             </p>
           </div>
           <button
-            onClick={() => selectedEvent && fetchStats(selectedEvent.id)}
+            onClick={() => selectedEvent && selectedSession && fetchStats(selectedEvent.id, selectedSession.id)}
             disabled={loadingStats}
             className="p-1.5 rounded-lg hover:bg-slate-100"
           >
@@ -265,15 +282,36 @@ export const EventDashboardView: React.FC<EventDashboardViewProps> = ({ setView,
             {events.map((ev) => (
               <button
                 key={ev.id}
-                onClick={() => { setSelectedEvent(ev); setShowEventPicker(false); }}
+                onClick={() => {
+                  setSelectedEvent(ev);
+                  setSelectedSessionId(ev.sessions?.[0]?.id || '');
+                  setShowEventPicker(false);
+                }}
                 className={`w-full text-left px-4 py-2.5 text-[13px] hover:bg-slate-50 ${
                   selectedEvent?.id === ev.id ? 'font-semibold text-[#2F7A64]' : 'text-slate-700'
                 }`}
               >
-                {ev.name} — {ev.distribution_date}{' '}
+                {ev.name} — {formatSession(ev.sessions?.[0])}{' '}
                 <span className="text-[11px] text-slate-400">({ev.status})</span>
               </button>
             ))}
+          </div>
+        )}
+
+        {(selectedEvent?.sessions?.length ?? 0) > 1 && (
+          <div className="mt-2 bg-white border border-slate-200 rounded-xl shadow-sm p-3">
+            <label className="text-[12px] font-medium text-slate-600 block mb-1">Session</label>
+            <select
+              value={selectedSessionId}
+              onChange={(e) => setSelectedSessionId(e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
+            >
+              {(selectedEvent?.sessions ?? []).map((session) => (
+                <option key={session.id} value={session.id}>
+                  {session.session_name} · {formatSession(session)}
+                </option>
+              ))}
+            </select>
           </div>
         )}
       </div>

@@ -29,8 +29,10 @@ import {
   lookupByQr,
   recordDistribution,
   DistributionEvent,
+  DistributionEventSession,
   ScanResult,
   EventSupplyItem,
+  resolveEventSession,
 } from '../services/eventDistribution';
 import { StorageService } from '../services/storage';
 
@@ -51,6 +53,7 @@ export const VolunteerScanView: React.FC<VolunteerScanViewProps> = ({ setView })
   const [mode, setMode] = useState<Mode>('select_event');
   const [events, setEvents] = useState<DistributionEvent[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<DistributionEvent | null>(null);
+  const [selectedSessionId, setSelectedSessionId] = useState<string>('');
   const [inputMethod, setInputMethod] = useState<'qr' | 'code'>('code');
   const [codeInput, setCodeInput] = useState('');
   const [qrRawInput, setQrRawInput] = useState(''); // fallback text input for QR string
@@ -63,6 +66,17 @@ export const VolunteerScanView: React.FC<VolunteerScanViewProps> = ({ setView })
   const [offlineQueue, setOfflineQueue] = useState<
     Array<{ eventId: string; registrationId: string; timestamp: string }>
   >([]);
+  const selectedSession = resolveEventSession(selectedEvent, selectedSessionId);
+
+  const formatSession = (session?: DistributionEventSession | null) => {
+    if (!session) return 'Select a session';
+    return new Date(session.start_at).toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
 
   // Load offline queue from localStorage
   useEffect(() => {
@@ -79,6 +93,7 @@ export const VolunteerScanView: React.FC<VolunteerScanViewProps> = ({ setView })
         setEvents(active);
         if (active.length === 1) {
           setSelectedEvent(active[0]);
+          setSelectedSessionId(active[0].sessions?.[0]?.id || '');
           setMode('scan');
         }
       })
@@ -132,11 +147,11 @@ export const VolunteerScanView: React.FC<VolunteerScanViewProps> = ({ setView })
   // ── Lookup helpers ──────────────────────────────────────────
 
   const handleQrScan = async (raw: string) => {
-    if (!selectedEvent) return;
+    if (!selectedEvent || !selectedSession) return;
     setScanning(true);
     setError('');
     try {
-      const res = await lookupByQr(raw, selectedEvent.id);
+      const res = await lookupByQr(raw, selectedEvent.id, selectedSession.id);
       if (!res) { setError('QR code not found for the selected event.'); return; }
       processResult(res);
     } catch (e: any) {
@@ -147,13 +162,13 @@ export const VolunteerScanView: React.FC<VolunteerScanViewProps> = ({ setView })
   };
 
   const handleCodeLookup = async () => {
-    if (!selectedEvent) return;
+    if (!selectedEvent || !selectedSession) return;
     const clean = codeInput.replace(/\D/g, '').slice(0, 4);
     if (clean.length !== 4) { setError('Enter a 4-digit code.'); return; }
     setScanning(true);
     setError('');
     try {
-      const res = await lookupByCode(selectedEvent.id, clean);
+      const res = await lookupByCode(selectedEvent.id, clean, selectedSession.id);
       if (!res) { setError(`No registration found for code ${clean}.`); return; }
       processResult(res);
     } catch (e: any) {
@@ -184,7 +199,7 @@ export const VolunteerScanView: React.FC<VolunteerScanViewProps> = ({ setView })
   // ── Record distribution ─────────────────────────────────────
 
   const handleConfirm = async () => {
-    if (!result || !selectedEvent) return;
+    if (!result || !selectedEvent || !selectedSession) return;
     if (result.alreadyServed && !adminOverride) return;
 
     setSaving(true);
@@ -193,6 +208,7 @@ export const VolunteerScanView: React.FC<VolunteerScanViewProps> = ({ setView })
       const itemsToRecord = supplySelections.filter((s) => s.quantity > 0);
       await recordDistribution({
         eventId: selectedEvent.id,
+        sessionId: selectedSession.id,
         registrationId: result.registration.id,
         supplyItems: itemsToRecord.map((s) => ({
           supplyItemId: s.item.id,
@@ -262,11 +278,15 @@ export const VolunteerScanView: React.FC<VolunteerScanViewProps> = ({ setView })
               <Card
                 key={ev.id}
                 className="p-4 cursor-pointer hover:shadow-md"
-                onClick={() => { setSelectedEvent(ev); setMode('scan'); }}
+                onClick={() => {
+                  setSelectedEvent(ev);
+                  setSelectedSessionId(ev.sessions?.[0]?.id || '');
+                  setMode('scan');
+                }}
               >
                 <p className="text-[15px] font-semibold text-slate-900">{ev.name}</p>
                 <p className="text-[12px] text-slate-500 mt-0.5">
-                  {ev.distribution_date}{ev.location_name ? ` · ${ev.location_name}` : ''}
+                  {formatSession(ev.sessions?.[0])}{ev.sessions?.[0]?.location_name ? ` · ${ev.sessions[0].location_name}` : ''}
                 </p>
               </Card>
             ))
@@ -432,12 +452,29 @@ export const VolunteerScanView: React.FC<VolunteerScanViewProps> = ({ setView })
         </button>
         <div className="flex-1 min-w-0">
           <h1 className="text-[17px] font-bold text-slate-900 truncate">{selectedEvent?.name}</h1>
-          <p className="text-[12px] text-slate-500">{selectedEvent?.distribution_date}</p>
+          <p className="text-[12px] text-slate-500">{formatSession(selectedSession)}</p>
         </div>
         <button onClick={() => setView('EVENT_DASHBOARD' as ViewState)} className="text-[12px] text-[#2F7A64] font-semibold">
           Dashboard
         </button>
       </div>
+
+      {(selectedEvent?.sessions?.length ?? 0) > 1 && (
+        <div className="bg-white border-b border-slate-200 px-4 py-3">
+          <label className="text-[12px] font-medium text-slate-600 block mb-1">Session</label>
+          <select
+            value={selectedSessionId}
+            onChange={(e) => setSelectedSessionId(e.target.value)}
+            className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
+          >
+            {(selectedEvent?.sessions ?? []).map((session) => (
+              <option key={session.id} value={session.id}>
+                {session.session_name} · {formatSession(session)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Method toggle */}
       <div className="flex border-b border-slate-200 bg-white">

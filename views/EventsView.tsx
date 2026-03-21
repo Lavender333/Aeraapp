@@ -5,9 +5,11 @@ import { Card } from '../components/Card';
 import { ViewState } from '../types';
 import {
   DistributionEvent,
+  DistributionEventSession,
   EventRegistrationWithEvent,
   buildQrPayload,
   generateQrDataUrl,
+  getEventPrimarySession,
   listMyEventRegistrations,
   listPublicActiveEvents,
 } from '../services/eventDistribution';
@@ -22,6 +24,18 @@ export const EventsView: React.FC<EventsViewProps> = ({ setView }) => {
   const [events, setEvents] = useState<DistributionEvent[]>([]);
   const [myRegs, setMyRegs] = useState<EventRegistrationWithEvent[]>([]);
   const [qrByRegId, setQrByRegId] = useState<Record<string, string>>({});
+
+  const formatSession = (session?: DistributionEventSession | null) => {
+    if (!session) return 'Session TBD';
+    const start = new Date(session.start_at);
+    return start.toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
 
   const refresh = async () => {
     setLoading(true);
@@ -49,7 +63,7 @@ export const EventsView: React.FC<EventsViewProps> = ({ setView }) => {
 
       const nextEntries: Array<[string, string]> = [];
       for (const reg of pending) {
-        const payload = buildQrPayload(reg.event_id, reg.participant_code);
+        const payload = buildQrPayload(reg.event_id, reg.participant_code, reg.session_id);
         const dataUrl = await generateQrDataUrl(payload);
         nextEntries.push([reg.id, dataUrl]);
       }
@@ -70,11 +84,16 @@ export const EventsView: React.FC<EventsViewProps> = ({ setView }) => {
     };
   }, [myRegs, qrByRegId]);
 
-  const myEventIds = useMemo(() => new Set(myRegs.map((r) => r.event_id)), [myRegs]);
+  const mySessionIds = useMemo(() => new Set(myRegs.map((r) => r.session_id)), [myRegs]);
 
-  const openEventRegistration = (eventId: string) => {
+  const openEventRegistration = (eventId: string, sessionId?: string) => {
     const url = new URL(window.location.href);
     url.searchParams.set('event', eventId);
+    if (sessionId) {
+      url.searchParams.set('session', sessionId);
+    } else {
+      url.searchParams.delete('session');
+    }
     url.hash = '';
     window.history.replaceState({}, '', url.toString());
     setView('EVENT_REGISTRATION');
@@ -120,11 +139,11 @@ export const EventsView: React.FC<EventsViewProps> = ({ setView }) => {
                     <p className="text-[15px] font-semibold text-slate-900">{reg.event?.name || 'Event'}</p>
                     <p className="text-[12px] text-slate-500">
                       <CalendarDays size={12} className="inline mr-1" />
-                      {reg.event?.distribution_date || 'TBD'}
+                      {formatSession(reg.session || getEventPrimarySession(reg.event))}
                     </p>
                     <p className="text-[12px] text-slate-600 mt-1">
                       <MapPin size={12} className="inline mr-1" />
-                      Location Address: {reg.event?.location_name || 'Not provided yet'}
+                      Location Address: {reg.session?.location_name || getEventPrimarySession(reg.event)?.location_name || 'Not provided yet'}
                     </p>
                   </div>
                   <span className="text-[10px] font-bold uppercase px-2 py-1 rounded bg-emerald-50 text-emerald-700">Saved</span>
@@ -151,7 +170,7 @@ export const EventsView: React.FC<EventsViewProps> = ({ setView }) => {
                   </div>
                 )}
 
-                <Button fullWidth size="sm" onClick={() => openEventRegistration(reg.event_id)}>
+                <Button fullWidth size="sm" onClick={() => openEventRegistration(reg.event_id, reg.session_id)}>
                   Edit Response
                 </Button>
               </Card>
@@ -171,22 +190,29 @@ export const EventsView: React.FC<EventsViewProps> = ({ setView }) => {
             events.map((ev) => (
               <Card key={ev.id} className="p-4">
                 <p className="text-[15px] font-semibold text-slate-900">{ev.name}</p>
-                <p className="text-[12px] text-slate-500 mt-1">
-                  <CalendarDays size={12} className="inline mr-1" />
-                  {ev.distribution_date}
-                </p>
-                <p className="text-[12px] text-slate-600 mt-1">
-                  <MapPin size={12} className="inline mr-1" />
-                  Location Address: {ev.location_name || 'Not provided yet'}
-                </p>
-                <Button
-                  fullWidth
-                  size="sm"
-                  className="mt-3"
-                  onClick={() => openEventRegistration(ev.id)}
-                >
-                  {myEventIds.has(ev.id) ? 'View / Edit My Response' : 'Register'}
-                </Button>
+                <div className="space-y-2 mt-3">
+                  {(ev.sessions ?? []).map((session) => (
+                    <div key={session.id} className="rounded-xl border border-slate-200 p-3">
+                      <p className="text-[13px] font-semibold text-slate-800">{session.session_name}</p>
+                      <p className="text-[12px] text-slate-500 mt-1">
+                        <CalendarDays size={12} className="inline mr-1" />
+                        {formatSession(session)}
+                      </p>
+                      <p className="text-[12px] text-slate-600 mt-1">
+                        <MapPin size={12} className="inline mr-1" />
+                        Location Address: {session.location_name || 'Not provided yet'}
+                      </p>
+                      <Button
+                        fullWidth
+                        size="sm"
+                        className="mt-3"
+                        onClick={() => openEventRegistration(ev.id, session.id)}
+                      >
+                        {mySessionIds.has(session.id) ? 'View / Edit My Response' : 'Register'}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               </Card>
             ))
           ) : (
