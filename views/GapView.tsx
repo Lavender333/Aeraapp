@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { GapDocumentAttachment, GapRevenueSettings, HelpRequestData, HelpRequestRecord, ViewState, UserRole } from '../types';
+import { getGapRevenueSettingsRemote, saveGapRevenueSettingsRemote } from '../services/api';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Input, Textarea } from '../components/Input';
@@ -91,6 +92,19 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
   const [revenueSettings, setRevenueSettings] = useState<GapRevenueSettings>(() => StorageService.getGapRevenueSettings());
   const [revenueDraft, setRevenueDraft] = useState<GapRevenueSettings>(() => StorageService.getGapRevenueSettings());
   const [revenueSaveMsg, setRevenueSaveMsg] = useState('');
+
+  // Sync revenue settings from server on mount (CORE admin only)
+  useEffect(() => {
+    if (!isCoreAdmin) return;
+    getGapRevenueSettingsRemote()
+      .then((remote) => {
+        if (!remote) return;
+        StorageService.setGapRevenueSettings(remote);
+        setRevenueSettings(remote);
+        setRevenueDraft(remote);
+      })
+      .catch(() => {/* silently fall back to local */});
+  }, [isCoreAdmin]);
   const [formMode, setFormMode] = useState<'HARDSHIP' | 'ADVANCE'>('HARDSHIP');
   const [formStep, setFormStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [isSubmittingForm, setIsSubmittingForm] = useState(false);
@@ -936,15 +950,32 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
                   >Reset</Button>
                   <Button
                     onClick={() => {
-                      const saved = StorageService.setGapRevenueSettings(revenueDraft);
-                      setRevenueSettings(saved);
-                      setRevenueDraft(saved);
-                      setRevenueSaveMsg('Revenue settings saved.');
+                        const localSaved = StorageService.setGapRevenueSettings(revenueDraft);
+                        setRevenueSettings(localSaved);
+                        setRevenueDraft(localSaved);
+                        setRevenueSaveMsg('Saving…');
+                        saveGapRevenueSettingsRemote(localSaved)
+                          .then(() => setRevenueSaveMsg('Revenue settings saved to server.'))
+                          .catch(() => setRevenueSaveMsg('Saved locally. Remote sync failed — will retry on next load.'));
                     }}
                   >Save Settings</Button>
                 </div>
               </div>
             )}
+          </Card>
+        )}
+
+        {isCoreAdmin && (
+          <Card className="border-emerald-200 bg-emerald-50 space-y-2">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <h3 className="font-bold text-slate-900">G.A.P. Fund Management</h3>
+                <p className="text-xs text-slate-600">Manage all org bank info, record disbursements, and track fund balances.</p>
+              </div>
+              <Button onClick={() => setView('GAP_MANAGEMENT')}>
+                Open Management →
+              </Button>
+            </div>
           </Card>
         )}
 

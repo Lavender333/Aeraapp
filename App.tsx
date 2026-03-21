@@ -42,6 +42,7 @@ const HelpFormView = lazyWithRetry(() => import('./views/HelpFormView').then((m)
 const SettingsView = lazyWithRetry(() => import('./views/SettingsView').then((m) => ({ default: m.SettingsView })));
 const MapView = lazyWithRetry(() => import('./views/MapView').then((m) => ({ default: m.MapView })));
 const GapView = lazyWithRetry(() => import('./views/GapView').then((m) => ({ default: m.GapView })));
+const GapManagementView = lazyWithRetry(() => import('./views/GapManagementView').then((m) => ({ default: m.GapManagementView })));
 const AssessmentView = lazyWithRetry(() => import('./views/AssessmentView').then((m) => ({ default: m.AssessmentView })));
 const PopulationView = lazyWithRetry(() => import('./views/PopulationView').then((m) => ({ default: m.PopulationView })));
 const RecoveryView = lazyWithRetry(() => import('./views/RecoveryView').then((m) => ({ default: m.RecoveryView })));
@@ -348,6 +349,8 @@ export default function App() {
         return <DashboardView setView={setView} />;
       case 'GAP':
         return <GapView setView={setView} />;
+      case 'GAP_MANAGEMENT':
+        return currentRole === 'ADMIN' ? <GapManagementView setView={setView} /> : <DashboardView setView={setView} />;
       case 'ASSESSMENT':
         return <AssessmentView setView={setView} />;
       case 'POPULATION':
@@ -411,6 +414,7 @@ export default function App() {
     'SETTINGS',
     'MAP',
     'GAP',
+    'GAP_MANAGEMENT',
     'ASSESSMENT',
     'POPULATION',
     'RECOVERY',

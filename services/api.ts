@@ -1,4 +1,4 @@
-import type { HouseholdMember, OrgInventory, UserProfile } from '../types';
+import type { GapDisbursement, GapRevenueSettings, HouseholdMember, OrgBankInfo, OrgInventory, UserProfile } from '../types';
 import { supabase, getOrgByCode, getOrgIdByCode } from './supabase';
 import { calculateAgeFromDob, isValidPhoneForInvite, normalizePhoneDigits, validateHouseholdMembers } from './validation';
 import type { VisionAssessmentResult } from './visionAssessment';
@@ -4882,4 +4882,254 @@ export async function removeMember(orgCode: string, memberId: string) {
     orgCode,
   });
   return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// G.A.P. Fund: revenue settings (stored in app_settings table)
+// ---------------------------------------------------------------------------
+
+const GAP_REV_SETTINGS_KEY = 'gap_revenue_settings';
+
+export async function getGapRevenueSettingsRemote(): Promise<GapRevenueSettings | null> {
+  const { data, error } = await supabase
+    .from('app_settings')
+    .select('value_text')
+    .eq('key', GAP_REV_SETTINGS_KEY)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message || 'Unable to load G.A.P. revenue settings');
+  if (!data?.value_text) return null;
+
+  try {
+    return JSON.parse(String(data.value_text)) as GapRevenueSettings;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveGapRevenueSettingsRemote(settings: GapRevenueSettings): Promise<GapRevenueSettings> {
+  const { data: authData } = await supabase.auth.getUser();
+  const userId = authData?.user?.id || null;
+
+  const payload = {
+    membershipPriceUsd: Number(settings.membershipPriceUsd || 9.99),
+    appStoreFeePercent: Number(settings.appStoreFeePercent || 30),
+    gapFundAllocationPercent: Number(settings.gapFundAllocationPercent || 30),
+    billingCycle: settings.billingCycle === 'annual' ? 'annual' : 'monthly',
+    updatedAt: new Date().toISOString(),
+  };
+
+  const { data: rows, error } = await supabase
+    .from('app_settings')
+    .upsert({ key: GAP_REV_SETTINGS_KEY, value_text: JSON.stringify(payload), updated_by: userId }, { onConflict: 'key' })
+    .select('value_text')
+    .single();
+
+  if (error || !rows) throw new Error(error?.message || 'Unable to save G.A.P. revenue settings');
+
+  try {
+    return JSON.parse(String((rows as any).value_text)) as GapRevenueSettings;
+  } catch {
+    return payload as GapRevenueSettings;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// G.A.P. Fund: org bank info
+// ---------------------------------------------------------------------------
+
+function mapBankInfoRow(row: any, orgCode?: string): OrgBankInfo {
+  return {
+    id: String(row.id || ''),
+    orgCode: String(row.org_code || orgCode || ''),
+    bankName: String(row.bank_name || ''),
+    beneficiaryName: String(row.beneficiary_name || ''),
+    routingNumber: String(row.routing_number || ''),
+    accountLast4: String(row.account_last4 || ''),
+    accountType: row.account_type === 'savings' ? 'savings' : 'checking',
+    ein: row.ein ? String(row.ein) : undefined,
+    bankAddress: row.bank_address ? String(row.bank_address) : undefined,
+    notes: row.notes ? String(row.notes) : undefined,
+    verified: Boolean(row.verified),
+    verifiedAt: row.verified_at ? String(row.verified_at) : undefined,
+    updatedAt: row.updated_at ? String(row.updated_at) : undefined,
+  };
+}
+
+export async function getOrgGapBankInfo(orgCode: string): Promise<OrgBankInfo | null> {
+  const org = await getOrgByCode(orgCode);
+  if (!org?.orgId) return null;
+
+  const { data, error } = await supabase
+    .from('gap_org_bank_info')
+    .select('*')
+    .eq('organization_id', org.orgId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message || 'Unable to load bank info');
+  if (!data) return null;
+  return mapBankInfoRow(data, orgCode);
+}
+
+export async function saveOrgGapBankInfo(
+  orgCode: string,
+  bankInfo: Partial<OrgBankInfo>,
+): Promise<OrgBankInfo> {
+  const org = await getOrgByCode(orgCode);
+  if (!org?.orgId) throw new Error('Organization not found');
+
+  const { data: authData } = await supabase.auth.getUser();
+  const userId = authData?.user?.id || null;
+
+  const upsertPayload = {
+    organization_id: org.orgId,
+    org_code: orgCode.toUpperCase().trim(),
+    bank_name: String(bankInfo.bankName || '').trim(),
+    beneficiary_name: String(bankInfo.beneficiaryName || '').trim(),
+    routing_number: String(bankInfo.routingNumber || '').replace(/\D/g, '').slice(0, 9),
+    account_last4: String(bankInfo.accountLast4 || '').replace(/\D/g, '').slice(-4),
+    account_type: bankInfo.accountType === 'savings' ? 'savings' : 'checking',
+    ein: bankInfo.ein ? String(bankInfo.ein).trim() : null,
+    bank_address: bankInfo.bankAddress ? String(bankInfo.bankAddress).trim() : null,
+    notes: bankInfo.notes ? String(bankInfo.notes).trim() : null,
+    updated_by: userId,
+  };
+
+  const { data: rows, error } = await supabase
+    .from('gap_org_bank_info')
+    .upsert(upsertPayload, { onConflict: 'organization_id' })
+    .select('*')
+    .single();
+
+  if (error || !rows) throw new Error(error?.message || 'Unable to save bank info');
+  return mapBankInfoRow(rows, orgCode);
+}
+
+export async function listAllOrgGapBankInfo(): Promise<OrgBankInfo[]> {
+  const { data, error } = await supabase
+    .from('gap_org_bank_info')
+    .select('*')
+    .order('org_code');
+
+  if (error) throw new Error(error.message || 'Unable to list org bank info');
+  return (data || []).map((row) => mapBankInfoRow(row));
+}
+
+// ---------------------------------------------------------------------------
+// G.A.P. Fund: disbursements
+// ---------------------------------------------------------------------------
+
+function mapDisbursementRow(row: any): GapDisbursement {
+  return {
+    id: String(row.id || ''),
+    orgCode: String(row.org_code || ''),
+    amountCents: Number(row.amount_cents || 0),
+    status: (['INITIATED', 'PENDING', 'SENT', 'CONFIRMED', 'FAILED'].includes(row.status)
+      ? row.status : 'INITIATED') as GapDisbursement['status'],
+    disbursementDate: String(row.disbursement_date || ''),
+    paymentMethod: (['ACH', 'WIRE', 'CHECK'].includes(row.payment_method)
+      ? row.payment_method : 'ACH') as GapDisbursement['paymentMethod'],
+    referenceNumber: row.reference_number ? String(row.reference_number) : undefined,
+    notes: row.notes ? String(row.notes) : undefined,
+    approvedBy: row.approved_by ? String(row.approved_by) : undefined,
+    createdAt: String(row.created_at || ''),
+  };
+}
+
+export async function listGapDisbursements(orgCode?: string): Promise<GapDisbursement[]> {
+  let query = supabase
+    .from('gap_disbursements')
+    .select('*')
+    .order('disbursement_date', { ascending: false })
+    .order('created_at', { ascending: false });
+
+  if (orgCode) {
+    query = query.eq('org_code', orgCode.toUpperCase().trim());
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message || 'Unable to list disbursements');
+  return (data || []).map(mapDisbursementRow);
+}
+
+export async function recordGapDisbursement(payload: {
+  orgCode: string;
+  amountUsd: number;
+  disbursementDate: string;
+  paymentMethod: GapDisbursement['paymentMethod'];
+  referenceNumber?: string;
+  notes?: string;
+}): Promise<GapDisbursement> {
+  const org = await getOrgByCode(payload.orgCode);
+  if (!org?.orgId) throw new Error('Organization not found');
+
+  const { data: authData } = await supabase.auth.getUser();
+  const userId = authData?.user?.id || null;
+
+  const amountCents = Math.round(Math.max(0.01, Number(payload.amountUsd || 0)) * 100);
+
+  const { data: rows, error } = await supabase
+    .from('gap_disbursements')
+    .insert({
+      organization_id: org.orgId,
+      org_code: payload.orgCode.toUpperCase().trim(),
+      amount_cents: amountCents,
+      status: 'INITIATED',
+      disbursement_date: payload.disbursementDate,
+      payment_method: payload.paymentMethod || 'ACH',
+      reference_number: payload.referenceNumber ? String(payload.referenceNumber).trim() : null,
+      notes: payload.notes ? String(payload.notes).trim() : null,
+      approved_by: userId,
+    })
+    .select('*')
+    .single();
+
+  if (error || !rows) throw new Error(error?.message || 'Unable to record disbursement');
+
+  await safeLogActivity({
+    action: 'CREATE',
+    entityType: 'gap_disbursements',
+    entityId: (rows as any).id,
+    orgCode: payload.orgCode,
+    details: { amount_cents: amountCents, payment_method: payload.paymentMethod },
+  });
+
+  return mapDisbursementRow(rows);
+}
+
+export async function updateGapDisbursementStatus(
+  id: string,
+  status: GapDisbursement['status'],
+  referenceNumber?: string,
+): Promise<GapDisbursement> {
+  const updatePayload: Record<string, unknown> = { status };
+  if (referenceNumber !== undefined) updatePayload.reference_number = String(referenceNumber).trim() || null;
+
+  const { data: rows, error } = await supabase
+    .from('gap_disbursements')
+    .update(updatePayload)
+    .eq('id', id)
+    .select('*')
+    .single();
+
+  if (error || !rows) throw new Error(error?.message || 'Unable to update disbursement status');
+  return mapDisbursementRow(rows);
+}
+
+export async function listOrgMemberCounts(): Promise<Array<{ orgId: string; memberCount: number }>> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('org_id')
+    .not('org_id', 'is', null);
+
+  if (error) throw new Error(error.message || 'Unable to load member counts');
+
+  const counts = new Map<string, number>();
+  for (const row of data || []) {
+    const orgId = String((row as any).org_id || '').trim();
+    if (!orgId) continue;
+    counts.set(orgId, (counts.get(orgId) || 0) + 1);
+  }
+
+  return Array.from(counts.entries()).map(([orgId, memberCount]) => ({ orgId, memberCount }));
 }

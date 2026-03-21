@@ -984,6 +984,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         </div>
       </section>
 
+      {userRole === 'ADMIN' && (
+        <section className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">G.A.P. Fund</p>
+              <p className="text-lg font-bold text-slate-900 mt-1">Hardship program controls</p>
+              <p className="text-xs text-slate-600 mt-1">Open G.A.P. review or jump straight into fund management for bank info and disbursements.</p>
+            </div>
+            <div className="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+              <DollarSign size={20} />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => setView('GAP')}>
+              Open G.A.P.
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setView('GAP_MANAGEMENT')}>
+              Manage Fund
+            </Button>
+          </div>
+        </section>
+      )}
+
       {isGeneralUser && hasOnboardingStepsIncomplete && showOnboardingWelcomeCard && (
         <section className="bg-white/95 border border-amber-200 rounded-2xl p-4 shadow-sm">
           <div className="flex items-start justify-between gap-3">

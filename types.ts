@@ -1,5 +1,5 @@
 
-export type ViewState = 'SPLASH' | 'LOGIN' | 'REGISTRATION' | 'ACCOUNT_SETUP' | 'DASHBOARD' | 'HELP_WIZARD' | 'SETTINGS' | 'NEW_SIGNUPS' | 'MAP' | 'ALERTS' | 'GAP' | 'ASSESSMENT' | 'POPULATION' | 'RECOVERY' | 'DRONE' | 'LOGISTICS' | 'ORG_DASHBOARD' | 'PRESENTATION' | 'PRIVACY_POLICY' | 'RESET_PASSWORD' | 'BUILD_KIT' | 'READINESS' | 'READINESS_GAP' | 'EVENTS' | 'EVENT_SETUP' | 'EVENT_REGISTRATION' | 'VOLUNTEER_SCAN' | 'EVENT_DASHBOARD' | 'SHELTER_LOCATOR';
+export type ViewState = 'SPLASH' | 'LOGIN' | 'REGISTRATION' | 'ACCOUNT_SETUP' | 'DASHBOARD' | 'HELP_WIZARD' | 'SETTINGS' | 'NEW_SIGNUPS' | 'MAP' | 'ALERTS' | 'GAP' | 'GAP_MANAGEMENT' | 'ASSESSMENT' | 'POPULATION' | 'RECOVERY' | 'DRONE' | 'LOGISTICS' | 'ORG_DASHBOARD' | 'PRESENTATION' | 'PRIVACY_POLICY' | 'RESET_PASSWORD' | 'BUILD_KIT' | 'READINESS' | 'READINESS_GAP' | 'EVENTS' | 'EVENT_SETUP' | 'EVENT_REGISTRATION' | 'VOLUNTEER_SCAN' | 'EVENT_DASHBOARD' | 'SHELTER_LOCATOR';
 
 export interface GapRevenueSettings {
   /** App Store listing price per membership (USD) */
@@ -12,6 +12,40 @@ export interface GapRevenueSettings {
   billingCycle: 'monthly' | 'annual';
   /** ISO timestamp of last change */
   updatedAt: string;
+}
+
+export interface GapDocumentAttachment {
+/** Bank / ACH profile submitted by an org for G.A.P. fund disbursement */
+export interface OrgBankInfo {
+  id?: string;
+  orgCode: string;
+  orgName?: string;
+  bankName: string;
+  beneficiaryName: string;      // Legal registered name of the organization
+  routingNumber: string;        // 9-digit ABA routing number (public info)
+  accountLast4: string;         // Last 4 digits of account # for display/verification
+  accountType: 'checking' | 'savings';
+  ein?: string;                 // EIN format XX-XXXXXXX for charitable compliance
+  bankAddress?: string;         // Optional branch address for wire transfers
+  notes?: string;
+  verified: boolean;
+  verifiedAt?: string;
+  updatedAt?: string;
+}
+
+/** Record of an actual bank transfer (ACH/wire/check) sent to an organization */
+export interface GapDisbursement {
+  id: string;
+  orgCode: string;
+  orgName?: string;
+  amountCents: number;           // Amount in cents (e.g. 50000 = $500.00)
+  status: 'INITIATED' | 'PENDING' | 'SENT' | 'CONFIRMED' | 'FAILED';
+  disbursementDate: string;      // ISO date YYYY-MM-DD
+  paymentMethod: 'ACH' | 'WIRE' | 'CHECK';
+  referenceNumber?: string;      // Chase ACH trace / confirmation number
+  notes?: string;
+  approvedBy?: string;
+  createdAt: string;
 }
 
 export interface GapDocumentAttachment {
