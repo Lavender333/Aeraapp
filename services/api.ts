@@ -77,6 +77,11 @@ type ConnectedMemberDirectoryRecord = {
   lastCheckIn: string;
 };
 
+export type ConnectedMemberMapRecord = ConnectedMemberDirectoryRecord & {
+  countyId: string | null;
+  stateId: string | null;
+};
+
 const buildConnectedMembersByOrgIds = async (orgIds: string[]): Promise<Map<string, ConnectedMemberDirectoryRecord[]>> => {
   const normalizedOrgIds = Array.from(new Set((orgIds || []).map((value) => String(value || '').trim()).filter(Boolean)));
   const byOrg = new Map<string, Map<string, ConnectedMemberDirectoryRecord>>();
@@ -191,6 +196,46 @@ export async function getConnectedMemberCountByOrgIds(orgIds: string[]): Promise
     total += rows.length;
   }
   return total;
+}
+
+export async function listConnectedMembersByOrgIds(orgIds: string[]): Promise<ConnectedMemberMapRecord[]> {
+  const normalizedOrgIds = Array.from(new Set((orgIds || []).map((value) => String(value || '').trim()).filter(Boolean)));
+  if (normalizedOrgIds.length === 0) return [];
+
+  const byOrg = await buildConnectedMembersByOrgIds(normalizedOrgIds);
+
+  const { data: profileScopes, error: scopeError } = await supabase
+    .from('profiles')
+    .select('id, org_id, county_id, state_id')
+    .in('org_id', normalizedOrgIds);
+
+  if (scopeError) throw scopeError;
+
+  const scopeByCompositeKey = new Map<string, { countyId: string | null; stateId: string | null }>();
+  for (const row of profileScopes || []) {
+    const memberId = String((row as any).id || '').trim();
+    const orgId = String((row as any).org_id || '').trim();
+    if (!memberId || !orgId) continue;
+    scopeByCompositeKey.set(`${orgId}::${memberId}`, {
+      countyId: String((row as any).county_id || '').trim() || null,
+      stateId: String((row as any).state_id || '').trim() || null,
+    });
+  }
+
+  const result: ConnectedMemberMapRecord[] = [];
+  for (const orgId of normalizedOrgIds) {
+    const members = byOrg.get(orgId) || [];
+    for (const member of members) {
+      const scope = scopeByCompositeKey.get(`${orgId}::${member.id}`);
+      result.push({
+        ...member,
+        countyId: scope?.countyId || null,
+        stateId: scope?.stateId || null,
+      });
+    }
+  }
+
+  return result;
 }
 
 const dataUrlToBlob = async (dataUrl: string): Promise<Blob> => {

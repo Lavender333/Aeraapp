@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
-import { GeoJSON, MapContainer, TileLayer } from 'react-leaflet';
+import { CircleMarker, GeoJSON, MapContainer, Popup, TileLayer } from 'react-leaflet';
 import type { PathOptions } from 'leaflet';
 import { ViewState, UserRole } from '../types';
 import { ArrowLeft, Layers, Users, Map as MapIcon, List, AlertTriangle, Activity, Loader2 } from 'lucide-react';
 import { StorageService } from '../services/storage';
-import { getConnectedMemberCountByOrgIds, listChildOrganizations } from '../services/api';
+import { getConnectedMemberCountByOrgIds, listChildOrganizations, listConnectedMembersByOrgIds, type ConnectedMemberMapRecord } from '../services/api';
 import {
   getCurrentMapScope,
   listActiveStateAlerts,
@@ -58,6 +58,8 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
   const [householdJoinActivity, setHouseholdJoinActivity] = useState<StateHouseholdJoinActivityRecord[]>([]);
   const [orgPopulationRollups, setOrgPopulationRollups] = useState<OrganizationPopulationRollupRecord[]>([]);
   const [connectedMemberTotal, setConnectedMemberTotal] = useState(0);
+  const [linkedMembers, setLinkedMembers] = useState<ConnectedMemberMapRecord[]>([]);
+  const [showLinkedMembers, setShowLinkedMembers] = useState(true);
   const [mapScope, setMapScope] = useState<{ role?: UserRole; org_id?: string | null; county_id?: string | null; state_id?: string | null } | null>(null);
 
   const localProfile = useMemo(() => StorageService.getProfile(), []);
@@ -101,11 +103,17 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
       ]);
 
       let connectedTotal = 0;
+      let connectedMembers: ConnectedMemberMapRecord[] = [];
       if (ORG_ROLES.includes(scopedRole) && scopedOrgIds.length > 0) {
         try {
-          connectedTotal = await getConnectedMemberCountByOrgIds(scopedOrgIds);
+          const [count, members] = await Promise.all([
+            getConnectedMemberCountByOrgIds(scopedOrgIds),
+            listConnectedMembersByOrgIds(scopedOrgIds),
+          ]);
+          connectedTotal = count;
+          connectedMembers = members;
         } catch (countError) {
-          console.warn('Unable to load connected member count for map scope', countError);
+          console.warn('Unable to load connected members for map scope', countError);
         }
       }
 
@@ -116,6 +124,7 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
       setHouseholdJoinActivity(joinRows);
       setOrgPopulationRollups(orgRollupRows);
       setConnectedMemberTotal(connectedTotal);
+      setLinkedMembers(connectedMembers);
     } catch (err: any) {
       setLoadError(err?.message || 'Unable to load map layers.');
     } finally {
@@ -260,6 +269,65 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     } as any;
   }, [canSeeOrgDetail, effectiveRole, mapScope?.org_id, regions, visibleSnapshots]);
 
+  const centroidByScopeKey = useMemo(() => {
+    const map = new Map<string, { lat: number; lng: number }>();
+    for (const region of regions) {
+      const raw = (region as any)?.centroid_geojson;
+      const key = buildScopeKey(region.state_id, region.county_id);
+      if (!raw || map.has(key)) continue;
+
+      let lng: number | null = null;
+      let lat: number | null = null;
+
+      if (raw?.type === 'Point' && Array.isArray(raw.coordinates) && raw.coordinates.length >= 2) {
+        lng = Number(raw.coordinates[0]);
+        lat = Number(raw.coordinates[1]);
+      } else if (Array.isArray(raw) && raw.length >= 2) {
+        lng = Number(raw[0]);
+        lat = Number(raw[1]);
+      } else if (typeof raw === 'object') {
+        lng = Number(raw.lng ?? raw.longitude ?? raw.lon ?? NaN);
+        lat = Number(raw.lat ?? raw.latitude ?? NaN);
+      }
+
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        map.set(key, { lat: Number(lat), lng: Number(lng) });
+      }
+    }
+    return map;
+  }, [regions]);
+
+  const linkedMemberMarkers = useMemo(() => {
+    const hash = (value: string) => {
+      let h = 0;
+      for (let i = 0; i < value.length; i += 1) {
+        h = (h << 5) - h + value.charCodeAt(i);
+        h |= 0;
+      }
+      return Math.abs(h);
+    };
+
+    const withPoints = linkedMembers
+      .map((member) => {
+        const key = buildScopeKey(member.stateId, member.countyId);
+        const centroid = centroidByScopeKey.get(key);
+        if (!centroid) return null;
+
+        const seed = hash(member.id);
+        const angle = (seed % 360) * (Math.PI / 180);
+        const magnitude = ((seed % 11) / 10) * 0.07;
+
+        return {
+          ...member,
+          lat: centroid.lat + Math.sin(angle) * magnitude,
+          lng: centroid.lng + Math.cos(angle) * magnitude,
+        };
+      })
+      .filter(Boolean) as Array<ConnectedMemberMapRecord & { lat: number; lng: number }>;
+
+    return withPoints;
+  }, [centroidByScopeKey, linkedMembers]);
+
   const mapStyle = useCallback(
     (feature: any): PathOptions => {
       const key = buildScopeKey(feature?.properties?.state_id, feature?.properties?.county_id);
@@ -357,6 +425,15 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
             </span>
           )}
           {canSeeOrgDetail && mapScope?.org_id && (
+            <button
+              type="button"
+              onClick={() => setShowLinkedMembers((value) => !value)}
+              className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap border ${showLinkedMembers ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
+            >
+              Member Points: {showLinkedMembers ? 'On' : 'Off'} ({linkedMemberMarkers.length})
+            </button>
+          )}
+          {canSeeOrgDetail && mapScope?.org_id && (
             <span className="px-3 py-1 bg-rose-50 border border-rose-200 text-rose-700 rounded-full text-xs font-medium whitespace-nowrap">
               Evac Assist: {orgPopulationSummary.evacuationAssist}
             </span>
@@ -409,6 +486,27 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                     }}
                   />
                 )}
+                {canSeeOrgDetail && showLinkedMembers && linkedMemberMarkers.map((member) => {
+                  const color = member.status === 'DANGER' ? '#ef4444' : member.status === 'SAFE' ? '#22c55e' : '#3b82f6';
+                  return (
+                    <CircleMarker
+                      key={`member-${member.orgId}-${member.id}`}
+                      center={[member.lat, member.lng]}
+                      radius={4}
+                      pathOptions={{ color, fillColor: color, fillOpacity: 0.85, weight: 1 }}
+                    >
+                      <Popup>
+                        <div className="text-sm">
+                          <p><strong>{member.name}</strong></p>
+                          <p>Status: {member.status}</p>
+                          {member.phone && <p>Phone: {member.phone}</p>}
+                          {member.address && <p>Address: {member.address}</p>}
+                          {member.lastCheckIn && <p>Last Check-In: {new Date(member.lastCheckIn).toLocaleString()}</p>}
+                        </div>
+                      </Popup>
+                    </CircleMarker>
+                  );
+                })}
               </MapContainer>
 
               <div className="absolute bottom-4 left-4 right-4 bg-white/95 backdrop-blur p-4 rounded-xl shadow-lg border border-slate-200">
@@ -418,7 +516,7 @@ export const PopulationView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                     <p className="text-base font-bold text-slate-900">{visibleSnapshots.length} region snapshot(s)</p>
                     <p className="text-sm text-slate-600">
                       {alerts.length} active alert(s) • {joinActivitySummary.submitted24h} join submissions in 24h • realtime enabled
-                      {canSeeOrgDetail && mapScope?.org_id ? ` • ${connectedMemberTotal} linked org members` : ''}
+                      {canSeeOrgDetail && mapScope?.org_id ? ` • ${connectedMemberTotal} linked org members (${linkedMemberMarkers.length} mapped)` : ''}
                     </p>
                   </div>
                   <Layers className="text-slate-400" />
