@@ -14,13 +14,14 @@ jobs:
       contents: read
 
     env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       AERA_MODEL_VERSION: ${{ vars.AERA_MODEL_VERSION || 'level3-2026.02' }}
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Python
         uses: actions/setup-python@v5
