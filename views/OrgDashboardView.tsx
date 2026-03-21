@@ -1431,7 +1431,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                 <div>
                   <h3 className="text-sm font-bold text-emerald-900">Nearby Outreach Panel</h3>
                   <p className="text-xs text-emerald-800 mt-1">
-                    Opted-in app users not connected to an organization/trusted network.
+                    Opted-in app users within range (same-org members plus unconnected users outside trusted networks).
                   </p>
                 </div>
                 <div className="text-right">

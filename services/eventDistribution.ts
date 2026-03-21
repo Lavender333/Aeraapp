@@ -1295,8 +1295,7 @@ export async function getOrgLeaderOutreachCandidates(
       .neq('id', authData.user.id)
       .not('latitude', 'is', null)
       .not('longitude', 'is', null)
-      .eq('geofenced_outreach_opt_in', true)
-      .is('org_id', null);
+      .eq('geofenced_outreach_opt_in', true);
 
     if (candidateError) throw new Error(candidateError.message);
 
@@ -1323,7 +1322,11 @@ export async function getOrgLeaderOutreachCandidates(
 
     for (const row of profileRows || []) {
       const profileId = String((row as any)?.id || '').trim();
-      if (!profileId || trustedIds.has(profileId)) continue;
+      if (!profileId) continue;
+
+      const rowOrgId = String((row as any)?.org_id || '').trim() || null;
+      if (rowOrgId && rowOrgId !== targetOrgId) continue;
+      if (!rowOrgId && trustedIds.has(profileId)) continue;
 
       const lat = Number((row as any)?.latitude);
       const lng = Number((row as any)?.longitude);
