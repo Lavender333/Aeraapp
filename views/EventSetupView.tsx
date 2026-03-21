@@ -51,13 +51,19 @@ const SUPPLY_TYPES: Array<{ value: SupplyType; label: string }> = [
 interface SupplyRow {
   supply_type: SupplyType;
   supply_label: string;
+  unit_type: string;
+  pack_size: string;
   starting_count: string;
   low_stock_threshold: string;
 }
 
+const UNIT_TYPES = ['UNIT', 'BOX', 'CASE', 'KIT', 'PACK', 'BAG'];
+
 const defaultSupply = (): SupplyRow => ({
   supply_type: 'FOOD_BOX',
   supply_label: '',
+  unit_type: 'UNIT',
+  pack_size: '1',
   starting_count: '',
   low_stock_threshold: '10',
 });
@@ -80,6 +86,10 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [locationName, setLocationName] = useState('');
+  const [maxRegistrants, setMaxRegistrants] = useState('');
+  const [pickupWindowStart, setPickupWindowStart] = useState('');
+  const [pickupWindowEnd, setPickupWindowEnd] = useState('');
+  const [eventNotes, setEventNotes] = useState('');
   const [supplies, setSupplies] = useState<SupplyRow[]>([defaultSupply()]);
 
   useEffect(() => {
@@ -142,6 +152,8 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
     if (hasBlankLabel) { setError('All supply items need a label.'); return; }
     const hasZeroCount = supplies.some((s) => !s.starting_count || Number(s.starting_count) < 1);
     if (hasZeroCount) { setError('All supply items need a starting count ≥ 1.'); return; }
+    const invalidPackSize = supplies.some((s) => Number(s.pack_size) < 1 || !Number.isFinite(Number(s.pack_size)));
+    if (invalidPackSize) { setError('All supply items need a pack size ≥ 1.'); return; }
 
     setSaving(true);
     try {
@@ -151,6 +163,10 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
         distribution_date: date,
         distribution_time: time || null,
         location_name: locationName.trim() || null,
+        max_registrants: maxRegistrants ? Math.max(1, Math.round(Number(maxRegistrants))) : null,
+        pickup_window_start: pickupWindowStart || null,
+        pickup_window_end: pickupWindowEnd || null,
+        event_notes: eventNotes.trim() || null,
         latitude: null,
         longitude: null,
         status: 'ACTIVE',
@@ -162,6 +178,8 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
           event_id: event.id,
           supply_type: s.supply_type,
           supply_label: s.supply_label.trim(),
+          unit_type: s.unit_type,
+          pack_size: Math.max(1, Math.round(Number(s.pack_size) || 1)),
           starting_count: Number(s.starting_count),
           current_count: Number(s.starting_count),
           low_stock_threshold: Number(s.low_stock_threshold) || 10,
@@ -403,6 +421,43 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
                 value={locationName}
                 onChange={(e) => setLocationName(e.target.value)}
               />
+              <Input
+                label="Max Registrants (optional)"
+                type="number"
+                min={1}
+                placeholder="e.g. 300"
+                value={maxRegistrants}
+                onChange={(e) => setMaxRegistrants(e.target.value)}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[12px] font-medium text-slate-600 mb-1 block">Pickup Window Start (optional)</label>
+                  <input
+                    type="time"
+                    value={pickupWindowStart}
+                    onChange={(e) => setPickupWindowStart(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[12px] font-medium text-slate-600 mb-1 block">Pickup Window End (optional)</label>
+                  <input
+                    type="time"
+                    value={pickupWindowEnd}
+                    onChange={(e) => setPickupWindowEnd(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-[12px] font-medium text-slate-600 mb-1 block">Event Notes (optional)</label>
+                <textarea
+                  value={eventNotes}
+                  onChange={(e) => setEventNotes(e.target.value)}
+                  placeholder="Parking guidance, pickup policy, special instructions..."
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2F7A64] min-h-[84px]"
+                />
+              </div>
             </Card>
 
             {/* Supply inventory */}
@@ -431,6 +486,30 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
                         <Trash2 size={15} />
                       </button>
                     )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] text-slate-500 block mb-1">Unit Type</label>
+                      <select
+                        value={s.unit_type}
+                        onChange={(e) => updateSupply(i, 'unit_type', e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
+                      >
+                        {UNIT_TYPES.map((u) => (
+                          <option key={u} value={u}>{u}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-slate-500 block mb-1">Pack Size</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={s.pack_size}
+                        onChange={(e) => updateSupply(i, 'pack_size', e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
+                      />
+                    </div>
                   </div>
                   <input
                     type="text"

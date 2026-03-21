@@ -21,6 +21,10 @@ export interface DistributionEvent {
   distribution_date: string;
   distribution_time: string | null;
   location_name: string | null;
+  max_registrants: number | null;
+  pickup_window_start: string | null;
+  pickup_window_end: string | null;
+  event_notes: string | null;
   latitude: number | null;
   longitude: number | null;
   status: EventStatus;
@@ -34,6 +38,8 @@ export interface EventSupplyItem {
   event_id: string;
   supply_type: SupplyType;
   supply_label: string;
+  unit_type: string;
+  pack_size: number;
   starting_count: number;
   current_count: number;
   low_stock_threshold: number;
@@ -52,6 +58,19 @@ export interface EventRegistration {
   zip_code: string | null;
   phone: string | null;
   email: string | null;
+  contact_preference: 'SMS' | 'CALL' | 'EMAIL' | string;
+  pickup_after_time: string | null;
+  proxy_pickup: boolean;
+  urgency_tier: 'LOW' | 'MEDIUM' | 'HIGH' | string;
+  delivery_barrier: string | null;
+  children_count: number;
+  seniors_count: number;
+  disability_present: boolean;
+  preferred_language: string;
+  consent_version: string | null;
+  consent_channel: string;
+  geocode_confidence: number | null;
+  geocoded_at: string | null;
   served: boolean;
   served_at: string | null;
   served_by: string | null;
@@ -256,9 +275,22 @@ export interface RegisterParticipantInput {
   zipCode?: string;
   phone?: string;
   email?: string;
+  contactPreference?: 'SMS' | 'CALL' | 'EMAIL';
+  pickupAfterTime?: string;
+  proxyPickup?: boolean;
+  urgencyTier?: 'LOW' | 'MEDIUM' | 'HIGH';
+  deliveryBarrier?: string;
+  childrenCount?: number;
+  seniorsCount?: number;
+  disabilityPresent?: boolean;
+  preferredLanguage?: string;
   outreachOptIn?: boolean;
   latitude?: number;
   longitude?: number;
+  consentVersion?: string;
+  consentChannel?: string;
+  geocodeConfidence?: number;
+  geocodedAt?: string;
   profileId?: string;
   requestedSupplies?: Array<{ supplyItemId: string; supplyLabel: string; quantity: number }>;
 }
@@ -340,6 +372,22 @@ export async function registerParticipant(
       zip_code: input.zipCode ?? null,
       phone: normalizedPhone,
       email: normalizedEmail,
+      contact_preference: input.contactPreference ?? 'SMS',
+      pickup_after_time: input.pickupAfterTime ?? null,
+      proxy_pickup: Boolean(input.proxyPickup),
+      urgency_tier: input.urgencyTier ?? 'MEDIUM',
+      delivery_barrier: input.deliveryBarrier ?? null,
+      children_count: Math.max(0, Math.round(Number(input.childrenCount || 0))),
+      seniors_count: Math.max(0, Math.round(Number(input.seniorsCount || 0))),
+      disability_present: Boolean(input.disabilityPresent),
+      preferred_language: String(input.preferredLanguage || 'en').trim() || 'en',
+      consent_version: input.consentVersion ?? null,
+      consent_channel: input.consentChannel ?? 'WEB',
+      geocode_confidence:
+        typeof input.geocodeConfidence === 'number' && Number.isFinite(input.geocodeConfidence)
+          ? input.geocodeConfidence
+          : null,
+      geocoded_at: input.geocodedAt ?? null,
       outreach_opt_in: input.outreachOptIn ?? false,
       latitude: input.latitude ?? null,
       longitude: input.longitude ?? null,
@@ -377,6 +425,22 @@ export async function registerParticipant(
     zip_code: input.zipCode ?? null,
     phone: normalizedPhone,
     email: normalizedEmail,
+    contact_preference: input.contactPreference ?? 'SMS',
+    pickup_after_time: input.pickupAfterTime ?? null,
+    proxy_pickup: Boolean(input.proxyPickup),
+    urgency_tier: input.urgencyTier ?? 'MEDIUM',
+    delivery_barrier: input.deliveryBarrier ?? null,
+    children_count: Math.max(0, Math.round(Number(input.childrenCount || 0))),
+    seniors_count: Math.max(0, Math.round(Number(input.seniorsCount || 0))),
+    disability_present: Boolean(input.disabilityPresent),
+    preferred_language: String(input.preferredLanguage || 'en').trim() || 'en',
+    consent_version: input.consentVersion ?? null,
+    consent_channel: input.consentChannel ?? 'WEB',
+    geocode_confidence:
+      typeof input.geocodeConfidence === 'number' && Number.isFinite(input.geocodeConfidence)
+        ? input.geocodeConfidence
+        : null,
+    geocoded_at: input.geocodedAt ?? null,
     outreach_opt_in: input.outreachOptIn ?? false,
     latitude: input.latitude ?? null,
     longitude: input.longitude ?? null,

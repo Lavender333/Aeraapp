@@ -304,27 +304,32 @@ export async function fetchOrgMemberPreparednessNeeds(orgCode: string) {
   const orgId = await getOrgIdByCode(orgCode);
   if (!orgId) throw new Error('Organization not found');
 
+  const { data: profiles, error: profileError } = await supabase
+    .from('profiles')
+    .select('id, full_name, phone')
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: false })
+    .limit(500);
+
+  if (profileError) throw profileError;
+
+  const { data: members, error: memberError } = await supabase
+    .from('members')
+    .select('id, name, phone')
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: false })
+    .limit(500);
+
+  if (memberError) throw memberError;
+
   const { data: recs, error: recError } = await supabase
     .from('kit_recommendations')
     .select('profile_id, readiness_score, readiness_cap, risk_tier, critical_missing_items, outreach_flags, updated_at')
     .eq('organization_id', orgId)
     .order('readiness_score', { ascending: true })
-    .limit(100);
+    .limit(500);
 
   if (recError) throw recError;
-  if (!recs || recs.length === 0) return [];
-
-  const profileIds = Array.from(new Set(recs.map((r: any) => r.profile_id).filter(Boolean)));
-  if (profileIds.length === 0) return [];
-
-  const { data: profiles, error: profileError } = await supabase
-    .from('profiles')
-    .select('id, full_name, phone')
-    .in('id', profileIds)
-    .eq('org_id', orgId);
-
-  if (profileError) throw profileError;
-
   const profileMap = new Map<string, { full_name: string | null; phone: string | null }>();
   for (const row of profiles || []) {
     profileMap.set(String((row as any).id), {
@@ -333,24 +338,63 @@ export async function fetchOrgMemberPreparednessNeeds(orgCode: string) {
     });
   }
 
-  return (recs || []).map((row: any) => {
-    const profile = profileMap.get(String(row.profile_id));
-    const criticalMissing = Array.isArray(row.critical_missing_items) ? row.critical_missing_items : [];
-    const outreachFlags = Array.isArray(row.outreach_flags) ? row.outreach_flags : [];
+  for (const row of members || []) {
+    const memberId = String((row as any).id || '');
+    if (!memberId || profileMap.has(memberId)) continue;
+    profileMap.set(memberId, {
+      full_name: (row as any).name || 'Unknown Member',
+      phone: (row as any).phone || null,
+    });
+  }
+
+  const byProfileId = new Map<string, any>();
+  for (const row of recs || []) {
+    byProfileId.set(String((row as any).profile_id), row);
+  }
+
+  const allProfileIds = Array.from(new Set([
+    ...Array.from(profileMap.keys()),
+    ...(recs || []).map((r: any) => String(r.profile_id || '')).filter(Boolean),
+  ]));
+
+  const rows = allProfileIds.map((profileId) => {
+    const row = byProfileId.get(profileId);
+    const profile = profileMap.get(profileId);
+    const hasRecommendation = Boolean(row);
+    const criticalMissing = hasRecommendation && Array.isArray(row.critical_missing_items)
+      ? row.critical_missing_items
+      : [
+          {
+            id: 'preparedness_profile_pending',
+            item: 'Preparedness profile pending',
+            explanation: 'Member has not completed Build Kit/readiness intake yet.',
+          },
+        ];
+    const outreachFlags = hasRecommendation && Array.isArray(row.outreach_flags)
+      ? row.outreach_flags
+      : ['NO_PREPAREDNESS_DATA'];
 
     return {
-      profile_id: String(row.profile_id),
+      profile_id: profileId,
       member_name: profile?.full_name || 'Unknown Member',
       phone: profile?.phone || null,
-      readiness_score: Number(row.readiness_score || 0),
-      readiness_cap: Number(row.readiness_cap || 100),
-      risk_tier: String(row.risk_tier || 'STANDARD'),
+      readiness_score: hasRecommendation ? Number(row.readiness_score || 0) : 0,
+      readiness_cap: hasRecommendation ? Number(row.readiness_cap || 100) : 100,
+      risk_tier: hasRecommendation ? String(row.risk_tier || 'STANDARD') : 'NO_DATA',
       critical_missing_items: criticalMissing,
       critical_missing_count: criticalMissing.length,
       outreach_flags: outreachFlags,
-      updated_at: row.updated_at || null,
+      updated_at: hasRecommendation ? (row.updated_at || null) : null,
     };
   });
+
+  rows.sort((a, b) => {
+    const scoreDiff = Number(a.readiness_score || 0) - Number(b.readiness_score || 0);
+    if (scoreDiff !== 0) return scoreDiff;
+    return String(a.member_name || '').localeCompare(String(b.member_name || ''));
+  });
+
+  return rows;
 }
 
 // --- Parent/child organization helpers ---
@@ -939,6 +983,40 @@ export type HouseholdJoinRequestRecord = {
   resolvedBy?: string;
 };
 
+export const DEFAULT_SELF_SERVICE_ADDITIONAL_MEMBERS = 3;
+
+export type HouseholdExpansionRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export type HouseholdExpansionMemberDraft = {
+  label: string;
+  name?: string;
+  relationship?: string;
+  dateOfBirth?: string;
+  notes?: string;
+  sameAddress?: boolean;
+};
+
+export type HouseholdExpansionRequestRecord = {
+  id: string;
+  householdId: string;
+  requesterProfileId: string;
+  requesterName?: string;
+  requesterPhone?: string;
+  requesterEmail?: string;
+  organizationId?: string;
+  status: HouseholdExpansionRequestStatus;
+  currentAdditionalMembers: number;
+  requestedAdditionalMembers: number;
+  approvedAdditionalMembers?: number;
+  reasonCategory?: string;
+  justification?: string;
+  extraMembers: HouseholdExpansionMemberDraft[];
+  createdAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  reviewNotes?: string;
+};
+
 export type AppNotificationRecord = {
   id: string;
   userId: string;
@@ -967,6 +1045,45 @@ const mapJoinRequestRecord = (
     createdAt: row.created_at,
     resolvedAt: row.resolved_at || undefined,
     resolvedBy: row.resolved_by || undefined,
+  };
+};
+
+const mapHouseholdExpansionRequestRecord = (
+  row: any,
+  profileLookup: Map<string, { full_name?: string | null; phone?: string | null; email?: string | null }>
+): HouseholdExpansionRequestRecord => {
+  const requester = profileLookup.get(String(row.requester_profile_id || ''));
+  return {
+    id: String(row.id),
+    householdId: String(row.household_id),
+    requesterProfileId: String(row.requester_profile_id),
+    requesterName: requester?.full_name || undefined,
+    requesterPhone: requester?.phone || undefined,
+    requesterEmail: requester?.email || undefined,
+    organizationId: row.organization_id || undefined,
+    status: String(row.status || 'pending').toLowerCase() as HouseholdExpansionRequestStatus,
+    currentAdditionalMembers: Math.max(0, Number(row.current_additional_members || 0)),
+    requestedAdditionalMembers: Math.max(0, Number(row.requested_additional_members || 0)),
+    approvedAdditionalMembers:
+      row.approved_additional_members === null || row.approved_additional_members === undefined
+        ? undefined
+        : Math.max(0, Number(row.approved_additional_members || 0)),
+    reasonCategory: row.reason_category || undefined,
+    justification: row.justification || undefined,
+    extraMembers: Array.isArray(row.extra_members)
+      ? row.extra_members.map((member: any) => ({
+          label: String(member?.label || member?.name || '').trim(),
+          name: member?.name ? String(member.name) : undefined,
+          relationship: member?.relationship ? String(member.relationship) : undefined,
+          dateOfBirth: member?.dateOfBirth ? String(member.dateOfBirth) : undefined,
+          notes: member?.notes ? String(member.notes) : undefined,
+          sameAddress: typeof member?.sameAddress === 'boolean' ? member.sameAddress : undefined,
+        })).filter((member: HouseholdExpansionMemberDraft) => member.label)
+      : [],
+    createdAt: String(row.created_at),
+    reviewedAt: row.reviewed_at || undefined,
+    reviewedBy: row.reviewed_by || undefined,
+    reviewNotes: row.review_notes || undefined,
   };
 };
 
@@ -999,6 +1116,24 @@ const normalizeInvitePhone = (phone: string) => {
   if (!digits) return '';
   return digits.length > 10 ? digits : digits.slice(-10);
 };
+
+const normalizeHouseholdExpansionMembers = (members: HouseholdExpansionMemberDraft[]) =>
+  (members || [])
+    .map((member) => {
+      const label = String(member?.label || member?.name || '').trim();
+      const relationship = String(member?.relationship || '').trim();
+      const dateOfBirth = String(member?.dateOfBirth || '').trim();
+      const notes = String(member?.notes || '').trim();
+      return {
+        label,
+        name: String(member?.name || '').trim() || undefined,
+        relationship: relationship || undefined,
+        dateOfBirth: dateOfBirth || undefined,
+        notes: notes || undefined,
+        sameAddress: typeof member?.sameAddress === 'boolean' ? member.sameAddress : true,
+      };
+    })
+    .filter((member) => member.label);
 
 const phonesMatchForInvite = (invitePhone: string, userPhone: string) => {
   const left = normalizeInvitePhone(invitePhone);
@@ -1090,6 +1225,51 @@ const getHouseholdSummaryForMembership = async (membership: {
     householdRole: membership.role,
     memberCount: Number(count || 1),
   };
+};
+
+const getAllowedAdditionalMembersForHousehold = async (householdId: string): Promise<number> => {
+  const normalizedHouseholdId = String(householdId || '').trim();
+  if (!normalizedHouseholdId) return DEFAULT_SELF_SERVICE_ADDITIONAL_MEMBERS;
+
+  const { data, error } = await supabase
+    .from('household_expansion_requests')
+    .select('approved_additional_members, requested_additional_members')
+    .eq('household_id', normalizedHouseholdId)
+    .eq('status', 'approved')
+    .order('reviewed_at', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return DEFAULT_SELF_SERVICE_ADDITIONAL_MEMBERS;
+
+  return Math.max(
+    DEFAULT_SELF_SERVICE_ADDITIONAL_MEMBERS,
+    Number((data as any).approved_additional_members || 0),
+    Number((data as any).requested_additional_members || 0),
+  );
+};
+
+const assertAdditionalHouseholdMembersWithinLimit = async (payload: {
+  profileId: string;
+  additionalMemberCount: number;
+  householdIdHint?: string;
+}) => {
+  const profileId = String(payload.profileId || '').trim();
+  if (!profileId) throw new Error('Not authenticated');
+
+  const membership = await getCurrentHouseholdMembership(profileId);
+  const targetHouseholdId = String(payload.householdIdHint || membership?.household_id || '').trim();
+  const limit = await getAllowedAdditionalMembersForHousehold(targetHouseholdId);
+  const count = Math.max(0, Number(payload.additionalMemberCount || 0));
+
+  if (count <= limit) {
+    return { limit };
+  }
+
+  throw new Error(
+    `You can add up to ${limit} extra household members right now. Submit a household expansion request for a larger household.`
+  );
 };
 
 export async function fetchHouseholdForCurrentUser(): Promise<HouseholdSummary | null> {
@@ -2014,6 +2194,304 @@ export async function resolveHouseholdJoinRequest(
   };
 }
 
+export async function getAllowedAdditionalHouseholdMembers(householdId?: string): Promise<number> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user?.id) throw new Error('Not authenticated');
+
+  const membership = await getCurrentHouseholdMembership(authData.user.id);
+  const targetHouseholdId = String(householdId || membership?.household_id || '').trim();
+  if (!targetHouseholdId) return DEFAULT_SELF_SERVICE_ADDITIONAL_MEMBERS;
+
+  return getAllowedAdditionalMembersForHousehold(targetHouseholdId);
+}
+
+export async function createHouseholdExpansionRequest(payload: {
+  requestedAdditionalMembers: number;
+  reasonCategory?: string;
+  justification?: string;
+  extraMembers?: HouseholdExpansionMemberDraft[];
+}): Promise<HouseholdExpansionRequestRecord> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user?.id) throw new Error('Not authenticated');
+
+  const userId = authData.user.id;
+  const membership = await getCurrentHouseholdMembership(userId);
+  if (!membership?.household_id) throw new Error('Join or create a household first.');
+  if (membership.role !== 'OWNER') throw new Error('Only household owners can request a larger household limit.');
+
+  const requesterProfile = await getProfileById(userId);
+  if (!requesterProfile?.org_id) {
+    throw new Error('Connect your account to an organization before requesting a larger household.');
+  }
+
+  const requestedAdditionalMembers = Math.max(0, Math.round(Number(payload.requestedAdditionalMembers || 0)));
+  if (requestedAdditionalMembers <= DEFAULT_SELF_SERVICE_ADDITIONAL_MEMBERS) {
+    throw new Error(`Only households above ${DEFAULT_SELF_SERVICE_ADDITIONAL_MEMBERS} extra members need approval.`);
+  }
+
+  const { data: currentVitals } = await supabase
+    .from('vitals')
+    .select('household')
+    .eq('profile_id', userId)
+    .maybeSingle();
+
+  const currentAdditionalMembers = Array.isArray((currentVitals as any)?.household)
+    ? (currentVitals as any).household.length
+    : 0;
+
+  const extraMembers = normalizeHouseholdExpansionMembers(payload.extraMembers || []);
+  if (extraMembers.length === 0) {
+    throw new Error('Add at least one extra household member for review.');
+  }
+
+  const { data: existingPending, error: existingPendingError } = await supabase
+    .from('household_expansion_requests')
+    .select('*')
+    .eq('household_id', membership.household_id)
+    .eq('requester_profile_id', userId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingPendingError) throw existingPendingError;
+  if (existingPending) {
+    const requesterLookup = new Map<string, { full_name?: string | null; phone?: string | null; email?: string | null }>();
+    requesterLookup.set(userId, {
+      full_name: requesterProfile.full_name || null,
+      phone: requesterProfile.phone || null,
+      email: requesterProfile.email || null,
+    });
+    return mapHouseholdExpansionRequestRecord(existingPending, requesterLookup);
+  }
+
+  const { data: inserted, error: insertError } = await supabase
+    .from('household_expansion_requests')
+    .insert({
+      household_id: membership.household_id,
+      requester_profile_id: userId,
+      organization_id: requesterProfile.org_id,
+      current_additional_members: currentAdditionalMembers,
+      requested_additional_members: requestedAdditionalMembers,
+      reason_category: String(payload.reasonCategory || '').trim() || null,
+      justification: String(payload.justification || '').trim() || null,
+      extra_members: extraMembers,
+      updated_at: new Date().toISOString(),
+    })
+    .select('*')
+    .single();
+
+  if (insertError) throw insertError;
+
+  const { data: adminRecipients } = await supabase
+    .from('profiles')
+    .select('id')
+    .or(`role.eq.ADMIN,and(role.in.(ORG_ADMIN,INSTITUTION_ADMIN),org_id.eq.${requesterProfile.org_id})`);
+
+  const recipientIds = Array.from(new Set((adminRecipients || [])
+    .map((row: any) => String(row?.id || ''))
+    .filter((id: string) => Boolean(id) && id !== userId)));
+
+  if (recipientIds.length > 0) {
+    const notificationRows = recipientIds.map((recipientId) => ({
+      user_id: recipientId,
+      type: 'household_expansion_request',
+      related_id: inserted.id,
+      metadata: {
+        household_id: membership.household_id,
+        requester_profile_id: userId,
+        requested_additional_members: requestedAdditionalMembers,
+        current_additional_members: currentAdditionalMembers,
+      },
+    }));
+    await supabase.from('notifications').insert(notificationRows);
+  }
+
+  await safeLogActivity({
+    action: 'CREATE',
+    entityType: 'household_expansion_requests',
+    entityId: inserted.id,
+    details: {
+      householdId: membership.household_id,
+      requestedAdditionalMembers,
+      recipientCount: recipientIds.length,
+    },
+  });
+
+  const requesterLookup = new Map<string, { full_name?: string | null; phone?: string | null; email?: string | null }>();
+  requesterLookup.set(userId, {
+    full_name: requesterProfile.full_name || null,
+    phone: requesterProfile.phone || null,
+    email: requesterProfile.email || null,
+  });
+  return mapHouseholdExpansionRequestRecord(inserted, requesterLookup);
+}
+
+export async function listMyHouseholdExpansionRequests(limit = 20): Promise<HouseholdExpansionRequestRecord[]> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user?.id) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('household_expansion_requests')
+    .select('*')
+    .eq('requester_profile_id', authData.user.id)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+
+  const requesterProfile = await getProfileById(authData.user.id);
+  const requesterLookup = new Map<string, { full_name?: string | null; phone?: string | null; email?: string | null }>();
+  requesterLookup.set(authData.user.id, {
+    full_name: requesterProfile?.full_name || null,
+    phone: requesterProfile?.phone || null,
+    email: requesterProfile?.email || null,
+  });
+
+  return (data || []).map((row: any) => mapHouseholdExpansionRequestRecord(row, requesterLookup));
+}
+
+export async function listHouseholdExpansionRequestsForAdmin(limit = 50): Promise<HouseholdExpansionRequestRecord[]> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user?.id) throw new Error('Not authenticated');
+
+  const profile = await getProfileById(authData.user.id);
+  const role = String(profile?.role || '').toUpperCase();
+  if (!['ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(role)) return [];
+
+  let query = supabase
+    .from('household_expansion_requests')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (role !== 'ADMIN') {
+    if (!profile?.org_id) return [];
+    query = query.eq('organization_id', profile.org_id);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const requesterIds = Array.from(new Set((data || [])
+    .map((row: any) => String(row?.requester_profile_id || ''))
+    .filter(Boolean)));
+  const requesterLookup = new Map<string, { full_name?: string | null; phone?: string | null; email?: string | null }>();
+
+  if (requesterIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, phone, email')
+      .in('id', requesterIds);
+
+    for (const requester of profiles || []) {
+      requesterLookup.set(String((requester as any).id), {
+        full_name: (requester as any).full_name || null,
+        phone: (requester as any).phone || null,
+        email: (requester as any).email || null,
+      });
+    }
+  }
+
+  return (data || []).map((row: any) => mapHouseholdExpansionRequestRecord(row, requesterLookup));
+}
+
+export async function resolveHouseholdExpansionRequest(
+  requestId: string,
+  action: HouseholdExpansionRequestStatus,
+  reviewNotes?: string,
+): Promise<HouseholdExpansionRequestRecord> {
+  const normalizedAction: HouseholdExpansionRequestStatus = action === 'rejected' ? 'rejected' : 'approved';
+  const normalizedRequestId = String(requestId || '').trim();
+  if (!normalizedRequestId) throw new Error('Request id is required.');
+
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user?.id) throw new Error('Not authenticated');
+
+  const actorProfile = await getProfileById(authData.user.id);
+  const actorRole = String(actorProfile?.role || '').toUpperCase();
+  if (!['ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(actorRole)) {
+    throw new Error('Only organization admins can review household expansion requests.');
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from('household_expansion_requests')
+    .select('*')
+    .eq('id', normalizedRequestId)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+  if (!existing?.id) throw new Error('Household expansion request not found.');
+
+  if (actorRole !== 'ADMIN' && actorProfile?.org_id && String(existing.organization_id || '') !== String(actorProfile.org_id)) {
+    throw new Error('You can only review requests for your organization.');
+  }
+
+  const approvedAdditionalMembers = normalizedAction === 'approved'
+    ? Math.max(
+        DEFAULT_SELF_SERVICE_ADDITIONAL_MEMBERS,
+        Number(existing.requested_additional_members || 0),
+        Number(existing.approved_additional_members || 0),
+      )
+    : null;
+
+  const { data: updated, error: updateError } = await supabase
+    .from('household_expansion_requests')
+    .update({
+      status: normalizedAction,
+      approved_additional_members: approvedAdditionalMembers,
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: authData.user.id,
+      review_notes: String(reviewNotes || '').trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', normalizedRequestId)
+    .select('*')
+    .single();
+
+  if (updateError) throw updateError;
+
+  await supabase.from('notifications').insert({
+    user_id: existing.requester_profile_id,
+    type: normalizedAction === 'approved' ? 'household_expansion_approved' : 'household_expansion_rejected',
+    related_id: normalizedRequestId,
+    metadata: {
+      household_id: existing.household_id,
+      approved_additional_members: approvedAdditionalMembers,
+      requested_additional_members: existing.requested_additional_members,
+    },
+  });
+
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'household_expansion_requests',
+    entityId: normalizedRequestId,
+    details: {
+      action: normalizedAction,
+      reviewedBy: authData.user.id,
+      approvedAdditionalMembers,
+    },
+  });
+
+  const requesterIds = [String(updated.requester_profile_id || '')].filter(Boolean);
+  const requesterLookup = new Map<string, { full_name?: string | null; phone?: string | null; email?: string | null }>();
+  if (requesterIds.length > 0) {
+    const { data: requesterProfiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, phone, email')
+      .in('id', requesterIds);
+    for (const requester of requesterProfiles || []) {
+      requesterLookup.set(String((requester as any).id), {
+        full_name: (requester as any).full_name || null,
+        phone: (requester as any).phone || null,
+        email: (requester as any).email || null,
+      });
+    }
+  }
+
+  return mapHouseholdExpansionRequestRecord(updated, requesterLookup);
+}
+
 export async function listHouseholdsForCurrentUser(): Promise<HouseholdOption[]> {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData?.user) throw new Error('Not authenticated');
@@ -2376,6 +2854,8 @@ export async function updateVitalsForUser(payload: {
   householdMembers: number;
   petDetails: string;
   medicalNeeds: string;
+  fireMeetLocation?: string;
+  severeWeatherMeetLocation?: string;
   zipCode?: string;
   medicationDependency?: boolean;
   insulinDependency?: boolean;
@@ -2392,6 +2872,11 @@ export async function updateVitalsForUser(payload: {
   if ('error' in memberValidation) {
     throw new Error(memberValidation.error);
   }
+
+  await assertAdditionalHouseholdMembersWithinLimit({
+    profileId: authData.user.id,
+    additionalMemberCount: Array.isArray(payload.household) ? payload.household.length : 0,
+  });
 
   if (!payload.consentPreparednessPlanning) {
     throw new Error('Consent is required for Vital Intake data.');
@@ -2410,6 +2895,8 @@ export async function updateVitalsForUser(payload: {
   const vitalsUpsertPayload: Record<string, unknown> = {
     profile_id: authData.user.id,
     medical_needs: payload.medicalNeeds || null,
+    fire_meet_location: String(payload.fireMeetLocation || '').trim() || null,
+    severe_weather_meet_location: String(payload.severeWeatherMeetLocation || '').trim() || null,
     household: payload.household || [],
     pet_details: payload.petDetails || null,
     household_size: Math.max(1, Number(payload.householdMembers) || (payload.household || []).length || 1),
@@ -2507,6 +2994,11 @@ export async function syncHouseholdMembersForUser(household: HouseholdMember[]) 
   if ('error' in memberValidation) {
     throw new Error(memberValidation.error);
   }
+
+  await assertAdditionalHouseholdMembersWithinLimit({
+    profileId: authData.user.id,
+    additionalMemberCount: Array.isArray(household) ? household.length : 0,
+  });
 
   const profileId = authData.user.id;
 
@@ -2792,7 +3284,7 @@ export async function fetchVitalsForUser(): Promise<Partial<UserProfile> | null>
 
   const { data, error } = await supabase
     .from('vitals')
-    .select('household, pet_details, medical_needs, household_size, medication_dependency, insulin_dependency, oxygen_powered_device, mobility_limitation, transportation_access, financial_strain, zip_code, consent_preparedness_planning, consent_timestamp')
+    .select('household, pet_details, medical_needs, fire_meet_location, severe_weather_meet_location, household_size, medication_dependency, insulin_dependency, oxygen_powered_device, mobility_limitation, transportation_access, financial_strain, zip_code, consent_preparedness_planning, consent_timestamp')
     .eq('profile_id', authData.user.id)
     .single();
 
@@ -2803,6 +3295,8 @@ export async function fetchVitalsForUser(): Promise<Partial<UserProfile> | null>
     householdMembers: Number(data.household_size || (data.household || []).length || 1),
     petDetails: data.pet_details || '',
     medicalNeeds: data.medical_needs || '',
+    fireMeetLocation: data.fire_meet_location || '',
+    severeWeatherMeetLocation: data.severe_weather_meet_location || '',
     medicationDependency: Boolean(data.medication_dependency),
     insulinDependency: Boolean(data.insulin_dependency),
     oxygenPoweredDevice: Boolean(data.oxygen_powered_device),

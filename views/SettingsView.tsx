@@ -7,7 +7,7 @@ import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
 import { buildCommunityInviteUrl, generateCommunityInviteQrDataUrl } from '../services/communityInvite';
-import { AppNotificationRecord, cancelMyHouseholdJoinRequest, ConnectedHouseholdMember, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestStatus, updateVitalsForUser } from '../services/api';
+import { AppNotificationRecord, cancelMyHouseholdJoinRequest, ConnectedHouseholdMember, createHouseholdExpansionRequest, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, markNotificationRead, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestStatus, updateVitalsForUser } from '../services/api';
 import { getOrgByCode } from '../services/supabase';
 import { listOrganizations as listOrganizationsSupabase } from '../services/supabaseApi';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
@@ -200,6 +200,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     zipCode: '',
     petDetails: '',
     medicalNeeds: '',
+    fireMeetLocation: '',
+    severeWeatherMeetLocation: '',
     medicationDependency: false,
     insulinDependency: false,
     oxygenPoweredDevice: false,
@@ -408,6 +410,15 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [isLeavingHousehold, setIsLeavingHousehold] = useState(false);
   const [isCancellingJoinRequest, setIsCancellingJoinRequest] = useState(false);
   const [notifications, setNotifications] = useState<AppNotificationRecord[]>([]);
+  const [allowedAdditionalMembers, setAllowedAdditionalMembers] = useState(3);
+  const [myExpansionRequests, setMyExpansionRequests] = useState<HouseholdExpansionRequestRecord[]>([]);
+  const [adminExpansionRequests, setAdminExpansionRequests] = useState<HouseholdExpansionRequestRecord[]>([]);
+  const [expansionRequestedAdditionalMembers, setExpansionRequestedAdditionalMembers] = useState(4);
+  const [expansionReasonCategory, setExpansionReasonCategory] = useState('LARGE_FAMILY');
+  const [expansionJustification, setExpansionJustification] = useState('');
+  const [expansionBusy, setExpansionBusy] = useState(false);
+  const [adminExpansionBusyId, setAdminExpansionBusyId] = useState<string | null>(null);
+  const [adminExpansionReviewNotes, setAdminExpansionReviewNotes] = useState<Record<string, string>>({});
   const [joinRequestBusyId, setJoinRequestBusyId] = useState<string | null>(null);
   const [notificationsBusy, setNotificationsBusy] = useState(false);
   const [showAllNotifications, setShowAllNotifications] = useState(false);
@@ -641,6 +652,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     if (typeof loaded.transportationAccess !== 'boolean') loaded.transportationAccess = true;
     if (typeof loaded.financialStrain !== 'boolean') loaded.financialStrain = false;
     if (typeof loaded.consentPreparednessPlanning !== 'boolean') loaded.consentPreparednessPlanning = false;
+    if (typeof loaded.fireMeetLocation !== 'string') loaded.fireMeetLocation = '';
+    if (typeof loaded.severeWeatherMeetLocation !== 'string') loaded.severeWeatherMeetLocation = '';
     setProfile(loaded);
     
     if (loaded.communityId && loaded.role !== 'INSTITUTION_ADMIN') {
@@ -892,17 +905,26 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       }
 
       try {
-        const [ownerRequests, myRequests] = await Promise.all([
+        const [ownerRequests, myRequests, myExpansion, adminExpansion, allowedExtraMembers] = await Promise.all([
           listHouseholdJoinRequestsForOwner(),
           listMyHouseholdJoinRequests(),
+          listMyHouseholdExpansionRequests(),
+          isAdmin ? listHouseholdExpansionRequestsForAdmin() : Promise.resolve([]),
+          getAllowedAdditionalHouseholdMembers(profile.householdId),
         ]);
         if (!active) return;
         setOwnerJoinRequests(ownerRequests);
         setMyJoinRequests(myRequests);
+        setMyExpansionRequests(myExpansion);
+        setAdminExpansionRequests(adminExpansion);
+        setAllowedAdditionalMembers(Math.max(3, Number(allowedExtraMembers || 3)));
       } catch {
         if (!active) return;
         setOwnerJoinRequests([]);
         setMyJoinRequests([]);
+        setMyExpansionRequests([]);
+        setAdminExpansionRequests([]);
+        setAllowedAdditionalMembers(3);
       }
 
       try {
@@ -917,7 +939,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     return () => {
       active = false;
     };
-  }, [profile.householdId, profile.householdRole]);
+  }, [profile.householdId, profile.householdRole, isAdmin]);
 
   useEffect(() => {
     let unsub: (() => void) | null = null;
@@ -928,15 +950,21 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         unsub = await subscribeToNotifications(async () => {
           if (!active) return;
           try {
-            const [inbox, ownerRequests, myRequests] = await Promise.all([
+            const [inbox, ownerRequests, myRequests, myExpansion, adminExpansion, allowedExtraMembers] = await Promise.all([
               listNotificationsForCurrentUser(50),
               listHouseholdJoinRequestsForOwner(),
               listMyHouseholdJoinRequests(),
+              listMyHouseholdExpansionRequests(),
+              isAdmin ? listHouseholdExpansionRequestsForAdmin() : Promise.resolve([]),
+              getAllowedAdditionalHouseholdMembers(profile.householdId),
             ]);
             if (!active) return;
             setNotifications(inbox);
             setOwnerJoinRequests(ownerRequests);
             setMyJoinRequests(myRequests);
+            setMyExpansionRequests(myExpansion);
+            setAdminExpansionRequests(adminExpansion);
+            setAllowedAdditionalMembers(Math.max(3, Number(allowedExtraMembers || 3)));
             await refreshHouseholdContext();
           } catch {
             // Ignore transient realtime refresh failures.
@@ -952,7 +980,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       active = false;
       if (unsub) unsub();
     };
-  }, []);
+  }, [isAdmin, profile.householdId]);
 
   useEffect(() => {
     const approvedRequest = myJoinRequests.find((request) => request.status === 'approved');
@@ -1182,6 +1210,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         householdMembers: profile.householdMembers,
         petDetails: profile.petDetails,
         medicalNeeds: profile.medicalNeeds,
+        fireMeetLocation: profile.fireMeetLocation,
+        severeWeatherMeetLocation: profile.severeWeatherMeetLocation,
         zipCode: profile.zipCode,
         medicationDependency: Boolean(profile.medicationDependency),
         insulinDependency: Boolean(profile.insulinDependency),
@@ -1232,6 +1262,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       'householdMembers',
       'petDetails',
       'medicalNeeds',
+      'fireMeetLocation',
+      'severeWeatherMeetLocation',
       'medicationDependency',
       'insulinDependency',
       'oxygenPoweredDevice',
@@ -1307,6 +1339,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               householdMembers: snapshot.householdMembers,
               petDetails: snapshot.petDetails,
               medicalNeeds: snapshot.medicalNeeds,
+              fireMeetLocation: snapshot.fireMeetLocation,
+              severeWeatherMeetLocation: snapshot.severeWeatherMeetLocation,
               zipCode: snapshot.zipCode,
               medicationDependency: Boolean(snapshot.medicationDependency),
               insulinDependency: Boolean(snapshot.insulinDependency),
@@ -1589,6 +1623,19 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     }
     return mapped;
   }, [notifications]);
+
+  const currentAdditionalMembers = Array.isArray(profile.household) ? profile.household.length : 0;
+  const isOverAdditionalMemberLimit = currentAdditionalMembers > allowedAdditionalMembers;
+  const overflowMembers = (profile.household || []).slice(Math.max(0, allowedAdditionalMembers));
+  const latestExpansionRequest = myExpansionRequests[0] || null;
+  const pendingAdminExpansionRequests = adminExpansionRequests.filter((item) => item.status === 'pending');
+
+  useEffect(() => {
+    setExpansionRequestedAdditionalMembers((prev) => {
+      const baseline = Math.max(4, currentAdditionalMembers, allowedAdditionalMembers + 1);
+      return prev < baseline ? baseline : prev;
+    });
+  }, [allowedAdditionalMembers, currentAdditionalMembers]);
 
   const handleCopyMemberInvite = async (member: HouseholdMember) => {
     setInviteStatusMessage(null);
@@ -1923,6 +1970,77 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     }
   };
 
+  const handleSubmitExpansionRequest = async () => {
+    if (profile.householdRole !== 'OWNER') return;
+
+    const normalizedRequested = Math.max(
+      4,
+      Math.round(Number(expansionRequestedAdditionalMembers || 0)),
+      currentAdditionalMembers,
+    );
+
+    setHouseholdCodeError(null);
+    setHouseholdCodeSuccess(null);
+    setExpansionBusy(true);
+    try {
+      const extraMembers = overflowMembers.map((member, idx) => ({
+        label: String(member.name || `Extra Member ${idx + 1}`).trim() || `Extra Member ${idx + 1}`,
+        name: String(member.name || '').trim() || undefined,
+        relationship: undefined,
+        dateOfBirth: String(member.age || '').trim() || undefined,
+        notes: String(member.needs || '').trim() || undefined,
+        sameAddress: true,
+      }));
+
+      await createHouseholdExpansionRequest({
+        requestedAdditionalMembers: normalizedRequested,
+        reasonCategory: expansionReasonCategory,
+        justification: expansionJustification,
+        extraMembers,
+      });
+
+      const [inbox, mine, adminQueue] = await Promise.all([
+        listNotificationsForCurrentUser(50),
+        listMyHouseholdExpansionRequests(),
+        isAdmin ? listHouseholdExpansionRequestsForAdmin() : Promise.resolve([]),
+      ]);
+      setNotifications(inbox);
+      setMyExpansionRequests(mine);
+      setAdminExpansionRequests(adminQueue);
+      setHouseholdCodeSuccess('Expansion request sent to organization admins for review.');
+    } catch (err: any) {
+      setHouseholdCodeError(err?.message || 'Unable to submit expansion request right now.');
+    } finally {
+      setExpansionBusy(false);
+    }
+  };
+
+  const handleResolveExpansionRequest = async (request: HouseholdExpansionRequestRecord, action: 'approved' | 'rejected') => {
+    setHouseholdCodeError(null);
+    setHouseholdCodeSuccess(null);
+    setAdminExpansionBusyId(request.id);
+    try {
+      await resolveHouseholdExpansionRequest(request.id, action, adminExpansionReviewNotes[request.id] || '');
+
+      const [inbox, mine, adminQueue, allowedExtraMembers] = await Promise.all([
+        listNotificationsForCurrentUser(50),
+        listMyHouseholdExpansionRequests(),
+        listHouseholdExpansionRequestsForAdmin(),
+        getAllowedAdditionalHouseholdMembers(profile.householdId),
+      ]);
+      setNotifications(inbox);
+      setMyExpansionRequests(mine);
+      setAdminExpansionRequests(adminQueue);
+      setAllowedAdditionalMembers(Math.max(3, Number(allowedExtraMembers || 3)));
+
+      setHouseholdCodeSuccess(action === 'approved' ? 'Expansion request approved.' : 'Expansion request rejected.');
+    } catch (err: any) {
+      setHouseholdCodeError(err?.message || 'Unable to resolve expansion request.');
+    } finally {
+      setAdminExpansionBusyId(null);
+    }
+  };
+
   const handleMarkAllNotificationsRead = async () => {
     setNotificationsBusy(true);
     try {
@@ -2108,7 +2226,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const handleExportUsers = () => {
-    const headers = ['ID', 'Name', 'Phone', 'Role', 'Status', 'Address', 'Community ID', 'Household Size'];
+    const headers = ['ID', 'Name', 'Phone', 'Role', 'Status', 'Address', 'Community ID', 'Household Size', 'Fire Meet Location', 'Hurricane/Tornado Meet Location'];
     const rows = users.map(u => [
       u.id,
       `"${u.fullName.replace(/"/g, '""')}"`,
@@ -2117,7 +2235,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       u.active !== false ? 'Active' : 'Inactive',
       `"${u.address.replace(/"/g, '""')}"`,
       u.communityId || 'N/A',
-      u.householdMembers
+      u.householdMembers,
+      `"${String((u as any).fireMeetLocation || '').replace(/"/g, '""')}"`,
+      `"${String((u as any).severeWeatherMeetLocation || '').replace(/"/g, '""')}"`,
     ]);
 
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -4074,6 +4194,73 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             latestSafetyStatusByMember={latestSafetyStatusByMember}
             requestAddToken={householdAddToken}
           />
+          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+            <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Additional Member Limit</p>
+            <p className="text-sm text-slate-700">
+              Approved additional members: <span className="font-bold">{allowedAdditionalMembers}</span> •
+              Current additional members: <span className="font-bold">{currentAdditionalMembers}</span>
+            </p>
+            {isOverAdditionalMemberLimit ? (
+              <p className="text-xs font-semibold text-amber-700">
+                You are above your approved limit. Submit an expansion request for org-admin review.
+              </p>
+            ) : (
+              <p className="text-xs text-slate-600">
+                You are within your approved additional-member limit.
+              </p>
+            )}
+          </div>
+          {profile.householdRole === 'OWNER' && (isOverAdditionalMemberLimit || latestExpansionRequest) && (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+              <p className="text-xs font-bold text-amber-700 uppercase tracking-wider">Household Expansion Request</p>
+              {latestExpansionRequest && (
+                <div className="rounded-lg border border-amber-200 bg-white p-3 text-xs text-slate-700">
+                  <p>
+                    Latest request: <span className="font-bold uppercase">{latestExpansionRequest.status}</span>
+                    {' '}({latestExpansionRequest.currentAdditionalMembers} -> {latestExpansionRequest.requestedAdditionalMembers})
+                  </p>
+                  <p className="mt-1 text-slate-500">Submitted {new Date(latestExpansionRequest.createdAt).toLocaleString()}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Input
+                  label="Requested Additional Members"
+                  type="number"
+                  min={4}
+                  value={String(expansionRequestedAdditionalMembers)}
+                  onChange={(e) => setExpansionRequestedAdditionalMembers(Math.max(4, Number(e.target.value) || 4))}
+                />
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">Reason</label>
+                  <select
+                    value={expansionReasonCategory}
+                    onChange={(e) => setExpansionReasonCategory(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  >
+                    <option value="LARGE_FAMILY">Large family</option>
+                    <option value="CAREGIVER">Caregiver household</option>
+                    <option value="MULTI_GENERATIONAL">Multi-generational</option>
+                    <option value="TEMPORARY_RELOCATION">Temporary relocation</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </div>
+              </div>
+              <Textarea
+                label="Justification"
+                value={expansionJustification}
+                onChange={(e) => setExpansionJustification(e.target.value)}
+                placeholder="Explain why your household needs a higher approved member limit."
+              />
+              <Button
+                size="sm"
+                className="bg-amber-600 hover:bg-amber-700"
+                onClick={handleSubmitExpansionRequest}
+                disabled={expansionBusy || profile.householdRole !== 'OWNER'}
+              >
+                {expansionBusy ? 'Submitting...' : 'Submit Expansion Request'}
+              </Button>
+            </div>
+          )}
           {profile.householdRole === 'OWNER' && (
             <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 space-y-3">
               <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Household Health Summary</p>
@@ -4173,6 +4360,55 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                       className="text-amber-700 hover:bg-amber-50"
                       onClick={() => handleResolveJoinRequest(request, 'rejected')}
                       disabled={joinRequestBusyId === request.id}
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {showMoreSections.household && isAdmin && pendingAdminExpansionRequests.length > 0 && (
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-3">
+            <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider">
+              Household Expansion Requests ({pendingAdminExpansionRequests.length})
+            </p>
+            <div className="space-y-2">
+              {pendingAdminExpansionRequests.map((request) => (
+                <div key={request.id} className="rounded-lg border border-indigo-200 bg-white p-3 space-y-2">
+                  <p className="text-sm font-semibold text-slate-900">
+                    {request.requesterName || 'Household Owner'}
+                    <span className="text-xs text-slate-500"> • Household {request.householdId.slice(0, 8)}</span>
+                  </p>
+                  <p className="text-xs text-slate-700">
+                    Additional members: <span className="font-bold">{request.currentAdditionalMembers}</span> ->
+                    {' '}<span className="font-bold">{request.requestedAdditionalMembers}</span>
+                  </p>
+                  {request.justification && <p className="text-xs text-slate-600">{request.justification}</p>}
+                  <Textarea
+                    label="Review Notes (optional)"
+                    value={adminExpansionReviewNotes[request.id] || ''}
+                    onChange={(e) =>
+                      setAdminExpansionReviewNotes((prev) => ({ ...prev, [request.id]: e.target.value }))
+                    }
+                  />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                      onClick={() => handleResolveExpansionRequest(request, 'approved')}
+                      disabled={adminExpansionBusyId === request.id}
+                    >
+                      {adminExpansionBusyId === request.id ? 'Working...' : 'Approve'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-amber-700 hover:bg-amber-50"
+                      onClick={() => handleResolveExpansionRequest(request, 'rejected')}
+                      disabled={adminExpansionBusyId === request.id}
                     >
                       Reject
                     </Button>
@@ -4433,6 +4669,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                             ? 'Your request was approved.'
                             : item.type === 'household_join_rejected'
                               ? 'Your request was not approved.'
+                              : item.type === 'household_expansion_request'
+                                ? 'Household expansion request awaiting org-admin review.'
+                                : item.type === 'household_expansion_approved'
+                                  ? 'Your household expansion request was approved.'
+                                  : item.type === 'household_expansion_rejected'
+                                    ? 'Your household expansion request was rejected.'
                               : item.type === 'household_member_reported_danger'
                                 ? `${String((item.metadata as any)?.reporterName || 'A household member')} reported DANGER.`
                                 : item.type === 'household_member_reported_safe'
@@ -4606,6 +4848,25 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           value={profile.petDetails}
           onChange={(e) => updateProfile('petDetails', e.target.value)}
         />
+
+        <div className="space-y-3">
+          <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">Household Meet Locations</p>
+          <Input
+            label="Fire Meet Location"
+            placeholder="Outside meeting point away from the house"
+            value={profile.fireMeetLocation || ''}
+            onChange={(e) => updateProfile('fireMeetLocation', e.target.value)}
+          />
+          <Input
+            label="Hurricane/Tornado Safe Meet Location"
+            placeholder="Interior room/area away from windows and falling objects"
+            value={profile.severeWeatherMeetLocation || ''}
+            onChange={(e) => updateProfile('severeWeatherMeetLocation', e.target.value)}
+          />
+          <p className="text-[11px] text-slate-500">
+            These locations are included in your preparedness profile so households can quickly align on where to meet.
+          </p>
+        </div>
 
         <div className="border-t border-slate-200 pt-4">
           <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wide">Final Step</p>

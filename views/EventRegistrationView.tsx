@@ -71,6 +71,15 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
   const [zipCode, setZipCode] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [contactPreference, setContactPreference] = useState<'SMS' | 'CALL' | 'EMAIL'>('SMS');
+  const [pickupAfterTime, setPickupAfterTime] = useState('');
+  const [proxyPickup, setProxyPickup] = useState(false);
+  const [urgencyTier, setUrgencyTier] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('MEDIUM');
+  const [deliveryBarrier, setDeliveryBarrier] = useState('');
+  const [childrenCount, setChildrenCount] = useState(0);
+  const [seniorsCount, setSeniorsCount] = useState(0);
+  const [disabilityPresent, setDisabilityPresent] = useState(false);
+  const [preferredLanguage, setPreferredLanguage] = useState('en');
 
   const [outreachOptIn, setOutreachOptIn] = useState(false);
   const [locationGranted, setLocationGranted] = useState(false);
@@ -151,6 +160,7 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
         if (defaults.zipCode) setZipCode(defaults.zipCode);
         if (defaults.phone) setPhone(defaults.phone);
         if (defaults.email) setEmail(defaults.email);
+        if (profile.language) setPreferredLanguage(String(profile.language));
         if (defaults.outreachOptIn) setOutreachOptIn(true);
         if (defaults.location) {
           setLocationLatLng(defaults.location);
@@ -181,6 +191,15 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
         setZipCode(existing.zip_code || '');
         setPhone(existing.phone || '');
         setEmail(existing.email || '');
+        setContactPreference((existing.contact_preference as any) || 'SMS');
+        setPickupAfterTime(existing.pickup_after_time || '');
+        setProxyPickup(Boolean(existing.proxy_pickup));
+        setUrgencyTier((existing.urgency_tier as any) || 'MEDIUM');
+        setDeliveryBarrier(existing.delivery_barrier || '');
+        setChildrenCount(Math.max(0, Number(existing.children_count || 0)));
+        setSeniorsCount(Math.max(0, Number(existing.seniors_count || 0)));
+        setDisabilityPresent(Boolean(existing.disability_present));
+        setPreferredLanguage(existing.preferred_language || 'en');
         setOutreachOptIn(Boolean(existing.outreach_opt_in));
 
         const needs = Array.isArray(existing.requested_supplies) ? existing.requested_supplies : [];
@@ -290,9 +309,22 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
         zipCode: fields.zipCode || undefined,
         phone: fields.phone || undefined,
         email: fields.email || undefined,
+        contactPreference,
+        pickupAfterTime: pickupAfterTime || undefined,
+        proxyPickup,
+        urgencyTier,
+        deliveryBarrier: deliveryBarrier.trim() || undefined,
+        childrenCount,
+        seniorsCount,
+        disabilityPresent,
+        preferredLanguage,
         outreachOptIn,
         latitude: locationLatLng?.lat,
         longitude: locationLatLng?.lng,
+        consentVersion: 'event-registration-v1',
+        consentChannel: 'WEB',
+        geocodeConfidence: locationLatLng ? 0.9 : undefined,
+        geocodedAt: locationLatLng ? new Date().toISOString() : undefined,
         requestedSupplies,
       });
 
@@ -569,6 +601,93 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
               <p className="text-[11px] text-slate-500">Total requested items: {requestedSummaryCount}</p>
             </Card>
           )}
+
+          <Card className="p-4 space-y-3">
+            <p className="text-[13px] font-semibold text-slate-700">Support & Preferences</p>
+            <div>
+              <label className="text-[12px] font-medium text-slate-600 mb-1 block">Preferred Contact Method</label>
+              <select
+                value={contactPreference}
+                onChange={(e) => setContactPreference(e.target.value as 'SMS' | 'CALL' | 'EMAIL')}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
+              >
+                <option value="SMS">SMS</option>
+                <option value="CALL">Phone Call</option>
+                <option value="EMAIL">Email</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[12px] font-medium text-slate-600 mb-1 block">Can Pick Up After (optional)</label>
+              <input
+                type="time"
+                value={pickupAfterTime}
+                onChange={(e) => setPickupAfterTime(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-[12px] font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                checked={proxyPickup}
+                onChange={(e) => setProxyPickup(e.target.checked)}
+              />
+              I need a proxy to pick up for my household.
+            </label>
+            <div>
+              <label className="text-[12px] font-medium text-slate-600 mb-1 block">Urgency Level</label>
+              <select
+                value={urgencyTier}
+                onChange={(e) => setUrgencyTier(e.target.value as 'LOW' | 'MEDIUM' | 'HIGH')}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
+              >
+                <option value="LOW">Low</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="HIGH">High</option>
+              </select>
+            </div>
+            <Input
+              label="Delivery/Access Barrier (optional)"
+              value={deliveryBarrier}
+              onChange={(e) => setDeliveryBarrier(e.target.value)}
+              placeholder="No transportation, homebound, etc."
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Children Count"
+                type="number"
+                min={0}
+                value={String(childrenCount)}
+                onChange={(e) => setChildrenCount(Math.max(0, Math.round(Number(e.target.value) || 0)))}
+              />
+              <Input
+                label="Seniors Count"
+                type="number"
+                min={0}
+                value={String(seniorsCount)}
+                onChange={(e) => setSeniorsCount(Math.max(0, Math.round(Number(e.target.value) || 0)))}
+              />
+            </div>
+            <label className="flex items-center gap-2 text-[12px] font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                checked={disabilityPresent}
+                onChange={(e) => setDisabilityPresent(e.target.checked)}
+              />
+              Household includes someone with a disability.
+            </label>
+            <div>
+              <label className="text-[12px] font-medium text-slate-600 mb-1 block">Preferred Language</label>
+              <select
+                value={preferredLanguage}
+                onChange={(e) => setPreferredLanguage(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2F7A64]"
+              >
+                <option value="en">English</option>
+                <option value="es">Spanish</option>
+                <option value="fr">French</option>
+              </select>
+            </div>
+          </Card>
 
           <Button fullWidth size="lg" className="bg-[#2F7A64] text-white" onClick={handleFormNext}>
             Continue

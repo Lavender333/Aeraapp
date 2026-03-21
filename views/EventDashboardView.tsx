@@ -159,10 +159,10 @@ export const EventDashboardView: React.FC<EventDashboardViewProps> = ({ setView,
         ),
         '',
         'Registrations:',
-        'Name,Ticket,Code,Household,Served,Check-in',
+        'Name,Ticket,Code,Household,Served,Check-in,Contact Preference,Urgency,Proxy Pickup,Pickup After,Children,Seniors,Disability,Preferred Language,Delivery Barrier',
         ...report.registrations.map(
           (r) =>
-            `"${r.full_name}",${r.ticket_id},${r.participant_code},${r.household_size},${r.served},${r.check_in_status}`
+            `"${r.full_name}",${r.ticket_id},${r.participant_code},${r.household_size},${r.served},${r.check_in_status},${r.contact_preference || ''},${r.urgency_tier || ''},${Boolean(r.proxy_pickup)},${r.pickup_after_time || ''},${Number(r.children_count || 0)},${Number(r.seniors_count || 0)},${Boolean(r.disability_present)},${r.preferred_language || ''},"${String(r.delivery_barrier || '').replace(/"/g, '""')}"`
         ),
       ];
       const blob = new Blob([lines.join('\n')], { type: 'text/csv' });

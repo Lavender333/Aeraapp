@@ -135,7 +135,6 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
   const [isAggregateView, setIsAggregateView] = useState(false);
   const [aggStats, setAggStats] = useState<{memberCounts:{total:number;safe:number;danger:number;unknown:number}; inventory:OrgInventory} | null>(null);
   const [selectedBroadcastTargets, setSelectedBroadcastTargets] = useState<string[]>([]);
-  const [registeredPopulation, setRegisteredPopulation] = useState<number>(0);
   const [requests, setRequests] = useState<ReplenishmentRequest[]>([]);
   const [inventoryFallback, setInventoryFallback] = useState(false);
   const [requestsFallback, setRequestsFallback] = useState(false);
@@ -226,7 +225,6 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
       setParentOrgName(org.name);
       setReplenishmentProvider(org.replenishmentProvider || 'General Aid Pool');
       setReplenishmentEmail(org.replenishmentEmail || '');
-      setRegisteredPopulation(org.registeredPopulation || 0);
     }
 
     const handleOnline = () => setIsOffline(false);
@@ -461,8 +459,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     ? Math.round((fullyReadyCount / readinessTrackedCount) * 1000) / 10
     : 0;
 
-  // Use member count for coverage; fallback to registeredPopulation if no linked members yet
-  const coverageBase = stats.total || registeredPopulation;
+  const coverageBase = stats.total;
 
   const handleInventoryChange = (key: keyof OrgInventory, value: number) => {
     const safeVal = Math.max(0, Number.isFinite(value) ? value : 0);
@@ -1115,6 +1112,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
           </div>
         </div>
         <div className="text-xs text-slate-500 font-bold mt-2">Total Members: {stats.total}</div>
+        <div className="text-[11px] text-slate-500">Inventory coverage and population-linked views use this connected-member total.</div>
       </div>
 
       {/* Navigation Tabs */}
@@ -1522,14 +1520,16 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                   </div>
                 </div>
                 <div className="space-y-2">
-                  {memberNeeds.slice(0, 20).map((need) => {
+                  {memberNeeds.map((need) => {
                     const score = Math.round(Number(need.readiness_score || 0));
                     const riskClasses =
                       need.risk_tier === 'HIGH'
                         ? 'bg-red-100 text-red-700 border-red-200'
                         : need.risk_tier === 'ELEVATED'
                           ? 'bg-amber-100 text-amber-700 border-amber-200'
-                          : 'bg-emerald-100 text-emerald-700 border-emerald-200';
+                          : need.risk_tier === 'NO_DATA'
+                            ? 'bg-slate-100 text-slate-700 border-slate-200'
+                            : 'bg-emerald-100 text-emerald-700 border-emerald-200';
 
                     return (
                       <div key={need.profile_id} className="rounded-lg border border-slate-200 p-3">
