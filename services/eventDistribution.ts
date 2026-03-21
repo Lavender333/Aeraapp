@@ -1294,8 +1294,7 @@ export async function getOrgLeaderOutreachCandidates(
       .eq('is_active', true)
       .neq('id', authData.user.id)
       .not('latitude', 'is', null)
-      .not('longitude', 'is', null)
-      .eq('geofenced_outreach_opt_in', true);
+      .not('longitude', 'is', null);
 
     if (candidateError) throw new Error(candidateError.message);
 
@@ -1325,8 +1324,17 @@ export async function getOrgLeaderOutreachCandidates(
       if (!profileId) continue;
 
       const rowOrgId = String((row as any)?.org_id || '').trim() || null;
-      if (rowOrgId && rowOrgId !== targetOrgId) continue;
-      if (!rowOrgId && trustedIds.has(profileId)) continue;
+      const optedIn = Boolean((row as any)?.geofenced_outreach_opt_in);
+
+      // Same-org members are eligible even when opt-in is unset.
+      if (rowOrgId === targetOrgId) {
+        // allow
+      } else {
+        // Non-org users must be explicitly opted-in and outside trusted networks.
+        if (!optedIn) continue;
+        if (rowOrgId) continue;
+        if (trustedIds.has(profileId)) continue;
+      }
 
       const lat = Number((row as any)?.latitude);
       const lng = Number((row as any)?.longitude);

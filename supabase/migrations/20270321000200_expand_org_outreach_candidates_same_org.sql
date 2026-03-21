@@ -91,11 +91,11 @@ BEGIN
       AND p.id <> auth.uid()
       AND p.latitude IS NOT NULL
       AND p.longitude IS NOT NULL
-      AND COALESCE(p.geofenced_outreach_opt_in, FALSE) = TRUE
       AND (
         p.org_id = v_target_org_id
         OR (
           p.org_id IS NULL
+          AND COALESCE(p.geofenced_outreach_opt_in, FALSE) = TRUE
           AND NOT EXISTS (
             SELECT 1
             FROM trusted_community_connections tcc
