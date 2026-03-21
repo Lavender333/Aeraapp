@@ -4217,7 +4217,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 <div className="rounded-lg border border-amber-200 bg-white p-3 text-xs text-slate-700">
                     <p>
                       Latest request: <span className="font-bold uppercase">{latestExpansionRequest.status}</span>
-                      {' '}({latestExpansionRequest.currentAdditionalMembers} {'->'} {latestExpansionRequest.requestedAdditionalMembers})
+                      {' '}({latestExpansionRequest.currentAdditionalMembers} {'→'} {latestExpansionRequest.requestedAdditionalMembers})
                     </p>
                   <p className="mt-1 text-slate-500">Submitted {new Date(latestExpansionRequest.createdAt).toLocaleString()}</p>
                 </div>
@@ -4383,7 +4383,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                     <span className="text-xs text-slate-500"> • Household {request.householdId.slice(0, 8)}</span>
                   </p>
                   <p className="text-xs text-slate-700">
-                    Additional members: <span className="font-bold">{request.currentAdditionalMembers}</span> {'->'}
+                    Additional members: <span className="font-bold">{request.currentAdditionalMembers}</span> {'→'}
                     {' '}<span className="font-bold">{request.requestedAdditionalMembers}</span>
                   </p>
                   {request.justification && <p className="text-xs text-slate-600">{request.justification}</p>}
