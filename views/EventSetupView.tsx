@@ -155,6 +155,7 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
 
   // Form state
   const [name, setName] = useState('');
+  const [eventAddress, setEventAddress] = useState('');
   const [eventNotes, setEventNotes] = useState('');
   const [sessions, setSessions] = useState<SessionRow[]>([defaultSession()]);
   const [supplies, setSupplies] = useState<SupplyRow[]>([defaultSupply()]);
@@ -222,6 +223,7 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
   const resetForm = () => {
     setEditingEventId(null);
     setName('');
+    setEventAddress('');
     setEventNotes('');
     setSessions([defaultSession()]);
     setSupplies([defaultSupply()]);
@@ -234,6 +236,7 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
       try {
     setEditingEventId(event.id);
     setName(event.name || '');
+    setEventAddress(event.address || getEventPrimarySession(event)?.location_name || '');
     setEventNotes(event.event_notes || '');
     setSavedEvent(null);
     setQrUrl('');
@@ -359,6 +362,7 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
         ? await updateEventDetails({
             eventId: editingEventId,
             name: name.trim(),
+            address: eventAddress.trim() || null,
             event_notes: eventNotes.trim() || null,
             timezone,
             sessions: normalizedSessions,
@@ -366,6 +370,7 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
         : await createEvent({
             organization_id: orgId,
             name: name.trim(),
+            address: eventAddress.trim() || null,
             event_notes: eventNotes.trim() || null,
             timezone,
             status: 'ACTIVE',
@@ -553,11 +558,11 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
                       <div className="flex items-center gap-1.5 mt-1">
                         <Calendar size={12} className="text-slate-400" />
                         <span className="text-[12px] text-slate-500">{formatSessionSummary(ev)}</span>
-                        {getEventPrimarySession(ev)?.location_name && (
+                        {(ev.address || getEventPrimarySession(ev)?.location_name) && (
                           <>
                             <span className="text-slate-300">·</span>
                             <MapPin size={12} className="text-slate-400" />
-                            <span className="text-[12px] text-slate-500 truncate">{getEventPrimarySession(ev)?.location_name}</span>
+                            <span className="text-[12px] text-slate-500 truncate">{ev.address || getEventPrimarySession(ev)?.location_name}</span>
                           </>
                         )}
                       </div>
@@ -644,6 +649,12 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
                 placeholder="e.g. April Food Distribution"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+              />
+              <Input
+                label="Event Address"
+                placeholder="e.g. 123 Main St, City, State ZIP"
+                value={eventAddress}
+                onChange={(e) => setEventAddress(e.target.value)}
               />
               <div>
                 <label className="text-[12px] font-medium text-slate-600 mb-1 block">Event Notes (optional)</label>

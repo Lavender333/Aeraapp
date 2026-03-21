@@ -36,6 +36,7 @@ export interface DistributionEvent {
   id: string;
   organization_id: string | null;
   name: string;
+  address: string | null;
   distribution_date: string;
   distribution_time: string | null;
   location_name: string | null;
@@ -142,6 +143,7 @@ export interface CreateEventSessionInput {
 export interface CreateEventInput {
   organization_id: string | null;
   name: string;
+  address?: string | null;
   event_notes?: string | null;
   timezone?: string | null;
   status: EventStatus;
@@ -156,6 +158,7 @@ export interface UpdateEventSessionInput extends CreateEventSessionInput {
 export interface UpdateEventInput {
   eventId: string;
   name: string;
+  address?: string | null;
   event_notes?: string | null;
   timezone?: string | null;
   status?: EventStatus;
@@ -317,6 +320,7 @@ export async function createEvent(
     .insert({
       organization_id: data.organization_id,
       name: data.name,
+      address: data.address ?? primarySession.location_name ?? null,
       event_notes: data.event_notes ?? null,
       timezone: data.timezone ?? 'UTC',
       status: data.status,
@@ -362,6 +366,7 @@ export async function updateEventDetails(
   const legacyFields = toLegacyEventFields(primarySession);
   const eventUpdatePayload: Record<string, unknown> = {
     name: data.name,
+    address: data.address ?? primarySession.location_name ?? null,
     event_notes: data.event_notes ?? null,
     timezone: data.timezone ?? 'UTC',
     ...legacyFields,
