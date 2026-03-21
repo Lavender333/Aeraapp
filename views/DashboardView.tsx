@@ -1024,7 +1024,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
           const inventoryReady = Boolean(orgInventory);
           const effectiveInventory = orgInventory || { water: 0, food: 0, blankets: 0, medicalKits: 0 };
           const coverageBase = orgMemberCount || orgPopulation;
-          const previewMembers = orgMembers.slice(0, 8);
           const status: Record<'water' | 'food' | 'blankets' | 'medicalKits', { level: 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN' }> = inventoryReady
             ? getInventoryStatuses(effectiveInventory, coverageBase)
             : {
@@ -1058,47 +1057,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               >
                 Manage Inventory
               </Button>
-              <Button size="sm" variant="outline" onClick={() => setView('POPULATION')}>
-                Population
-              </Button>
             </div>
           </div>
           {!orgInventory && (
             <p className="text-[11px] text-slate-500 font-semibold">Inventory is loading or unavailable. You can still open Manage.</p>
           )}
-          <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] uppercase font-bold text-indigo-700">Connected Members</p>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-indigo-700"
-                onClick={() => {
-                  sessionStorage.setItem('orgDashboardInitialTab', 'MEMBERS');
-                  setView('ORG_DASHBOARD');
-                }}
-              >
-                Manage Membership
-              </Button>
-            </div>
-            {previewMembers.length > 0 ? (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {previewMembers.map((member) => (
-                  <span key={member.id} className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700">
-                    <span className={`h-2 w-2 rounded-full ${member.status === 'SAFE' ? 'bg-emerald-500' : member.status === 'DANGER' ? 'bg-rose-500' : 'bg-slate-400'}`} />
-                    {member.name}
-                  </span>
-                ))}
-                {orgMembers.length > previewMembers.length && (
-                  <span className="inline-flex items-center rounded-full border border-indigo-200 bg-white px-2 py-1 text-[11px] font-bold text-indigo-700">
-                    +{orgMembers.length - previewMembers.length} more
-                  </span>
-                )}
-              </div>
-            ) : (
-              <p className="mt-2 text-[11px] font-semibold text-slate-600">Connected members are loading. Open Manage Membership to view full roster.</p>
-            )}
-          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
               { label: 'Water Cases', value: effectiveInventory.water, unit: 'cases', key: 'water' as const, icon: <Droplets size={16} className="text-blue-600" /> },
