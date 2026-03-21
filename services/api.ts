@@ -791,6 +791,50 @@ export async function updateOrganizationByCode(payload: {
   return data;
 }
 
+export async function getOrganizationOutreachRadiusByCode(orgCode: string, fallback: number = 3): Promise<number> {
+  const org = await getOrgByCode(orgCode);
+  if (!org?.orgId) return Math.max(1, Math.min(25, Math.round(Number(fallback) || 3)));
+
+  const { data, error } = await supabase
+    .from('organizations')
+    .select('outreach_radius_miles')
+    .eq('id', org.orgId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message || 'Unable to load outreach radius');
+
+  const value = Number((data as any)?.outreach_radius_miles);
+  if (!Number.isFinite(value)) return Math.max(1, Math.min(25, Math.round(Number(fallback) || 3)));
+  return Math.max(1, Math.min(25, Math.round(value)));
+}
+
+export async function saveOrganizationOutreachRadiusByCode(orgCode: string, miles: number): Promise<number> {
+  const org = await getOrgByCode(orgCode);
+  if (!org?.orgId) throw new Error('Organization not found');
+
+  const clamped = Math.max(1, Math.min(25, Math.round(Number(miles) || 3)));
+
+  const { data: rows, error } = await supabase
+    .from('organizations')
+    .update({ outreach_radius_miles: clamped })
+    .eq('id', org.orgId)
+    .select('id, org_code, outreach_radius_miles');
+
+  if (error) throw new Error(error.message || 'Unable to save outreach radius');
+  const row = rows?.[0] as any;
+  if (!row) throw new Error('Organization not found or you do not have permission to update it.');
+
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'organizations',
+    entityId: row.id,
+    orgCode: row.org_code || orgCode,
+    details: { outreach_radius_miles: row.outreach_radius_miles },
+  });
+
+  return Math.max(1, Math.min(25, Math.round(Number(row.outreach_radius_miles) || clamped)));
+}
+
 export async function updateProfile(profile: Partial<UserProfile> & { id: string }) {
   const orgId = profile.communityId ? await getOrgIdByCode(profile.communityId) : null;
 

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ViewState, OrgMember, OrgInventory, ReplenishmentRequest } from '../types';
 import { Button } from '../components/Button';
 import { StorageService } from '../services/storage';
-import { listRequests, createRequest, updateRequestStatus, fetchOrgOutreachFlags, fetchOrgMemberPreparednessNeeds, listChildOrganizations, aggregateOrgStats, broadcastToOrgs } from '../services/api';
+import { listRequests, createRequest, updateRequestStatus, fetchOrgOutreachFlags, fetchOrgMemberPreparednessNeeds, listChildOrganizations, aggregateOrgStats, broadcastToOrgs, getOrganizationOutreachRadiusByCode, saveOrganizationOutreachRadiusByCode } from '../services/api';
 import { REQUEST_ITEM_MAP } from '../services/validation';
 import { getInventoryStatuses, getRecommendedResupply } from '../services/inventoryStatus';
 import { getOrgByCode } from '../services/supabase';
@@ -286,8 +286,25 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
 
   useEffect(() => {
     if (!activeOrgCode) return;
+
+    let active = true;
     const storedRadius = StorageService.getOrgOutreachRadiusMiles(activeOrgCode, 3);
     setOutreachRadiusMiles(storedRadius);
+
+    (async () => {
+      try {
+        const remoteRadius = await getOrganizationOutreachRadiusByCode(activeOrgCode, storedRadius);
+        if (!active) return;
+        setOutreachRadiusMiles(remoteRadius);
+        StorageService.setOrgOutreachRadiusMiles(activeOrgCode, remoteRadius);
+      } catch (err) {
+        console.warn('Unable to load outreach radius from server; using local value', err);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
   }, [activeOrgCode]);
 
   // load data for the currently viewed organization (or aggregate)
@@ -650,10 +667,19 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     };
   };
 
-  const saveOutreachRadius = () => {
-    const saved = StorageService.setOrgOutreachRadiusMiles(activeOrgCode, outreachRadiusMiles);
-    setOutreachRadiusMiles(saved);
-    alert(`Outreach radius saved at ${saved} miles for ${orgName}.`);
+  const saveOutreachRadius = async () => {
+    const localSaved = StorageService.setOrgOutreachRadiusMiles(activeOrgCode, outreachRadiusMiles);
+    setOutreachRadiusMiles(localSaved);
+
+    try {
+      const remoteSaved = await saveOrganizationOutreachRadiusByCode(activeOrgCode, localSaved);
+      StorageService.setOrgOutreachRadiusMiles(activeOrgCode, remoteSaved);
+      setOutreachRadiusMiles(remoteSaved);
+      alert(`Outreach radius saved at ${remoteSaved} miles for ${orgName}.`);
+    } catch (err: any) {
+      console.warn('Unable to save outreach radius to server; retained locally', err);
+      alert(err?.message || `Outreach radius saved locally at ${localSaved} miles. Server sync failed.`);
+    }
   };
 
   const handlePingMember = async () => {
