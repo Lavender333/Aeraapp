@@ -1,5 +1,5 @@
 
-import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, RoleDefinition } from '../types';
+import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, RoleDefinition, GapRevenueSettings } from '../types';
 import { REQUEST_ITEM_MAP } from './validation';
 import { ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, fetchProfileForUser, fetchVitalsForUser, createHouseholdSafetyNotificationsForCurrentUser, listChildOrganizations, sendMemberPing, uploadProfileAvatarDataUrl, uploadGapDocumentForCurrentUser, getGapDocumentSignedUrl, updateHelpRequestData, getPendingPingForCurrentUser as getPendingPingForCurrentUserApi, createRequest, updateRequestStatus, stockReplenishmentRequest, saveReplenishmentSignature, updateOrganizationActiveByCode, setGlobalSystemAlert, getGlobalSystemAlert } from './api';
 import { getMemberStatus, setMemberStatus } from './api';
@@ -13,6 +13,7 @@ const STORAGE_STATE_KEY = 'aera_storage_state_v1';
 const ROLE_DEFINITIONS_KEY = 'aera_role_definitions_v1';
 const PROFILE_IMAGE_MAP_KEY = 'aera_profile_image_map_v1';
 const ORG_OUTREACH_RADIUS_MAP_KEY = 'aera_org_outreach_radius_map_v1';
+const GAP_REVENUE_SETTINGS_KEY = 'aera_gap_revenue_settings_v1';
 const MAX_CACHED_REQUESTS = 200;
 const MAX_CACHED_REPLENISHMENTS = 200;
 const IS_PRODUCTION = import.meta.env.PROD;
@@ -2171,5 +2172,42 @@ export const StorageService = {
     }
 
     return processed;
-  }
+  },
+
+  getGapRevenueSettings(): GapRevenueSettings {
+    const defaults: GapRevenueSettings = {
+      membershipPriceUsd: 9.99,
+      appStoreFeePercent: 30,
+      gapFundAllocationPercent: 30,
+      billingCycle: 'monthly',
+      updatedAt: new Date().toISOString(),
+    };
+    try {
+      const raw = safeGetItem(GAP_REVENUE_SETTINGS_KEY);
+      if (!raw) return defaults;
+      const parsed = JSON.parse(raw) as Partial<GapRevenueSettings>;
+      return {
+        membershipPriceUsd: Number(parsed.membershipPriceUsd ?? defaults.membershipPriceUsd),
+        appStoreFeePercent: Number(parsed.appStoreFeePercent ?? defaults.appStoreFeePercent),
+        gapFundAllocationPercent: Number(parsed.gapFundAllocationPercent ?? defaults.gapFundAllocationPercent),
+        billingCycle: parsed.billingCycle === 'annual' ? 'annual' : 'monthly',
+        updatedAt: String(parsed.updatedAt || defaults.updatedAt),
+      };
+    } catch {
+      return defaults;
+    }
+  },
+
+  setGapRevenueSettings(settings: Partial<GapRevenueSettings>): GapRevenueSettings {
+    const current = this.getGapRevenueSettings();
+    const updated: GapRevenueSettings = {
+      membershipPriceUsd: Math.max(0.99, Number(settings.membershipPriceUsd ?? current.membershipPriceUsd)),
+      appStoreFeePercent: Math.max(0, Math.min(50, Number(settings.appStoreFeePercent ?? current.appStoreFeePercent))),
+      gapFundAllocationPercent: Math.max(1, Math.min(100, Number(settings.gapFundAllocationPercent ?? current.gapFundAllocationPercent))),
+      billingCycle: settings.billingCycle === 'annual' ? 'annual' : (settings.billingCycle === 'monthly' ? 'monthly' : current.billingCycle),
+      updatedAt: new Date().toISOString(),
+    };
+    safeSetItem(GAP_REVENUE_SETTINGS_KEY, JSON.stringify(updated));
+    return updated;
+  },
 };

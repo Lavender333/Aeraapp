@@ -1,6 +1,19 @@
 
 export type ViewState = 'SPLASH' | 'LOGIN' | 'REGISTRATION' | 'ACCOUNT_SETUP' | 'DASHBOARD' | 'HELP_WIZARD' | 'SETTINGS' | 'NEW_SIGNUPS' | 'MAP' | 'ALERTS' | 'GAP' | 'ASSESSMENT' | 'POPULATION' | 'RECOVERY' | 'DRONE' | 'LOGISTICS' | 'ORG_DASHBOARD' | 'PRESENTATION' | 'PRIVACY_POLICY' | 'RESET_PASSWORD' | 'BUILD_KIT' | 'READINESS' | 'READINESS_GAP' | 'EVENTS' | 'EVENT_SETUP' | 'EVENT_REGISTRATION' | 'VOLUNTEER_SCAN' | 'EVENT_DASHBOARD' | 'SHELTER_LOCATOR';
 
+export interface GapRevenueSettings {
+  /** App Store listing price per membership (USD) */
+  membershipPriceUsd: number;
+  /** Apple / Google platform fee % taken before developer receives funds (e.g. 30) */
+  appStoreFeePercent: number;
+  /** % of net developer proceeds allocated to the G.A.P. hardship fund (e.g. 30) */
+  gapFundAllocationPercent: number;
+  /** Billing cycle label shown to users */
+  billingCycle: 'monthly' | 'annual';
+  /** ISO timestamp of last change */
+  updatedAt: string;
+}
+
 export interface GapDocumentAttachment {
   id: string;
   label: string;

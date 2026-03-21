@@ -1,12 +1,12 @@
 
 import React, { useEffect, useState } from 'react';
-import { GapDocumentAttachment, HelpRequestData, HelpRequestRecord, ViewState, UserRole } from '../types';
+import { GapDocumentAttachment, GapRevenueSettings, HelpRequestData, HelpRequestRecord, ViewState, UserRole } from '../types';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Input, Textarea } from '../components/Input';
 import { StorageService } from '../services/storage';
 import { calculateGapSuggestedAmount, resolveGapRequestAmount } from '../services/gapCalculation';
-import { AlertCircle, ArrowLeft, Info, ShieldCheck } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Info, Settings2, ShieldCheck } from 'lucide-react';
 
 type ReviewAction = 'Recommend' | 'Request Info' | 'Decline' | 'Approve' | 'Adjust' | 'Deny' | 'Override';
 
@@ -87,6 +87,10 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
   const isCoreAdmin = role === 'ADMIN';
   const isOrgAdmin = role === 'ORG_ADMIN' || role === 'INSTITUTION_ADMIN';
   const isMemberView = !isCoreAdmin && !isOrgAdmin;
+  const [showRevenueSetup, setShowRevenueSetup] = useState(false);
+  const [revenueSettings, setRevenueSettings] = useState<GapRevenueSettings>(() => StorageService.getGapRevenueSettings());
+  const [revenueDraft, setRevenueDraft] = useState<GapRevenueSettings>(() => StorageService.getGapRevenueSettings());
+  const [revenueSaveMsg, setRevenueSaveMsg] = useState('');
   const [formMode, setFormMode] = useState<'HARDSHIP' | 'ADVANCE'>('HARDSHIP');
   const [formStep, setFormStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [isSubmittingForm, setIsSubmittingForm] = useState(false);
@@ -770,6 +774,179 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
           <p className="text-base font-semibold text-slate-900 mt-1">Grants • Advances • Provision</p>
           <p className="text-xs text-slate-600 mt-1">Support options based on documented need and current eligibility.</p>
         </Card>
+
+        {isCoreAdmin && (
+          <Card className="border-emerald-200 bg-white space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-slate-900">G.A.P. Revenue Setup</h3>
+                <p className="text-xs text-slate-500">Configure how App Store membership revenue is split into the G.A.P. hardship fund.</p>
+              </div>
+              <button
+                onClick={() => {
+                  setRevenueDraft({ ...revenueSettings });
+                  setRevenueSaveMsg('');
+                  setShowRevenueSetup((v) => !v);
+                }}
+                className="flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-900"
+              >
+                <Settings2 size={14} />{showRevenueSetup ? 'Close' : 'Configure'}
+              </button>
+            </div>
+
+            {/* Revenue math summary (always visible) */}
+            {(() => {
+              const price = Number(revenueSettings.membershipPriceUsd || 9.99);
+              const platformFee = Number(revenueSettings.appStoreFeePercent || 30) / 100;
+              const gapPct = Number(revenueSettings.gapFundAllocationPercent || 30) / 100;
+              const netPerMember = price * (1 - platformFee);
+              const gapPerMember = netPerMember * gapPct;
+              const monthlyMultiplier = revenueSettings.billingCycle === 'annual' ? 12 : 1;
+              const gapPerMemberMonthly = gapPerMember / monthlyMultiplier;
+              const estimatedMonthlyPool = gapPerMemberMonthly * totalConnectedUsers;
+              return (
+                <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 space-y-1">
+                  <p className="text-xs font-semibold text-emerald-800">Per-Member Fund Calculation</p>
+                  <p className="text-xs text-slate-700">App Store price: <span className="font-semibold">{formatCurrency(price)}</span> / {revenueSettings.billingCycle}</p>
+                  <p className="text-xs text-slate-700">Platform fee ({revenueSettings.appStoreFeePercent}%): &minus;{formatCurrency(price * platformFee)}</p>
+                  <p className="text-xs text-slate-700">Net developer proceeds: <span className="font-semibold">{formatCurrency(netPerMember)}</span></p>
+                  <p className="text-xs text-slate-700">G.A.P. allocation ({revenueSettings.gapFundAllocationPercent}% of net): <span className="font-bold text-emerald-700">{formatCurrency(gapPerMember)}</span> / {revenueSettings.billingCycle}</p>
+                  <p className="text-xs text-slate-700 font-semibold mt-1">Estimated monthly G.A.P. pool ({totalConnectedUsers} members): <span className="text-emerald-800">{formatCurrency(estimatedMonthlyPool)}</span></p>
+                </div>
+              );
+            })()}
+
+            {/* Editable setup form */}
+            {showRevenueSetup && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    type="number"
+                    min={0.99}
+                    step={0.01}
+                    label="Membership price (USD)"
+                    value={revenueDraft.membershipPriceUsd}
+                    onChange={(e) => setRevenueDraft((p) => ({ ...p, membershipPriceUsd: Number(e.target.value) }))}
+                  />
+                  <label className="text-sm font-medium text-slate-700 flex flex-col gap-1">
+                    Billing cycle
+                    <select
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                      value={revenueDraft.billingCycle}
+                      onChange={(e) => setRevenueDraft((p) => ({ ...p, billingCycle: e.target.value as 'monthly' | 'annual' }))}
+                    >
+                      <option value="monthly">Monthly</option>
+                      <option value="annual">Annual</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-medium text-slate-700 block mb-1">
+                      App Store platform fee % <span className="text-slate-400 font-normal text-xs">(Apple: 30% standard / 15% small dev)</span>
+                    </label>
+                    <input
+                      type="range" min={0} max={50} step={1}
+                      value={revenueDraft.appStoreFeePercent}
+                      onChange={(e) => setRevenueDraft((p) => ({ ...p, appStoreFeePercent: Number(e.target.value) }))}
+                      className="w-full"
+                    />
+                    <p className="text-xs text-slate-600 mt-0.5">{revenueDraft.appStoreFeePercent}%</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-slate-700 block mb-1">
+                      G.A.P. fund allocation % <span className="text-slate-400 font-normal text-xs">(of net proceeds)</span>
+                    </label>
+                    <input
+                      type="range" min={1} max={100} step={1}
+                      value={revenueDraft.gapFundAllocationPercent}
+                      onChange={(e) => setRevenueDraft((p) => ({ ...p, gapFundAllocationPercent: Number(e.target.value) }))}
+                      className="w-full"
+                    />
+                    <p className="text-xs text-slate-600 mt-0.5">{revenueDraft.gapFundAllocationPercent}%</p>
+                  </div>
+                </div>
+
+                {/* Live preview while editing */}
+                {(() => {
+                  const price = Number(revenueDraft.membershipPriceUsd || 9.99);
+                  const pfee = Number(revenueDraft.appStoreFeePercent || 30) / 100;
+                  const gpct = Number(revenueDraft.gapFundAllocationPercent || 30) / 100;
+                  const net = price * (1 - pfee);
+                  const gapPerCycle = net * gpct;
+                  const monthlyDiv = revenueDraft.billingCycle === 'annual' ? 12 : 1;
+                  const monthly = gapPerCycle / monthlyDiv;
+                  return (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700 space-y-0.5">
+                      <p className="font-semibold text-slate-800">Preview</p>
+                      <p>Net developer proceeds: {formatCurrency(net)} / {revenueDraft.billingCycle}</p>
+                      <p>G.A.P. contribution per member: <span className="font-semibold text-emerald-700">{formatCurrency(gapPerCycle)}</span> / {revenueDraft.billingCycle} ({formatCurrency(monthly)}/mo)</p>
+                      <p>Estimated monthly fund ({totalConnectedUsers} members): <span className="font-semibold">{formatCurrency(monthly * totalConnectedUsers)}</span></p>
+                    </div>
+                  );
+                })()}
+
+                {/* Per-org disbursement table */}
+                {communityIds.length > 0 && (
+                  <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto">
+                    <p className="text-xs font-semibold text-slate-700 px-3 pt-3 pb-1">Org Disbursement Breakdown (pro-rata by member count)</p>
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-slate-500">
+                          <th className="px-3 py-2 text-left">Community ID</th>
+                          <th className="px-3 py-2 text-right">Members</th>
+                          <th className="px-3 py-2 text-right">Share</th>
+                          <th className="px-3 py-2 text-right">Est. Monthly</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {communityIds.map((cid) => {
+                          const funding = communityFundingById.get(cid);
+                          if (!funding) return null;
+                          const price = Number(revenueDraft.membershipPriceUsd || 9.99);
+                          const pfee = Number(revenueDraft.appStoreFeePercent || 30) / 100;
+                          const gpct = Number(revenueDraft.gapFundAllocationPercent || 30) / 100;
+                          const monthlyDiv = revenueDraft.billingCycle === 'annual' ? 12 : 1;
+                          const gapMonthlyPerMember = (price * (1 - pfee) * gpct) / monthlyDiv;
+                          const orgMonthly = gapMonthlyPerMember * funding.connectedUsers;
+                          const sharePct = totalConnectedUsers > 0 ? Math.round((funding.connectedUsers / totalConnectedUsers) * 1000) / 10 : 0;
+                          return (
+                            <tr key={cid} className="border-b border-slate-100 last:border-0">
+                              <td className="px-3 py-2 font-mono text-slate-800">{cid}</td>
+                              <td className="px-3 py-2 text-right">{funding.connectedUsers}</td>
+                              <td className="px-3 py-2 text-right">{sharePct}%</td>
+                              <td className="px-3 py-2 text-right font-semibold text-emerald-700">{formatCurrency(orgMonthly)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    <p className="text-[10px] text-slate-500 px-3 pb-3 pt-1">Disbursement to each organization is proportional to its registered member count. Actual disbursement requires documented hardship approval.</p>
+                  </div>
+                )}
+
+                {revenueSaveMsg && <p className="text-xs text-emerald-700 font-semibold">{revenueSaveMsg}</p>}
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setRevenueDraft({ ...revenueSettings });
+                      setRevenueSaveMsg('');
+                    }}
+                  >Reset</Button>
+                  <Button
+                    onClick={() => {
+                      const saved = StorageService.setGapRevenueSettings(revenueDraft);
+                      setRevenueSettings(saved);
+                      setRevenueDraft(saved);
+                      setRevenueSaveMsg('Revenue settings saved.');
+                    }}
+                  >Save Settings</Button>
+                </div>
+              </div>
+            )}
+          </Card>
+        )}
 
         {isCoreAdmin && (
           <Card className="border-slate-200 bg-white space-y-3">
