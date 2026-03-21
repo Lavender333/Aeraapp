@@ -11,9 +11,10 @@ import { AppNotificationRecord, cancelMyHouseholdJoinRequest, ConnectedHousehold
 import { getOrgByCode } from '../services/supabase';
 import { listOrganizations as listOrganizationsSupabase } from '../services/supabaseApi';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
+import { listEvents, DistributionEvent } from '../services/eventDistribution';
 import { isValidPhoneForInvite, validateHouseholdMembers } from '../services/validation';
 import { t } from '../services/translations';
-import { User, Bell, Lock, LogOut, Check, Building2, ArrowLeft, ArrowRight, Link as LinkIcon, Loader2, HeartPulse, ShieldCheck, Users, ToggleLeft, ToggleRight, MoreVertical, Copy, CheckCircle, Database, X, XCircle, Globe, Search, Truck, Phone, Mail, MapPin, Power, Ban, Activity, Radio, AlertTriangle, HelpCircle, FileText, Printer, CheckSquare, Download, RefreshCcw, Clipboard, PenTool, ChevronDown, PlayCircle, Save } from 'lucide-react';
+import { User, Bell, Lock, LogOut, Check, Building2, ArrowLeft, ArrowRight, Link as LinkIcon, Loader2, HeartPulse, ShieldCheck, Users, ToggleLeft, ToggleRight, MoreVertical, Copy, CheckCircle, Database, X, XCircle, Globe, Search, Truck, Phone, Mail, MapPin, Power, Ban, Activity, Radio, AlertTriangle, HelpCircle, FileText, Printer, CheckSquare, Download, RefreshCcw, Clipboard, PenTool, ChevronDown, PlayCircle, Save, Calendar } from 'lucide-react';
 
 // Phone Formatter Utility
 const formatPhoneNumber = (value: string) => {
@@ -278,7 +279,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   ]);
   
   // UI States
-  const [currentSection, setCurrentSection] = useState<'MAIN' | 'ACCESS_CONTROL' | 'DB_VIEWER' | 'ORG_DIRECTORY' | 'BROADCAST_CONTROL' | 'MASTER_INVENTORY'>('MAIN');
+  const [currentSection, setCurrentSection] = useState<'MAIN' | 'ACCESS_CONTROL' | 'DB_VIEWER' | 'ORG_DIRECTORY' | 'BROADCAST_CONTROL' | 'MASTER_INVENTORY' | 'EVENT_MANAGEMENT'>('MAIN');
   const [isSaved, setIsSaved] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [connectedOrg, setConnectedOrg] = useState<string | null>(null);
@@ -362,6 +363,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [inventoryRequests, setInventoryRequests] = useState<ReplenishmentRequest[]>([]);
   const [printingRequest, setPrintingRequest] = useState<ReplenishmentRequest | null>(null);
   const [autoPrintOnOpen, setAutoPrintOnOpen] = useState(false);
+
+  // Event Management State
+  const [events, setEvents] = useState<DistributionEvent[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [eventListBusy, setEventListBusy] = useState(false);
+  const [eventLoadError, setEventLoadError] = useState<string | null>(null);
   const [workOrderForm, setWorkOrderForm] = useState<Record<string, string>>({});
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSavingVitals, setIsSavingVitals] = useState(false);
@@ -2186,6 +2193,26 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setCurrentSection('MASTER_INVENTORY');
   };
 
+  const openEventManagement = async () => {
+    if (!isAdmin) return;
+    setEventListBusy(true);
+    setEventLoadError(null);
+    try {
+      const allEvents = await listEvents();
+      const scopedEvents = isOrgScopedAdmin
+        ? allEvents.filter((evt) => String(evt.org_id || '') === orgScopeId)
+        : allEvents;
+      setEvents(scopedEvents);
+      setSelectedEventId(scopedEvents.length > 0 ? scopedEvents[0].id : null);
+    } catch (err) {
+      console.warn('Failed to load events from Supabase', err);
+      setEventLoadError('Failed to load events. Please try again.');
+    } finally {
+      setEventListBusy(false);
+    }
+    setCurrentSection('EVENT_MANAGEMENT');
+  };
+
   // --- Access Control Handlers ---
   const togglePermission = (roleId: UserRole, perm: keyof RoleDefinition['permissions']) => {
     if (isOrgScopedAdmin) return;
@@ -2965,6 +2992,104 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
            {orgList.filter(o => o.currentBroadcast).length === 0 && (
              <p className="text-center text-slate-400 py-4 italic">No active organization broadcasts.</p>
            )}
+        </div>
+      </div>
+    );
+  }
+
+  // --- Render: Event Management ---
+  if (currentSection === 'EVENT_MANAGEMENT') {
+    return (
+      <div className="p-6 pb-28 space-y-6 animate-fade-in bg-slate-50 min-h-screen">
+        <div className="flex items-center gap-3 border-b border-slate-200 pb-4 sticky top-0 bg-slate-50 z-10">
+          <button onClick={() => setCurrentSection('MAIN')} className="p-2 -ml-2 text-slate-500 hover:text-slate-800">
+            <ArrowLeft size={24} />
+          </button>
+          <div>
+            <h1 className="text-xl font-bold text-slate-900">Event Management</h1>
+            <p className="text-xs text-slate-500">Create and manage distribution events</p>
+          </div>
+        </div>
+
+        {eventLoadError && (
+          <div className="bg-red-50 border border-red-200 p-4 rounded-xl shadow-sm">
+            <h3 className="font-bold text-red-900 mb-2">{eventLoadError}</h3>
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <Button 
+            onClick={() => setView('EVENT_SETUP')}
+            className="bg-brand-600 hover:bg-brand-500 text-white border-0 flex-1"
+          >
+            <Calendar size={16} className="mr-2" /> Create New Event
+          </Button>
+          <Button 
+            onClick={openEventManagement}
+            variant="outline"
+            className="text-slate-600 border-slate-300"
+            disabled={eventListBusy}
+          >
+            {eventListBusy ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}
+          </Button>
+        </div>
+
+        <div className="space-y-3">
+          <h3 className="font-bold text-slate-900">Events ({events.length})</h3>
+          {eventListBusy && <p className="text-center text-slate-500 py-4">Loading events...</p>}
+          
+          {!eventListBusy && events.length === 0 && (
+            <div className="bg-slate-100 border border-slate-300 p-6 rounded-xl shadow-sm text-center">
+              <Calendar size={32} className="mx-auto text-slate-400 mb-2" />
+              <p className="text-slate-600">No events found. Create one to get started.</p>
+            </div>
+          )}
+
+          {!eventListBusy && events.map((event) => (
+            <div key={event.id} className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex justify-between items-start mb-2">
+                <div className="flex-1">
+                  <h4 className="font-bold text-slate-900 flex items-center gap-2">
+                    <Calendar size={16} className="text-brand-600" />
+                    {event.name}
+                  </h4>
+                  <p className="text-xs text-slate-600 mt-1">{event.description}</p>
+                </div>
+                <div className="text-right">
+                  <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                    event.status === 'ACTIVE' ? 'bg-green-100 text-green-700' :
+                    event.status === 'COMPLETED' ? 'bg-slate-100 text-slate-700' :
+                    'bg-amber-100 text-amber-700'
+                  }`}>
+                    {event.status}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 mb-3 bg-slate-50 p-2 rounded">
+                <div><span className="font-semibold">Sessions:</span> {event.sessions?.length || 0}</div>
+                <div><span className="font-semibold">Registrations:</span> {event.registrations_count || 0}</div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => setView('EVENT_SETUP')}
+                  size="sm"
+                  className="bg-brand-600 hover:bg-brand-500 text-white border-0 flex-1"
+                >
+                  View Details
+                </Button>
+                <Button 
+                  onClick={() => setView('EVENT_DASHBOARD')}
+                  size="sm"
+                  variant="outline"
+                  className="text-slate-600 border-slate-300"
+                >
+                  Dashboard
+                </Button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -3842,6 +3967,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               >
                 <span>{t('settings.master_inventory')}</span>
                 <FileText size={18} />
+              </Button>
+              <Button 
+                onClick={openEventManagement} 
+                className="bg-indigo-600 hover:bg-indigo-500 text-white border-0 w-full justify-between"
+              >
+                <span>Event Management</span>
+                <Calendar size={18} />
               </Button>
               <Button 
                 onClick={openBroadcastControl} 
