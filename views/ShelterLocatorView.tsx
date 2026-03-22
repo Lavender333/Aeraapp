@@ -3,7 +3,7 @@ import { ArrowLeft, ExternalLink, MapPin } from 'lucide-react';
 import { ViewState } from '../types';
 import { Button } from '../components/Button';
 
-const SHELTER_LOCATOR_URL = 'https://www.arcgis.com/apps/webappviewer/index.html?id=a5da083275bb4bc7bfb7c032891a9d6e';
+const SHELTER_LOCATOR_URL = 'https://egateway.fema.gov/ESF6/DRCLocator';
 const SHELTER_LOCATOR_PREVIEW_IMAGE = 'https://disasterresponse.maps.arcgis.com/sharing/rest/content/items/a5da083275bb4bc7bfb7c032891a9d6e/resources/inConfig/6892968846091456.png';
 
 export const ShelterLocatorView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
