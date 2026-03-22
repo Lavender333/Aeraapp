@@ -638,24 +638,43 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
 
   const makeFinanceExportRows = () => {
     const generatedAt = new Date().toISOString();
-    return revenueProfitSeries.map((row) => ({
-      generated_at: generatedAt,
-      tier: financeTier.name,
-      scenario: financeScenario,
-      month: row.month,
-      users: row.users,
-      price_per_user_gross_usd: Number(defaultPricePerUser.toFixed(2)),
-      apple_fee_percent: Number(financeAppleFeePercent.toFixed(2)),
-      gross_subscriptions_usd: Number(row.grossRevenue.toFixed(2)),
-      apple_fee_usd: Number(row.appleFee.toFixed(2)),
-      net_subscriptions_usd: Number(row.netSubscriptions.toFixed(2)),
-      grant_revenue_usd: Number(financeTier.grantRevenue.toFixed(2)),
-      total_net_revenue_usd: Number(row.revenue.toFixed(2)),
-      monthly_cost_usd: Number(row.cost.toFixed(2)),
-      monthly_profit_usd: Number(row.profit.toFixed(2)),
-      break_even_users_at_current_price: breakEvenUsersPrice ?? '',
-      conversion_needed_percent: conversionNeededPct ?? '',
-    }));
+    return revenueProfitSeries.map((row) => {
+      const users = Number(row.users);
+      const price = Number(defaultPricePerUser.toFixed(2));
+      const feePct = Number(financeAppleFeePercent.toFixed(2));
+      const feeRate = Number((feePct / 100).toFixed(6));
+      const gross = Number(row.grossRevenue.toFixed(2));
+      const appleFee = Number(row.appleFee.toFixed(2));
+      const netSubs = Number(row.netSubscriptions.toFixed(2));
+      const grants = Number(financeTier.grantRevenue.toFixed(2));
+      const netRevenue = Number(row.revenue.toFixed(2));
+      const cost = Number(row.cost.toFixed(2));
+      const profit = Number(row.profit.toFixed(2));
+
+      return {
+        generated_at: generatedAt,
+        tier: financeTier.name,
+        scenario: financeScenario,
+        month: row.month,
+        users,
+        price_per_user_gross_usd: price,
+        apple_fee_percent: feePct,
+        gross_subscriptions_usd: gross,
+        apple_fee_usd: appleFee,
+        net_subscriptions_usd: netSubs,
+        grant_revenue_usd: grants,
+        total_net_revenue_usd: netRevenue,
+        monthly_cost_usd: cost,
+        monthly_profit_usd: profit,
+        break_even_users_at_current_price: breakEvenUsersPrice ?? '',
+        conversion_needed_percent: conversionNeededPct ?? '',
+        formula_gross_subscriptions: `=${users}*${price}`,
+        formula_apple_fee: `=${gross}*${feeRate}`,
+        formula_net_subscriptions: `=${gross}-${appleFee}`,
+        formula_total_net_revenue: `=${grants}+${netSubs}`,
+        formula_monthly_profit: `=${netRevenue}-${cost}`,
+      };
+    });
   };
 
   const exportFinanceCsv = () => {
@@ -685,15 +704,60 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     URL.revokeObjectURL(url);
   };
 
-  const exportFinanceExcel = async () => {
+  const exportFinancePdf = async () => {
     setFinanceExporting(true);
     try {
       const rows = makeFinanceExportRows();
-      const XLSX = await import('xlsx');
-      const workbook = XLSX.utils.book_new();
-      const sheet = XLSX.utils.json_to_sheet(rows);
-      XLSX.utils.book_append_sheet(workbook, sheet, 'Financial Dashboard');
-      XLSX.writeFile(workbook, `aera_financial_dashboard_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+
+      const currency = (n: number) => `$${Number(n || 0).toLocaleString()}`;
+      const title = 'AERA Financial Intelligence Dashboard';
+      const dateStamp = new Date().toISOString();
+
+      doc.setFontSize(16);
+      doc.text(title, 40, 40);
+      doc.setFontSize(10);
+      doc.text(`Generated: ${dateStamp}`, 40, 58);
+      doc.text(`Tier: ${financeTier.name} | Scenario: ${financeScenario.toUpperCase()} | Apple Fee: ${financeAppleFeePercent}%`, 40, 74);
+      doc.text(`Users: ${financeUsers.toLocaleString()} | Price (Gross): ${currency(defaultPricePerUser)} | Net Revenue: ${currency(monthlyRevenue)} | Cost: ${currency(financeMonthlyCost)} | Profit: ${currency(monthlyProfit)}`, 40, 90);
+
+      const headers = [
+        'Month', 'Users', 'Gross', 'Apple Fee', 'Net Subs', 'Grants', 'Net Revenue', 'Cost', 'Profit'
+      ];
+      const colX = [40, 95, 165, 255, 345, 430, 505, 600, 675];
+      let y = 120;
+
+      doc.setFontSize(9);
+      headers.forEach((h, i) => doc.text(h, colX[i], y));
+      y += 10;
+      doc.line(40, y, 790, y);
+      y += 14;
+
+      rows.forEach((row) => {
+        if (y > 555) {
+          doc.addPage();
+          y = 40;
+          doc.setFontSize(9);
+          headers.forEach((h, i) => doc.text(h, colX[i], y));
+          y += 10;
+          doc.line(40, y, 790, y);
+          y += 14;
+        }
+
+        doc.text(String(row.month), colX[0], y);
+        doc.text(Number(row.users).toLocaleString(), colX[1], y);
+        doc.text(currency(Number(row.gross_subscriptions_usd)), colX[2], y);
+        doc.text(currency(Number(row.apple_fee_usd)), colX[3], y);
+        doc.text(currency(Number(row.net_subscriptions_usd)), colX[4], y);
+        doc.text(currency(Number(row.grant_revenue_usd)), colX[5], y);
+        doc.text(currency(Number(row.total_net_revenue_usd)), colX[6], y);
+        doc.text(currency(Number(row.monthly_cost_usd)), colX[7], y);
+        doc.text(currency(Number(row.monthly_profit_usd)), colX[8], y);
+        y += 16;
+      });
+
+      doc.save(`aera_financial_dashboard_${new Date().toISOString().slice(0, 10)}.pdf`);
     } finally {
       setFinanceExporting(false);
     }
@@ -863,8 +927,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                 <Button size="sm" variant="outline" onClick={exportFinanceCsv}>
                   Export CSV
                 </Button>
-                <Button size="sm" variant="outline" onClick={exportFinanceExcel} disabled={financeExporting}>
-                  {financeExporting ? 'Exporting...' : 'Export Excel'}
+                <Button size="sm" variant="outline" onClick={exportFinancePdf} disabled={financeExporting}>
+                  {financeExporting ? 'Exporting...' : 'Export PDF'}
                 </Button>
               </div>
 
