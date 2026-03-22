@@ -465,6 +465,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const onboardingChecklistDone = onboardingChecklistItems.filter((item) => item.done).length;
   const hasOnboardingStepsIncomplete = onboardingChecklistDone < onboardingChecklistItems.length;
 
+  const pendingGapSubmissionCountForOrgAdmin = (() => {
+    if (!isOrgAdmin) return 0;
+    const dbSnapshot = StorageService.getDB();
+    const profileSnapshot = StorageService.getProfile();
+    const normalizeCommunityId = (value: string) => String(value || '').trim().toUpperCase();
+    const orgScopeId = normalizeCommunityId(String(profileSnapshot.communityId || ''));
+    if (!orgScopeId) return 0;
+
+    const pendingStatuses = new Set(['PENDING', 'RECEIVED']);
+    const usersById = new Map((dbSnapshot.users || []).map((user) => [String(user.id || '').trim(), user]));
+    const connectedMemberIds = new Set((orgMembers || []).map((member) => String(member.id || '').trim()).filter(Boolean));
+
+    return (dbSnapshot.requests || []).filter((request) => {
+      const status = String(request.status || '').toUpperCase();
+      if (!pendingStatuses.has(status)) return false;
+      const requestUserId = String(request.userId || '').trim();
+      const requestUser = usersById.get(requestUserId);
+      const requestCommunityId = normalizeCommunityId(String(requestUser?.communityId || ''));
+      return requestCommunityId === orgScopeId || connectedMemberIds.has(requestUserId);
+    }).length;
+  })();
+
   const handleOnboardingDoItNow = () => {
     if (!hasCommunity) {
       setShowCommunityConnectModal(true);
@@ -1004,6 +1026,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               Manage Fund
             </Button>
           </div>
+        </section>
+      )}
+
+      {isOrgAdmin && (
+        <section className="bg-white/95 border border-slate-200 rounded-2xl p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">G.A.P. Submissions</p>
+              <p className="text-lg font-bold text-slate-900 mt-1">Organization Review Queue</p>
+              <p className="text-xs text-slate-600 mt-1">Review submissions from members connected to your organization.</p>
+            </div>
+            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${pendingGapSubmissionCountForOrgAdmin > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+              {pendingGapSubmissionCountForOrgAdmin} pending
+            </span>
+          </div>
+          <Button size="sm" onClick={() => setView('GAP')}>
+            Open G.A.P. Queue
+          </Button>
         </section>
       )}
 

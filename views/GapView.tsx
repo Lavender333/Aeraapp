@@ -198,10 +198,14 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
     return String(user?.communityId || '').trim();
   };
 
-  const orgScopeId = String(profile.communityId || '').trim();
-  const scopedCommunityIds = networkCommunityIds.length > 0 ? networkCommunityIds : (orgScopeId ? [orgScopeId] : []);
+  const normalizeCommunityId = (value: string) => String(value || '').trim().toUpperCase();
+  const orgScopeId = normalizeCommunityId(String(profile.communityId || ''));
+  const scopedCommunityIds = (networkCommunityIds.length > 0 ? networkCommunityIds : (orgScopeId ? [orgScopeId] : []))
+    .map(normalizeCommunityId)
+    .filter(Boolean);
   const scopedCommunitySet = new Set(scopedCommunityIds);
   const orgMembers = orgScopeId ? StorageService.getOrgMembers(orgScopeId) : [];
+  const scopedMemberIds = new Set(orgMembers.map((member) => String(member.id || '').trim()).filter(Boolean));
   const orgMemberById = new Map(orgMembers.map((member) => [member.id, member.name]));
 
   const pendingStatuses = new Set(['PENDING', 'RECEIVED']);
@@ -210,7 +214,11 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
   const memberPendingRequests = memberRequests.filter((req) => pendingStatuses.has(String(req.status || '').toUpperCase()));
   const memberResolvedRequests = memberRequests.filter((req) => resolvedStatuses.has(String(req.status || '').toUpperCase()));
   const orgRequests = isOrgAdmin
-    ? allRequests.filter((req) => scopedCommunitySet.has(resolveOrgForRequest(req)))
+    ? allRequests.filter((req) => {
+      const requestOrg = normalizeCommunityId(resolveOrgForRequest(req));
+      const requestUserId = String(req.userId || '').trim();
+      return scopedCommunitySet.has(requestOrg) || scopedMemberIds.has(requestUserId);
+    })
     : [];
 
   const pendingOrgRequests = orgRequests.filter((req) => pendingStatuses.has(String(req.status || '').toUpperCase()));
