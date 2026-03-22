@@ -112,6 +112,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [financeScenario, setFinanceScenario] = useState<'low' | 'medium' | 'high'>('high');
   const [financePrice, setFinancePrice] = useState<number>(2);
   const [financeUsersInput, setFinanceUsersInput] = useState<number>(3000);
+  const [financeAppleFeePercent, setFinanceAppleFeePercent] = useState<number>(20);
+  const [financeExporting, setFinanceExporting] = useState(false);
   const [inventoryFallback, setInventoryFallback] = useState(false);
   const [showOpDef, setShowOpDef] = useState(false);
   const [communityIdInput, setCommunityIdInput] = useState('');
@@ -586,12 +588,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const financeBurn = financeMonthlyCost - financeTier.grantRevenue;
   const financeUsers = financeUsersInput;
 
-  // Base subscription price per active subscriber (resident view)
+  // Base subscription price per active subscriber (gross, before marketplace fees)
   const defaultPricePerUser = financePrice;
-  const monthlyRevenue = financeTier.grantRevenue + (financeUsers * defaultPricePerUser);
+  const appleFeeRate = Math.max(0, Math.min(1, financeAppleFeePercent / 100));
+  const grossSubscriptionRevenue = financeUsers * defaultPricePerUser;
+  const appleFeeAmount = grossSubscriptionRevenue * appleFeeRate;
+  const netSubscriptionRevenue = Math.max(0, grossSubscriptionRevenue - appleFeeAmount);
+  const monthlyRevenue = financeTier.grantRevenue + netSubscriptionRevenue;
   const monthlyProfit = monthlyRevenue - financeMonthlyCost;
-  const breakEvenUsersPrice = defaultPricePerUser > 0
-    ? Math.max(0, Math.ceil(financeBurn / defaultPricePerUser))
+  const netPricePerUser = defaultPricePerUser * (1 - appleFeeRate);
+  const breakEvenUsersPrice = netPricePerUser > 0
+    ? Math.max(0, Math.ceil(financeBurn / netPricePerUser))
     : null;
   const projected12MonthProfit = monthlyProfit * 12;
   const initials = userName ? userName.trim().charAt(0).toUpperCase() : 'A';
@@ -607,15 +614,90 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const revenueProfitSeries = Array.from({ length: 12 }).map((_, idx) => {
     const month = idx + 1;
     const users = Math.round(financeUsers * Math.pow(1.1, idx));
-    const revenue = financeTier.grantRevenue + (users * defaultPricePerUser);
+    const grossRevenue = users * defaultPricePerUser;
+    const appleFee = grossRevenue * appleFeeRate;
+    const netSubscriptions = Math.max(0, grossRevenue - appleFee);
+    const revenue = financeTier.grantRevenue + netSubscriptions;
     const profit = revenue - financeMonthlyCost;
-    return { month, revenue, cost: financeMonthlyCost, profit };
+    return {
+      month,
+      users,
+      grossRevenue,
+      appleFee,
+      netSubscriptions,
+      revenue,
+      cost: financeMonthlyCost,
+      profit,
+    };
   });
 
   const currentTotalUsers = financeUsers;
   const conversionNeededPct = financeTier.targetUsers > 0 && breakEvenUsersPrice !== null
     ? Math.min(100, Math.round((breakEvenUsersPrice / financeTier.targetUsers) * 100))
     : null;
+
+  const makeFinanceExportRows = () => {
+    const generatedAt = new Date().toISOString();
+    return revenueProfitSeries.map((row) => ({
+      generated_at: generatedAt,
+      tier: financeTier.name,
+      scenario: financeScenario,
+      month: row.month,
+      users: row.users,
+      price_per_user_gross_usd: Number(defaultPricePerUser.toFixed(2)),
+      apple_fee_percent: Number(financeAppleFeePercent.toFixed(2)),
+      gross_subscriptions_usd: Number(row.grossRevenue.toFixed(2)),
+      apple_fee_usd: Number(row.appleFee.toFixed(2)),
+      net_subscriptions_usd: Number(row.netSubscriptions.toFixed(2)),
+      grant_revenue_usd: Number(financeTier.grantRevenue.toFixed(2)),
+      total_net_revenue_usd: Number(row.revenue.toFixed(2)),
+      monthly_cost_usd: Number(row.cost.toFixed(2)),
+      monthly_profit_usd: Number(row.profit.toFixed(2)),
+      break_even_users_at_current_price: breakEvenUsersPrice ?? '',
+      conversion_needed_percent: conversionNeededPct ?? '',
+    }));
+  };
+
+  const exportFinanceCsv = () => {
+    const rows = makeFinanceExportRows();
+    if (!rows.length) return;
+    const headers = Object.keys(rows[0]);
+    const escapeCell = (value: unknown) => {
+      const text = String(value ?? '');
+      if (/[",\n]/.test(text)) {
+        return `"${text.replace(/"/g, '""')}"`;
+      }
+      return text;
+    };
+    const csv = [
+      headers.join(','),
+      ...rows.map((row) => headers.map((h) => escapeCell((row as Record<string, unknown>)[h])).join(',')),
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `aera_financial_dashboard_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportFinanceExcel = async () => {
+    setFinanceExporting(true);
+    try {
+      const rows = makeFinanceExportRows();
+      const XLSX = await import('xlsx');
+      const workbook = XLSX.utils.book_new();
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      XLSX.utils.book_append_sheet(workbook, sheet, 'Financial Dashboard');
+      XLSX.writeFile(workbook, `aera_financial_dashboard_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } finally {
+      setFinanceExporting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-slate-50 to-teal-50 animate-fade-in pb-28">
@@ -769,12 +851,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                     Scenario: {financeScenario.toUpperCase()} • ${financeMonthlyCost.toLocaleString()}/mo
                   </p>
                   <p className="text-[11px] text-slate-500">
-                    Quick snapshot: set users and price; see burn, break-even, and conversion needed.
+                    Quick snapshot: set users, price, and Apple fee; see net revenue, burn, break-even, and conversion needed.
                   </p>
                 </div>
                 <div className="bg-slate-900 text-slate-100 px-4 py-2 rounded-lg font-semibold text-xs shadow-sm">
                   Financial snapshot
                 </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={exportFinanceCsv}>
+                  Export CSV
+                </Button>
+                <Button size="sm" variant="outline" onClick={exportFinanceExcel} disabled={financeExporting}>
+                  {financeExporting ? 'Exporting...' : 'Export Excel'}
+                </Button>
               </div>
 
               {/* Scenario Switcher (High / Medium / Low) + Operational Cost Definition toggle */}
@@ -840,13 +931,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                 <h4 className="font-bold text-slate-800 flex items-center gap-2">
                   <Users size={16} className="text-blue-600" /> Snapshot
                 </h4>
-                <div className="grid md:grid-cols-2 gap-3">
+                <div className="grid md:grid-cols-3 gap-3">
                   <label className="text-xs font-semibold text-slate-600 flex flex-col gap-1">
-                    Price per user (monthly)
+                    Price per user (monthly, gross)
                     <input
                       type="number"
                       value={financePrice}
                       onChange={(e) => setFinancePrice(Math.max(0, Number(e.target.value) || 0))}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600 flex flex-col gap-1">
+                    Apple fee (%)
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={financeAppleFeePercent}
+                      onChange={(e) => setFinanceAppleFeePercent(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
                       className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                     />
                   </label>
@@ -860,14 +962,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                     />
                   </label>
                 </div>
-                <div className="grid md:grid-cols-5 gap-3 text-sm">
+                <div className="grid md:grid-cols-6 gap-3 text-sm">
                   <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
                     <p className="text-[11px] uppercase font-bold text-slate-500">Cost</p>
                     <p className="text-lg font-bold text-slate-900">${financeMonthlyCost.toLocaleString()}</p>
                   </div>
                   <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-                    <p className="text-[11px] uppercase font-bold text-slate-500">Revenue</p>
+                    <p className="text-[11px] uppercase font-bold text-slate-500">Gross Subscriptions</p>
+                    <p className="text-lg font-bold text-slate-900">${grossSubscriptionRevenue.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                    <p className="text-[11px] uppercase font-bold text-slate-500">Apple Fee ({financeAppleFeePercent}%)</p>
+                    <p className="text-lg font-bold text-slate-900">-${appleFeeAmount.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                    <p className="text-[11px] uppercase font-bold text-slate-500">Net Revenue</p>
                     <p className="text-lg font-bold text-slate-900">${monthlyRevenue.toLocaleString()}</p>
+                    {financeTier.grantRevenue > 0 && (
+                      <p className="text-[10px] text-slate-500">Includes grants: ${financeTier.grantRevenue.toLocaleString()}</p>
+                    )}
                   </div>
                   <div className={`rounded-lg p-3 border ${monthlyProfit >=0 ? 'bg-emerald-50 border-emerald-200' : 'bg-orange-50 border-orange-200'}`}>
                     <p className="text-[11px] uppercase font-bold text-slate-500">Burn / Profit</p>
@@ -899,7 +1012,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                       <YAxis />
                       <Tooltip formatter={(val: number | string) => `$${Number(val).toLocaleString()}`} />
                       <Legend />
-                      <Line type="monotone" dataKey="revenue" stroke="#2563eb" strokeWidth={3} name="Revenue" dot={false} />
+                      <Line type="monotone" dataKey="revenue" stroke="#2563eb" strokeWidth={3} name="Net Revenue" dot={false} />
                       <Line type="monotone" dataKey="cost" stroke="#f59e0b" strokeWidth={2} name="Cost" dot={false} />
                       <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} name="Profit" dot={false} />
                       <ReferenceLine y={0} stroke="#94a3b8" />
@@ -910,7 +1023,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
 
               {/* Simple note */}
               <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-sm text-slate-700">
-                Keep it simple: set users and price; read burn, break-even, and conversion. Use scenarios only to reflect cost side (low/med/high).
+                Keep it simple: set users, gross price, and Apple fee. Net Revenue = (Users × Price × (1 - Apple Fee%)) + grants.
+                Use scenarios to model operational cost side (low/med/high).
               </div>
             </div>
           </div>
