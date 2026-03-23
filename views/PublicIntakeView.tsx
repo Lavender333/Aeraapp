@@ -68,8 +68,10 @@ export const PublicIntakeView: React.FC<PublicIntakeViewProps> = ({ shareToken =
   const [shareInfo, setShareInfo] = useState<PublicIntakeLinkInfo | null>(null);
   const [isLoading, setIsLoading] = useState(!!shareToken);
   const [loadError, setLoadError] = useState('');
+  const [loadWarning, setLoadWarning] = useState('');
   const [errors, setErrors] = useState<Partial<Record<keyof IntakeForm, string>>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   const currentIndex = STEPS.findIndex((s) => s.id === step);
 
@@ -97,9 +99,12 @@ export const PublicIntakeView: React.FC<PublicIntakeViewProps> = ({ shareToken =
         }
 
         setShareInfo(link);
+        setLoadWarning('');
       } catch (err) {
         if (mounted) {
-          setLoadError('Error loading share link. Please try again.');
+          // Do not block form usage if metadata lookup fails.
+          // Token validity is still enforced on submit.
+          setLoadWarning('We could not load sharer details, but you can still submit this form.');
           console.error('Error loading share link:', err);
         }
       } finally {
@@ -147,6 +152,7 @@ export const PublicIntakeView: React.FC<PublicIntakeViewProps> = ({ shareToken =
 
   const submitIntake = async () => {
     if (!validateStep()) return;
+    setSubmitError('');
     setIsSubmitting(true);
     try {
       const lead = await submitPublicLeadIntake({
@@ -167,6 +173,16 @@ export const PublicIntakeView: React.FC<PublicIntakeViewProps> = ({ shareToken =
 
       setSubmittedId(lead.external_lead_id || lead.id);
       setStep('CONFIRMATION');
+    } catch (err) {
+      const message = String((err as { message?: string } | null)?.message || '');
+      const lower = message.toLowerCase();
+      if (lower.includes('invalid or expired share token')) {
+        setSubmitError('This share link is invalid or has expired. Please request a new link.');
+      } else if (message) {
+        setSubmitError(message);
+      } else {
+        setSubmitError('We could not submit your intake right now. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -225,6 +241,14 @@ export const PublicIntakeView: React.FC<PublicIntakeViewProps> = ({ shareToken =
         </div>
       )}
 
+      {loadWarning && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-3">
+          <div className="max-w-2xl mx-auto text-sm text-amber-900">
+            {loadWarning}
+          </div>
+        </div>
+      )}
+
       {/* Step progress */}
       {step !== 'CONFIRMATION' && (
         <div className="max-w-2xl mx-auto px-4 pt-5">
@@ -259,6 +283,12 @@ export const PublicIntakeView: React.FC<PublicIntakeViewProps> = ({ shareToken =
       )}
 
       <main className="max-w-2xl mx-auto px-4 space-y-4">
+        {submitError && (
+          <Card className="border-rose-200 bg-rose-50">
+            <p className="text-sm text-rose-800">{submitError}</p>
+          </Card>
+        )}
+
         {/* ── Step 1: Identity ─────────────────────────────────────────── */}
         {step === 'IDENTITY' && (
           <Card className="border-slate-200 bg-white">
