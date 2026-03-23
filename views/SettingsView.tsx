@@ -14,7 +14,7 @@ import { subscribeToNotifications } from '../services/supabaseRealtime';
 import { listEvents, DistributionEvent } from '../services/eventDistribution';
 import { isValidPhoneForInvite, validateHouseholdMembers } from '../services/validation';
 import { t } from '../services/translations';
-import { User, Bell, Lock, LogOut, Check, Building2, ArrowLeft, ArrowRight, Link as LinkIcon, Loader2, HeartPulse, ShieldCheck, Users, ToggleLeft, ToggleRight, MoreVertical, Copy, CheckCircle, Database, X, XCircle, Globe, Search, Truck, Phone, Mail, MapPin, Power, Ban, Activity, Radio, AlertTriangle, HelpCircle, FileText, Printer, CheckSquare, Download, RefreshCcw, Clipboard, PenTool, ChevronDown, PlayCircle, Save, Calendar } from 'lucide-react';
+import { User, Bell, Lock, LogOut, Check, Building2, ArrowLeft, ArrowRight, Link as LinkIcon, Loader2, HeartPulse, ShieldCheck, Users, ToggleLeft, ToggleRight, MoreVertical, Copy, CheckCircle, Database, X, XCircle, Globe, Search, Truck, Phone, Mail, MapPin, Power, Ban, Activity, Radio, AlertTriangle, HelpCircle, FileText, Printer, CheckSquare, Download, RefreshCcw, Clipboard, PenTool, ChevronDown, PlayCircle, Save, Calendar, MessageSquare } from 'lucide-react';
 
 // Phone Formatter Utility
 const formatPhoneNumber = (value: string) => {
@@ -444,6 +444,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [contactSupportBusy, setContactSupportBusy] = useState(false);
   const [contactSupportError, setContactSupportError] = useState<string | null>(null);
   const [contactSupportSuccess, setContactSupportSuccess] = useState<string | null>(null);
+  const [contactUsTab, setContactUsTab] = useState<'faq' | 'contact'>('faq');
+  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
   const latestApprovedJoinRequestRef = useRef<string | null>(null);
   const accordionButtonIds: Record<SettingsAccordionKey, string> = {
     profile: 'settings-accordion-button-profile',
@@ -5096,116 +5098,276 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           </>
         )}
 
-            {canSubmitContactSupport && (
-              <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Contact Us - Aera</p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Send a question or assistance request to the AERA admin team. Replies and resolution updates will appear in your ticket history below.
-                    </p>
-                  </div>
-                  <div className="rounded-full bg-sky-50 border border-sky-200 px-2.5 py-1 text-[10px] font-bold text-sky-700">
-                    AERA Admin Queue
-                  </div>
-                </div>
+            {canSubmitContactSupport && (() => {
+              const generalFaqs = [
+                {
+                  q: 'What is AERA and what does it do?',
+                  a: 'AERA (Automated Emergency Response Assistant) is a community preparedness platform that connects households, local organizations, and emergency coordinators. It helps you build a supply inventory, coordinate with neighbors, request or offer help, and stay informed during emergencies.',
+                },
+                {
+                  q: 'Is my personal information private?',
+                  a: 'Yes. Your profile data is only shared with organizations you explicitly join or community members you approve. Location data is used solely to match you with nearby resources and outreach programs. AERA never sells your data.',
+                },
+                {
+                  q: 'How do I join or leave an organization?',
+                  a: 'Go to Settings → Community to find and join organizations using an invite code or QR code. To leave, open the organization card in your Community settings and tap "Leave Organization."',
+                },
+                {
+                  q: 'I forgot my password / can\'t log in. What should I do?',
+                  a: 'Use the "Forgot Password" link on the login screen to receive a reset link by email. If you still can\'t access your account, submit a support ticket here and select the "Account Access" category.',
+                },
+                {
+                  q: 'How do I update my household members or emergency contacts?',
+                  a: 'In Settings, open the Household section and tap "Show more." From there you can add, edit, or remove household members and their medical notes. Emergency contacts can be managed in the Contacts section.',
+                },
+                {
+                  q: 'What is the supply inventory for?',
+                  a: 'The inventory helps you track essential supplies (food, water, medications, etc.) your household has on hand. AERA uses this data to identify gaps and prioritize community resource sharing during a disaster.',
+                },
+                {
+                  q: 'How does geofenced outreach work?',
+                  a: 'If you opt in under Privacy settings, nearby organizations can see that there is an unconnected household in their area and may reach out to invite you. No identifying details are shared until you accept.',
+                },
+                {
+                  q: 'Can I use AERA without a smartphone?',
+                  a: 'AERA is a web-based progressive web app accessible on any modern browser. While a smartphone is recommended for location features, you can use AERA on a tablet or desktop computer.',
+                },
+                {
+                  q: 'How do I delete my account?',
+                  a: 'Submit a support ticket below with the subject "Account Deletion Request." The AERA admin team will process your request within 5 business days and confirm by email.',
+                },
+              ];
 
-                <div className="grid md:grid-cols-2 gap-3">
-                  <Input
-                    label="Subject"
-                    value={contactSupportSubject}
-                    onChange={(e) => setContactSupportSubject(e.target.value)}
-                    placeholder="Short summary of the issue"
-                  />
-                  <label className="space-y-1 text-sm text-slate-700">
-                    <span className="font-medium">Category</span>
-                    <select
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-200"
-                      value={contactSupportCategory}
-                      onChange={(e) => setContactSupportCategory(e.target.value)}
+              const orgAdminFaqs = [
+                {
+                  q: 'How do I add or remove members from my organization?',
+                  a: 'In the Community section of Settings, open your organization panel. Use "Invite Member" to send a QR code or link. To remove a member, find them in the member list and tap "Remove." Removed members keep their personal profiles but lose access to org resources.',
+                },
+                {
+                  q: 'How does Community Outreach Visibility work?',
+                  a: 'The Outreach panel shows unconnected households near your organization that have opted in to geofenced outreach. All members must have location coordinates set and the opt-in enabled for them to appear. Use "Invite to Org" to send them a personalized link.',
+                },
+                {
+                  q: 'What are the different member roles and what can each do?',
+                  a: 'MEMBER — can view shared resources, submit help requests, and update personal inventory. ORG_ADMIN — can manage members, post broadcasts, view outreach candidates, and run distribution events. INSTITUTION_ADMIN — same as Org Admin plus multi-org reporting. ADMIN — full platform access.',
+                },
+                {
+                  q: 'How do I post a broadcast to my members?',
+                  a: 'Navigate to the Community section and open your organization. Tap "New Broadcast," add a title and message, and select the urgency level. All active members receive an in-app notification immediately.',
+                },
+                {
+                  q: 'Can I export a member roster or inventory report?',
+                  a: 'Yes. In the Reports section of your org panel, choose "Export Roster" (CSV) or "Export Inventory Summary" (PDF). Reports include anonymized household data unless you have explicit consent on file.',
+                },
+                {
+                  q: 'How do I set up a distribution event?',
+                  a: 'Go to Community → your org → Events and tap "New Distribution Event." Set the date, location, resource categories, and capacity. Members can register and you will see a real-time attendee count.',
+                },
+                {
+                  q: 'A member can\'t log in with the invite code I sent. What\'s wrong?',
+                  a: 'Invite codes expire after 7 days and are bound to the phone number entered during setup. Go to Settings → Household → Member Account Invites, verify the phone number is correct, then tap "Resend" to issue a fresh code.',
+                },
+                {
+                  q: 'How do I transfer admin ownership to another member?',
+                  a: 'Currently, ownership transfers are handled by the AERA platform team. Submit a ticket below with the subject "Org Ownership Transfer," include your org name and the email of the new owner, and the team will action it within 2 business days.',
+                },
+              ];
+
+              const activeFaqs = isOrgScopedAdmin
+                ? [...generalFaqs, ...orgAdminFaqs]
+                : generalFaqs;
+
+              return (
+                <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+                  {/* Header */}
+                  <div className="flex items-start justify-between gap-3 px-4 pt-4 pb-3">
+                    <div>
+                      <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Contact Us - Aera</p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Browse common questions or send a ticket directly to the AERA admin team.
+                      </p>
+                    </div>
+                    <div className="rounded-full bg-sky-50 border border-sky-200 px-2.5 py-1 text-[10px] font-bold text-sky-700 shrink-0">
+                      AERA Admin Queue
+                    </div>
+                  </div>
+
+                  {/* Tab bar */}
+                  <div className="flex border-b border-slate-200 px-4">
+                    <button
+                      type="button"
+                      onClick={() => setContactUsTab('faq')}
+                      className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${contactUsTab === 'faq' ? 'border-sky-500 text-sky-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                     >
-                      <option value="GENERAL">General Help</option>
-                      <option value="ACCOUNT">Account Access</option>
-                      <option value="ORGANIZATION">Organization Setup</option>
-                      <option value="TECHNICAL">Technical Issue</option>
-                      <option value="OTHER">Other</option>
-                    </select>
-                  </label>
-                </div>
-
-                <Textarea
-                  label="How can AERA help?"
-                  value={contactSupportMessage}
-                  onChange={(e) => setContactSupportMessage(e.target.value)}
-                  placeholder="Describe the issue, what you tried, and what outcome you need."
-                  rows={4}
-                />
-
-                {contactSupportError && <p className="text-xs font-semibold text-amber-700">{contactSupportError}</p>}
-                {contactSupportSuccess && <p className="text-xs font-semibold text-emerald-700">{contactSupportSuccess}</p>}
-
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-[11px] text-slate-500">Platform admins receive an in-app notification as soon as the ticket is submitted.</p>
-                  <Button size="sm" onClick={handleSubmitContactSupport} disabled={contactSupportBusy}>
-                    {contactSupportBusy ? <Loader2 size={14} className="mr-1 animate-spin" /> : null}
-                    Submit Ticket
-                  </Button>
-                </div>
-
-                <div className="border-t border-slate-100 pt-4 space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">My Support Tickets</p>
-                    <span className="text-[11px] text-slate-500">{mySupportTickets.length} total</span>
+                      <HelpCircle size={13} />
+                      FAQ
+                      {isOrgScopedAdmin && (
+                        <span className="ml-1 rounded-full bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 text-[9px] font-bold">+Org Admin</span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setContactUsTab('contact')}
+                      className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${contactUsTab === 'contact' ? 'border-sky-500 text-sky-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    >
+                      <MessageSquare size={13} />
+                      Submit a Ticket
+                      {mySupportTickets.length > 0 && (
+                        <span className="rounded-full bg-slate-200 text-slate-700 px-1.5 py-0.5 text-[9px] font-bold">{mySupportTickets.length}</span>
+                      )}
+                    </button>
                   </div>
 
-                  {visibleSupportTickets.length === 0 ? (
-                    <p className="text-xs text-slate-600">No support tickets yet.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {visibleSupportTickets.map((ticket) => (
-                        <div key={ticket.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div>
-                              <p className="text-sm font-semibold text-slate-900">{ticket.subject}</p>
-                              <p className="text-[11px] text-slate-500">
-                                {ticket.category} · Submitted {new Date(ticket.createdAt).toLocaleString()}
-                              </p>
-                            </div>
-                            <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${ticket.status === 'RESOLVED' ? 'bg-emerald-100 text-emerald-700' : ticket.status === 'IN_PROGRESS' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-700'}`}>
-                              {ticket.status === 'IN_PROGRESS' ? 'In Progress' : ticket.status}
-                            </span>
-                          </div>
-
-                          <p className="text-xs text-slate-700">{ticket.message}</p>
-
-                          {(ticket.assignedAdminName || ticket.resolvedByAdminName) && (
-                            <p className="text-[11px] text-slate-500">
-                              {ticket.status === 'RESOLVED'
-                                ? `Resolved by ${ticket.resolvedByAdminName || ticket.assignedAdminName}`
-                                : `Assigned to ${ticket.assignedAdminName}`}
-                            </p>
-                          )}
-
-                          {ticket.messages.length > 1 && (
-                            <div className="space-y-2 border-t border-slate-200 pt-2">
-                              {ticket.messages.slice(-2).map((entry, index) => (
-                                <div key={`${ticket.id}-${entry.createdAt}-${index}`} className="rounded-lg bg-white border border-slate-200 p-2">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <p className="text-[11px] font-semibold text-slate-700">{entry.authorName}</p>
-                                    <p className="text-[10px] text-slate-400">{new Date(entry.createdAt).toLocaleString()}</p>
-                                  </div>
-                                  <p className="text-xs text-slate-600 mt-1">{entry.message}</p>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                  {/* FAQ tab */}
+                  {contactUsTab === 'faq' && (
+                    <div className="divide-y divide-slate-100">
+                      {isOrgScopedAdmin && (
+                        <div className="px-4 py-2 bg-slate-50 flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">General</span>
+                          <span className="text-[10px] text-slate-400">({generalFaqs.length} questions)</span>
+                          <span className="mx-2 text-slate-300">·</span>
+                          <span className="text-[10px] font-bold text-fuchsia-600 uppercase tracking-wider">Org Admin</span>
+                          <span className="text-[10px] text-slate-400">({orgAdminFaqs.length} questions)</span>
                         </div>
-                      ))}
+                      )}
+                      {activeFaqs.map((faq, i) => {
+                        const isOrgQ = isOrgScopedAdmin && i >= generalFaqs.length;
+                        const isOpen = openFaqIndex === i;
+                        return (
+                          <div key={i}>
+                            <button
+                              type="button"
+                              onClick={() => setOpenFaqIndex(isOpen ? null : i)}
+                              className="w-full flex items-start justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors"
+                            >
+                              <div className="flex items-start gap-2 min-w-0">
+                                {isOrgQ && (
+                                  <span className="mt-0.5 shrink-0 rounded-full bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 text-[9px] font-bold leading-tight">ORG</span>
+                                )}
+                                <span className="text-sm font-medium text-slate-800">{faq.q}</span>
+                              </div>
+                              <ChevronDown size={15} className={`shrink-0 text-slate-400 transition-transform mt-0.5 ${isOpen ? 'rotate-180' : ''}`} />
+                            </button>
+                            {isOpen && (
+                              <div className="px-4 pb-3">
+                                <p className="text-sm text-slate-600 leading-relaxed pl-0">{faq.a}</p>
+                                <button
+                                  type="button"
+                                  onClick={() => setContactUsTab('contact')}
+                                  className="mt-2 text-xs font-semibold text-sky-600 hover:underline"
+                                >
+                                  Still need help? Submit a ticket →
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Contact / ticket tab */}
+                  {contactUsTab === 'contact' && (
+                    <div className="p-4 space-y-4">
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <Input
+                          label="Subject"
+                          value={contactSupportSubject}
+                          onChange={(e) => setContactSupportSubject(e.target.value)}
+                          placeholder="Short summary of the issue"
+                        />
+                        <label className="space-y-1 text-sm text-slate-700">
+                          <span className="font-medium">Category</span>
+                          <select
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-200"
+                            value={contactSupportCategory}
+                            onChange={(e) => setContactSupportCategory(e.target.value)}
+                          >
+                            <option value="GENERAL">General Help</option>
+                            <option value="ACCOUNT">Account Access</option>
+                            <option value="ORGANIZATION">Organization Setup</option>
+                            <option value="TECHNICAL">Technical Issue</option>
+                            <option value="OTHER">Other</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <Textarea
+                        label="How can AERA help?"
+                        value={contactSupportMessage}
+                        onChange={(e) => setContactSupportMessage(e.target.value)}
+                        placeholder="Describe the issue, what you tried, and what outcome you need."
+                        rows={4}
+                      />
+
+                      {contactSupportError && <p className="text-xs font-semibold text-amber-700">{contactSupportError}</p>}
+                      {contactSupportSuccess && <p className="text-xs font-semibold text-emerald-700">{contactSupportSuccess}</p>}
+
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-[11px] text-slate-500">Platform admins receive an in-app notification as soon as the ticket is submitted.</p>
+                        <Button size="sm" onClick={handleSubmitContactSupport} disabled={contactSupportBusy}>
+                          {contactSupportBusy ? <Loader2 size={14} className="mr-1 animate-spin" /> : null}
+                          Submit Ticket
+                        </Button>
+                      </div>
+
+                      <div className="border-t border-slate-100 pt-4 space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">My Support Tickets</p>
+                          <span className="text-[11px] text-slate-500">{mySupportTickets.length} total</span>
+                        </div>
+
+                        {visibleSupportTickets.length === 0 ? (
+                          <p className="text-xs text-slate-600">No support tickets yet.</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {visibleSupportTickets.map((ticket) => (
+                              <div key={ticket.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div>
+                                    <p className="text-sm font-semibold text-slate-900">{ticket.subject}</p>
+                                    <p className="text-[11px] text-slate-500">
+                                      {ticket.category} · Submitted {new Date(ticket.createdAt).toLocaleString()}
+                                    </p>
+                                  </div>
+                                  <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${ticket.status === 'RESOLVED' ? 'bg-emerald-100 text-emerald-700' : ticket.status === 'IN_PROGRESS' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-700'}`}>
+                                    {ticket.status === 'IN_PROGRESS' ? 'In Progress' : ticket.status}
+                                  </span>
+                                </div>
+
+                                <p className="text-xs text-slate-700">{ticket.message}</p>
+
+                                {(ticket.assignedAdminName || ticket.resolvedByAdminName) && (
+                                  <p className="text-[11px] text-slate-500">
+                                    {ticket.status === 'RESOLVED'
+                                      ? `Resolved by ${ticket.resolvedByAdminName || ticket.assignedAdminName}`
+                                      : `Assigned to ${ticket.assignedAdminName}`}
+                                  </p>
+                                )}
+
+                                {ticket.messages.length > 1 && (
+                                  <div className="space-y-2 border-t border-slate-200 pt-2">
+                                    {ticket.messages.slice(-2).map((entry, index) => (
+                                      <div key={`${ticket.id}-${entry.createdAt}-${index}`} className="rounded-lg bg-white border border-slate-200 p-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <p className="text-[11px] font-semibold text-slate-700">{entry.authorName}</p>
+                                          <p className="text-[10px] text-slate-400">{new Date(entry.createdAt).toLocaleString()}</p>
+                                        </div>
+                                        <p className="text-xs text-slate-600 mt-1">{entry.message}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
         <button
           type="button"
