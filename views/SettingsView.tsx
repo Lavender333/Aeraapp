@@ -4101,6 +4101,31 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                   <Activity size={18} />
                 </Button>
               )}
+              <Button
+                onClick={() => setView('LEAD_INTAKE')}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white border-0 w-full justify-between"
+              >
+                <span>Referral Intake & Share Links</span>
+                <Clipboard size={18} />
+              </Button>
+              {isPlatformAdmin && (
+                <Button
+                  onClick={() => setView('LEAD_ADMIN')}
+                  className="bg-violet-600 hover:bg-violet-500 text-white border-0 w-full justify-between"
+                >
+                  <span>Lead Pipeline Admin</span>
+                  <CheckSquare size={18} />
+                </Button>
+              )}
+              {isPlatformAdmin && (
+                <Button
+                  onClick={() => setView('BUYER_PORTAL')}
+                  className="bg-cyan-600 hover:bg-cyan-500 text-white border-0 w-full justify-between"
+                >
+                  <span>Buyer Portal</span>
+                  <Users size={18} />
+                </Button>
+              )}
               <Button 
                 onClick={openOrgDirectory} 
                 className="bg-sky-600 hover:bg-sky-500 text-white border-0 w-full justify-between"

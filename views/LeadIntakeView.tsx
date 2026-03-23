@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle, Clock3, FileText, ShieldCheck, User, Users } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle, Clock3, FileText, ShieldCheck, User, Users, Link, Copy } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
 import { VerifiedLead, ViewState } from '../types';
 import { fetchSubmittedReferralLeads, submitLeadIntake } from '../services/leadSupabase';
+import { createShareableIntakeLink, getUserShareableIntakeLinks, getPublicShareUrl, ShareableIntakeLink } from '../services/shareableIntake';
+import { StorageService } from '../services/storage';
 
 type Step = 'IDENTITY' | 'SITUATION' | 'CONSENT' | 'CONFIRMATION';
 
@@ -71,6 +73,13 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
   const [isLoadingSubmitted, setIsLoadingSubmitted] = useState(true);
   const [errors, setErrors] = useState<Partial<Record<keyof IntakeForm, string>>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+    const [shareableLinks, setShareableLinks] = useState<ShareableIntakeLink[]>([]);
+    const [isLoadingLinks, setIsLoadingLinks] = useState(false);
+    const [showShareModal, setShowShareModal] = useState(false);
+    const [isCreatingLink, setIsCreatingLink] = useState(false);
+    const [shareOrgName, setShareOrgName] = useState('');
+    const [copiedToken, setCopiedToken] = useState<string | null>(null);
+    const sharerName = StorageService.getProfile()?.fullName?.trim() || 'AERA Team Member';
 
   const currentIndex = STEPS.findIndex((s) => s.id === step);
 
@@ -90,6 +99,26 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
       mounted = false;
     };
   }, []);
+
+    // Load shareable links
+    useEffect(() => {
+      let mounted = true;
+      const loadLinks = async () => {
+        try {
+          setIsLoadingLinks(true);
+          const links = await getUserShareableIntakeLinks();
+          if (mounted) setShareableLinks(links);
+        } catch (err) {
+          console.error('Error loading shareable links:', err);
+        } finally {
+          if (mounted) setIsLoadingLinks(false);
+        }
+      };
+      void loadLinks();
+      return () => {
+        mounted = false;
+      };
+    }, []);
 
   const referralStatusLabel = (status: VerifiedLead['status']) => {
     if (status === 'NEW') return 'Submitted';
@@ -166,6 +195,32 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
       setIsSubmitting(false);
     }
   };
+
+    const handleCreateShareLink = async () => {
+      setIsCreatingLink(true);
+      try {
+        const link = await createShareableIntakeLink({
+          referrer_name: sharerName,
+          organization_name: shareOrgName || undefined,
+          expiresInDays: 90,
+        });
+        setShareableLinks((prev) => [link, ...prev]);
+        setShowShareModal(false);
+        setShareOrgName('');
+      } catch (err) {
+        console.error('Error creating share link:', err);
+        alert('Failed to create share link. Please try again.');
+      } finally {
+        setIsCreatingLink(false);
+      }
+    };
+
+    const handleCopyUrl = (token: string) => {
+      const url = getPublicShareUrl(token);
+      navigator.clipboard.writeText(url);
+      setCopiedToken(token);
+      setTimeout(() => setCopiedToken(null), 2000);
+    };
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
@@ -437,6 +492,57 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
           </div>
         )}
 
+          {/* Share Form Card */}
+          <Card className="border-emerald-200 bg-emerald-50">
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <div className="flex items-center gap-2">
+                <Link size={18} className="text-emerald-700" />
+                <div>
+                  <h2 className="text-lg font-bold text-emerald-900">Share Intake Form</h2>
+                  <p className="text-sm text-emerald-700">Generate a link for others to submit referrals</p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => setShowShareModal(true)}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                Generate Link
+              </Button>
+            </div>
+
+            {isLoadingLinks ? (
+              <p className="text-sm text-emerald-700">Loading share links…</p>
+            ) : shareableLinks.length === 0 ? (
+              <p className="text-sm text-emerald-700">No shareable links created yet. Generate one to get started!</p>
+            ) : (
+              <div className="space-y-2">
+                {shareableLinks.map((link) => (
+                  <div key={link.id} className="bg-white border border-emerald-200 rounded-lg p-3 flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-slate-900">{link.referrer_name}</p>
+                      {link.organization_name && (
+                        <p className="text-sm text-slate-600">{link.organization_name}</p>
+                      )}
+                      <p className="text-xs text-slate-500 mt-1">
+                        {link.submission_count} submission{link.submission_count !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleCopyUrl(link.share_token)}
+                      className={copiedToken === link.share_token ? 'bg-emerald-100 text-emerald-700 border-emerald-300' : ''}
+                    >
+                      <Copy size={14} className="mr-1" />
+                      {copiedToken === link.share_token ? 'Copied!' : 'Copy'}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
         <Card className="border-slate-200 bg-white">
           <div className="flex items-center gap-2 mb-4">
             <Users size={18} className="text-slate-600" />
@@ -472,6 +578,63 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
           )}
         </Card>
       </main>
+
+        {/* Share Modal */}
+        {showShareModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <Card className="max-w-md w-full border-slate-300 bg-white">
+              <div className="flex items-center gap-2 mb-4">
+                <Link size={20} className="text-emerald-600" />
+                <h2 className="text-lg font-bold text-slate-900">Create Shareable Form</h2>
+              </div>
+              <p className="text-sm text-slate-600 mb-4">
+                This creates a public link to the intake form pre-filled with your information. Anyone with the link can submit a referral without logging in.
+              </p>
+              <div className="space-y-3 mb-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-900 mb-2">
+                    Your Name (Referrer)
+                  </label>
+                  <p className="text-sm text-slate-600 mb-2">This will be displayed to people filling out the form</p>
+                  <p className="text-sm font-mono bg-slate-50 p-2 rounded border border-slate-200 text-slate-700">
+                    {sharerName}
+                  </p>
+                </div>
+                <div>
+                  <label htmlFor="orgName" className="block text-sm font-semibold text-slate-900 mb-2">
+                    Organization Name (Optional)
+                  </label>
+                  <Input
+                    id="orgName"
+                    value={shareOrgName}
+                    onChange={(e) => setShareOrgName(e.target.value)}
+                    placeholder="e.g. Red Cross, Local Fire Department"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  fullWidth
+                  onClick={() => {
+                    setShowShareModal(false);
+                    setShareOrgName('');
+                  }}
+                  disabled={isCreatingLink}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  fullWidth
+                  onClick={handleCreateShareLink}
+                  disabled={isCreatingLink}
+                >
+                  {isCreatingLink ? 'Creating...' : 'Create Link'}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
     </div>
   );
 };

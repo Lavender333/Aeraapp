@@ -57,6 +57,14 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
       sessionStorage.removeItem('postLoginView');
       return 'BUYER_PORTAL';
     }
+    if (requestedView === 'LEAD_INTAKE' && ['ADMIN', 'ORG_ADMIN'].includes(role) && onboardComplete) {
+      sessionStorage.removeItem('postLoginView');
+      return 'LEAD_INTAKE';
+    }
+    if (requestedView === 'LEAD_ADMIN' && role === 'ADMIN' && onboardComplete) {
+      sessionStorage.removeItem('postLoginView');
+      return 'LEAD_ADMIN';
+    }
     sessionStorage.removeItem('postLoginView');
     if (!onboardComplete) return 'ACCOUNT_SETUP';
     if (role === 'BUYER') return 'BUYER_PORTAL';

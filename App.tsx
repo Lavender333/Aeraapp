@@ -68,6 +68,7 @@ const ShelterLocatorView = lazyWithRetry(() => import('./views/ShelterLocatorVie
 const BuyerPortalView = lazyWithRetry(() => import('./views/BuyerPortalView').then((m) => ({ default: m.BuyerPortalView })));
 const LeadIntakeView = lazyWithRetry(() => import('./views/LeadIntakeView').then((m) => ({ default: m.LeadIntakeView })));
 const LeadAdminView = lazyWithRetry(() => import('./views/LeadAdminView').then((m) => ({ default: m.LeadAdminView })));
+const PublicIntakeView = lazyWithRetry(() => import('./views/PublicIntakeView').then((m) => ({ default: m.PublicIntakeView })));
 
 class ViewErrorBoundary extends React.Component<
   { onRecover: () => void; children: React.ReactNode },
@@ -132,6 +133,9 @@ export default function App() {
   const getStandaloneRequestedView = (): ViewState | null => {
     if (typeof window === 'undefined') return null;
     if (window.location.pathname === '/buyer-portal') return 'BUYER_PORTAL';
+    if (window.location.pathname === '/lead-intake') return 'LEAD_INTAKE';
+    if (window.location.pathname === '/lead-admin') return 'LEAD_ADMIN';
+    if (window.location.pathname === '/public/intake') return 'PUBLIC_INTAKE';
     return null;
   };
 
@@ -148,12 +152,22 @@ export default function App() {
   const resolveAuthenticatedLandingView = (profile: Partial<UserProfile> | null | undefined): ViewState => {
     const role = String(profile?.role || 'GENERAL_USER').toUpperCase();
     const onboardComplete = Boolean(profile?.onboardComplete);
+    const canRoleAccessLeadIntake = ['ADMIN', 'ORG_ADMIN'].includes(role);
+    const canRoleAccessLeadAdmin = role === 'ADMIN';
 
     const requestedStandaloneView = getStandaloneRequestedView() || (sessionStorage.getItem('postLoginView') as ViewState | null);
 
     if (requestedStandaloneView === 'BUYER_PORTAL' && canRoleAccessBuyerPortal(role)) {
       sessionStorage.removeItem('postLoginView');
       return 'BUYER_PORTAL';
+    }
+    if (requestedStandaloneView === 'LEAD_INTAKE' && canRoleAccessLeadIntake) {
+      sessionStorage.removeItem('postLoginView');
+      return 'LEAD_INTAKE';
+    }
+    if (requestedStandaloneView === 'LEAD_ADMIN' && canRoleAccessLeadAdmin) {
+      sessionStorage.removeItem('postLoginView');
+      return 'LEAD_ADMIN';
     }
 
     if (!onboardComplete) return 'ACCOUNT_SETUP';
@@ -196,11 +210,15 @@ export default function App() {
       const isRecoveryUrl = isRecoveryPath || isRecoveryHash;
       const isPresentationUrl = window.location.pathname === '/presentation';
       const requestedStandaloneView = getStandaloneRequestedView();
+        const isPublicIntakeUrl = requestedStandaloneView === 'PUBLIC_INTAKE';
       const isEventRegistrationUrl = Boolean(eventIdFromUrl);
       try {
         const { data } = await supabase.auth.getSession();
         if (!active) return;
-        if (isPresentationUrl) {
+          if (isPublicIntakeUrl) {
+            setPostSplashView('PUBLIC_INTAKE');
+            setView('PUBLIC_INTAKE');
+          } else if (isPresentationUrl) {
           setPostSplashView('PRESENTATION');
           setView('PRESENTATION');
         } else if (isRecoveryUrl) {
@@ -266,8 +284,19 @@ export default function App() {
             setPostSplashView(nextView);
             setView(nextView);
           }
+        } else if (requestedStandaloneView === 'PUBLIC_INTAKE') {
+          setPostSplashView('PUBLIC_INTAKE');
+          setView('PUBLIC_INTAKE');
         } else if (requestedStandaloneView === 'BUYER_PORTAL') {
           sessionStorage.setItem('postLoginView', 'BUYER_PORTAL');
+          setPostSplashView('LOGIN');
+          setView('SPLASH');
+        } else if (requestedStandaloneView === 'LEAD_INTAKE') {
+          sessionStorage.setItem('postLoginView', 'LEAD_INTAKE');
+          setPostSplashView('LOGIN');
+          setView('SPLASH');
+        } else if (requestedStandaloneView === 'LEAD_ADMIN') {
+          sessionStorage.setItem('postLoginView', 'LEAD_ADMIN');
           setPostSplashView('LOGIN');
           setView('SPLASH');
         } else if (pendingInvite?.communityId) {
@@ -279,7 +308,10 @@ export default function App() {
         }
       } catch {
         if (!active) return;
-        if (isPresentationUrl) {
+        if (isPublicIntakeUrl) {
+          setPostSplashView('PUBLIC_INTAKE');
+          setView('PUBLIC_INTAKE');
+        } else if (isPresentationUrl) {
           setPostSplashView('PRESENTATION');
           setView('PRESENTATION');
         } else if (isRecoveryUrl) {
@@ -438,6 +470,10 @@ export default function App() {
         return canAccessLeadIntake ? <LeadIntakeView setView={setView} /> : <DashboardView setView={setView} />;
       case 'LEAD_ADMIN':
         return canAccessLeadAdmin ? <LeadAdminView setView={setView} /> : <DashboardView setView={setView} />;
+      case 'PUBLIC_INTAKE': {
+        const shareToken = new URLSearchParams(window.location.search).get('share_token') || '';
+        return <PublicIntakeView shareToken={shareToken} />;
+      }
       default:
         return <DashboardView setView={setView} />;
     }
@@ -461,6 +497,7 @@ export default function App() {
                   currentView !== 'VOLUNTEER_SCAN' &&
                   currentView !== 'EVENT_DASHBOARD' &&
                   currentView !== 'BUYER_PORTAL' &&
+                  currentView !== 'PUBLIC_INTAKE' &&
                   currentView !== 'LEAD_INTAKE' &&
                   currentView !== 'LEAD_ADMIN';
 
