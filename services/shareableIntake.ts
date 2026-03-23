@@ -80,10 +80,40 @@ export async function getShareableIntakeLinkByToken(
     token_input: shareToken,
   });
 
-  if (error) throw error;
-  const row = Array.isArray(data) ? data[0] : data;
-  if (!row || row.is_valid === false) return null;
-  return row as PublicIntakeLinkInfo;
+  if (!error) {
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row || row.is_valid === false) return null;
+    return row as PublicIntakeLinkInfo;
+  }
+
+  // Backward compatibility: if the RPC has not been deployed yet,
+  // fall back to legacy token lookup so shared links keep working.
+  const message = String((error as { message?: string } | null)?.message || '').toLowerCase();
+  const isMissingRpc =
+    message.includes('get_intake_link_by_token') &&
+    (message.includes('not found') || message.includes('does not exist'));
+
+  if (!isMissingRpc) throw error;
+
+  const { data: legacyRow, error: legacyError } = await supabase
+    .from('shareable_intake_links')
+    .select('referrer_name, organization_name, expires_at, is_active')
+    .eq('share_token', shareToken)
+    .eq('is_active', true)
+    .single();
+
+  if (legacyError && legacyError.code !== 'PGRST116') throw legacyError;
+  if (!legacyRow) return null;
+
+  if (legacyRow.expires_at && new Date(legacyRow.expires_at) < new Date()) {
+    return null;
+  }
+
+  return {
+    referrer_name: legacyRow.referrer_name,
+    organization_name: legacyRow.organization_name,
+    is_valid: true,
+  };
 }
 
 /**
@@ -115,9 +145,18 @@ export async function incrementShareableLinkSubmissionCount(
 /**
  * Get the public share URL for a link
  */
-export function getPublicShareUrl(shareToken: string): string {
+export interface PublicShareUrlOptions {
+  referrerName?: string;
+  organizationName?: string;
+}
+
+export function getPublicShareUrl(shareToken: string, options: PublicShareUrlOptions = {}): string {
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  return `${baseUrl}/public/intake?share_token=${shareToken}`;
+  const params = new URLSearchParams();
+  params.set('share_token', shareToken);
+  if (options.referrerName) params.set('referrer', options.referrerName);
+  if (options.organizationName) params.set('org', options.organizationName);
+  return `${baseUrl}/public/intake?${params.toString()}`;
 }
 
 export interface PublicLeadIntakeInput {

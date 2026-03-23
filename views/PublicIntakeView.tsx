@@ -62,10 +62,30 @@ interface PublicIntakeViewProps {
 }
 
 export const PublicIntakeView: React.FC<PublicIntakeViewProps> = ({ shareToken = '' }) => {
+  const searchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+  const hash = typeof window !== 'undefined' ? window.location.hash || '' : '';
+  const hashQuery = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
+  const hashParams = new URLSearchParams(hashQuery);
+  const getParam = (key: string) => {
+    const raw = searchParams.get(key) || hashParams.get(key) || '';
+    return raw.replace(/^['\"]|['\"]$/g, '').trim();
+  };
+
+  const fallbackReferrerName = getParam('referrer');
+  const fallbackOrgName = getParam('org');
+
   const [step, setStep] = useState<Step>('IDENTITY');
   const [form, setForm] = useState<IntakeForm>(EMPTY_FORM);
   const [submittedId, setSubmittedId] = useState<string>('');
-  const [shareInfo, setShareInfo] = useState<PublicIntakeLinkInfo | null>(null);
+  const [shareInfo, setShareInfo] = useState<PublicIntakeLinkInfo | null>(
+    fallbackReferrerName
+      ? {
+          referrer_name: fallbackReferrerName,
+          organization_name: fallbackOrgName || undefined,
+          is_valid: true,
+        }
+      : null
+  );
   const [isLoading, setIsLoading] = useState(!!shareToken);
   const [loadError, setLoadError] = useState('');
   const [errors, setErrors] = useState<Partial<Record<keyof IntakeForm, string>>>({});

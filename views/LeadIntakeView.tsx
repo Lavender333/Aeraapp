@@ -215,10 +215,13 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
       }
     };
 
-    const handleCopyUrl = (token: string) => {
-      const url = getPublicShareUrl(token);
+    const handleCopyUrl = (link: ShareableIntakeLink) => {
+      const url = getPublicShareUrl(link.share_token, {
+        referrerName: link.referrer_name,
+        organizationName: link.organization_name,
+      });
       navigator.clipboard.writeText(url);
-      setCopiedToken(token);
+      setCopiedToken(link.share_token);
       setTimeout(() => setCopiedToken(null), 2000);
     };
 
@@ -531,7 +534,7 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleCopyUrl(link.share_token)}
+                      onClick={() => handleCopyUrl(link)}
                       className={copiedToken === link.share_token ? 'bg-emerald-100 text-emerald-700 border-emerald-300' : ''}
                     >
                       <Copy size={14} className="mr-1" />
