@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ViewState, UserRole } from '../types';
 import { Button } from '../components/Button';
 import { Textarea } from '../components/Input';
-import { ArrowLeft, Camera, Home, Zap, Droplets, Triangle, CheckCircle, AlertTriangle, Loader2, Sparkles, X, MapPin, RefreshCw, Aperture, Keyboard, Download } from 'lucide-react';
+import { ArrowLeft, Camera, Home, Zap, Droplets, CheckCircle, AlertTriangle, Loader2, Sparkles, X, MapPin, RefreshCw, Aperture, Keyboard, Download } from 'lucide-react';
 import { t } from '../services/translations';
 import { submitDamageAssessment, getAssessmentPhotoSignedUrl, listDamageAssessmentsForCurrentUser, DamageAssessmentResult, analyzeDamagePhotoOnServer } from '../services/api';
 import { StorageService } from '../services/storage';
@@ -46,8 +46,6 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     houseFloors: 'none',
     damagedShingles: 'none',
     flashingCracked: false,
-    granuleLoss: 'none',
-    hitsPerSquare: 'none',
     softSpots: false,
     exposedDecking: false,
     interiorLeaks: false,
@@ -60,7 +58,6 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     { id: 'STRUCTURAL', label: 'Structure/Roof', icon: <Home size={32} />, color: 'blue' },
     { id: 'FLOOD', label: 'Water/Flood', icon: <Droplets size={32} />, color: 'cyan' },
     { id: 'ELECTRICAL', label: 'Power/Gas', icon: <Zap size={32} />, color: 'yellow' },
-    { id: 'ACCESS', label: 'Blocked Road', icon: <Triangle size={32} />, color: 'orange' },
   ];
 
   const canViewReportedResults = userRole === 'ADMIN' || userRole === 'ORG_ADMIN' || userRole === 'INSTITUTION_ADMIN';
@@ -68,8 +65,8 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
   const roofRatingMap: Record<number, { label: string; meaning: string; action: string }> = {
     1: { label: 'Maintenance', meaning: 'Normal wear, minor debris, maybe a loose shingle.', action: 'Cleaning & tune-up.' },
     2: { label: 'Minor Repair', meaning: '1–5 shingles damaged; flashing sealant may be cracked.', action: 'Targeted repair ($500–$1,500).' },
-    3: { label: 'Moderate Repair', meaning: 'Widespread wind creases or 5–10% granule loss.', action: 'Sectional replacement.' },
-    4: { label: 'Significant', meaning: 'Functional damage. 10+ hits per square or structural soft spots.', action: 'Full replacement likely.' },
+    3: { label: 'Moderate Repair', meaning: 'Widespread wind creases or broad visible shingle damage.', action: 'Sectional replacement.' },
+    4: { label: 'Significant', meaning: 'Functional damage with structural concern or widespread failure.', action: 'Full replacement likely.' },
     5: { label: 'Catastrophic', meaning: 'Exposed decking, active interior leaks, or structural sagging.', action: 'Emergency tarping & replacement.' },
   };
 
@@ -77,8 +74,8 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     let score = 1;
 
     if (answers.damagedShingles === '1-5' || answers.flashingCracked) score = Math.max(score, 2);
-    if (answers.damagedShingles === '6-20' || answers.granuleLoss === '5-10') score = Math.max(score, 3);
-    if (answers.hitsPerSquare === '10+' || answers.softSpots || answers.granuleLoss === '10+') score = Math.max(score, 4);
+    if (answers.damagedShingles === '6-20') score = Math.max(score, 3);
+    if (answers.softSpots) score = Math.max(score, 4);
     if (answers.exposedDecking || answers.interiorLeaks || answers.structuralSagging || answers.damagedShingles === '20+') score = 5;
 
     return score;
@@ -92,9 +89,7 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
 
   const isRoofingTriageComplete =
     roofAnswers.houseFloors !== 'none' &&
-    roofAnswers.damagedShingles !== 'none' &&
-    roofAnswers.granuleLoss !== 'none' &&
-    roofAnswers.hitsPerSquare !== 'none';
+    roofAnswers.damagedShingles !== 'none';
 
   // Cleanup camera on unmount
   useEffect(() => {
@@ -304,11 +299,11 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
       let result;
       try {
         result = await analyzeDamagePhotoOnServer({
-          damageType: damageType || 'ACCESS',
+          damageType: damageType || 'ELECTRICAL',
           imageDataUrl: imageData,
         });
       } catch {
-        result = await analyzeDamagePhotoLocally(imageData, damageType || 'ACCESS');
+        result = await analyzeDamagePhotoLocally(imageData, damageType || 'ELECTRICAL');
       }
 
       const severityLabel = result.suggestedSeverity === 3 ? 'Critical' : result.suggestedSeverity === 2 ? 'Moderate' : 'Minor';
@@ -559,6 +554,7 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
           <div className="space-y-6 animate-slide-up">
             
             {/* Camera / Photo Section */}
+            {damageType !== 'ELECTRICAL' ? (
             <div className="space-y-3">
                <label className="block text-sm font-bold text-slate-900 uppercase tracking-wider">1. Visual Evidence</label>
                
@@ -668,6 +664,15 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                  </div>
                )}
             </div>
+            ) : (
+              <div className="space-y-3">
+                <label className="block text-sm font-bold text-slate-900 uppercase tracking-wider">1. Visual Evidence</label>
+                <div className="border border-amber-200 bg-amber-50 rounded-xl p-4">
+                  <p className="text-sm font-semibold text-amber-900">Photo capture is disabled for Power/Gas assessments.</p>
+                  <p className="text-xs text-amber-800 mt-1">Submit details through severity and notes so teams can respond quickly.</p>
+                </div>
+              </div>
+            )}
 
             {/* Severity Slider */}
             <div className="space-y-3">
@@ -696,7 +701,7 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
             {damageType === 'STRUCTURAL' && (
               <div className="space-y-3 bg-white border border-slate-200 rounded-xl p-4">
                 <label className="block text-sm font-bold text-slate-900 uppercase tracking-wider">Roofing Triage (1–5)</label>
-                <p className="text-xs text-slate-500">Required: House floors, Damaged shingles, Granule loss, and Impact hits per square.</p>
+                <p className="text-xs text-slate-500">Required: House floors and Damaged shingles.</p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                   <label className="space-y-1">
@@ -720,24 +725,6 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                     </select>
                   </label>
 
-                  <label className="space-y-1">
-                    <span className="text-slate-700 font-semibold">Granule loss</span>
-                    <select className="w-full border border-slate-300 rounded-lg p-2" value={roofAnswers.granuleLoss} onChange={(e) => setRoofAnswers((prev) => ({ ...prev, granuleLoss: e.target.value }))}>
-                      <option value="none">None / unsure</option>
-                      <option value="5-10">5–10%</option>
-                      <option value="10+">10%+</option>
-                    </select>
-                  </label>
-
-                  <label className="space-y-1 sm:col-span-2">
-                    <span className="text-slate-700 font-semibold">Impact hits per square (hail/wind)</span>
-                    <select className="w-full border border-slate-300 rounded-lg p-2" value={roofAnswers.hitsPerSquare} onChange={(e) => setRoofAnswers((prev) => ({ ...prev, hitsPerSquare: e.target.value }))}>
-                      <option value="none">None / unsure</option>
-                      <option value="1-5">1–5 hits</option>
-                      <option value="6-10">6–10 hits</option>
-                      <option value="10+">10+ hits</option>
-                    </select>
-                  </label>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">

@@ -1203,6 +1203,8 @@ export interface OrgOutreachCandidate {
   latitude: number;
   longitude: number;
   distance_miles: number;
+  location_confidence?: 'HIGH' | 'MEDIUM' | 'LOW';
+  location_source?: 'PROFILE_GEOCODE' | 'ORG_CENTER_FALLBACK';
 }
 
 export type OutreachContactMethod = 'PHONE_CALL' | 'EMAIL' | 'MANUAL_OUTREACH';
@@ -1244,6 +1246,39 @@ const mergeOutreachCandidates = (base: OrgOutreachCandidate[], extra: OrgOutreac
   });
 };
 
+const OUTREACH_MIN_GEOCODE_CONFIDENCE = 0.75;
+const OUTREACH_MAX_GEOCODE_AGE_DAYS = 180;
+
+const isFreshGeocode = (geocodedAt?: string | null) => {
+  if (!geocodedAt) return false;
+  const ts = new Date(geocodedAt).getTime();
+  if (!Number.isFinite(ts)) return false;
+  const ageMs = Date.now() - ts;
+  const maxAgeMs = OUTREACH_MAX_GEOCODE_AGE_DAYS * 24 * 60 * 60 * 1000;
+  return ageMs <= maxAgeMs;
+};
+
+const classifyLocationConfidence = (
+  geocodeConfidence: number | null | undefined,
+  geocodedAt: string | null | undefined,
+  source: 'PROFILE_GEOCODE' | 'ORG_CENTER_FALLBACK',
+): 'HIGH' | 'MEDIUM' | 'LOW' => {
+  if (source === 'ORG_CENTER_FALLBACK') return 'LOW';
+  const score = Number(geocodeConfidence);
+  const fresh = isFreshGeocode(geocodedAt);
+  if (Number.isFinite(score) && score >= 0.9 && fresh) return 'HIGH';
+  if (Number.isFinite(score) && score >= 0.75) return fresh ? 'MEDIUM' : 'LOW';
+  return 'LOW';
+};
+
+const shouldIncludeUnconnectedCandidate = (
+  geocodeConfidence: number | null | undefined,
+  geocodedAt: string | null | undefined,
+) => {
+  const score = Number(geocodeConfidence);
+  return Number.isFinite(score) && score >= OUTREACH_MIN_GEOCODE_CONFIDENCE && isFreshGeocode(geocodedAt);
+};
+
 const listSameOrgNearbyCandidates = async (
   targetOrgId: string,
   radiusMiles: number,
@@ -1275,7 +1310,7 @@ const listSameOrgNearbyCandidates = async (
 
   const { data: rows, error } = await supabase
     .from('profiles')
-    .select('id, full_name, mobile_phone, phone, email, latitude, longitude, org_id, is_active')
+    .select('id, full_name, mobile_phone, phone, email, latitude, longitude, geocode_confidence, geocoded_at, org_id, is_active')
     .eq('is_active', true)
     .eq('org_id', targetOrgId)
     .neq('id', authData.user.id);
@@ -1291,6 +1326,9 @@ const listSameOrgNearbyCandidates = async (
 
     let lat = Number((row as any)?.latitude);
     let lng = Number((row as any)?.longitude);
+    const geocodeConfidence = Number((row as any)?.geocode_confidence);
+    const geocodedAt = String((row as any)?.geocoded_at || '');
+    const usingOrgFallback = !Number.isFinite(lat) || !Number.isFinite(lng);
 
     // Same-org users without coordinates are plotted at org center for outreach visibility.
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
@@ -1311,6 +1349,12 @@ const listSameOrgNearbyCandidates = async (
       latitude: lat,
       longitude: lng,
       distance_miles: Number(dist.toFixed(2)),
+      location_source: usingOrgFallback ? 'ORG_CENTER_FALLBACK' : 'PROFILE_GEOCODE',
+      location_confidence: classifyLocationConfidence(
+        Number.isFinite(geocodeConfidence) ? geocodeConfidence : null,
+        geocodedAt || null,
+        usingOrgFallback ? 'ORG_CENTER_FALLBACK' : 'PROFILE_GEOCODE',
+      ),
     });
   }
 
@@ -1392,7 +1436,7 @@ export async function getOrgLeaderOutreachCandidates(
 
     const { data: profileRows, error: candidateError } = await supabase
       .from('profiles')
-      .select('id, full_name, mobile_phone, phone, email, latitude, longitude, geofenced_outreach_radius_miles, geofenced_outreach_opt_in, org_id, is_active')
+      .select('id, full_name, mobile_phone, phone, email, latitude, longitude, geocode_confidence, geocoded_at, geofenced_outreach_radius_miles, geofenced_outreach_opt_in, org_id, is_active')
       .eq('is_active', true)
       .neq('id', authData.user.id)
       .not('latitude', 'is', null)
@@ -1426,6 +1470,8 @@ export async function getOrgLeaderOutreachCandidates(
 
       const rowOrgId = String((row as any)?.org_id || '').trim() || null;
       const optedIn = Boolean((row as any)?.geofenced_outreach_opt_in);
+      const geocodeConfidence = Number((row as any)?.geocode_confidence);
+      const geocodedAt = String((row as any)?.geocoded_at || '');
 
       // Same-org members are eligible even when opt-in is unset.
       if (rowOrgId === targetOrgId) {
@@ -1435,6 +1481,10 @@ export async function getOrgLeaderOutreachCandidates(
         if (!optedIn) continue;
         if (rowOrgId) continue;
         if (trustedIds.has(profileId)) continue;
+        if (!shouldIncludeUnconnectedCandidate(
+          Number.isFinite(geocodeConfidence) ? geocodeConfidence : null,
+          geocodedAt || null,
+        )) continue;
       }
 
       let lat = Number((row as any)?.latitude);
@@ -1460,6 +1510,12 @@ export async function getOrgLeaderOutreachCandidates(
         latitude: lat,
         longitude: lng,
         distance_miles: Number(dist.toFixed(2)),
+        location_source: 'PROFILE_GEOCODE',
+        location_confidence: classifyLocationConfidence(
+          Number.isFinite(geocodeConfidence) ? geocodeConfidence : null,
+          geocodedAt || null,
+          'PROFILE_GEOCODE',
+        ),
       });
     }
 
@@ -1475,11 +1531,57 @@ export async function getOrgLeaderOutreachCandidates(
   const rpcRows = (data ?? []) as OrgOutreachCandidate[];
   if (!organizationId) return rpcRows;
 
+  const rpcIds = rpcRows
+    .map((row) => String(row?.profile_id || '').trim())
+    .filter(Boolean);
+
+  let rpcMetaMap = new Map<string, any>();
+  if (rpcIds.length > 0) {
+    const { data: rpcMetaRows } = await supabase
+      .from('profiles')
+      .select('id, org_id, geocode_confidence, geocoded_at')
+      .in('id', rpcIds);
+
+    rpcMetaMap = new Map(
+      (rpcMetaRows || []).map((row: any) => [String(row?.id || '').trim(), row])
+    );
+  }
+
+  const filteredRpcRows = rpcRows.filter((row) => {
+    const id = String(row?.profile_id || '').trim();
+    const meta = rpcMetaMap.get(id);
+    const rowOrgId = String(meta?.org_id || '').trim() || null;
+    const geocodeConfidence = Number(meta?.geocode_confidence);
+    const geocodedAt = String(meta?.geocoded_at || '');
+
+    if (rowOrgId !== organizationId) {
+      return shouldIncludeUnconnectedCandidate(
+        Number.isFinite(geocodeConfidence) ? geocodeConfidence : null,
+        geocodedAt || null,
+      );
+    }
+    return true;
+  }).map((row) => {
+    const id = String(row?.profile_id || '').trim();
+    const meta = rpcMetaMap.get(id);
+    const geocodeConfidence = Number(meta?.geocode_confidence);
+    const geocodedAt = String(meta?.geocoded_at || '');
+    return {
+      ...row,
+      location_source: row.location_source || 'PROFILE_GEOCODE',
+      location_confidence: row.location_confidence || classifyLocationConfidence(
+        Number.isFinite(geocodeConfidence) ? geocodeConfidence : null,
+        geocodedAt || null,
+        'PROFILE_GEOCODE',
+      ),
+    };
+  });
+
   try {
     const sameOrgSupplement = await listSameOrgNearbyCandidates(organizationId, normalizedRequestedRadius);
-    return mergeOutreachCandidates(rpcRows, sameOrgSupplement);
+    return mergeOutreachCandidates(filteredRpcRows, sameOrgSupplement);
   } catch {
-    return rpcRows;
+    return filteredRpcRows;
   }
 }
 

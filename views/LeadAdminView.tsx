@@ -13,6 +13,7 @@ import {
   BarChart2,
   Building2,
   CheckCircle2,
+  Copy,
   ChevronDown,
   ChevronUp,
   CircleDollarSign,
@@ -129,6 +130,24 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
         return { ...l, status: 'DELIVERED', deliveredAt: now, disputeWindowClosesAt: closeAt, assignedBuyerId: buyer.id, assignedBuyerName: buyer.orgName };
       }),
     );
+  };
+
+  const getBuyerInviteLink = () => {
+    if (typeof window === 'undefined') return '/buyer-portal';
+    return `${window.location.origin}/buyer-portal?invite=buyer`;
+  };
+
+  const copyBuyerInviteLink = async (buyer?: BuyerAccount) => {
+    const base = getBuyerInviteLink();
+    const link = buyer
+      ? `${base}&buyerId=${encodeURIComponent(String(buyer.id || '').trim())}`
+      : base;
+    try {
+      await navigator.clipboard.writeText(link);
+      window.alert('Buyer invite link copied. Assign BUYER role before login.');
+    } catch {
+      window.prompt('Copy buyer invite link:', link);
+    }
   };
 
   const tabs: Array<{ id: AdminTab; label: string; icon: React.ReactNode }> = [
@@ -290,6 +309,20 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
         {/* ── BUYERS Tab ─────────────────────────────────────────────────── */}
         {activeTab === 'BUYERS' && (
           <div className="space-y-3">
+            <Card className="border-cyan-200 bg-cyan-50/60">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-cyan-900">Buyer Onboarding Link</h3>
+                  <p className="text-xs text-cyan-800 mt-1">
+                    Share this link with a buyer to direct them to Buyer Portal. Accounts still require BUYER role assignment.
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => copyBuyerInviteLink()}>
+                  <Copy size={14} className="mr-1" /> Copy Link
+                </Button>
+              </div>
+            </Card>
+
             {buyers.map((buyer) => (
               <Card key={buyer.id} className="border-slate-200 bg-white/95">
                 <div className="flex items-start justify-between gap-4">
@@ -316,6 +349,9 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
                   <div className="text-right shrink-0">
                     <p className="text-xs text-slate-500">Platform Fee</p>
                     <p className="font-bold text-slate-900">{fmt$(buyer.monthlyPlatformFeeCents)}/mo</p>
+                    <Button size="sm" variant="outline" className="mt-2" onClick={() => copyBuyerInviteLink(buyer)}>
+                      <Copy size={14} className="mr-1" /> Invite Link
+                    </Button>
                     {buyer.billingModel === 'PREPAID_WALLET' && (
                       <>
                         <p className="text-xs text-slate-500 mt-1">Wallet Balance</p>

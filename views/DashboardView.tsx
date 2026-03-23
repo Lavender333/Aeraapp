@@ -16,8 +16,6 @@ import {
   DollarSign,
   ClipboardList,
   Users,
-  HardHat,
-  Navigation,
   Truck,
   Database,
   WifiOff,
@@ -42,7 +40,6 @@ import {
   Home,
   User,
   BriefcaseBusiness,
-  ClipboardList,
   BarChart2
 } from 'lucide-react';
 import {
@@ -538,6 +535,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
       await element.play();
     } catch {
       setWelcomeVideoPlaybackMessage('Tap play on the video controls to start playback.');
+    }
+  };
+
+  const getShareableFinanceDashboardLink = () => {
+    if (typeof window === 'undefined') return '/finance-dashboard';
+    return `${window.location.origin}/finance-dashboard`;
+  };
+
+  const copyFinanceDashboardLink = async () => {
+    const url = getShareableFinanceDashboardLink();
+    try {
+      await navigator.clipboard.writeText(url);
+      alert('Finance dashboard link copied.');
+    } catch {
+      window.prompt('Copy this finance dashboard link:', url);
     }
   };
 
@@ -1231,6 +1243,32 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         </section>
       )}
 
+      {userRole === 'ADMIN' && (
+        <section className="bg-white/95 border border-violet-200 rounded-2xl p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-violet-700">Admin Operations</p>
+              <p className="text-lg font-bold text-slate-900 mt-1">Leads, buyers, and finance controls</p>
+              <p className="text-xs text-slate-600 mt-1">Manage lead routing, buyer workflows, and share a public finance dashboard link.</p>
+            </div>
+            <div className="w-11 h-11 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center shrink-0">
+              <BarChart2 size={20} />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => setView('LEAD_ADMIN')}>
+              Lead Admin
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setView('BUYER_PORTAL')}>
+              Buyer Portal
+            </Button>
+            <Button size="sm" variant="outline" onClick={copyFinanceDashboardLink}>
+              Copy Finance Dashboard Link
+            </Button>
+          </div>
+        </section>
+      )}
+
       {isGeneralUser && hasOnboardingStepsIncomplete && showOnboardingWelcomeCard && (
         <section className="bg-white/95 border border-amber-200 rounded-2xl p-4 shadow-sm">
           <div className="flex items-start justify-between gap-3">
@@ -1751,40 +1789,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                   <h3 className="font-semibold text-slate-900">Population</h3>
                   <p className="text-xs text-slate-500 mt-1">Evac zones & heatmaps</p>
                   <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 mt-2">Pro</span>
-                </div>
-              </div>
-            </Card>
-
-            {/* Deployment & Recovery */}
-            <Card 
-              className="col-span-1 hover:border-brand-300 border-slate-200 bg-white/95"
-              onClick={() => setView('RECOVERY')}
-            >
-              <div className="flex flex-col items-start gap-3">
-                <div className="p-2 bg-orange-100 rounded-lg text-orange-700">
-                  <HardHat size={24} />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-slate-900">Recovery</h3>
-                  <p className="text-xs text-slate-500 mt-1">Teams & Deployments</p>
-                  <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 mt-2">Pro</span>
-                </div>
-              </div>
-            </Card>
-
-            {/* Drone Innovations */}
-            <Card 
-              className="col-span-1 hover:border-brand-300 border-slate-200 bg-white/95"
-              onClick={() => setView('DRONE')}
-            >
-              <div className="flex flex-col items-start gap-3">
-                <div className="p-2 bg-slate-800 rounded-lg text-brand-400">
-                  <Navigation size={24} />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-slate-900">Drone to Phone</h3>
-                  <p className="text-xs text-slate-500 mt-1">UAV Feed & Delivery</p>
-                  <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 mt-2">Pro</span>
                 </div>
               </div>
             </Card>

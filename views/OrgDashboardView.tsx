@@ -164,6 +164,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
   const [isRequesting, setIsRequesting] = useState(false);
   const [requestSuccess, setRequestSuccess] = useState(false);
   const [selectedItem, setSelectedItem] = useState('Water Cases');
+  const [customRequestTopic, setCustomRequestTopic] = useState('');
   const [requestAmount, setRequestAmount] = useState(10);
   const requestFormRef = useRef<HTMLDivElement | null>(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -675,6 +676,26 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     };
   };
 
+  const getLocationConfidenceUI = (candidate: OrgOutreachCandidate) => {
+    const level = candidate.location_confidence || 'MEDIUM';
+    if (level === 'HIGH') {
+      return {
+        label: 'High Confidence',
+        className: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+      };
+    }
+    if (level === 'LOW') {
+      return {
+        label: candidate.location_source === 'ORG_CENTER_FALLBACK' ? 'Org-Center Fallback' : 'Low Confidence',
+        className: 'bg-amber-100 text-amber-700 border-amber-200',
+      };
+    }
+    return {
+      label: 'Medium Confidence',
+      className: 'bg-blue-100 text-blue-700 border-blue-200',
+    };
+  };
+
   const saveOutreachRadius = async () => {
     const localSaved = StorageService.setOrgOutreachRadiusMiles(activeOrgCode, outreachRadiusMiles);
     setOutreachRadiusMiles(localSaved);
@@ -749,17 +770,26 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
   };
 
   const handleSubmitRequest = async () => {
+    const resolvedItem = selectedItem === 'Custom Topic'
+      ? customRequestTopic.trim()
+      : selectedItem;
+
+    if (!resolvedItem) {
+      alert('Enter a topic for the custom resource item.');
+      return;
+    }
+
     try {
       // Try API first, but fall back to local storage
       try {
-        await createRequest(activeOrgCode, { item: selectedItem, quantity: requestAmount, provider: replenishmentProvider, orgName });
+        await createRequest(activeOrgCode, { item: resolvedItem, quantity: requestAmount, provider: replenishmentProvider, orgName });
         const refreshed = await listRequests(activeOrgCode);
         setRequests(mergeReplenishmentRequests(refreshed as ReplenishmentRequest[], StorageService.getOrgReplenishmentRequests(activeOrgCode)));
       } catch (apiError) {
         console.warn('API request failed, using local storage:', apiError);
         // Use local storage as fallback
         StorageService.createReplenishmentRequest(activeOrgCode, {
-          item: selectedItem,
+          item: resolvedItem,
           quantity: requestAmount,
           provider: replenishmentProvider,
           orgName
@@ -1230,7 +1260,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
             </div>
             <div className="flex justify-between mt-1">
               <span className="font-bold">Inventory Totals:</span>
-              <span>W:{aggStats.inventory.water} F:{aggStats.inventory.food} B:{aggStats.inventory.blankets} M:{aggStats.inventory.medicalKits}</span>
+              <span>Water: {aggStats.inventory.water} Food: {aggStats.inventory.food} Blankets: {aggStats.inventory.blankets} Medical Kits: {aggStats.inventory.medicalKits}</span>
             </div>
           </div>
         )}
@@ -1467,6 +1497,9 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                   <p className="text-xs text-emerald-800 mt-1">
                     Opted-in app users within range (same-org members plus unconnected users outside trusted networks).
                   </p>
+                  <p className="text-[11px] text-emerald-700 mt-1 font-semibold">
+                    Unconnected users are shown only when geocoding confidence is strong and recently refreshed.
+                  </p>
                 </div>
                 <div className="text-right">
                   <p className="text-[11px] uppercase font-bold text-emerald-700">Candidates</p>
@@ -1552,7 +1585,17 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                     <div key={candidate.profile_id} className="bg-white border border-emerald-100 rounded-lg p-3">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-sm font-bold text-slate-900">{candidate.full_name || 'Nearby App User'}</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-bold text-slate-900">{candidate.full_name || 'Nearby App User'}</p>
+                            {(() => {
+                              const confidenceUi = getLocationConfidenceUI(candidate);
+                              return (
+                                <span className={`text-[10px] px-2 py-1 rounded border font-bold uppercase ${confidenceUi.className}`}>
+                                  {confidenceUi.label}
+                                </span>
+                              );
+                            })()}
+                          </div>
                           <p className="text-xs text-slate-500">
                             {candidate.distance_miles} miles away
                             {candidate.phone ? ` • ${candidate.phone}` : ''}
@@ -1845,8 +1888,21 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                         <option value="Food Boxes">Food Boxes</option>
                         <option value="Blankets">Blankets</option>
                         <option value="Medical Kits">Medical Kits</option>
+                        <option value="Custom Topic">Custom Topic</option>
                       </select>
                     </div>
+                    {selectedItem === 'Custom Topic' && (
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Custom Topic</label>
+                        <input
+                          type="text"
+                          className="w-full p-2 rounded border border-slate-300 text-sm text-slate-900 font-bold"
+                          value={customRequestTopic}
+                          onChange={(e) => setCustomRequestTopic(e.target.value)}
+                          placeholder="Example: Baby Formula, Fuel Canisters, Hygiene Kits"
+                        />
+                      </div>
+                    )}
                     <div>
                       <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Quantity</label>
                       <input 

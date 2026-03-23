@@ -54,21 +54,27 @@ export const ShelterLocatorView: React.FC<{ setView: (v: ViewState) => void }> =
               Disaster Recovery Center locator in a new browser tab.
             </p>
 
-            <div className="mt-4 flex flex-wrap gap-3">
-              <button
-                onClick={openOfficialLocator}
-                className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-white text-sm font-semibold hover:bg-brand-700"
-              >
-                <ExternalLink size={16} />
-                Open FEMA Locator
-              </button>
+            <div className="mt-4 space-y-3">
+              <div className="rounded-lg border border-slate-200 p-3">
+                <p className="text-[11px] uppercase font-bold text-slate-500 mb-2">Official FEMA Tool</p>
+                <button
+                  onClick={openOfficialLocator}
+                  className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-white text-sm font-semibold hover:bg-brand-700"
+                >
+                  <ExternalLink size={16} />
+                  Open FEMA Locator
+                </button>
+              </div>
 
-              <button
-                onClick={useMapAssistant}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-slate-700 text-sm font-medium hover:bg-slate-100"
-              >
-                Use Map Assistant Instead
-              </button>
+              <div className="rounded-lg border border-slate-200 p-3">
+                <p className="text-[11px] uppercase font-bold text-slate-500 mb-2">Alternative Search</p>
+                <button
+                  onClick={useMapAssistant}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-slate-700 text-sm font-medium hover:bg-slate-100"
+                >
+                  Use Map Assistant Instead
+                </button>
+              </div>
             </div>
 
             <p className="mt-3 text-xs text-slate-500">

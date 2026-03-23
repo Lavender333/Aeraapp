@@ -69,6 +69,7 @@ const BuyerPortalView = lazyWithRetry(() => import('./views/BuyerPortalView').th
 const LeadIntakeView = lazyWithRetry(() => import('./views/LeadIntakeView').then((m) => ({ default: m.LeadIntakeView })));
 const LeadAdminView = lazyWithRetry(() => import('./views/LeadAdminView').then((m) => ({ default: m.LeadAdminView })));
 const PublicIntakeView = lazyWithRetry(() => import('./views/PublicIntakeView').then((m) => ({ default: m.PublicIntakeView })));
+const FinanceDashboardView = lazyWithRetry(() => import('./views/FinanceDashboardView').then((m) => ({ default: m.FinanceDashboardView })));
 
 class ViewErrorBoundary extends React.Component<
   { onRecover: () => void; children: React.ReactNode },
@@ -136,6 +137,7 @@ export default function App() {
     if (window.location.pathname === '/lead-intake') return 'LEAD_INTAKE';
     if (window.location.pathname === '/lead-admin') return 'LEAD_ADMIN';
     if (window.location.pathname === '/public/intake') return 'PUBLIC_INTAKE';
+    if (window.location.pathname === '/finance-dashboard') return 'FINANCE_DASHBOARD';
     return null;
   };
 
@@ -210,15 +212,18 @@ export default function App() {
       const isRecoveryUrl = isRecoveryPath || isRecoveryHash;
       const isPresentationUrl = window.location.pathname === '/presentation';
       const requestedStandaloneView = getStandaloneRequestedView();
-        const isPublicIntakeUrl = requestedStandaloneView === 'PUBLIC_INTAKE';
+      const isPublicIntakeUrl = requestedStandaloneView === 'PUBLIC_INTAKE';
       const isEventRegistrationUrl = Boolean(eventIdFromUrl);
       try {
         const { data } = await supabase.auth.getSession();
         if (!active) return;
-          if (isPublicIntakeUrl) {
-            setPostSplashView('PUBLIC_INTAKE');
-            setView('PUBLIC_INTAKE');
-          } else if (isPresentationUrl) {
+        if (isPublicIntakeUrl) {
+          setPostSplashView('PUBLIC_INTAKE');
+          setView('PUBLIC_INTAKE');
+        } else if (requestedStandaloneView === 'FINANCE_DASHBOARD') {
+          setPostSplashView('FINANCE_DASHBOARD');
+          setView('FINANCE_DASHBOARD');
+        } else if (isPresentationUrl) {
           setPostSplashView('PRESENTATION');
           setView('PRESENTATION');
         } else if (isRecoveryUrl) {
@@ -311,6 +316,9 @@ export default function App() {
         if (isPublicIntakeUrl) {
           setPostSplashView('PUBLIC_INTAKE');
           setView('PUBLIC_INTAKE');
+        } else if (requestedStandaloneView === 'FINANCE_DASHBOARD') {
+          setPostSplashView('FINANCE_DASHBOARD');
+          setView('FINANCE_DASHBOARD');
         } else if (isPresentationUrl) {
           setPostSplashView('PRESENTATION');
           setView('PRESENTATION');
@@ -486,6 +494,8 @@ export default function App() {
         const shareToken = rawShareToken.replace(/^['"]|['"]$/g, '').trim();
         return <PublicIntakeView shareToken={shareToken} />;
       }
+      case 'FINANCE_DASHBOARD':
+        return <FinanceDashboardView setView={setView} />;
       default:
         return <DashboardView setView={setView} />;
     }
@@ -511,7 +521,8 @@ export default function App() {
                   currentView !== 'BUYER_PORTAL' &&
                   currentView !== 'PUBLIC_INTAKE' &&
                   currentView !== 'LEAD_INTAKE' &&
-                  currentView !== 'LEAD_ADMIN';
+                  currentView !== 'LEAD_ADMIN' &&
+                  currentView !== 'FINANCE_DASHBOARD';
 
   const useWideLayout = [
     'DASHBOARD',
