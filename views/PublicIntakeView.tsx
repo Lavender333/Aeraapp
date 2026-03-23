@@ -449,7 +449,16 @@ export const PublicIntakeView: React.FC<PublicIntakeViewProps> = ({ shareToken =
                   className="mt-1"
                 />
                 <span className="text-sm text-slate-700">
-                  I acknowledge that I have read and understand TCPA regulations regarding phone and text messages.
+                  I acknowledge that I have read and understand{' '}
+                  <a
+                    href="https://www.ecfr.gov/current/title-47/chapter-I/subchapter-A/part-64/subpart-L"
+                    className="font-semibold text-slate-900 hover:underline"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    TCPA regulations
+                  </a>{' '}
+                  regarding phone and text messages.
                 </span>
               </label>
 
