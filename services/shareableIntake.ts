@@ -60,27 +60,30 @@ export async function getUserShareableIntakeLinks(): Promise<ShareableIntakeLink
 }
 
 /**
- * Get a shareable link by token (public access)
+ * Minimal info returned by the token-scoped lookup RPC (no full row exposed).
+ */
+export interface PublicIntakeLinkInfo {
+  referrer_name: string;
+  organization_name?: string;
+  is_valid: boolean;
+}
+
+/**
+ * Get display info for a share link by token (public access).
+ * Uses a SECURITY DEFINER RPC that never exposes the token list —
+ * anon can resolve exactly one token they already have, nothing more.
  */
 export async function getShareableIntakeLinkByToken(
   shareToken: string
-): Promise<ShareableIntakeLink | null> {
-  const { data, error } = await supabase
-    .from('shareable_intake_links')
-    .select('*')
-    .eq('share_token', shareToken)
-    .eq('is_active', true)
-    .single();
+): Promise<PublicIntakeLinkInfo | null> {
+  const { data, error } = await supabase.rpc('get_intake_link_by_token', {
+    token_input: shareToken,
+  });
 
-  if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
-  if (!data) return null;
-
-  // Check if expired
-  if (data.expires_at && new Date(data.expires_at) < new Date()) {
-    return null;
-  }
-
-  return data;
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row || row.is_valid === false) return null;
+  return row as PublicIntakeLinkInfo;
 }
 
 /**
@@ -96,7 +99,8 @@ export async function deactivateShareableIntakeLink(linkId: string): Promise<voi
 }
 
 /**
- * Increment submission count for a link
+ * Increment submission count for a link (authenticated users only).
+ * Note: anon submissions are incremented server-side inside submit_public_lead_intake.
  */
 export async function incrementShareableLinkSubmissionCount(
   shareToken: string

@@ -6,7 +6,7 @@ import { Input } from '../components/Input';
 import {
   getShareableIntakeLinkByToken,
   submitPublicLeadIntake,
-  ShareableIntakeLink,
+  PublicIntakeLinkInfo,
 } from '../services/shareableIntake';
 
 type Step = 'IDENTITY' | 'SITUATION' | 'CONSENT' | 'CONFIRMATION';
@@ -65,7 +65,7 @@ export const PublicIntakeView: React.FC<PublicIntakeViewProps> = ({ shareToken =
   const [step, setStep] = useState<Step>('IDENTITY');
   const [form, setForm] = useState<IntakeForm>(EMPTY_FORM);
   const [submittedId, setSubmittedId] = useState<string>('');
-  const [shareInfo, setShareInfo] = useState<ShareableIntakeLink | null>(null);
+  const [shareInfo, setShareInfo] = useState<PublicIntakeLinkInfo | null>(null);
   const [isLoading, setIsLoading] = useState(!!shareToken);
   const [loadError, setLoadError] = useState('');
   const [errors, setErrors] = useState<Partial<Record<keyof IntakeForm, string>>>({});
