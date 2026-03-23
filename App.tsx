@@ -130,6 +130,7 @@ export default function App() {
   const isPresentationView = currentView === 'PRESENTATION' || isPresentationPath;
 
   const canRoleAccessBuyerPortal = (role: string) => ['ADMIN', 'BUYER'].includes(role);
+  const hasPersistedAuthState = () => Boolean(StorageService.getAuthToken() || StorageService.getRefreshToken());
 
   const getStandaloneRequestedView = (): ViewState | null => {
     if (typeof window === 'undefined') return null;
@@ -291,7 +292,7 @@ export default function App() {
           }
         } else {
           const localProfile = StorageService.getProfile();
-          if (localProfile?.id && localProfile.id !== 'guest') {
+          if (hasPersistedAuthState() && localProfile?.id && localProfile.id !== 'guest') {
             const nextView = resolveAuthenticatedLandingView(localProfile);
             setPostSplashView(nextView);
             setView('SPLASH');
@@ -311,7 +312,7 @@ export default function App() {
             setPostSplashView('LOGIN');
             setView('SPLASH');
           } else if (pendingInvite?.communityId) {
-            setPostSplashView('REGISTRATION');
+            setPostSplashView('LOGIN');
             setView('SPLASH');
           } else {
             setPostSplashView('LOGIN');
@@ -337,12 +338,12 @@ export default function App() {
           setView('SPLASH');
         } else {
           const localProfile = StorageService.getProfile();
-          if (localProfile?.id && localProfile.id !== 'guest') {
+          if (hasPersistedAuthState() && localProfile?.id && localProfile.id !== 'guest') {
             const nextView = resolveAuthenticatedLandingView(localProfile);
             setPostSplashView(nextView);
             setView('SPLASH');
           } else if (pendingInvite?.communityId) {
-            setPostSplashView('REGISTRATION');
+            setPostSplashView('LOGIN');
             setView('SPLASH');
           } else {
             setPostSplashView('LOGIN');
