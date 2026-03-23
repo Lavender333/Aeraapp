@@ -5148,8 +5148,8 @@ export async function listMembers(orgCode: string) {
 }
 
 /**
- * Updates the system role of an org member. Only ORG_ADMIN or ADMIN may call this.
- * The org creator cannot be demoted to GENERAL_USER.
+ * Updates the system role of an org member. Only org-scoped admins or platform admins may call this.
+ * The organization creator's role cannot be changed.
  */
 export async function updateMemberRole(
   targetProfileId: string,
@@ -5161,12 +5161,65 @@ export async function updateMemberRole(
   const actorId = authData.user.id;
   if (actorId === targetProfileId) throw new Error('You cannot change your own role from this panel.');
 
+  if (newRole !== 'GENERAL_USER' && newRole !== 'ORG_ADMIN') {
+    throw new Error('Only General User and Org Admin roles may be assigned here.');
+  }
+
+  const actorProfile = await getProfileById(actorId);
+  const actorRole = String(actorProfile?.role || '').toUpperCase();
+  if (!['ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(actorRole)) {
+    throw new Error('Only organization admins can change member roles.');
+  }
+
+  const { data: targetProfile, error: targetError } = await supabase
+    .from('profiles')
+    .select('id, org_id, role, created_at')
+    .eq('id', targetProfileId)
+    .maybeSingle();
+
+  if (targetError) throw new Error(targetError.message || 'Failed to load target member profile.');
+  if (!targetProfile?.id) throw new Error('Target member not found.');
+
+  const targetOrgId = String(targetProfile.org_id || '').trim();
+  if (!targetOrgId) throw new Error('Target member is not linked to an organization.');
+
+  if (actorRole !== 'ADMIN' && String(actorProfile?.org_id || '').trim() !== targetOrgId) {
+    throw new Error('You can only change roles for members in your organization.');
+  }
+
+  let orgCreatorId: string | null = null;
+  try {
+    const { data: orgRow } = await supabase
+      .from('organizations')
+      .select('created_by')
+      .eq('id', targetOrgId)
+      .maybeSingle();
+    orgCreatorId = String((orgRow as any)?.created_by || '').trim() || null;
+  } catch {
+    orgCreatorId = null;
+  }
+
+  if (!orgCreatorId) {
+    const { data: earliestProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('org_id', targetOrgId)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    orgCreatorId = String((earliestProfile as any)?.id || '').trim() || null;
+  }
+
+  if (orgCreatorId && orgCreatorId === targetProfileId) {
+    throw new Error('The organization creator\'s role cannot be changed.');
+  }
+
   const { error } = await supabase
     .from('profiles')
     .update({ role: newRole })
     .eq('id', targetProfileId);
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(error.message || 'Failed to update member role.');
 }
 
 export async function addMember(orgCode: string, payload: any) {
