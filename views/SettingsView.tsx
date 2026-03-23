@@ -227,6 +227,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const isAdmin = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(normalizedRole);
   const isPlatformAdmin = normalizedRole === 'ADMIN';
   const isOrgScopedAdmin = normalizedRole === 'ORG_ADMIN' || normalizedRole === 'INSTITUTION_ADMIN';
+  const canManageOrgSettings = isOrgScopedAdmin || isPlatformAdmin;
   const orgScopeId = String(profile.communityId || '').trim();
   function getStoredProfileImage(userId?: string) {
     const normalizedId = String(userId || '').trim();
@@ -4133,7 +4134,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 <span>{isOrgScopedAdmin ? 'Organization Profile' : t('settings.organization_directory')}</span>
                 <Building2 size={18} />
               </Button>
-              {isOrgScopedAdmin && (
+              {canManageOrgSettings && (
                 <Button
                   onClick={openOrganizationAddressSettings}
                   className="bg-emerald-600 hover:bg-emerald-500 text-white border-0 w-full justify-between"
@@ -5240,7 +5241,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {isOrgScopedAdmin && !orgLocationConfigured && (
+            {canManageOrgSettings && !orgLocationConfigured && (
               <span className="text-[11px] font-bold px-2 py-1 rounded-full bg-red-100 text-red-700">
                 Location needed
               </span>
@@ -5252,13 +5253,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <ChevronDown size={20} className={`text-slate-600 transition-transform ${expandedSections.community ? 'rotate-180' : ''}`} />
           </div>
         </button>
-        {!expandedSections.community && isOrgScopedAdmin && !orgLocationConfigured && (
+        {!expandedSections.community && canManageOrgSettings && !orgLocationConfigured && (
           <div className="mt-2 rounded-2xl border border-red-200 bg-red-50 p-4">
             <p className="text-[10px] font-bold uppercase tracking-wider text-red-700">Organization location missing</p>
             <p className="text-sm font-semibold text-red-900">Open this section to add your organization address. Coordinates are generated automatically when you save.</p>
           </div>
         )}
-        {!expandedSections.community && isOrgScopedAdmin && (
+        {!expandedSections.community && canManageOrgSettings && (
           communityInviteUrl ? (
             <div className="mt-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -5303,7 +5304,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
         {expandedSections.community && (
           <div id={accordionPanelIds.community} role="region" aria-labelledby={accordionButtonIds.community}>
-        {isOrgScopedAdmin && communityInviteUrl && (
+        {canManageOrgSettings && communityInviteUrl && (
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 space-y-3 mb-4">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Member join QR code</p>
@@ -5474,7 +5475,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           </>
         )}
 
-        {isOrgScopedAdmin && (
+        {canManageOrgSettings && (
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 space-y-3 relative z-10">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Organization Address</p>
