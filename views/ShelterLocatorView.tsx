@@ -50,9 +50,12 @@ export const ShelterLocatorView: React.FC<{ setView: (v: ViewState) => void }> =
           <div className="max-w-4xl mx-auto bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-sm">
             <h2 className="text-base md:text-lg font-semibold text-slate-900">Open the Official FEMA Locator</h2>
             <p className="text-sm text-slate-600 mt-2">
-              FEMA often blocks in-app embedding for security. For the most reliable experience, open the official
-              Disaster Recovery Center locator in a new browser tab.
+              For the most reliable experience, open the official FEMA Disaster Recovery Center locator in a new browser tab.
             </p>
+
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              <span className="font-semibold">Disclaimer:</span> FEMA is an independent U.S. government agency. AERA is not affiliated with, endorsed by, or connected to FEMA or any of its programs. This link is provided solely for informational convenience.
+            </div>
 
             <div className="mt-4 space-y-3">
               <div className="rounded-lg border border-slate-200 p-3">

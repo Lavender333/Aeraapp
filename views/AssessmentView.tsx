@@ -539,14 +539,6 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                 </button>
               ))}
             </div>
-
-            <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 flex gap-3 items-start">
-               <Sparkles className="text-purple-600 shrink-0 mt-1" size={20} />
-               <div>
-                 <h3 className="font-bold text-purple-900 text-sm">AI Assisted Mode</h3>
-                 <p className="text-xs text-purple-700 mt-1">Take a photo in the next step, and our AI will automatically assess the severity and type of damage for you.</p>
-               </div>
-            </div>
           </div>
         )}
 

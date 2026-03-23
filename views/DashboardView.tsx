@@ -1262,6 +1262,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
             <Button size="sm" variant="outline" onClick={() => setView('BUYER_PORTAL')}>
               Buyer Portal
             </Button>
+          </div>
+        </section>
+      )}
+
+      {userRole === 'ADMIN' && (
+        <section className="bg-white/95 border border-emerald-200 rounded-2xl p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Finance Dashboard</p>
+              <p className="text-lg font-bold text-slate-900 mt-1">Shareable financial projections</p>
+              <p className="text-xs text-slate-600 mt-1">View the public finance dashboard or copy a shareable link to send to stakeholders.</p>
+            </div>
+            <div className="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+              <TrendingUp size={20} />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => setView('FINANCE_DASHBOARD')}>
+              <ExternalLink size={14} className="mr-1" />
+              Select
+            </Button>
             <Button size="sm" variant="outline" onClick={copyFinanceDashboardLink}>
               Copy Finance Dashboard Link
             </Button>

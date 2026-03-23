@@ -1275,8 +1275,12 @@ const shouldIncludeUnconnectedCandidate = (
   geocodeConfidence: number | null | undefined,
   geocodedAt: string | null | undefined,
 ) => {
+  // When the geocode_confidence column is unavailable (migration not yet applied),
+  // treat confidence as unknown and include the candidate rather than silently dropping them.
+  if (geocodeConfidence === null || geocodeConfidence === undefined) return true;
   const score = Number(geocodeConfidence);
-  return Number.isFinite(score) && score >= OUTREACH_MIN_GEOCODE_CONFIDENCE && isFreshGeocode(geocodedAt);
+  if (!Number.isFinite(score)) return true;
+  return score >= OUTREACH_MIN_GEOCODE_CONFIDENCE && isFreshGeocode(geocodedAt);
 };
 
 const listSameOrgNearbyCandidates = async (
@@ -1310,7 +1314,7 @@ const listSameOrgNearbyCandidates = async (
 
   const { data: rows, error } = await supabase
     .from('profiles')
-    .select('id, full_name, mobile_phone, phone, email, latitude, longitude, geocode_confidence, geocoded_at, org_id, is_active')
+    .select('id, full_name, mobile_phone, phone, email, latitude, longitude, org_id, is_active')
     .eq('is_active', true)
     .eq('org_id', targetOrgId)
     .neq('id', authData.user.id);
@@ -1436,7 +1440,7 @@ export async function getOrgLeaderOutreachCandidates(
 
     const { data: profileRows, error: candidateError } = await supabase
       .from('profiles')
-      .select('id, full_name, mobile_phone, phone, email, latitude, longitude, geocode_confidence, geocoded_at, geofenced_outreach_radius_miles, geofenced_outreach_opt_in, org_id, is_active')
+      .select('id, full_name, mobile_phone, phone, email, latitude, longitude, geofenced_outreach_radius_miles, geofenced_outreach_opt_in, org_id, is_active')
       .eq('is_active', true)
       .neq('id', authData.user.id)
       .not('latitude', 'is', null)
@@ -1539,7 +1543,7 @@ export async function getOrgLeaderOutreachCandidates(
   if (rpcIds.length > 0) {
     const { data: rpcMetaRows } = await supabase
       .from('profiles')
-      .select('id, org_id, geocode_confidence, geocoded_at')
+      .select('id, org_id')
       .in('id', rpcIds);
 
     rpcMetaMap = new Map(
