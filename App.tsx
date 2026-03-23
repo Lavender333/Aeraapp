@@ -471,7 +471,19 @@ export default function App() {
       case 'LEAD_ADMIN':
         return canAccessLeadAdmin ? <LeadAdminView setView={setView} /> : <DashboardView setView={setView} />;
       case 'PUBLIC_INTAKE': {
-        const shareToken = new URLSearchParams(window.location.search).get('share_token') || '';
+        const searchParams = new URLSearchParams(window.location.search || '');
+        const hash = window.location.hash || '';
+        const hashQuery = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
+        const hashParams = new URLSearchParams(hashQuery);
+        const rawShareToken =
+          searchParams.get('share_token') ||
+          searchParams.get('token') ||
+          searchParams.get('shareToken') ||
+          hashParams.get('share_token') ||
+          hashParams.get('token') ||
+          hashParams.get('shareToken') ||
+          '';
+        const shareToken = rawShareToken.replace(/^['"]|['"]$/g, '').trim();
         return <PublicIntakeView shareToken={shareToken} />;
       }
       default:
