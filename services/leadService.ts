@@ -17,6 +17,7 @@ import {
   DEFAULT_LEAD_PRICING,
   DisputeReason,
 } from '../types';
+import { createStripePaymentIntentViaSupabase } from './leadSupabase';
 
 // ── Dispute window (hours) ──────────────────────────────────────────────────
 export const DISPUTE_WINDOW_HOURS = 72;
@@ -340,12 +341,7 @@ export async function createStripePaymentIntent(
   amountCents: number,
   buyerEmail: string,
 ): Promise<{ clientSecret: string; paymentIntentId: string }> {
-  // TODO: Call your backend POST /api/billing/payment-intent
-  console.log(`[Stripe stub] Create intent for invoice ${invoiceId}: $${(amountCents / 100).toFixed(2)} → ${buyerEmail}`);
-  return {
-    clientSecret: 'pi_stub_secret',
-    paymentIntentId: `pi_stub_${Date.now()}`,
-  };
+  return createStripePaymentIntentViaSupabase(invoiceId, amountCents, buyerEmail);
 }
 
 /** Deduct accepted lead from prepaid wallet */
@@ -361,11 +357,11 @@ export function deductFromWallet(
 /** Check if dispute is valid and should receive a credit */
 export function evaluateDispute(
   reason: DisputeReason,
-  lead: VerifiedLead,
-  windowOpen: boolean,
+  lead?: VerifiedLead,
+  windowOpen: boolean = true,
 ): { valid: boolean; creditPercent: number } {
   if (!windowOpen) return { valid: false, creditPercent: 0 };
-  if (lead.status === 'REFUNDED') return { valid: false, creditPercent: 0 };
+  if (lead?.status === 'REFUNDED') return { valid: false, creditPercent: 0 };
 
   const autoCredit: Partial<Record<DisputeReason, number>> = {
     DUPLICATE: 100,

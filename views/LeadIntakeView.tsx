@@ -4,7 +4,7 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
 import { ViewState } from '../types';
-import { computeQualityScore, assignTier, SAMPLE_LEADS } from '../services/leadService';
+import { submitLeadIntake } from '../services/leadSupabase';
 
 type Step = 'IDENTITY' | 'SITUATION' | 'CONSENT' | 'CONFIRMATION';
 
@@ -68,6 +68,7 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
   const [form, setForm] = useState<IntakeForm>(EMPTY_FORM);
   const [submittedId, setSubmittedId] = useState<string>('');
   const [errors, setErrors] = useState<Partial<Record<keyof IntakeForm, string>>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const currentIndex = STEPS.findIndex((s) => s.id === step);
 
@@ -104,25 +105,31 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
     if (next) setStep(next.id);
   };
 
-  const submitIntake = () => {
+  const submitIntake = async () => {
     if (!validateStep()) return;
-    // In production: POST to /api/leads/intake
-    const phoneVerified = form.phone.replace(/\D/g, '').length === 10;
-    const emailVerified = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email);
-    const identityScore = 70 + Math.round(Math.random() * 25);
-    const qualityScore = computeQualityScore({
-      phoneVerified,
-      emailVerified,
-      identityScore,
-      serviceAreaMatch: true,
-      fraudFlagged: false,
-      duplicateChecked: true,
-    });
-    const tier = assignTier(qualityScore, form.severity);
-    const leadId = `LEAD-${Date.now().toString().slice(-5)}`;
-    console.log('[LeadIntake] Submitted:', { leadId, tier, qualityScore, ...form });
-    setSubmittedId(leadId);
-    setStep('CONFIRMATION');
+    setIsSubmitting(true);
+    try {
+      const lead = await submitLeadIntake({
+        applicantName: form.applicantName,
+        phone: form.phone,
+        email: form.email,
+        city: form.city,
+        state: form.state,
+        zipCode: form.zipCode,
+        caseType: form.caseType,
+        severity: form.severity,
+        consentToContact: form.consentToContact,
+        tcpaComplianceAcknowledged: form.tcpaComplianceAcknowledged,
+        privacyPolicyAccepted: form.privacyPolicyAccepted,
+        notes: form.situationSummary,
+        channel: 'WEB',
+        sourceTag: 'organic-web',
+      });
+      setSubmittedId(lead.id);
+      setStep('CONFIRMATION');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -384,8 +391,8 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
               <div />
             )}
             {step === 'CONSENT' ? (
-              <Button onClick={submitIntake}>
-                Submit Lead  <ArrowRight size={14} className="ml-1 inline" />
+              <Button onClick={submitIntake} disabled={isSubmitting}>
+                {isSubmitting ? 'Submitting...' : 'Submit Lead'}  <ArrowRight size={14} className="ml-1 inline" />
               </Button>
             ) : (
               <Button onClick={nextStep}>

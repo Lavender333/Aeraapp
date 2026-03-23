@@ -6,7 +6,7 @@
  *  - Browse reporting KPIs
  *  - Manage buyer account settings
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -26,7 +26,7 @@ import {
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { StorageService } from '../services/storage';
-import { ViewState, DEFAULT_LEAD_PRICING, DisputeReason } from '../types';
+import { BuyerAccount, ViewState, DEFAULT_LEAD_PRICING, DisputeReason } from '../types';
 import {
   SAMPLE_LEADS,
   SAMPLE_BUYERS,
@@ -35,6 +35,13 @@ import {
   evaluateDispute,
   weeklyReconciliation,
 } from '../services/leadService';
+import {
+  createLeadDispute,
+  createStripePaymentIntentViaSupabase,
+  fetchBuyerAccounts,
+  fetchVerifiedLeads,
+  updateLeadRecord,
+} from '../services/leadSupabase';
 
 type BuyerPortalTab = 'LEADS' | 'DISPUTES' | 'BILLING' | 'REPORTING' | 'SETTINGS';
 
@@ -83,7 +90,7 @@ interface DisputeForm {
 const DISPUTE_REASONS: Array<{ value: DisputeReason; label: string; credit: string }> = [
   { value: 'DUPLICATE',        label: 'Duplicate Submission',          credit: '100%' },
   { value: 'INVALID_CONTACT',  label: 'Invalid / Disconnected Contact', credit: '100%' },
-  { value: 'OUT_OF_AREA',      label: 'Out of Service Area',           credit: '100%' },
+  { value: 'OUT_OF_SERVICE_AREA', label: 'Out of Service Area',        credit: '100%' },
   { value: 'CONSENT_ISSUE',    label: 'No Valid Consent',              credit: '100%' },
   { value: 'ALREADY_CLIENT',   label: 'Already a Client',             credit: '75%'  },
   { value: 'OTHER',            label: 'Other (Reviewed)',              credit: '50%'  },
@@ -93,12 +100,14 @@ export const BuyerPortalView: React.FC<BuyerPortalViewProps> = ({ setView }) => 
   const profile = StorageService.getProfile();
   const [activeTab, setActiveTab] = useState<BuyerPortalTab>('LEADS');
   const [leads, setLeads]         = useState(SAMPLE_LEADS);
+  const [buyerAccount, setBuyerAccount] = useState<BuyerAccount>(demoBuyer);
   const [disputes, setDisputes]   = useState<Array<DisputeForm & { id: string; submittedAt: string; creditPct: number }>>([]);
   const [disputeForm, setDisputeForm] = useState<DisputeForm>({ leadId: '', reason: 'DUPLICATE', notes: '' });
   const [showDisputeFlow, setShowDisputeFlow] = useState(false);
   const [walletBalance, setWalletBalance] = useState(demoBuyer.walletBalanceCents);
+  const [isPaying, setIsPaying] = useState(false);
 
-  const buyerName     = profile?.communityId || profile?.fullName || demoBuyer.orgName;
+  const buyerName     = profile?.communityId || profile?.fullName || buyerAccount.orgName;
   const acceptedLeads = useMemo(() => leads.filter((l) => l.status === 'ACCEPTED'),  [leads]);
   const inboxLeads    = useMemo(() => leads.filter((l) => ['DELIVERED','NEW','VERIFIED'].includes(l.status)), [leads]);
   const recon         = useMemo(() => weeklyReconciliation(leads), [leads]);
@@ -107,30 +116,76 @@ export const BuyerPortalView: React.FC<BuyerPortalViewProps> = ({ setView }) => 
     [acceptedLeads],
   );
 
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      const [leadRows, buyerRows] = await Promise.all([
+        fetchVerifiedLeads(),
+        fetchBuyerAccounts(),
+      ]);
+      if (!mounted) return;
+
+      const preferredBuyer = buyerRows[0] || demoBuyer;
+      setBuyerAccount(preferredBuyer);
+      setWalletBalance(preferredBuyer.walletBalanceCents);
+      setLeads(leadRows);
+    };
+
+    void load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const acceptLead = (leadId: string) => {
     setLeads((prev) => prev.map((l) => l.id === leadId ? { ...l, status: 'ACCEPTED' } : l));
     const lead = leads.find((l) => l.id === leadId);
     if (lead) setWalletBalance((b) => Math.max(0, b - getLeadPrice(lead.tier) * 100));
+    void updateLeadRecord(leadId, { status: 'ACCEPTED' });
   };
 
   const rejectLead = (leadId: string) => {
     setLeads((prev) => prev.map((l) => l.id === leadId ? { ...l, status: 'REJECTED' } : l));
+    void updateLeadRecord(leadId, { status: 'REJECTED', rejectionReason: 'Rejected by buyer' });
   };
 
-  const submitDispute = () => {
+  const submitDispute = async () => {
     const { leadId, reason, notes } = disputeForm;
     if (!leadId || !notes.trim()) return;
-    const creditPct   = evaluateDispute(reason);
-    const lead        = leads.find((l) => l.id === leadId);
+    const lead = leads.find((l) => l.id === leadId);
+    if (!lead) return;
+    const { valid, creditPercent } = evaluateDispute(reason, lead, isDisputeWindowOpen(lead));
+    if (!valid) return;
+    const creditPct = creditPercent / 100;
     const creditCents = lead ? Math.round(getLeadPrice(lead.tier) * 100 * creditPct) : 0;
+    await createLeadDispute({
+      leadId,
+      buyerId: buyerAccount.id,
+      reason,
+      notes,
+      creditIssuedCents: creditCents,
+    });
     setDisputes((prev) => [
       ...prev,
       { id: `DSP-${Date.now()}`, leadId, reason, notes, submittedAt: new Date().toISOString(), creditPct },
     ]);
     if (creditCents > 0) setWalletBalance((b) => b + creditCents);
     setLeads((prev) => prev.map((l) => l.id === leadId ? { ...l, status: 'REFUNDED' } : l));
+    void updateLeadRecord(leadId, { status: 'REFUNDED', creditIssued: true, resolvedAt: new Date().toISOString() });
     setDisputeForm({ leadId: '', reason: 'DUPLICATE', notes: '' });
     setShowDisputeFlow(false);
+  };
+
+  const handleStripePay = async () => {
+    if (acceptedLeads.length === 0 || totalOwed <= 0) return;
+    setIsPaying(true);
+    try {
+      const invoiceId = `INV-${Date.now()}`;
+      const res = await createStripePaymentIntentViaSupabase(invoiceId, totalOwed, buyerAccount.contactEmail);
+      window.alert(`Payment intent created: ${res.paymentIntentId}`);
+    } finally {
+      setIsPaying(false);
+    }
   };
 
   const tabs: Array<{ id: BuyerPortalTab; label: string; icon: React.ReactNode }> = [
@@ -382,7 +437,9 @@ export const BuyerPortalView: React.FC<BuyerPortalViewProps> = ({ setView }) => 
                   )}
                 </div>
                 {acceptedLeads.length > 0 && (
-                  <Button className="mt-4 w-full">Pay via Stripe</Button>
+                  <Button className="mt-4 w-full" onClick={handleStripePay} disabled={isPaying}>
+                    {isPaying ? 'Processing...' : 'Pay via Stripe'}
+                  </Button>
                 )}
               </Card>
 
@@ -495,12 +552,12 @@ export const BuyerPortalView: React.FC<BuyerPortalViewProps> = ({ setView }) => 
               <h2 className="text-lg font-bold text-slate-900 mb-3">Buyer Account</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                 {[
-                  { label: 'Organization',      value: demoBuyer.orgName },
-                  { label: 'Contact',           value: `${demoBuyer.contactName} · ${demoBuyer.contactEmail}` },
-                  { label: 'Coverage States',   value: demoBuyer.coverageStates.join(', ') },
-                  { label: 'Daily Lead Cap',    value: `${demoBuyer.dailyLeadCap} leads/day` },
-                  { label: 'Min Quality Score', value: demoBuyer.minQualityScore.toString() },
-                  { label: 'Billing Model',     value: demoBuyer.billingModel.replace('_', ' ') },
+                  { label: 'Organization',      value: buyerAccount.orgName },
+                  { label: 'Contact',           value: `${buyerAccount.contactName} · ${buyerAccount.contactEmail}` },
+                  { label: 'Coverage States',   value: buyerAccount.coverageStates.join(', ') },
+                  { label: 'Daily Lead Cap',    value: `${buyerAccount.dailyLeadCap} leads/day` },
+                  { label: 'Min Quality Score', value: buyerAccount.minQualityScore.toString() },
+                  { label: 'Billing Model',     value: buyerAccount.billingModel.replace('_', ' ') },
                 ].map((row) => (
                   <div key={row.label} className="border border-slate-100 rounded-xl px-3 py-2.5">
                     <p className="text-[10px] text-slate-500 uppercase tracking-wide">{row.label}</p>
@@ -514,9 +571,9 @@ export const BuyerPortalView: React.FC<BuyerPortalViewProps> = ({ setView }) => 
               <h2 className="text-lg font-bold text-slate-900 mb-3">Verification Status</h2>
               <div className="space-y-2 text-sm">
                 {[
-                  { label: 'License Verified', ok: demoBuyer.licenseVerified },
-                  { label: 'TCPA Verified',    ok: demoBuyer.tcpaVerified    },
-                  { label: 'Active Account',   ok: demoBuyer.active          },
+                  { label: 'License Verified', ok: buyerAccount.licenseVerified },
+                  { label: 'TCPA Verified',    ok: buyerAccount.tcpaVerified    },
+                  { label: 'Active Account',   ok: buyerAccount.active          },
                 ].map((row) => (
                   <div key={row.label} className={`rounded-xl border p-3 flex items-center gap-3 ${row.ok ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'}`}>
                     {row.ok

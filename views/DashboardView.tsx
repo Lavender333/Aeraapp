@@ -448,7 +448,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const isOrgAdmin = userRole === 'INSTITUTION_ADMIN' || userRole === 'ORG_ADMIN';
   const canOpenOrgDashboard = isOrgAdmin || userRole === 'ADMIN' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN';
   const isContractor = userRole === 'CONTRACTOR';
-  const canAccessBuyerPortal = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(userRole);
+  const canAccessLeadIntake = ['ADMIN', 'ORG_ADMIN'].includes(userRole);
+  const canAccessBuyerPortal = ['ADMIN', 'ORG_ADMIN'].includes(userRole);
+  const canAccessLeadAdmin = userRole === 'ADMIN';
   const showCommunityBlocks = !isGeneralUser;
   const showCommunityAnnouncements = hasCommunity;
   const showLogisticsHome = userRole === 'FIRST_RESPONDER' || userRole === 'LOCAL_AUTHORITY' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN' || isContractor;
@@ -1684,30 +1686,32 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
           </Card>
         )}
 
-        {/* Lead Intake — visible to all authenticated users */}
-        <Card
-          className="col-span-2 bg-white/95 border-slate-200 cursor-pointer"
-          onClick={() => setView('LEAD_INTAKE')}
-        >
-          <div className="flex items-start gap-4">
-            <div className="p-3 bg-emerald-50 rounded-xl shadow-sm">
-              <ClipboardList size={24} className="text-emerald-700" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-xl font-bold text-slate-900">Submit a Verified Lead</h3>
-              <p className="text-sm text-slate-600">Refer a disaster-affected person for professional services and earn a referral reward.</p>
-              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">3-Step Intake</span>
-                <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">TCPA Consent</span>
-                <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Privacy Protected</span>
+        {/* Lead Intake — org/admin only */}
+        {canAccessLeadIntake && (
+          <Card
+            className="col-span-2 bg-white/95 border-slate-200 cursor-pointer"
+            onClick={() => setView('LEAD_INTAKE')}
+          >
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-emerald-50 rounded-xl shadow-sm">
+                <ClipboardList size={24} className="text-emerald-700" />
               </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-slate-900">Submit a Verified Lead</h3>
+                <p className="text-sm text-slate-600">Refer a disaster-affected person for professional services and earn a referral reward.</p>
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">3-Step Intake</span>
+                  <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">TCPA Consent</span>
+                  <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Privacy Protected</span>
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-slate-400 flex-shrink-0" />
             </div>
-            <ChevronRight className="w-5 h-5 text-slate-400 flex-shrink-0" />
-          </div>
-        </Card>
+          </Card>
+        )}
 
-        {/* Lead Admin — admin roles only */}
-        {canAccessBuyerPortal && (
+        {/* Lead Admin — admin only */}
+        {canAccessLeadAdmin && (
           <Card
             className="col-span-2 bg-white/95 border-slate-200 cursor-pointer"
             onClick={() => setView('LEAD_ADMIN')}

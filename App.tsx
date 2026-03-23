@@ -119,6 +119,9 @@ export default function App() {
   const showSetupNotice = !hasSupabaseConfig;
   const currentRole = String(StorageService.getProfile()?.role || 'GENERAL_USER').toUpperCase();
   const canAccessAdvancedViews = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN', 'FIRST_RESPONDER', 'LOCAL_AUTHORITY', 'CONTRACTOR'].includes(currentRole);
+  const canAccessLeadIntake = ['ADMIN', 'ORG_ADMIN'].includes(currentRole);
+  const canAccessBuyerPortal = ['ADMIN', 'ORG_ADMIN'].includes(currentRole);
+  const canAccessLeadAdmin = currentRole === 'ADMIN';
   const canAccessOrgDashboard = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(currentRole);
   const canAccessNewSignups = currentRole === 'ADMIN';
   const isPresentationPath = typeof window !== 'undefined' && window.location.pathname === '/presentation';
@@ -390,11 +393,11 @@ export default function App() {
       case 'SHELTER_LOCATOR':
         return <ShelterLocatorView setView={setView} />;
       case 'BUYER_PORTAL':
-        return <BuyerPortalView setView={setView} />;
+        return canAccessBuyerPortal ? <BuyerPortalView setView={setView} /> : <DashboardView setView={setView} />;
       case 'LEAD_INTAKE':
-        return <LeadIntakeView setView={setView} />;
+        return canAccessLeadIntake ? <LeadIntakeView setView={setView} /> : <DashboardView setView={setView} />;
       case 'LEAD_ADMIN':
-        return canAccessAdvancedViews ? <LeadAdminView setView={setView} /> : <DashboardView setView={setView} />;
+        return canAccessLeadAdmin ? <LeadAdminView setView={setView} /> : <DashboardView setView={setView} />;
       default:
         return <DashboardView setView={setView} />;
     }

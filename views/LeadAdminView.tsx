@@ -6,7 +6,7 @@
  *  - View reporting / reconciliation dashboard
  *  - Manage buyer accounts
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   BadgeCheck,
@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
-import { ViewState, VerifiedLead, LeadStatus, DEFAULT_LEAD_PRICING } from '../types';
+import { ViewState, VerifiedLead, LeadStatus, DEFAULT_LEAD_PRICING, BuyerAccount } from '../types';
 import {
   SAMPLE_LEADS,
   SAMPLE_BUYERS,
@@ -37,6 +37,7 @@ import {
   matchBuyer,
   isDisputeWindowOpen,
 } from '../services/leadService';
+import { fetchBuyerAccounts, fetchVerifiedLeads, updateLeadRecord } from '../services/leadSupabase';
 
 type AdminTab = 'LEADS' | 'BUYERS' | 'REPORTING' | 'COMPLIANCE' | 'PRICING';
 
@@ -66,8 +67,32 @@ interface LeadAdminViewProps {
 export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('LEADS');
   const [leads, setLeads] = useState<VerifiedLead[]>(SAMPLE_LEADS);
+  const [buyers, setBuyers] = useState<BuyerAccount[]>(SAMPLE_BUYERS);
+  const [loading, setLoading] = useState(true);
   const [expandedLead, setExpandedLead] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<LeadStatus | 'ALL'>('ALL');
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const [leadRows, buyerRows] = await Promise.all([
+          fetchVerifiedLeads(),
+          fetchBuyerAccounts(),
+        ]);
+        if (!mounted) return;
+        setLeads(leadRows);
+        setBuyers(buyerRows);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    void load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const recon = useMemo(() => weeklyReconciliation(leads), [leads]);
 
@@ -77,17 +102,30 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
   );
 
   const advanceStatus = (leadId: string, newStatus: LeadStatus) => {
-    setLeads((prev) => prev.map((l) => l.id === leadId ? { ...l, status: newStatus, verifiedAt: newStatus === 'VERIFIED' ? new Date().toISOString() : l.verifiedAt } : l));
+    const now = new Date().toISOString();
+    setLeads((prev) => prev.map((l) => l.id === leadId ? { ...l, status: newStatus, verifiedAt: newStatus === 'VERIFIED' ? now : l.verifiedAt } : l));
+    void updateLeadRecord(leadId, {
+      status: newStatus,
+      verifiedAt: newStatus === 'VERIFIED' ? now : undefined,
+      rejectionReason: newStatus === 'REJECTED' ? 'Rejected by admin review' : undefined,
+    });
   };
 
   const routeLead = (leadId: string) => {
     setLeads((prev) =>
       prev.map((l) => {
         if (l.id !== leadId) return l;
-        const buyer = matchBuyer(l, SAMPLE_BUYERS);
+        const buyer = matchBuyer(l, buyers);
         if (!buyer) return l;
         const now = new Date().toISOString();
         const closeAt = new Date(Date.now() + 72 * 3_600_000).toISOString();
+        void updateLeadRecord(l.id, {
+          status: 'DELIVERED',
+          deliveredAt: now,
+          disputeWindowClosesAt: closeAt,
+          assignedBuyerId: buyer.id,
+          assignedBuyerName: buyer.orgName,
+        });
         return { ...l, status: 'DELIVERED', deliveredAt: now, disputeWindowClosesAt: closeAt, assignedBuyerId: buyer.id, assignedBuyerName: buyer.orgName };
       }),
     );
@@ -157,6 +195,7 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
         {/* ── LEADS Tab ──────────────────────────────────────────────────── */}
         {activeTab === 'LEADS' && (
           <Card className="border-slate-200 bg-white/95">
+            {loading && <p className="text-sm text-slate-500 mb-3">Loading live lead data...</p>}
             <div className="flex items-center justify-between gap-3 mb-4">
               <h2 className="text-lg font-bold text-slate-900">Lead Pipeline</h2>
               <div className="flex items-center gap-2">
@@ -251,7 +290,7 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
         {/* ── BUYERS Tab ─────────────────────────────────────────────────── */}
         {activeTab === 'BUYERS' && (
           <div className="space-y-3">
-            {SAMPLE_BUYERS.map((buyer) => (
+            {buyers.map((buyer) => (
               <Card key={buyer.id} className="border-slate-200 bg-white/95">
                 <div className="flex items-start justify-between gap-4">
                   <div>
