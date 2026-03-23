@@ -237,7 +237,7 @@ export default function App() {
           if (localProfile?.id && localProfile.id !== 'guest') {
             const nextView = resolveAuthenticatedLandingView(localProfile);
             setPostSplashView(nextView);
-            setView(nextView);
+            setView('SPLASH');
           } else {
             const [remoteProfile, remoteVitals] = await Promise.all([
               fetchProfileForUser().catch(() => null),
@@ -287,29 +287,36 @@ export default function App() {
             StorageService.saveProfile(hydratedProfile, { skipRemoteSync: true });
             const nextView = resolveAuthenticatedLandingView(hydratedProfile);
             setPostSplashView(nextView);
-            setView(nextView);
+            setView('SPLASH');
           }
-        } else if (requestedStandaloneView === 'PUBLIC_INTAKE') {
-          setPostSplashView('PUBLIC_INTAKE');
-          setView('PUBLIC_INTAKE');
-        } else if (requestedStandaloneView === 'BUYER_PORTAL') {
-          sessionStorage.setItem('postLoginView', 'BUYER_PORTAL');
-          setPostSplashView('LOGIN');
-          setView('SPLASH');
-        } else if (requestedStandaloneView === 'LEAD_INTAKE') {
-          sessionStorage.setItem('postLoginView', 'LEAD_INTAKE');
-          setPostSplashView('LOGIN');
-          setView('SPLASH');
-        } else if (requestedStandaloneView === 'LEAD_ADMIN') {
-          sessionStorage.setItem('postLoginView', 'LEAD_ADMIN');
-          setPostSplashView('LOGIN');
-          setView('SPLASH');
-        } else if (pendingInvite?.communityId) {
-          setPostSplashView('REGISTRATION');
-          setView('SPLASH');
         } else {
-          setPostSplashView('LOGIN');
-          setView('SPLASH');
+          const localProfile = StorageService.getProfile();
+          if (localProfile?.id && localProfile.id !== 'guest') {
+            const nextView = resolveAuthenticatedLandingView(localProfile);
+            setPostSplashView(nextView);
+            setView('SPLASH');
+          } else if (requestedStandaloneView === 'PUBLIC_INTAKE') {
+            setPostSplashView('PUBLIC_INTAKE');
+            setView('PUBLIC_INTAKE');
+          } else if (requestedStandaloneView === 'BUYER_PORTAL') {
+            sessionStorage.setItem('postLoginView', 'BUYER_PORTAL');
+            setPostSplashView('LOGIN');
+            setView('SPLASH');
+          } else if (requestedStandaloneView === 'LEAD_INTAKE') {
+            sessionStorage.setItem('postLoginView', 'LEAD_INTAKE');
+            setPostSplashView('LOGIN');
+            setView('SPLASH');
+          } else if (requestedStandaloneView === 'LEAD_ADMIN') {
+            sessionStorage.setItem('postLoginView', 'LEAD_ADMIN');
+            setPostSplashView('LOGIN');
+            setView('SPLASH');
+          } else if (pendingInvite?.communityId) {
+            setPostSplashView('REGISTRATION');
+            setView('SPLASH');
+          } else {
+            setPostSplashView('LOGIN');
+            setView('SPLASH');
+          }
         }
       } catch {
         if (!active) return;
@@ -328,11 +335,19 @@ export default function App() {
         } else if (isEventRegistrationUrl) {
           setPostSplashView('EVENT_REGISTRATION');
           setView('SPLASH');
-        } else if (pendingInvite?.communityId) {
-          setPostSplashView('REGISTRATION');
-          setView('SPLASH');
         } else {
-          setView('SPLASH');
+          const localProfile = StorageService.getProfile();
+          if (localProfile?.id && localProfile.id !== 'guest') {
+            const nextView = resolveAuthenticatedLandingView(localProfile);
+            setPostSplashView(nextView);
+            setView('SPLASH');
+          } else if (pendingInvite?.communityId) {
+            setPostSplashView('REGISTRATION');
+            setView('SPLASH');
+          } else {
+            setPostSplashView('LOGIN');
+            setView('SPLASH');
+          }
         }
       } finally {
         if (active) setIsBootstrapping(false);
