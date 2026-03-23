@@ -65,6 +65,9 @@ const EventRegistrationView = lazyWithRetry(() => import('./views/EventRegistrat
 const VolunteerScanView = lazyWithRetry(() => import('./views/VolunteerScanView').then((m) => ({ default: m.VolunteerScanView })));
 const EventDashboardView = lazyWithRetry(() => import('./views/EventDashboardView').then((m) => ({ default: m.EventDashboardView })));
 const ShelterLocatorView = lazyWithRetry(() => import('./views/ShelterLocatorView').then((m) => ({ default: m.ShelterLocatorView })));
+const BuyerPortalView = lazyWithRetry(() => import('./views/BuyerPortalView').then((m) => ({ default: m.BuyerPortalView })));
+const LeadIntakeView = lazyWithRetry(() => import('./views/LeadIntakeView').then((m) => ({ default: m.LeadIntakeView })));
+const LeadAdminView = lazyWithRetry(() => import('./views/LeadAdminView').then((m) => ({ default: m.LeadAdminView })));
 
 class ViewErrorBoundary extends React.Component<
   { onRecover: () => void; children: React.ReactNode },
@@ -386,6 +389,12 @@ export default function App() {
         return canAccessOrgDashboard ? <EventDashboardView setView={setView} /> : <DashboardView setView={setView} />;
       case 'SHELTER_LOCATOR':
         return <ShelterLocatorView setView={setView} />;
+      case 'BUYER_PORTAL':
+        return <BuyerPortalView setView={setView} />;
+      case 'LEAD_INTAKE':
+        return <LeadIntakeView setView={setView} />;
+      case 'LEAD_ADMIN':
+        return canAccessAdvancedViews ? <LeadAdminView setView={setView} /> : <DashboardView setView={setView} />;
       default:
         return <DashboardView setView={setView} />;
     }
@@ -407,7 +416,10 @@ export default function App() {
                   currentView !== 'EVENT_SETUP' &&
                   currentView !== 'EVENT_REGISTRATION' &&
                   currentView !== 'VOLUNTEER_SCAN' &&
-                  currentView !== 'EVENT_DASHBOARD';
+                  currentView !== 'EVENT_DASHBOARD' &&
+                  currentView !== 'BUYER_PORTAL' &&
+                  currentView !== 'LEAD_INTAKE' &&
+                  currentView !== 'LEAD_ADMIN';
 
   const useWideLayout = [
     'DASHBOARD',
@@ -427,6 +439,8 @@ export default function App() {
     'EVENT_DASHBOARD',
     'VOLUNTEER_SCAN',
     'SHELTER_LOCATOR',
+    'BUYER_PORTAL',
+    'LEAD_ADMIN',
   ].includes(currentView);
   const shellFrameClass = useWideLayout
     ? 'shadow-none md:border-0'

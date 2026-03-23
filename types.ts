@@ -1,5 +1,166 @@
 
-export type ViewState = 'SPLASH' | 'LOGIN' | 'REGISTRATION' | 'ACCOUNT_SETUP' | 'DASHBOARD' | 'HELP_WIZARD' | 'SETTINGS' | 'NEW_SIGNUPS' | 'MAP' | 'ALERTS' | 'GAP' | 'GAP_MANAGEMENT' | 'ASSESSMENT' | 'POPULATION' | 'RECOVERY' | 'DRONE' | 'LOGISTICS' | 'ORG_DASHBOARD' | 'PRESENTATION' | 'PRIVACY_POLICY' | 'RESET_PASSWORD' | 'BUILD_KIT' | 'READINESS' | 'READINESS_GAP' | 'EVENTS' | 'EVENT_SETUP' | 'EVENT_REGISTRATION' | 'VOLUNTEER_SCAN' | 'EVENT_DASHBOARD' | 'SHELTER_LOCATOR';
+export type ViewState = 'SPLASH' | 'LOGIN' | 'REGISTRATION' | 'ACCOUNT_SETUP' | 'DASHBOARD' | 'HELP_WIZARD' | 'SETTINGS' | 'NEW_SIGNUPS' | 'MAP' | 'ALERTS' | 'GAP' | 'GAP_MANAGEMENT' | 'ASSESSMENT' | 'POPULATION' | 'RECOVERY' | 'DRONE' | 'LOGISTICS' | 'ORG_DASHBOARD' | 'PRESENTATION' | 'PRIVACY_POLICY' | 'RESET_PASSWORD' | 'BUILD_KIT' | 'READINESS' | 'READINESS_GAP' | 'EVENTS' | 'EVENT_SETUP' | 'EVENT_REGISTRATION' | 'VOLUNTEER_SCAN' | 'EVENT_DASHBOARD' | 'SHELTER_LOCATOR' | 'BUYER_PORTAL' | 'LEAD_INTAKE' | 'LEAD_ADMIN';
+
+// ─── Verified Lead System ─────────────────────────────────────────────────────
+
+export type LeadStatus = 'NEW' | 'VERIFIED' | 'DELIVERED' | 'ACCEPTED' | 'REJECTED' | 'REFUNDED';
+export type LeadTier = 'A' | 'B' | 'C';
+export type LeadSeverity = 'HIGH' | 'MEDIUM' | 'LOW';
+
+export interface VerifiedLead {
+  id: string;
+  /** Source tag (utm_source, partner code, campaign id) */
+  sourceTag: string;
+  /** Intake channel: web form, call centre, referral */
+  channel: 'WEB' | 'CALL' | 'REFERRAL';
+
+  // Applicant identity
+  applicantName: string;
+  phone: string;
+  email: string;
+  city: string;
+  state: string;
+  zipCode: string;
+
+  // Consent & compliance
+  consentToContact: boolean;
+  consentTimestamp: string;           // ISO timestamp
+  tcpaComplianceAcknowledged: boolean;
+  privacyPolicyAccepted: boolean;
+  consentIpAddress?: string;
+
+  // Verification
+  phoneVerified: boolean;
+  emailVerified: boolean;
+  identityScore: number;              // 0–100
+  duplicateChecked: boolean;
+  fraudFlagged: boolean;
+  serviceAreaMatch: boolean;
+
+  // Scoring
+  qualityScore: number;               // 0–100 composite
+  tier: LeadTier;                     // A / B / C
+  severity: LeadSeverity;
+  caseType: string;                   // e.g. "Property Claim", "Housing"
+
+  // Lifecycle
+  status: LeadStatus;
+  createdAt: string;
+  verifiedAt?: string;
+  deliveredAt?: string;
+  disputeWindowClosesAt?: string;     // deliveredAt + 72 h
+  resolvedAt?: string;
+  notes?: string;
+
+  // Buyer assignment
+  assignedBuyerId?: string;
+  assignedBuyerName?: string;
+  rejectionReason?: string;
+  creditIssued?: boolean;
+}
+
+// Tier pricing table
+export interface LeadPricingTier {
+  tier: LeadTier;
+  label: string;
+  priceUsd: number;       // charged per accepted lead
+  description: string;
+}
+
+export const DEFAULT_LEAD_PRICING: LeadPricingTier[] = [
+  { tier: 'A', label: 'Tier A — Fully Verified, High Intent', priceUsd: 275, description: 'Identity + contact + service-area confirmed, score ≥88, HIGH severity' },
+  { tier: 'B', label: 'Tier B — Verified, Medium Intent',     priceUsd: 145, description: 'Contact verified, score 70–87, MEDIUM severity' },
+  { tier: 'C', label: 'Tier C — Basic Verified',              priceUsd: 75,  description: 'Email/phone present, score 50–69, LOW severity' },
+];
+
+// Buyer account
+export interface BuyerAccount {
+  id: string;
+  orgName: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  licenseNumber?: string;
+  coverageStates: string[];           // ['TX','LA','FL']
+  acceptedCaseTypes: string[];
+  dailyLeadCap: number;
+  minQualityScore: number;
+  acceptedSeverities: LeadSeverity[];
+  billingModel: 'PREPAID_WALLET' | 'NET_7' | 'NET_15';
+  walletBalanceCents: number;
+  monthlyPlatformFeeCents: number;
+  active: boolean;
+  createdAt: string;
+  tcpaVerified: boolean;
+  licenseVerified: boolean;
+}
+
+// Invoice / billing record
+export type InvoiceStatus = 'DRAFT' | 'SENT' | 'PAID' | 'OVERDUE' | 'VOIDED';
+
+export interface LeadInvoiceLine {
+  leadId: string;
+  tier: LeadTier;
+  priceUsd: number;
+  event: 'ACCEPTED' | 'PLATFORM_FEE' | 'CREDIT';
+  description: string;
+}
+
+export interface LeadInvoice {
+  id: string;
+  buyerId: string;
+  buyerName: string;
+  periodStart: string;    // ISO date
+  periodEnd: string;
+  lines: LeadInvoiceLine[];
+  subtotalCents: number;
+  creditsCents: number;
+  totalCents: number;
+  status: InvoiceStatus;
+  dueDate: string;        // Net-7 / Net-15
+  stripePaymentIntentId?: string;
+  paidAt?: string;
+  createdAt: string;
+}
+
+// Dispute
+export type DisputeStatus = 'OPEN' | 'UNDER_REVIEW' | 'RESOLVED_CREDIT' | 'RESOLVED_DENIED';
+export type DisputeReason =
+  | 'DUPLICATE'
+  | 'OUT_OF_SERVICE_AREA'
+  | 'INVALID_CONTACT'
+  | 'CONSENT_ISSUE'
+  | 'ALREADY_CLIENT'
+  | 'OTHER';
+
+export interface LeadDispute {
+  id: string;
+  leadId: string;
+  buyerId: string;
+  reason: DisputeReason;
+  notes?: string;
+  status: DisputeStatus;
+  submittedAt: string;
+  resolvedAt?: string;
+  creditIssuedCents?: number;
+}
+
+// Weekly reconciliation summary
+export interface WeeklyReconSummary {
+  weekStart: string;
+  weekEnd: string;
+  totalDelivered: number;
+  totalAccepted: number;
+  totalRejected: number;
+  totalDisputed: number;
+  grossRevenueCents: number;
+  creditsCents: number;
+  netRevenueCents: number;
+  acceptanceRate: number;   // 0–1
+  disputeRate: number;      // 0–1
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export interface GapRevenueSettings {
   /** App Store listing price per membership (USD) */
@@ -14,7 +175,14 @@ export interface GapRevenueSettings {
   updatedAt: string;
 }
 
+/** Bank / ACH profile submitted by an org for G.A.P. fund disbursement */
 export interface GapDocumentAttachment {
+  id?: string;
+  fileName: string;
+  url: string;
+  uploadedAt: string;
+}
+
 /** Bank / ACH profile submitted by an org for G.A.P. fund disbursement */
 export interface OrgBankInfo {
   id?: string;
