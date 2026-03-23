@@ -68,7 +68,6 @@ export const PublicIntakeView: React.FC<PublicIntakeViewProps> = ({ shareToken =
   const [shareInfo, setShareInfo] = useState<PublicIntakeLinkInfo | null>(null);
   const [isLoading, setIsLoading] = useState(!!shareToken);
   const [loadError, setLoadError] = useState('');
-  const [loadWarning, setLoadWarning] = useState('');
   const [errors, setErrors] = useState<Partial<Record<keyof IntakeForm, string>>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -99,12 +98,8 @@ export const PublicIntakeView: React.FC<PublicIntakeViewProps> = ({ shareToken =
         }
 
         setShareInfo(link);
-        setLoadWarning('');
       } catch (err) {
         if (mounted) {
-          // Do not block form usage if metadata lookup fails.
-          // Token validity is still enforced on submit.
-          setLoadWarning('We could not load sharer details, but you can still submit this form.');
           console.error('Error loading share link:', err);
         }
       } finally {
@@ -237,14 +232,6 @@ export const PublicIntakeView: React.FC<PublicIntakeViewProps> = ({ shareToken =
               <strong>Shared by:</strong> {shareInfo.referrer_name}
               {shareInfo.organization_name && ` (${shareInfo.organization_name})`}
             </p>
-          </div>
-        </div>
-      )}
-
-      {loadWarning && (
-        <div className="bg-amber-50 border-b border-amber-200 px-4 py-3">
-          <div className="max-w-2xl mx-auto text-sm text-amber-900">
-            {loadWarning}
           </div>
         </div>
       )}
