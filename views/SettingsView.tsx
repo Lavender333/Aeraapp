@@ -3427,20 +3427,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                    <div className="flex flex-wrap gap-2">
                      <Button
                        size="sm"
-                       variant="outline"
-                       onClick={handleGeocodeOrgAddress}
-                       disabled={orgLocationBusy}
-                     >
-                       {orgLocationBusy ? <Loader2 size={16} className="mr-2 animate-spin" /> : <MapPin size={16} className="mr-2" />}
-                       Geocode Address
-                     </Button>
-                     <Button
-                       size="sm"
                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
                        onClick={handleSaveOrgLocation}
                        disabled={orgLocationBusy}
                      >
-                       <Save size={16} className="mr-2" /> Save Org Location
+                       {orgLocationBusy ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Save size={16} className="mr-2" />}
+                       Save Org Location
                      </Button>
                    </div>
                  </div>
@@ -5503,20 +5495,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
-                variant="outline"
-                onClick={handleGeocodeOrgAddress}
-                disabled={orgLocationBusy || !profile.communityId}
-              >
-                {orgLocationBusy ? <Loader2 size={16} className="mr-2 animate-spin" /> : <MapPin size={16} className="mr-2" />}
-                Geocode Address
-              </Button>
-              <Button
-                size="sm"
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
                 onClick={handleSaveOrgLocation}
                 disabled={orgLocationBusy || !profile.communityId}
               >
-                <Save size={16} className="mr-2" /> Save Organization Address
+                {orgLocationBusy ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Save size={16} className="mr-2" />}
+                Save Organization Address
               </Button>
             </div>
           </div>
@@ -5542,6 +5526,47 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <h2 className="text-lg font-semibold text-slate-800">Legal &amp; Privacy</h2>
           </div>
         </div>
+
+        {/* Community Outreach Visibility toggle */}
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Community Outreach Visibility</p>
+              <p className="text-xs text-slate-500 mt-0.5">Allow nearby community organizations to see you in their Nearby Outreach Panel. Your name and contact info may be shared with verified org leaders for emergency coordination.</p>
+            </div>
+            <button
+              type="button"
+              aria-label={profile.geofencedOutreachOptIn ? 'Disable community outreach visibility' : 'Enable community outreach visibility'}
+              onClick={async () => {
+                const next = !profile.geofencedOutreachOptIn;
+                const updated = {
+                  ...profile,
+                  geofencedOutreachOptIn: next,
+                  geofencedOutreachConsentAt: next ? new Date().toISOString() : profile.geofencedOutreachConsentAt,
+                };
+                setProfile(updated);
+                StorageService.saveProfile(updated);
+                try {
+                  await updateProfileForUser({
+                    fullName: profile.fullName,
+                    phone: profile.phone,
+                    geofencedOutreachOptIn: next,
+                    geofencedOutreachConsentAt: updated.geofencedOutreachConsentAt,
+                  });
+                } catch { /* best-effort */ }
+              }}
+              className="shrink-0"
+            >
+              {profile.geofencedOutreachOptIn
+                ? <ToggleRight size={32} className="text-emerald-600" />
+                : <ToggleLeft size={32} className="text-slate-400" />}
+            </button>
+          </div>
+          {profile.geofencedOutreachOptIn && (
+            <p className="text-[11px] text-emerald-700 font-semibold">Visible to nearby org leaders</p>
+          )}
+        </div>
+
         <div className="space-y-1">
           <button
             type="button"

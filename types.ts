@@ -485,6 +485,10 @@ export interface OrgMember {
   emergencyContactName: string;
   emergencyContactPhone: string;
   emergencyContactRelation: string;
+
+  // Role management
+  role?: string;
+  isOrgCreator?: boolean;
 }
 
 export interface OrgInventory {

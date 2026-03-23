@@ -4755,12 +4755,31 @@ export async function listMembers(orgCode: string) {
 
   const { data: profileRows, error: profileError } = await supabase
     .from('profiles')
-    .select('id, full_name, email, phone, mobile_phone, home_address, emergency_contact, last_login_at, created_at')
+    .select('id, full_name, email, phone, mobile_phone, home_address, emergency_contact, last_login_at, created_at, role')
     .eq('org_id', orgId)
     .order('created_at', { ascending: false });
 
   if (profileError) {
     return memberRows;
+  }
+
+  // Find the org creator (earliest profile joined, or org's created_by field)
+  let orgCreatorId: string | null = null;
+  try {
+    const { data: orgRow } = await supabase
+      .from('organizations')
+      .select('created_by')
+      .eq('id', orgId)
+      .maybeSingle();
+    orgCreatorId = String((orgRow as any)?.created_by || '').trim() || null;
+  } catch { /* best-effort */ }
+
+  // Fallback: earliest profile in org
+  if (!orgCreatorId && Array.isArray(profileRows) && profileRows.length > 0) {
+    const sorted = [...profileRows].sort((a: any, b: any) =>
+      new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
+    );
+    orgCreatorId = String((sorted[0] as any)?.id || '').trim() || null;
   }
 
   const profileById = new Map<string, any>();
@@ -4775,6 +4794,8 @@ export async function listMembers(orgCode: string) {
     return {
       ...member,
       last_login_at: profile?.last_login_at || null,
+      role: profile?.role || null,
+      is_org_creator: orgCreatorId ? String(member?.id || '') === orgCreatorId : false,
     };
   });
 
@@ -4793,9 +4814,33 @@ export async function listMembers(orgCode: string) {
       emergency_contact_phone: profile.emergency_contact?.phone || null,
       emergency_contact_relation: profile.emergency_contact?.relation || null,
       last_login_at: profile.last_login_at || null,
+      role: profile.role || null,
+      is_org_creator: orgCreatorId ? String(profile.id || '') === orgCreatorId : false,
     }));
 
   return [...memberRowsWithLastLogin, ...profileBackfill];
+}
+
+/**
+ * Updates the system role of an org member. Only ORG_ADMIN or ADMIN may call this.
+ * The org creator cannot be demoted to GENERAL_USER.
+ */
+export async function updateMemberRole(
+  targetProfileId: string,
+  newRole: 'GENERAL_USER' | 'ORG_ADMIN',
+): Promise<void> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user?.id) throw new Error('Not authenticated');
+
+  const actorId = authData.user.id;
+  if (actorId === targetProfileId) throw new Error('You cannot change your own role from this panel.');
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ role: newRole })
+    .eq('id', targetProfileId);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function addMember(orgCode: string, payload: any) {

@@ -1310,7 +1310,9 @@ const listSameOrgNearbyCandidates = async (
     orgLat = Number((actorProfile as any)?.latitude);
     orgLng = Number((actorProfile as any)?.longitude);
   }
-  if (!Number.isFinite(orgLat) || !Number.isFinite(orgLng)) return [];
+  // Do NOT return early when org has no coordinates — same-org members are always eligible
+  // regardless of whether org coordinates have been saved.
+  const orgHasCoords = Number.isFinite(orgLat) && Number.isFinite(orgLng);
 
   const { data: rows, error } = await supabase
     .from('profiles')
@@ -1330,35 +1332,34 @@ const listSameOrgNearbyCandidates = async (
 
     let lat = Number((row as any)?.latitude);
     let lng = Number((row as any)?.longitude);
-    const geocodeConfidence = Number((row as any)?.geocode_confidence);
-    const geocodedAt = String((row as any)?.geocoded_at || '');
-    const usingOrgFallback = !Number.isFinite(lat) || !Number.isFinite(lng);
+    const memberHasCoords = Number.isFinite(lat) && Number.isFinite(lng);
 
-    // Same-org users without coordinates are plotted at org center for outreach visibility.
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    // If neither org nor member has coordinates, include at distance 0 (same-org always eligible).
+    if (!memberHasCoords && orgHasCoords) {
       lat = orgLat;
       lng = orgLng;
     }
 
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    const usingOrgFallback = !memberHasCoords;
+    const effectiveLat = memberHasCoords ? lat : (orgHasCoords ? orgLat : 0);
+    const effectiveLng = memberHasCoords ? lng : (orgHasCoords ? orgLng : 0);
 
-    const dist = haversineDistanceMiles(orgLat, orgLng, lat, lng);
-    if (dist > normalizedRadius) continue;
+    let dist = 0;
+    if (orgHasCoords) {
+      dist = haversineDistanceMiles(orgLat, orgLng, effectiveLat, effectiveLng);
+      if (dist > normalizedRadius) continue;
+    }
 
     candidates.push({
       profile_id: profileId,
       full_name: String((row as any)?.full_name || ''),
       phone: String((row as any)?.mobile_phone || (row as any)?.phone || ''),
       email: String((row as any)?.email || ''),
-      latitude: lat,
-      longitude: lng,
+      latitude: effectiveLat,
+      longitude: effectiveLng,
       distance_miles: Number(dist.toFixed(2)),
       location_source: usingOrgFallback ? 'ORG_CENTER_FALLBACK' : 'PROFILE_GEOCODE',
-      location_confidence: classifyLocationConfidence(
-        Number.isFinite(geocodeConfidence) ? geocodeConfidence : null,
-        geocodedAt || null,
-        usingOrgFallback ? 'ORG_CENTER_FALLBACK' : 'PROFILE_GEOCODE',
-      ),
+      location_confidence: usingOrgFallback ? 'LOW' : 'MEDIUM',
     });
   }
 

@@ -3,10 +3,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ViewState, OrgMember, OrgInventory, ReplenishmentRequest } from '../types';
 import { Button } from '../components/Button';
 import { StorageService } from '../services/storage';
-import { listRequests, createRequest, updateRequestStatus, stockReplenishmentRequest as stockReplenishmentRequestRemote, fetchOrgOutreachFlags, fetchOrgMemberPreparednessNeeds, listChildOrganizations, aggregateOrgStats, broadcastToOrgs, getOrganizationOutreachRadiusByCode, saveOrganizationOutreachRadiusByCode } from '../services/api';
+import { listRequests, createRequest, updateRequestStatus, stockReplenishmentRequest as stockReplenishmentRequestRemote, fetchOrgOutreachFlags, fetchOrgMemberPreparednessNeeds, listChildOrganizations, aggregateOrgStats, broadcastToOrgs, getOrganizationOutreachRadiusByCode, saveOrganizationOutreachRadiusByCode, updateMemberRole } from '../services/api';
 import { REQUEST_ITEM_MAP } from '../services/validation';
 import { getInventoryStatuses, getRecommendedResupply } from '../services/inventoryStatus';
-import { getOrgByCode } from '../services/supabase';
+import { getOrgByCode, supabase } from '../services/supabase';
 import { getOrgLeaderOutreachCandidates, listOrgOutreachAuditLogs, logOrgOutreachContact, OrgOutreachCandidate, OrgOutreachAuditLog, OutreachContactMethod } from '../services/eventDistribution';
 import { t } from '../services/translations';
 import { Building2, CheckCircle, AlertTriangle, HelpCircle, Package, ArrowLeft, Send, Truck, Copy, Save, Phone, MapPin, User, HeartPulse, BellRing, X, AlertOctagon, Loader2, Wand2, ShieldCheck, WifiOff, FileText, Printer, Mail, LocateFixed } from 'lucide-react';
@@ -83,6 +83,8 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     emergencyContactName: String(member?.emergencyContactName || member?.emergency_contact_name || ''),
     emergencyContactPhone: String(member?.emergencyContactPhone || member?.emergency_contact_phone || ''),
     emergencyContactRelation: String(member?.emergencyContactRelation || member?.emergency_contact_relation || ''),
+    role: String(member?.role || ''),
+    isOrgCreator: Boolean(member?.isOrgCreator || member?.is_org_creator),
   });
 
   const normalizeMembers = (list: any[]): OrgMember[] => (Array.isArray(list) ? list.map(normalizeMember) : []);
@@ -188,6 +190,12 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
   const [isModerating, setIsModerating] = useState(false);
   const [moderationError, setModerationError] = useState<string | null>(null);
 
+  // Role management
+  const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [roleChangeBusy, setRoleChangeBusy] = useState(false);
+  const [roleChangeError, setRoleChangeError] = useState<string | null>(null);
+  const [roleChangeSuccess, setRoleChangeSuccess] = useState<string | null>(null);
+
   useEffect(() => {
     setActiveTab(initialTab);
   }, [initialTab]);
@@ -228,6 +236,11 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     const id = communityIdOverride || profile.communityId || 'CH-9921';
     setCommunityId(id);
     setParentOrgName(profile.communityId || 'Community Organization');
+
+    // Capture current user's Supabase ID for role-change protection
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user?.id) setCurrentUserId(data.user.id);
+    }).catch(() => {});
 
     // Load Org Data (parent only)
     const org = StorageService.getOrganization(id);
@@ -708,6 +721,33 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     } catch (err: any) {
       console.warn('Unable to save outreach radius to server; retained locally', err);
       alert(err?.message || `Outreach radius saved locally at ${localSaved} miles. Server sync failed.`);
+    }
+  };
+
+  const handleChangeMemberRole = async (member: OrgMember, newRole: 'GENERAL_USER' | 'ORG_ADMIN') => {
+    if (member.isOrgCreator) {
+      setRoleChangeError('The org creator\'s role cannot be changed.');
+      return;
+    }
+    if (member.id === currentUserId) {
+      setRoleChangeError('You cannot change your own role.');
+      return;
+    }
+    setRoleChangeBusy(true);
+    setRoleChangeError(null);
+    setRoleChangeSuccess(null);
+    try {
+      await updateMemberRole(member.id, newRole);
+      // Update local member state
+      const updatedMember = { ...member, role: newRole };
+      setMembers((prev) => prev.map((m) => m.id === member.id ? updatedMember : m));
+      setSelectedMember(updatedMember);
+      setRoleChangeSuccess(`${member.name}'s role updated to ${newRole === 'ORG_ADMIN' ? 'Org Admin' : 'General User'}.`);
+      setTimeout(() => setRoleChangeSuccess(null), 3500);
+    } catch (err: any) {
+      setRoleChangeError(err?.message || 'Failed to update role.');
+    } finally {
+      setRoleChangeBusy(false);
     }
   };
 
@@ -1416,6 +1456,48 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                             )}
                          </div>
                       </div>
+                   </div>
+
+                   {/* System Role Management */}
+                   <div className="border-t border-slate-100 pt-4">
+                     <h3 className="font-bold text-slate-900 pb-2 flex items-center gap-2 text-sm">
+                       <ShieldCheck size={16} className="text-slate-400" /> System Role
+                     </h3>
+                     {selectedMember.isOrgCreator ? (
+                       <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 font-medium">
+                         This member is the organization creator and their role cannot be changed.
+                       </div>
+                     ) : selectedMember.id === currentUserId ? (
+                       <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600 font-medium">
+                         You cannot change your own role from this panel.
+                       </div>
+                     ) : (
+                       <div className="space-y-2">
+                         <p className="text-xs text-slate-500">
+                           Current role: <span className="font-bold text-slate-700">
+                             {selectedMember.role === 'ORG_ADMIN' ? 'Org Admin' : selectedMember.role || 'General User'}
+                           </span>
+                         </p>
+                         <div className="flex gap-2 flex-wrap">
+                           <button
+                             disabled={roleChangeBusy || selectedMember.role === 'ORG_ADMIN'}
+                             onClick={() => handleChangeMemberRole(selectedMember, 'ORG_ADMIN')}
+                             className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${selectedMember.role === 'ORG_ADMIN' ? 'bg-violet-100 text-violet-700 border-violet-300 cursor-default' : 'bg-white text-violet-700 border-violet-200 hover:bg-violet-50'} disabled:opacity-50`}
+                           >
+                             {roleChangeBusy ? '…' : 'Make Org Admin'}
+                           </button>
+                           <button
+                             disabled={roleChangeBusy || !selectedMember.role || selectedMember.role === 'GENERAL_USER'}
+                             onClick={() => handleChangeMemberRole(selectedMember, 'GENERAL_USER')}
+                             className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${(!selectedMember.role || selectedMember.role === 'GENERAL_USER') ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-default' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'} disabled:opacity-50`}
+                           >
+                             {roleChangeBusy ? '…' : 'Set to General User'}
+                           </button>
+                         </div>
+                         {roleChangeError && <p className="text-xs text-red-600 font-semibold">{roleChangeError}</p>}
+                         {roleChangeSuccess && <p className="text-xs text-emerald-600 font-semibold">{roleChangeSuccess}</p>}
+                       </div>
+                     )}
                    </div>
                 </div>
               </div>

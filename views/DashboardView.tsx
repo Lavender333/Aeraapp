@@ -68,6 +68,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const ONBOARDING_BANNER_SNOOZE_MS = 1000 * 60 * 60 * 24; // 1 day
   const ONBOARDING_WELCOME_KEY = 'aera.onboarding.welcome.dismissUntil';
   const ONBOARDING_BANNER_KEY = 'aera.onboarding.banner.dismissUntil';
+  const ONBOARDING_SKIPPED_KEY = 'aera.onboarding.skipped';
 
   const isSnoozed = (key: string) => {
     const raw = Number(localStorage.getItem(key) || '0');
@@ -124,6 +125,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [householdMemberCount, setHouseholdMemberCount] = useState(0);
   const [showOnboardingWelcomeCard, setShowOnboardingWelcomeCard] = useState(true);
   const [showOnboardingReminderBanner, setShowOnboardingReminderBanner] = useState(true);
+  const [skippedOnboardingSteps, setSkippedOnboardingSteps] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(ONBOARDING_SKIPPED_KEY);
+      return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+    } catch { return new Set(); }
+  });
   const [showWelcomeVideoModal, setShowWelcomeVideoModal] = useState(false);
   const [welcomeVideoPlaybackMessage, setWelcomeVideoPlaybackMessage] = useState('');
   const welcomeVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -463,10 +470,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   };
   const isProfileComplete = missingProfileFields.length === 0;
   const onboardingChecklistItems = [
-    { label: 'Join your community (Community ID)', done: hasCommunity },
-    { label: 'Complete your household profile', done: isProfileComplete },
-    { label: 'Add household members (optional now, editable anytime)', done: householdMemberCount > 0 },
-  ];
+    { key: 'community', label: 'Join your community (Community ID)', done: hasCommunity },
+    { key: 'profile', label: 'Complete your household profile', done: isProfileComplete },
+    { key: 'members', label: 'Add household members (optional now, editable anytime)', done: householdMemberCount > 0 },
+  ].map((item) => ({ ...item, done: item.done || skippedOnboardingSteps.has(item.key) }));
   const onboardingChecklistDone = onboardingChecklistItems.filter((item) => item.done).length;
   const hasOnboardingStepsIncomplete = onboardingChecklistDone < onboardingChecklistItems.length;
 
@@ -511,6 +518,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     setShowOnboardingReminderBanner(false);
     localStorage.setItem(ONBOARDING_WELCOME_KEY, String(Date.now() + ONBOARDING_WELCOME_SNOOZE_MS));
     localStorage.setItem(ONBOARDING_BANNER_KEY, String(Date.now() + ONBOARDING_BANNER_SNOOZE_MS));
+  };
+
+  const handleSkipOnboardingStep = (key: string) => {
+    setSkippedOnboardingSteps((prev) => {
+      const next = new Set(prev);
+      next.add(key);
+      try { localStorage.setItem(ONBOARDING_SKIPPED_KEY, JSON.stringify([...next])); } catch {}
+      return next;
+    });
   };
 
   const handleDismissOnboardingReminderBanner = () => {
@@ -1174,6 +1190,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         </div>
       )}
 
+      {checklistCompletionPct > 0 && (
       <section className="bg-white/95 border border-slate-200 rounded-2xl p-4 shadow-sm">
         <div className="flex items-center justify-between gap-3 mb-3">
           <div>
@@ -1201,6 +1218,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
           )}
         </div>
       </section>
+      )}
 
       {userRole === 'ADMIN' && (
         <section className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 shadow-sm">
@@ -1308,7 +1326,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                 <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full ${item.done ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
                   {item.done ? <Check size={12} /> : <ChevronRight size={12} />}
                 </span>
-                <span>{item.label}</span>
+                <span className="flex-1">{item.label}</span>
+                {!item.done && (
+                  <button
+                    onClick={() => handleSkipOnboardingStep(item.key)}
+                    className="text-[10px] font-semibold text-slate-400 hover:text-slate-600 underline underline-offset-2"
+                  >
+                    Skip
+                  </button>
+                )}
               </div>
             ))}
           </div>
