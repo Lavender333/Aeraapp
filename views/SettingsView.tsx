@@ -7,7 +7,7 @@ import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
 import { buildCommunityInviteUrl, generateCommunityInviteQrDataUrl } from '../services/communityInvite';
-import { AppNotificationRecord, cancelMyHouseholdJoinRequest, captureUserLocation, ConnectedHouseholdMember, ContactSupportTicketRecord, createContactSupportTicket, createHouseholdExpansionRequest, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyContactSupportTickets, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestStatus, updateVitalsForUser } from '../services/api';
+import { AppNotificationRecord, cancelMyHouseholdJoinRequest, captureUserLocation, ConnectedHouseholdMember, ContactSupportTicketRecord, ContactSupportTicketStatus, createContactSupportTicket, createFaqSelfResolvedRecord, createHouseholdExpansionRequest, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, escalateContactSupportTicket, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listContactSupportTicketsForOrgAdmin, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyContactSupportTickets, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, respondToContactSupportTicketAsOrgAdmin, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestStatus, updateVitalsForUser } from '../services/api';
 import { getOrgByCode, getOrgIdByCode } from '../services/supabase';
 import { listOrganizations as listOrganizationsSupabase } from '../services/supabaseApi';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
@@ -148,6 +148,51 @@ const mergeRoleDefinitions = (stored: RoleDefinition[] | null | undefined): Role
 
   return merged;
 };
+
+// ── FAQ data (referenced in Contact Us tab + smart suggestion matching) ──────
+const GENERAL_FAQS: Array<{ q: string; a: string }> = [
+  { q: 'What is AERA and what does it do?', a: 'AERA (Automated Emergency Response Assistant) is a community preparedness platform that connects households, local organizations, and emergency coordinators. It helps you build a supply inventory, coordinate with neighbors, request or offer help, and stay informed during emergencies.' },
+  { q: 'Is my personal information private?', a: 'Yes. Your profile data is only shared with organizations you explicitly join or community members you approve. Location data is used solely to match you with nearby resources and outreach programs. AERA never sells your data.' },
+  { q: 'How do I join or leave an organization?', a: 'Go to Settings → Community to find and join organizations using an invite code or QR code. To leave, open the organization card in your Community settings and tap "Leave Organization."' },
+  { q: "I forgot my password / can't log in. What should I do?", a: 'Use the "Forgot Password" link on the login screen to receive a reset link by email. If you still can\'t access your account, submit a support ticket here and select the "Account Access" category.' },
+  { q: 'How do I update my household members or emergency contacts?', a: 'In Settings, open the Household section and tap "Show more." From there you can add, edit, or remove household members and their medical notes. Emergency contacts can be managed in the Contacts section.' },
+  { q: 'What is the supply inventory for?', a: 'The inventory helps you track essential supplies (food, water, medications, etc.) your household has on hand. AERA uses this data to identify gaps and prioritize community resource sharing during a disaster.' },
+  { q: 'How does geofenced outreach work?', a: 'If you opt in under Privacy settings, nearby organizations can see that there is an unconnected household in their area and may reach out to invite you. No identifying details are shared until you accept.' },
+  { q: 'Can I use AERA without a smartphone?', a: 'AERA is a web-based progressive web app accessible on any modern browser. While a smartphone is recommended for location features, you can use AERA on a tablet or desktop computer.' },
+  { q: 'How do I delete my account?', a: 'Submit a support ticket below with the subject "Account Deletion Request." The AERA admin team will process your request within 5 business days and confirm by email.' },
+];
+
+const ORG_ADMIN_FAQS: Array<{ q: string; a: string }> = [
+  { q: 'How do I add or remove members from my organization?', a: 'In the Community section of Settings, open your organization panel. Use "Invite Member" to send a QR code or link. To remove a member, find them in the member list and tap "Remove." Removed members keep their personal profiles but lose access to org resources.' },
+  { q: 'How does Community Outreach Visibility work?', a: 'The Outreach panel shows unconnected households near your organization that have opted in to geofenced outreach. All members must have location coordinates set and the opt-in enabled for them to appear. Use "Invite to Org" to send them a personalized link.' },
+  { q: 'What are the different member roles and what can each do?', a: 'MEMBER — can view shared resources, submit help requests, and update personal inventory. ORG_ADMIN — can manage members, post broadcasts, view outreach candidates, and run distribution events. INSTITUTION_ADMIN — same as Org Admin plus multi-org reporting. ADMIN — full platform access.' },
+  { q: 'How do I post a broadcast to my members?', a: 'Navigate to the Community section and open your organization. Tap "New Broadcast," add a title and message, and select the urgency level. All active members receive an in-app notification immediately.' },
+  { q: 'Can I export a member roster or inventory report?', a: 'Yes. In the Reports section of your org panel, choose "Export Roster" (CSV) or "Export Inventory Summary" (PDF). Reports include anonymized household data unless you have explicit consent on file.' },
+  { q: 'How do I set up a distribution event?', a: 'Go to Community → your org → Events and tap "New Distribution Event." Set the date, location, resource categories, and capacity. Members can register and you will see a real-time attendee count.' },
+  { q: "A member can't log in with the invite code I sent. What's wrong?", a: 'Invite codes expire after 7 days and are bound to the phone number entered during setup. Go to Settings → Household → Member Account Invites, verify the phone number is correct, then tap "Resend" to issue a fresh code.' },
+  { q: 'How do I transfer admin ownership to another member?', a: 'Currently, ownership transfers are handled by the AERA platform team. Submit a ticket below with the subject "Org Ownership Transfer," include your org name and the email of the new owner, and the team will action it within 2 business days.' },
+];
+
+const SUPPORT_FAQ_KEYWORDS: Array<{ keys: string[]; index: number; fromOrg?: boolean }> = [
+  { keys: ['password', 'login', 'sign in', "can't log", 'forgot', 'reset', 'locked out'], index: 3 },
+  { keys: ['privacy', 'private', 'personal data', 'my data', 'sell data', 'share data'], index: 1 },
+  { keys: ['join org', 'leave org', 'join organization', 'leave organization', 'join community', 'leave community'], index: 2 },
+  { keys: ['household member', 'emergency contact', 'family member', 'add member', 'remove member'], index: 4 },
+  { keys: ['inventory', 'supply', 'supplies', 'food water', 'medication', 'stock'], index: 5 },
+  { keys: ['outreach', 'geofence', 'nearby', 'location sharing', 'opt in'], index: 6 },
+  { keys: ['delete account', 'remove account', 'close account'], index: 8 },
+  { keys: ['what is aera', 'how does aera', 'about aera', 'aera work'], index: 0 },
+  { keys: ['phone', 'mobile', 'smartphone', 'no phone', 'browser', 'computer'], index: 7 },
+  { keys: ['add member', 'remove member', 'member list', 'invite member'], index: 0, fromOrg: true },
+  { keys: ['outreach visibility', 'community outreach', 'outreach panel'], index: 1, fromOrg: true },
+  { keys: ['member role', 'org admin role', 'institution admin', 'role permissions'], index: 2, fromOrg: true },
+  { keys: ['broadcast', 'announce', 'notify members'], index: 3, fromOrg: true },
+  { keys: ['export roster', 'export report', 'member report', 'inventory report'], index: 4, fromOrg: true },
+  { keys: ['distribution event', 'event setup', 'resource event'], index: 5, fromOrg: true },
+  { keys: ['invite code', 'invite link', 'member invite', 'expired code'], index: 6, fromOrg: true },
+  { keys: ['transfer admin', 'transfer ownership', 'change admin', 'new admin'], index: 7, fromOrg: true },
+];
+
 
 const US_STATE_CODES = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD',
@@ -444,8 +489,18 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [contactSupportBusy, setContactSupportBusy] = useState(false);
   const [contactSupportError, setContactSupportError] = useState<string | null>(null);
   const [contactSupportSuccess, setContactSupportSuccess] = useState<string | null>(null);
-  const [contactUsTab, setContactUsTab] = useState<'faq' | 'contact'>('faq');
+  const [contactUsTab, setContactUsTab] = useState<'faq' | 'contact' | 'org_inbox'>('faq');
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
+  const [faqSuggestionDismissed, setFaqSuggestionDismissed] = useState(false);
+  const [faqSelfResolving, setFaqSelfResolving] = useState(false);
+  const [faqSelfResolved, setFaqSelfResolved] = useState(false);
+  const [orgInboxTickets, setOrgInboxTickets] = useState<ContactSupportTicketRecord[]>([]);
+  const [orgInboxLoading, setOrgInboxLoading] = useState(false);
+  const [orgInboxReplyDrafts, setOrgInboxReplyDrafts] = useState<Record<string, string>>({});
+  const [orgInboxBusyId, setOrgInboxBusyId] = useState<string | null>(null);
+  const [orgInboxError, setOrgInboxError] = useState<string | null>(null);
+  const [orgInboxSuccess, setOrgInboxSuccess] = useState<string | null>(null);
+  const [escalatingTicketId, setEscalatingTicketId] = useState<string | null>(null);
   const latestApprovedJoinRequestRef = useRef<string | null>(null);
   const accordionButtonIds: Record<SettingsAccordionKey, string> = {
     profile: 'settings-accordion-button-profile',
@@ -1659,6 +1714,30 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const latestExpansionRequest = myExpansionRequests[0] || null;
   const pendingAdminExpansionRequests = adminExpansionRequests.filter((item) => item.status === 'pending');
   const visibleSupportTickets = mySupportTickets.slice(0, 4);
+  // Smart FAQ suggestion: match typed subject against known keyword groups
+  const faqSuggestion = useMemo(() => {
+    if (faqSuggestionDismissed || faqSelfResolved) return null;
+    const query = contactSupportSubject.toLowerCase().trim();
+    if (query.length < 4) return null;
+    for (const entry of SUPPORT_FAQ_KEYWORDS) {
+      if (entry.keys.some((k) => query.includes(k))) {
+        return entry.fromOrg ? ORG_ADMIN_FAQS[entry.index] : GENERAL_FAQS[entry.index];
+      }
+    }
+    return null;
+  }, [contactSupportSubject, faqSuggestionDismissed, faqSelfResolved]);
+
+  // Load org admin inbox on mount
+  useEffect(() => {
+    if (!isOrgScopedAdmin) return;
+    let mounted = true;
+    setOrgInboxLoading(true);
+    listContactSupportTicketsForOrgAdmin(50)
+      .then((rows) => { if (mounted) setOrgInboxTickets(rows); })
+      .catch(() => {})
+      .finally(() => { if (mounted) setOrgInboxLoading(false); });
+    return () => { mounted = false; };
+  }, [isOrgScopedAdmin]);
 
   useEffect(() => {
     setExpansionRequestedAdditionalMembers((prev) => {
@@ -2116,7 +2195,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       setContactSupportSubject('');
       setContactSupportMessage('');
       setContactSupportCategory('GENERAL');
-      setContactSupportSuccess('Your request was sent to the AERA admin team. Replies will appear here and in Notifications.');
+      setFaqSuggestionDismissed(false);
+      setFaqSelfResolved(false);
+      const routingMsg = profile.communityId
+        ? `Your request was sent to your organization's admin team. If they can't resolve it, they'll escalate to AERA. Replies appear here and in Notifications.`
+        : 'Your request was sent directly to the AERA admin team. Replies will appear here and in Notifications.';
+      setContactSupportSuccess(routingMsg);
     } catch (error: any) {
       setContactSupportError(String(error?.message || 'Failed to send your request.'));
     } finally {
@@ -2124,7 +2208,56 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     }
   };
 
-  const handleLogout = () => {
+      const handleFaqSelfResolve = async (faq: { q: string; a: string }) => {
+        setFaqSelfResolving(true);
+        try {
+          await createFaqSelfResolvedRecord({
+            questionText: faq.q,
+            suggestedAnswer: faq.a,
+            subject: contactSupportSubject || faq.q,
+            category: contactSupportCategory,
+          });
+        } catch { /* silent — analytics only */ }
+        setFaqSelfResolved(true);
+        setFaqSelfResolving(false);
+      };
+
+      const handleOrgAdminRespond = async (ticketId: string, status: ContactSupportTicketStatus) => {
+        const message = String(orgInboxReplyDrafts[ticketId] || '').trim();
+        if (!message) { setOrgInboxError('Add a response before updating.'); return; }
+        setOrgInboxBusyId(ticketId);
+        setOrgInboxError(null);
+        setOrgInboxSuccess(null);
+        try {
+          await respondToContactSupportTicketAsOrgAdmin(ticketId, { message, status });
+          const refreshed = await listContactSupportTicketsForOrgAdmin(50);
+          setOrgInboxTickets(refreshed);
+          setOrgInboxReplyDrafts((prev) => ({ ...prev, [ticketId]: '' }));
+          setOrgInboxSuccess(status === 'RESOLVED' ? 'Ticket resolved and member notified.' : 'Reply sent and member notified.');
+        } catch (err: any) {
+          setOrgInboxError(String(err?.message || 'Failed to respond.'));
+        } finally {
+          setOrgInboxBusyId(null);
+        }
+      };
+
+      const handleEscalateTicket = async (ticketId: string) => {
+        setEscalatingTicketId(ticketId);
+        setOrgInboxError(null);
+        setOrgInboxSuccess(null);
+        try {
+          await escalateContactSupportTicket(ticketId);
+          const refreshed = await listContactSupportTicketsForOrgAdmin(50);
+          setOrgInboxTickets(refreshed);
+          setOrgInboxSuccess('Ticket escalated to AERA Admin. They will be notified immediately.');
+        } catch (err: any) {
+          setOrgInboxError(String(err?.message || 'Failed to escalate.'));
+        } finally {
+          setEscalatingTicketId(null);
+        }
+      };
+
+      const handleLogout = () => {
     StorageService.logoutUser();
     setView('LOGIN');
   };
@@ -5099,163 +5232,69 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         )}
 
             {canSubmitContactSupport && (() => {
-              const generalFaqs = [
-                {
-                  q: 'What is AERA and what does it do?',
-                  a: 'AERA (Automated Emergency Response Assistant) is a community preparedness platform that connects households, local organizations, and emergency coordinators. It helps you build a supply inventory, coordinate with neighbors, request or offer help, and stay informed during emergencies.',
-                },
-                {
-                  q: 'Is my personal information private?',
-                  a: 'Yes. Your profile data is only shared with organizations you explicitly join or community members you approve. Location data is used solely to match you with nearby resources and outreach programs. AERA never sells your data.',
-                },
-                {
-                  q: 'How do I join or leave an organization?',
-                  a: 'Go to Settings → Community to find and join organizations using an invite code or QR code. To leave, open the organization card in your Community settings and tap "Leave Organization."',
-                },
-                {
-                  q: 'I forgot my password / can\'t log in. What should I do?',
-                  a: 'Use the "Forgot Password" link on the login screen to receive a reset link by email. If you still can\'t access your account, submit a support ticket here and select the "Account Access" category.',
-                },
-                {
-                  q: 'How do I update my household members or emergency contacts?',
-                  a: 'In Settings, open the Household section and tap "Show more." From there you can add, edit, or remove household members and their medical notes. Emergency contacts can be managed in the Contacts section.',
-                },
-                {
-                  q: 'What is the supply inventory for?',
-                  a: 'The inventory helps you track essential supplies (food, water, medications, etc.) your household has on hand. AERA uses this data to identify gaps and prioritize community resource sharing during a disaster.',
-                },
-                {
-                  q: 'How does geofenced outreach work?',
-                  a: 'If you opt in under Privacy settings, nearby organizations can see that there is an unconnected household in their area and may reach out to invite you. No identifying details are shared until you accept.',
-                },
-                {
-                  q: 'Can I use AERA without a smartphone?',
-                  a: 'AERA is a web-based progressive web app accessible on any modern browser. While a smartphone is recommended for location features, you can use AERA on a tablet or desktop computer.',
-                },
-                {
-                  q: 'How do I delete my account?',
-                  a: 'Submit a support ticket below with the subject "Account Deletion Request." The AERA admin team will process your request within 5 business days and confirm by email.',
-                },
-              ];
-
-              const orgAdminFaqs = [
-                {
-                  q: 'How do I add or remove members from my organization?',
-                  a: 'In the Community section of Settings, open your organization panel. Use "Invite Member" to send a QR code or link. To remove a member, find them in the member list and tap "Remove." Removed members keep their personal profiles but lose access to org resources.',
-                },
-                {
-                  q: 'How does Community Outreach Visibility work?',
-                  a: 'The Outreach panel shows unconnected households near your organization that have opted in to geofenced outreach. All members must have location coordinates set and the opt-in enabled for them to appear. Use "Invite to Org" to send them a personalized link.',
-                },
-                {
-                  q: 'What are the different member roles and what can each do?',
-                  a: 'MEMBER — can view shared resources, submit help requests, and update personal inventory. ORG_ADMIN — can manage members, post broadcasts, view outreach candidates, and run distribution events. INSTITUTION_ADMIN — same as Org Admin plus multi-org reporting. ADMIN — full platform access.',
-                },
-                {
-                  q: 'How do I post a broadcast to my members?',
-                  a: 'Navigate to the Community section and open your organization. Tap "New Broadcast," add a title and message, and select the urgency level. All active members receive an in-app notification immediately.',
-                },
-                {
-                  q: 'Can I export a member roster or inventory report?',
-                  a: 'Yes. In the Reports section of your org panel, choose "Export Roster" (CSV) or "Export Inventory Summary" (PDF). Reports include anonymized household data unless you have explicit consent on file.',
-                },
-                {
-                  q: 'How do I set up a distribution event?',
-                  a: 'Go to Community → your org → Events and tap "New Distribution Event." Set the date, location, resource categories, and capacity. Members can register and you will see a real-time attendee count.',
-                },
-                {
-                  q: 'A member can\'t log in with the invite code I sent. What\'s wrong?',
-                  a: 'Invite codes expire after 7 days and are bound to the phone number entered during setup. Go to Settings → Household → Member Account Invites, verify the phone number is correct, then tap "Resend" to issue a fresh code.',
-                },
-                {
-                  q: 'How do I transfer admin ownership to another member?',
-                  a: 'Currently, ownership transfers are handled by the AERA platform team. Submit a ticket below with the subject "Org Ownership Transfer," include your org name and the email of the new owner, and the team will action it within 2 business days.',
-                },
-              ];
-
-              const activeFaqs = isOrgScopedAdmin
-                ? [...generalFaqs, ...orgAdminFaqs]
-                : generalFaqs;
-
+              const activeFaqs = isOrgScopedAdmin ? [...GENERAL_FAQS, ...ORG_ADMIN_FAQS] : GENERAL_FAQS;
               return (
                 <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
                   {/* Header */}
                   <div className="flex items-start justify-between gap-3 px-4 pt-4 pb-3">
                     <div>
                       <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Contact Us - Aera</p>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Browse common questions or send a ticket directly to the AERA admin team.
-                      </p>
+                      <p className="text-xs text-slate-500 mt-1">Browse common questions or send a ticket to the support team.</p>
                     </div>
-                    <div className="rounded-full bg-sky-50 border border-sky-200 px-2.5 py-1 text-[10px] font-bold text-sky-700 shrink-0">
-                      AERA Admin Queue
-                    </div>
+                    <div className="rounded-full bg-sky-50 border border-sky-200 px-2.5 py-1 text-[10px] font-bold text-sky-700 shrink-0">AERA Admin Queue</div>
                   </div>
 
                   {/* Tab bar */}
                   <div className="flex border-b border-slate-200 px-4">
-                    <button
-                      type="button"
-                      onClick={() => setContactUsTab('faq')}
-                      className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${contactUsTab === 'faq' ? 'border-sky-500 text-sky-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-                    >
+                    <button type="button" onClick={() => setContactUsTab('faq')} className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${contactUsTab === 'faq' ? 'border-sky-500 text-sky-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
                       <HelpCircle size={13} />
                       FAQ
-                      {isOrgScopedAdmin && (
-                        <span className="ml-1 rounded-full bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 text-[9px] font-bold">+Org Admin</span>
-                      )}
+                      {isOrgScopedAdmin && <span className="ml-1 rounded-full bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 text-[9px] font-bold">+Org Admin</span>}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setContactUsTab('contact')}
-                      className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${contactUsTab === 'contact' ? 'border-sky-500 text-sky-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-                    >
+                    <button type="button" onClick={() => setContactUsTab('contact')} className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${contactUsTab === 'contact' ? 'border-sky-500 text-sky-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
                       <MessageSquare size={13} />
                       Submit a Ticket
-                      {mySupportTickets.length > 0 && (
-                        <span className="rounded-full bg-slate-200 text-slate-700 px-1.5 py-0.5 text-[9px] font-bold">{mySupportTickets.length}</span>
-                      )}
+                      {mySupportTickets.length > 0 && <span className="rounded-full bg-slate-200 text-slate-700 px-1.5 py-0.5 text-[9px] font-bold">{mySupportTickets.length}</span>}
                     </button>
+                    {isOrgScopedAdmin && (
+                      <button type="button" onClick={() => setContactUsTab('org_inbox')} className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${contactUsTab === 'org_inbox' ? 'border-fuchsia-500 text-fuchsia-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                        <Users size={13} />
+                        Member Inbox
+                        {orgInboxTickets.filter((t) => t.status !== 'RESOLVED').length > 0 && (
+                          <span className="rounded-full bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 text-[9px] font-bold">{orgInboxTickets.filter((t) => t.status !== 'RESOLVED').length}</span>
+                        )}
+                      </button>
+                    )}
                   </div>
 
-                  {/* FAQ tab */}
+                  {/* FAQ Tab */}
                   {contactUsTab === 'faq' && (
                     <div className="divide-y divide-slate-100">
                       {isOrgScopedAdmin && (
-                        <div className="px-4 py-2 bg-slate-50 flex items-center gap-2">
+                        <div className="px-4 py-2 bg-slate-50 flex items-center gap-2 flex-wrap">
                           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">General</span>
-                          <span className="text-[10px] text-slate-400">({generalFaqs.length} questions)</span>
-                          <span className="mx-2 text-slate-300">·</span>
+                          <span className="text-[10px] text-slate-400">({GENERAL_FAQS.length})</span>
+                          <span className="mx-1 text-slate-300">·</span>
                           <span className="text-[10px] font-bold text-fuchsia-600 uppercase tracking-wider">Org Admin</span>
-                          <span className="text-[10px] text-slate-400">({orgAdminFaqs.length} questions)</span>
+                          <span className="text-[10px] text-slate-400">({ORG_ADMIN_FAQS.length})</span>
                         </div>
                       )}
                       {activeFaqs.map((faq, i) => {
-                        const isOrgQ = isOrgScopedAdmin && i >= generalFaqs.length;
+                        const isOrgQ = isOrgScopedAdmin && i >= GENERAL_FAQS.length;
                         const isOpen = openFaqIndex === i;
                         return (
                           <div key={i}>
-                            <button
-                              type="button"
-                              onClick={() => setOpenFaqIndex(isOpen ? null : i)}
-                              className="w-full flex items-start justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors"
-                            >
+                            <button type="button" onClick={() => setOpenFaqIndex(isOpen ? null : i)} className="w-full flex items-start justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors">
                               <div className="flex items-start gap-2 min-w-0">
-                                {isOrgQ && (
-                                  <span className="mt-0.5 shrink-0 rounded-full bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 text-[9px] font-bold leading-tight">ORG</span>
-                                )}
+                                {isOrgQ && <span className="mt-0.5 shrink-0 rounded-full bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 text-[9px] font-bold leading-tight">ORG</span>}
                                 <span className="text-sm font-medium text-slate-800">{faq.q}</span>
                               </div>
                               <ChevronDown size={15} className={`shrink-0 text-slate-400 transition-transform mt-0.5 ${isOpen ? 'rotate-180' : ''}`} />
                             </button>
                             {isOpen && (
                               <div className="px-4 pb-3">
-                                <p className="text-sm text-slate-600 leading-relaxed pl-0">{faq.a}</p>
-                                <button
-                                  type="button"
-                                  onClick={() => setContactUsTab('contact')}
-                                  className="mt-2 text-xs font-semibold text-sky-600 hover:underline"
-                                >
+                                <p className="text-sm text-slate-600 leading-relaxed">{faq.a}</p>
+                                <button type="button" onClick={() => setContactUsTab('contact')} className="mt-2 text-xs font-semibold text-sky-600 hover:underline">
                                   Still need help? Submit a ticket →
                                 </button>
                               </div>
@@ -5266,23 +5305,31 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                     </div>
                   )}
 
-                  {/* Contact / ticket tab */}
+                  {/* Submit a Ticket Tab */}
                   {contactUsTab === 'contact' && (
                     <div className="p-4 space-y-4">
+                      {/* Routing hint */}
+                      <div className={`rounded-xl border px-3 py-2.5 flex items-start gap-2 ${profile.communityId ? 'border-fuchsia-200 bg-fuchsia-50' : 'border-sky-200 bg-sky-50'}`}>
+                        <div className={`mt-0.5 p-1 rounded-full ${profile.communityId ? 'bg-fuchsia-100 text-fuchsia-700' : 'bg-sky-100 text-sky-700'}`}>
+                          {profile.communityId ? <Users size={12} /> : <ShieldCheck size={12} />}
+                        </div>
+                        <p className="text-xs text-slate-700">
+                          {profile.communityId
+                            ? <>Your ticket will go to your <strong className="text-fuchsia-700">{profile.communityId}</strong> organization admin first. If they can&apos;t resolve it, they&apos;ll escalate it to AERA.</>
+                            : <>You&apos;re not connected to an organization &mdash; your ticket goes <strong className="text-sky-700">directly to the AERA admin team</strong>.</>}
+                        </p>
+                      </div>
+
                       <div className="grid md:grid-cols-2 gap-3">
                         <Input
                           label="Subject"
                           value={contactSupportSubject}
-                          onChange={(e) => setContactSupportSubject(e.target.value)}
+                          onChange={(e) => { setContactSupportSubject(e.target.value); setFaqSuggestionDismissed(false); setFaqSelfResolved(false); }}
                           placeholder="Short summary of the issue"
                         />
                         <label className="space-y-1 text-sm text-slate-700">
                           <span className="font-medium">Category</span>
-                          <select
-                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-200"
-                            value={contactSupportCategory}
-                            onChange={(e) => setContactSupportCategory(e.target.value)}
-                          >
+                          <select className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-200" value={contactSupportCategory} onChange={(e) => setContactSupportCategory(e.target.value)}>
                             <option value="GENERAL">General Help</option>
                             <option value="ACCOUNT">Account Access</option>
                             <option value="ORGANIZATION">Organization Setup</option>
@@ -5292,33 +5339,55 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                         </label>
                       </div>
 
-                      <Textarea
-                        label="How can AERA help?"
-                        value={contactSupportMessage}
-                        onChange={(e) => setContactSupportMessage(e.target.value)}
-                        placeholder="Describe the issue, what you tried, and what outcome you need."
-                        rows={4}
-                      />
+                      {/* Smart FAQ suggestion */}
+                      {faqSuggestion && !faqSelfResolved && (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-xs font-bold text-amber-800">We found a related answer &mdash; does this help?</p>
+                            <button type="button" onClick={() => setFaqSuggestionDismissed(true)} className="text-slate-400 hover:text-slate-600 shrink-0"><X size={13} /></button>
+                          </div>
+                          <p className="text-xs font-semibold text-slate-800">{faqSuggestion.q}</p>
+                          <p className="text-xs text-slate-700 leading-relaxed">{faqSuggestion.a}</p>
+                          <div className="flex items-center gap-2 pt-1">
+                            <Button size="sm" onClick={() => void handleFaqSelfResolve(faqSuggestion)} disabled={faqSelfResolving} className="bg-emerald-600 hover:bg-emerald-500 text-white border-0">
+                              {faqSelfResolving ? <Loader2 size={12} className="mr-1 animate-spin" /> : <Check size={12} className="mr-1" />}
+                              Yes, this resolved it
+                            </Button>
+                            <button type="button" onClick={() => setFaqSuggestionDismissed(true)} className="text-xs font-semibold text-slate-600 hover:underline">No, I still need help</button>
+                          </div>
+                        </div>
+                      )}
 
-                      {contactSupportError && <p className="text-xs font-semibold text-amber-700">{contactSupportError}</p>}
-                      {contactSupportSuccess && <p className="text-xs font-semibold text-emerald-700">{contactSupportSuccess}</p>}
+                      {faqSelfResolved && (
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                          <p className="text-xs font-semibold text-emerald-700">Great! Your question has been noted as self-resolved. No ticket was submitted. The AERA team can still see it for analytics.</p>
+                          <button type="button" onClick={() => { setFaqSelfResolved(false); setFaqSuggestionDismissed(true); }} className="mt-1.5 text-xs font-semibold text-slate-600 hover:underline">I still need to submit a ticket</button>
+                        </div>
+                      )}
 
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-[11px] text-slate-500">Platform admins receive an in-app notification as soon as the ticket is submitted.</p>
-                        <Button size="sm" onClick={handleSubmitContactSupport} disabled={contactSupportBusy}>
-                          {contactSupportBusy ? <Loader2 size={14} className="mr-1 animate-spin" /> : null}
-                          Submit Ticket
-                        </Button>
-                      </div>
+                      {!faqSelfResolved && (faqSuggestionDismissed || !faqSuggestion) && (
+                        <>
+                          <Textarea label="How can AERA help?" value={contactSupportMessage} onChange={(e) => setContactSupportMessage(e.target.value)} placeholder="Describe the issue, what you tried, and what outcome you need." rows={4} />
+                          {contactSupportError && <p className="text-xs font-semibold text-amber-700">{contactSupportError}</p>}
+                          {contactSupportSuccess && <p className="text-xs font-semibold text-emerald-700">{contactSupportSuccess}</p>}
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-[11px] text-slate-500">{profile.communityId ? 'Org admins are notified immediately and can escalate to AERA if needed.' : 'AERA admins are notified immediately.'}</p>
+                            <Button size="sm" onClick={handleSubmitContactSupport} disabled={contactSupportBusy}>
+                              {contactSupportBusy ? <Loader2 size={14} className="mr-1 animate-spin" /> : null}
+                              Submit Ticket
+                            </Button>
+                          </div>
+                        </>
+                      )}
 
+                      {/* My submitted tickets */}
                       <div className="border-t border-slate-100 pt-4 space-y-3">
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">My Support Tickets</p>
                           <span className="text-[11px] text-slate-500">{mySupportTickets.length} total</span>
                         </div>
-
                         {visibleSupportTickets.length === 0 ? (
-                          <p className="text-xs text-slate-600">No support tickets yet.</p>
+                          <p className="text-xs text-slate-600">No tickets yet.</p>
                         ) : (
                           <div className="space-y-3">
                             {visibleSupportTickets.map((ticket) => (
@@ -5326,25 +5395,20 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                   <div>
                                     <p className="text-sm font-semibold text-slate-900">{ticket.subject}</p>
-                                    <p className="text-[11px] text-slate-500">
-                                      {ticket.category} · Submitted {new Date(ticket.createdAt).toLocaleString()}
-                                    </p>
+                                    <p className="text-[11px] text-slate-500">{ticket.category} · {new Date(ticket.createdAt).toLocaleString()}</p>
                                   </div>
-                                  <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${ticket.status === 'RESOLVED' ? 'bg-emerald-100 text-emerald-700' : ticket.status === 'IN_PROGRESS' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-700'}`}>
-                                    {ticket.status === 'IN_PROGRESS' ? 'In Progress' : ticket.status}
-                                  </span>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    {ticket.resolvedViaFaq && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">FAQ</span>}
+                                    {ticket.escalatedToAdmin && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700">Escalated</span>}
+                                    <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${ticket.status === 'RESOLVED' ? 'bg-emerald-100 text-emerald-700' : ticket.status === 'IN_PROGRESS' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-700'}`}>
+                                      {ticket.status === 'IN_PROGRESS' ? 'In Progress' : ticket.status}
+                                    </span>
+                                  </div>
                                 </div>
-
                                 <p className="text-xs text-slate-700">{ticket.message}</p>
-
                                 {(ticket.assignedAdminName || ticket.resolvedByAdminName) && (
-                                  <p className="text-[11px] text-slate-500">
-                                    {ticket.status === 'RESOLVED'
-                                      ? `Resolved by ${ticket.resolvedByAdminName || ticket.assignedAdminName}`
-                                      : `Assigned to ${ticket.assignedAdminName}`}
-                                  </p>
+                                  <p className="text-[11px] text-slate-500">{ticket.status === 'RESOLVED' ? `Resolved by ${ticket.resolvedByAdminName || ticket.assignedAdminName}` : `Assigned to ${ticket.assignedAdminName}`}</p>
                                 )}
-
                                 {ticket.messages.length > 1 && (
                                   <div className="space-y-2 border-t border-slate-200 pt-2">
                                     {ticket.messages.slice(-2).map((entry, index) => (
@@ -5363,6 +5427,119 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                           </div>
                         )}
                       </div>
+                    </div>
+                  )}
+
+                  {/* Org Admin Member Inbox Tab */}
+                  {contactUsTab === 'org_inbox' && isOrgScopedAdmin && (
+                    <div className="p-4 space-y-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Member Support Inbox</p>
+                          <p className="text-xs text-slate-500 mt-0.5">Tickets submitted by members of your organization. Resolve them or escalate to AERA if needed.</p>
+                        </div>
+                        <Button size="sm" variant="ghost" onClick={() => { setOrgInboxLoading(true); void listContactSupportTicketsForOrgAdmin(50).then(setOrgInboxTickets).catch(() => {}).finally(() => setOrgInboxLoading(false)); }}>
+                          <RefreshCcw size={13} className={orgInboxLoading ? 'animate-spin' : ''} />
+                        </Button>
+                      </div>
+
+                      {orgInboxError && <p className="text-xs font-semibold text-rose-700">{orgInboxError}</p>}
+                      {orgInboxSuccess && <p className="text-xs font-semibold text-emerald-700">{orgInboxSuccess}</p>}
+
+                      {orgInboxLoading && orgInboxTickets.length === 0 && <p className="text-xs text-slate-500">Loading member tickets...</p>}
+
+                      {!orgInboxLoading && orgInboxTickets.length === 0 && (
+                        <p className="text-xs text-slate-600">No support tickets from your org members yet.</p>
+                      )}
+
+                      {orgInboxTickets.length > 0 && (
+                        <div className="space-y-3">
+                          {orgInboxTickets.filter((t) => !t.escalatedToAdmin && t.status !== 'RESOLVED' && !t.resolvedViaFaq).map((ticket) => (
+                            <div key={ticket.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div>
+                                  <p className="text-sm font-semibold text-slate-900">{ticket.subject}</p>
+                                  <p className="text-[11px] text-slate-500">{ticket.requesterName || 'Member'} · {ticket.category} · {new Date(ticket.createdAt).toLocaleString()}</p>
+                                </div>
+                                <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${ticket.status === 'IN_PROGRESS' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-700'}`}>
+                                  {ticket.status === 'IN_PROGRESS' ? 'In Progress' : 'Open'}
+                                </span>
+                              </div>
+
+                              {ticket.messages.map((entry, idx) => (
+                                <div key={`${ticket.id}-${idx}`} className={`rounded-lg border px-3 py-2 ${entry.authorRole === 'ORG_ADMIN' || entry.authorRole === 'INSTITUTION_ADMIN' ? 'border-fuchsia-200 bg-fuchsia-50' : 'border-slate-200 bg-white'}`}>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="text-xs font-semibold text-slate-800">{entry.authorName}</p>
+                                    <p className="text-[10px] text-slate-400">{new Date(entry.createdAt).toLocaleString()}</p>
+                                  </div>
+                                  <p className="text-xs text-slate-600 mt-1">{entry.message}</p>
+                                </div>
+                              ))}
+
+                              <div className="space-y-2 border-t border-slate-200 pt-2">
+                                <label className="block text-xs font-semibold text-slate-700">Your response</label>
+                                <textarea
+                                  className="w-full min-h-20 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-fuchsia-200"
+                                  placeholder="Reply to the member or note what action you took..."
+                                  value={orgInboxReplyDrafts[ticket.id] || ''}
+                                  onChange={(e) => setOrgInboxReplyDrafts((prev) => ({ ...prev, [ticket.id]: e.target.value }))}
+                                />
+                                <div className="flex flex-wrap gap-2">
+                                  <Button size="sm" variant="outline" onClick={() => void handleOrgAdminRespond(ticket.id, 'IN_PROGRESS')} disabled={orgInboxBusyId === ticket.id}>
+                                    {orgInboxBusyId === ticket.id ? <Loader2 size={12} className="mr-1 animate-spin" /> : null}
+                                    Send Reply
+                                  </Button>
+                                  <Button size="sm" onClick={() => void handleOrgAdminRespond(ticket.id, 'RESOLVED')} disabled={orgInboxBusyId === ticket.id}>
+                                    Resolve
+                                  </Button>
+                                  <Button size="sm" variant="ghost" className="text-rose-600 hover:bg-rose-50" onClick={() => void handleEscalateTicket(ticket.id)} disabled={escalatingTicketId === ticket.id}>
+                                    {escalatingTicketId === ticket.id ? <Loader2 size={12} className="mr-1 animate-spin" /> : null}
+                                    Escalate to AERA
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+
+                          {orgInboxTickets.filter((t) => t.escalatedToAdmin).length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-[10px] font-bold text-rose-600 uppercase tracking-wider">Escalated to AERA</p>
+                              {orgInboxTickets.filter((t) => t.escalatedToAdmin).map((ticket) => (
+                                <div key={ticket.id} className="rounded-xl border border-rose-200 bg-rose-50 p-3 space-y-1">
+                                  <p className="text-sm font-semibold text-slate-900">{ticket.subject}</p>
+                                  <p className="text-[11px] text-slate-500">{ticket.requesterName || 'Member'} · Escalated {ticket.escalatedAt ? new Date(ticket.escalatedAt).toLocaleString() : ''}</p>
+                                  <p className="text-[11px] text-rose-700">Awaiting AERA admin response.</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {orgInboxTickets.filter((t) => t.status === 'RESOLVED' && !t.resolvedViaFaq).length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Resolved</p>
+                              {orgInboxTickets.filter((t) => t.status === 'RESOLVED' && !t.resolvedViaFaq).map((ticket) => (
+                                <div key={ticket.id} className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 space-y-1">
+                                  <p className="text-sm font-semibold text-slate-900">{ticket.subject}</p>
+                                  <p className="text-[11px] text-slate-500">{ticket.requesterName || 'Member'} · Resolved by {ticket.resolvedByAdminName || 'Admin'}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {orgInboxTickets.filter((t) => t.resolvedViaFaq).length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Self-Resolved via FAQ (documentation only)</p>
+                              {orgInboxTickets.filter((t) => t.resolvedViaFaq).map((ticket) => (
+                                <div key={ticket.id} className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-1">
+                                  <p className="text-sm font-semibold text-slate-900">{ticket.subject}</p>
+                                  <p className="text-[11px] text-slate-500">{ticket.requesterName || 'Member'} · {new Date(ticket.createdAt).toLocaleString()}</p>
+                                  {ticket.faqSuggestedAnswer && <p className="text-[11px] text-amber-800 italic">Answer shown: &quot;{ticket.faqSuggestedAnswer.slice(0, 120)}{ticket.faqSuggestedAnswer.length > 120 ? '...' : ''}&quot;</p>}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

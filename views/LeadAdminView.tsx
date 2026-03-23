@@ -31,7 +31,7 @@ import {
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { ViewState, VerifiedLead, LeadStatus, DEFAULT_LEAD_PRICING, BuyerAccount } from '../types';
-import { ContactSupportTicketRecord, ContactSupportTicketStatus, listContactSupportTicketsForAdmin, respondToContactSupportTicket } from '../services/api';
+import { ContactSupportTicketRecord, ContactSupportTicketStatus, editContactSupportTicket, listContactSupportTicketsForAdmin, respondToContactSupportTicket } from '../services/api';
 import {
   SAMPLE_LEADS,
   SAMPLE_BUYERS,
@@ -85,6 +85,9 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
   const [supportBusyId, setSupportBusyId] = useState<string | null>(null);
   const [supportError, setSupportError] = useState<string | null>(null);
   const [supportSuccess, setSupportSuccess] = useState<string | null>(null);
+  const [editingTicketId, setEditingTicketId] = useState<string | null>(null);
+  const [editDrafts, setEditDrafts] = useState<Record<string, { subject?: string; category?: string; adminNote?: string }>>({});
+  const [editBusyId, setEditBusyId] = useState<string | null>(null);
 
   const loadSupportQueue = async () => {
     const rows = await listContactSupportTicketsForAdmin(100);
@@ -184,6 +187,29 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
   };
     if (typeof window === 'undefined') return '/buyer-portal';
     return `${window.location.origin}/buyer-portal?invite=buyer`;
+  };
+
+  const handleEditTicket = async (ticketId: string) => {
+    const draft = editDrafts[ticketId] || {};
+    setEditBusyId(ticketId);
+    setSupportError(null);
+    setSupportSuccess(null);
+    try {
+      await editContactSupportTicket(ticketId, {
+        subject: draft.subject,
+        category: draft.category,
+        adminNote: draft.adminNote,
+      });
+      const refreshed = await listContactSupportTicketsForAdmin(100);
+      setSupportTickets(refreshed);
+      setEditingTicketId(null);
+      setEditDrafts((prev) => { const n = { ...prev }; delete n[ticketId]; return n; });
+      setSupportSuccess('Ticket updated successfully.');
+    } catch (error: any) {
+      setSupportError(String(error?.message || 'Failed to update ticket.'));
+    } finally {
+      setEditBusyId(null);
+    }
   };
 
   const copyBuyerInviteLink = async (buyer?: BuyerAccount) => {
@@ -450,30 +476,46 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
               ) : (
                 <div className="space-y-3">
                   {supportTickets.map((ticket) => (
-                    <div key={ticket.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                    <div key={ticket.id} className={`rounded-2xl border p-4 space-y-3 ${ticket.escalatedToAdmin ? 'border-rose-200 bg-rose-50' : ticket.resolvedViaFaq ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50'}`}>
                       <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2 mb-1">
                             <p className="font-bold text-slate-900">{ticket.subject}</p>
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${SUPPORT_STATUS_COLORS[ticket.status]}`}>{ticket.status === 'IN_PROGRESS' ? 'In Progress' : ticket.status}</span>
                             <span className="text-[10px] font-bold bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full">{ticket.category}</span>
+                            {ticket.escalatedToAdmin && <span className="text-[10px] font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">Escalated from Org</span>}
+                            {ticket.resolvedViaFaq && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">FAQ Self-Resolved</span>}
+                            {ticket.routedTo === 'ORG_ADMIN' && !ticket.escalatedToAdmin && <span className="text-[10px] font-bold bg-fuchsia-100 text-fuchsia-700 px-2 py-0.5 rounded-full">Via Org Admin</span>}
                           </div>
                           <p className="text-xs text-slate-500">
                             {ticket.requesterName || 'Unknown user'} · {ticket.requesterRole || 'User'}
                             {ticket.requesterEmail ? ` · ${ticket.requesterEmail}` : ''}
                             {ticket.orgName ? ` · ${ticket.orgName}` : ''}
                           </p>
-                          <p className="text-[11px] text-slate-400 mt-1">Submitted {formatDate(ticket.createdAt)} · Ticket {ticket.id}</p>
+                          <p className="text-[11px] text-slate-400 mt-1">
+                            Submitted {formatDate(ticket.createdAt)} · Ticket {ticket.id}
+                            {ticket.escalatedAt ? ` · Escalated ${formatDate(ticket.escalatedAt)}` : ''}
+                          </p>
+                          {ticket.faqSuggestedAnswer && (
+                            <p className="text-[11px] text-amber-700 mt-1 italic">FAQ answer shown: &ldquo;{ticket.faqSuggestedAnswer.slice(0, 100)}{ticket.faqSuggestedAnswer.length > 100 ? '...' : ''}&rdquo;</p>
+                          )}
                         </div>
-                        <div className="text-right text-xs text-slate-500">
+                        <div className="flex flex-col items-end gap-2 text-xs text-slate-500">
                           <p>{ticket.assignedAdminName ? `Handling: ${ticket.assignedAdminName}` : 'Unassigned'}</p>
                           {ticket.resolvedByAdminName && <p>Resolved by {ticket.resolvedByAdminName}</p>}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setEditingTicketId(editingTicketId === ticket.id ? null : ticket.id)}
+                          >
+                            {editingTicketId === ticket.id ? 'Close Edit' : 'Edit'}
+                          </Button>
                         </div>
                       </div>
 
                       <div className="space-y-2">
                         {ticket.messages.map((entry, index) => (
-                          <div key={`${ticket.id}-${entry.createdAt}-${index}`} className={`rounded-xl border px-3 py-2 ${entry.authorRole === 'ADMIN' ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-white'}`}>
+                          <div key={`${ticket.id}-${entry.createdAt}-${index}`} className={`rounded-xl border px-3 py-2 ${entry.authorRole === 'ADMIN' ? 'border-sky-200 bg-sky-50' : entry.authorRole === 'ORG_ADMIN' || entry.authorRole === 'INSTITUTION_ADMIN' ? 'border-fuchsia-200 bg-fuchsia-50' : 'border-slate-200 bg-white'}`}>
                             <div className="flex items-center justify-between gap-2">
                               <p className="text-xs font-semibold text-slate-800">{entry.authorName}</p>
                               <p className="text-[10px] text-slate-400">{formatDate(entry.createdAt)}</p>
@@ -509,6 +551,53 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
                             >
                               {supportBusyId === ticket.id ? <RefreshCcw size={14} className="mr-1 animate-spin" /> : null}
                               Resolve Ticket
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {editingTicketId === ticket.id && (
+                        <div className="space-y-3 border-t border-slate-200 pt-3">
+                          <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Edit Ticket</p>
+                          <div className="grid sm:grid-cols-2 gap-2">
+                            <label className="block space-y-1">
+                              <span className="text-xs font-semibold text-slate-700">Subject</span>
+                              <input
+                                type="text"
+                                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-200"
+                                defaultValue={ticket.subject}
+                                onChange={(e) => setEditDrafts((prev) => ({ ...prev, [ticket.id]: { ...prev[ticket.id], subject: e.target.value } }))}
+                              />
+                            </label>
+                            <label className="block space-y-1">
+                              <span className="text-xs font-semibold text-slate-700">Category</span>
+                              <select
+                                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-200"
+                                defaultValue={ticket.category}
+                                onChange={(e) => setEditDrafts((prev) => ({ ...prev, [ticket.id]: { ...prev[ticket.id], category: e.target.value } }))}
+                              >
+                                <option value="GENERAL">General Help</option>
+                                <option value="ACCOUNT">Account Access</option>
+                                <option value="ORGANIZATION">Organization Setup</option>
+                                <option value="TECHNICAL">Technical Issue</option>
+                                <option value="OTHER">Other</option>
+                              </select>
+                            </label>
+                          </div>
+                          <label className="block space-y-1">
+                            <span className="text-xs font-semibold text-slate-700">Admin Note (appended to thread)</span>
+                            <textarea
+                              className="w-full min-h-16 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-200"
+                              placeholder="Optional internal note to append to the message thread..."
+                              value={editDrafts[ticket.id]?.adminNote || ''}
+                              onChange={(e) => setEditDrafts((prev) => ({ ...prev, [ticket.id]: { ...prev[ticket.id], adminNote: e.target.value } }))}
+                            />
+                          </label>
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" variant="ghost" onClick={() => setEditingTicketId(null)}>Cancel</Button>
+                            <Button size="sm" onClick={() => void handleEditTicket(ticket.id)} disabled={editBusyId === ticket.id}>
+                              {editBusyId === ticket.id ? <RefreshCcw size={14} className="mr-1 animate-spin" /> : null}
+                              Save Changes
                             </Button>
                           </div>
                         </div>

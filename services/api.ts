@@ -1490,6 +1490,13 @@ export type ContactSupportTicketRecord = {
   createdAt: string;
   updatedAt?: string;
   messages: ContactSupportTicketMessage[];
+  // Routing & escalation
+  routedTo?: 'ORG_ADMIN' | 'AERA_ADMIN';
+  escalatedToAdmin?: boolean;
+  escalatedAt?: string;
+  // FAQ self-resolution
+  resolvedViaFaq?: boolean;
+  faqSuggestedAnswer?: string;
 };
 
 export type HouseholdJoinResolutionAction = 'approved' | 'rejected';
@@ -1615,6 +1622,11 @@ const mapContactSupportTicketRecord = (row: any): ContactSupportTicketRecord => 
     createdAt: String(row?.created_at || new Date().toISOString()),
     updatedAt: data?.updatedAt || undefined,
     messages,
+    routedTo: data?.routedTo === 'ORG_ADMIN' ? 'ORG_ADMIN' : data?.routedTo === 'AERA_ADMIN' ? 'AERA_ADMIN' : undefined,
+    escalatedToAdmin: Boolean(data?.escalatedToAdmin),
+    escalatedAt: data?.escalatedAt || undefined,
+    resolvedViaFaq: Boolean(data?.resolvedViaFaq),
+    faqSuggestedAnswer: data?.faqSuggestedAnswer || undefined,
   };
 };
 
@@ -4880,6 +4892,7 @@ export async function createContactSupportTicket(payload: {
   const orgMeta = requesterProfile?.org_id ? await getOrgMetaById(String(requesterProfile.org_id)) : null;
   const now = new Date().toISOString();
   const priority = payload.priority === 'HIGH' || payload.priority === 'LOW' ? payload.priority : 'MEDIUM';
+    const routedTo: 'ORG_ADMIN' | 'AERA_ADMIN' = requesterProfile?.org_id ? 'ORG_ADMIN' : 'AERA_ADMIN';
   const dataPayload = {
     requestType: 'CONTACT_SUPPORT',
     category: String(payload.category || 'GENERAL').trim().toUpperCase(),
@@ -4893,6 +4906,7 @@ export async function createContactSupportTicket(payload: {
     requesterOrgName: orgMeta?.orgName || undefined,
     createdAt: now,
     updatedAt: now,
+    routedTo,
     messages: [
       {
         authorId: authData.user.id,
@@ -4920,18 +4934,29 @@ export async function createContactSupportTicket(payload: {
 
   if (error || !data) throw new Error(error?.message || 'Failed to create support ticket.');
 
-  const { data: adminRows, error: adminError } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('role', 'ADMIN');
-
-  if (adminError) {
-    console.warn('Support ticket admin notification lookup failed', adminError);
+  // Route notifications: org admins first when requester belongs to an org, else AERA admin
+  let recipientIds: string[] = [];
+  if (routedTo === 'ORG_ADMIN' && requesterProfile?.org_id) {
+    const { data: orgAdminRows } = await supabase
+      .from('profiles')
+      .select('id')
+      .in('role', ['ORG_ADMIN', 'INSTITUTION_ADMIN'])
+      .eq('org_id', requesterProfile.org_id);
+    recipientIds = (orgAdminRows || [])
+      .map((row: any) => String(row?.id || ''))
+      .filter((id: string) => Boolean(id) && id !== authData.user.id);
   }
-
-  const recipientIds = Array.from(new Set((adminRows || [])
-    .map((row: any) => String(row?.id || ''))
-    .filter((id: string) => Boolean(id) && id !== authData.user.id)));
+  if (recipientIds.length === 0) {
+    // Fallback: always notify AERA admin (also covers 'AERA_ADMIN' routing)
+    const { data: aeraAdminRows, error: adminError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('role', 'ADMIN');
+    if (adminError) console.warn('Support ticket admin notification lookup failed', adminError);
+    recipientIds = (aeraAdminRows || [])
+      .map((row: any) => String(row?.id || ''))
+      .filter((id: string) => Boolean(id) && id !== authData.user.id);
+  }
 
   if (recipientIds.length > 0) {
     await supabase.from('notifications').insert(
@@ -5093,6 +5118,275 @@ export async function respondToContactSupportTicket(
   });
 
   return mapContactSupportTicketRecord(updated);
+}
+
+// Member CRUD
+// ── Org Admin ticket functions ──────────────────────────────────────────────
+
+export async function listContactSupportTicketsForOrgAdmin(limit = 100): Promise<ContactSupportTicketRecord[]> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user?.id) throw new Error('Not authenticated');
+
+  const actorProfile = await getProfileById(authData.user.id);
+  const role = String(actorProfile?.role || '').toUpperCase();
+  if (!['ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(role)) return [];
+  if (!actorProfile?.org_id) return [];
+
+  const { data, error } = await supabase
+    .from('help_requests')
+    .select('id, user_id, org_id, status, priority, data, location, created_at')
+    .eq('org_id', actorProfile.org_id)
+    .contains('data', { requestType: 'CONTACT_SUPPORT' })
+    .order('created_at', { ascending: false })
+    .limit(Math.max(1, Math.min(limit, 200)));
+
+  if (error) throw new Error(error.message || 'Failed to load org support queue.');
+  return (data || []).map(mapContactSupportTicketRecord);
+}
+
+export async function respondToContactSupportTicketAsOrgAdmin(
+  ticketId: string,
+  payload: { message: string; status: ContactSupportTicketStatus },
+): Promise<ContactSupportTicketRecord> {
+  const normalizedId = String(ticketId || '').trim();
+  const message = String(payload.message || '').trim();
+  if (!normalizedId) throw new Error('Ticket ID is required.');
+  if (!message) throw new Error('Response message is required.');
+
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user?.id) throw new Error('Not authenticated');
+
+  const actorProfile = await getProfileById(authData.user.id);
+  const role = String(actorProfile?.role || '').toUpperCase();
+  if (!['ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(role)) throw new Error('Only Org Admins can use this function.');
+  if (!actorProfile?.org_id) throw new Error('Not associated with an organization.');
+
+  const { data: existing, error: existingError } = await supabase
+    .from('help_requests')
+    .select('id, user_id, org_id, status, priority, data, location, created_at')
+    .eq('id', normalizedId)
+    .maybeSingle();
+
+  if (existingError) throw new Error(existingError.message || 'Failed to load ticket.');
+  if (!existing?.id || String(existing?.data?.requestType || '') !== 'CONTACT_SUPPORT') throw new Error('Ticket not found.');
+  if (String(existing.org_id) !== String(actorProfile.org_id)) throw new Error('Ticket does not belong to your organization.');
+
+  const now = new Date().toISOString();
+  const adminName = String(actorProfile?.full_name || authData.user.email || 'Org Admin');
+  const existingMessages = Array.isArray(existing.data?.messages) ? existing.data.messages : [];
+  const nextStatus = payload.status === 'RESOLVED' ? 'RESOLVED' : 'DISPATCHED';
+  const nextData = {
+    ...(existing.data || {}),
+    assignedAdminId: authData.user.id,
+    assignedAdminName: adminName,
+    updatedAt: now,
+    lastResponseAt: now,
+    messages: [
+      ...existingMessages,
+      {
+        authorId: authData.user.id,
+        authorName: adminName,
+        authorRole: role,
+        message,
+        createdAt: now,
+        action: payload.status === 'RESOLVED' ? 'RESOLVED' : 'RESPONDED',
+      },
+    ],
+    ...(payload.status === 'RESOLVED'
+      ? { resolvedAt: now, resolvedByAdminId: authData.user.id, resolvedByAdminName: adminName }
+      : {}),
+  };
+
+  const { data: updatedRows, error: updateError } = await supabase
+    .from('help_requests')
+    .update({ status: nextStatus, data: nextData })
+    .eq('id', normalizedId)
+    .select('id, user_id, org_id, status, priority, data, location, created_at');
+
+  if (updateError) throw new Error(updateError.message || 'Failed to update ticket.');
+  const updated = updatedRows?.[0];
+  if (!updated) throw new Error('Ticket not found or permission denied.');
+
+  await supabase.from('notifications').insert({
+    user_id: existing.user_id,
+    type: payload.status === 'RESOLVED' ? 'support_ticket_resolved' : 'support_ticket_response',
+    related_id: normalizedId,
+    metadata: { subject: existing.data?.subject || '', adminName, category: existing.data?.category || 'GENERAL' },
+  });
+
+  await safeLogActivity({ action: 'UPDATE', entityType: 'help_requests', entityId: normalizedId, details: { requestType: 'CONTACT_SUPPORT', status: payload.status, respondedBy: authData.user.id } });
+  return mapContactSupportTicketRecord(updated);
+}
+
+export async function escalateContactSupportTicket(ticketId: string): Promise<ContactSupportTicketRecord> {
+  const normalizedId = String(ticketId || '').trim();
+  if (!normalizedId) throw new Error('Ticket ID is required.');
+
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user?.id) throw new Error('Not authenticated');
+
+  const actorProfile = await getProfileById(authData.user.id);
+  const role = String(actorProfile?.role || '').toUpperCase();
+  if (!['ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(role)) throw new Error('Only Org Admins can escalate tickets.');
+  if (!actorProfile?.org_id) throw new Error('Not associated with an organization.');
+
+  const { data: existing, error: existingError } = await supabase
+    .from('help_requests')
+    .select('id, user_id, org_id, status, priority, data, location, created_at')
+    .eq('id', normalizedId)
+    .maybeSingle();
+
+  if (existingError) throw new Error(existingError.message || 'Failed to load ticket.');
+  if (!existing?.id) throw new Error('Ticket not found.');
+  if (String(existing.org_id) !== String(actorProfile.org_id)) throw new Error('Ticket does not belong to your organization.');
+
+  const now = new Date().toISOString();
+  const adminName = String(actorProfile?.full_name || 'Org Admin');
+  const orgMeta = await getOrgMetaById(String(actorProfile.org_id));
+  const existingMessages = Array.isArray(existing.data?.messages) ? existing.data.messages : [];
+
+  const nextData = {
+    ...(existing.data || {}),
+    routedTo: 'AERA_ADMIN',
+    escalatedToAdmin: true,
+    escalatedAt: now,
+    updatedAt: now,
+    messages: [
+      ...existingMessages,
+      {
+        authorId: authData.user.id,
+        authorName: adminName,
+        authorRole: role,
+        message: `Ticket escalated to AERA Admin by ${adminName} (${orgMeta?.orgName || 'Org'}) — unable to resolve at organization level.`,
+        createdAt: now,
+        action: 'RESPONDED',
+      },
+    ],
+  };
+
+  const { data: updatedRows, error: updateError } = await supabase
+    .from('help_requests')
+    .update({ status: 'DISPATCHED', data: nextData })
+    .eq('id', normalizedId)
+    .select('id, user_id, org_id, status, priority, data, location, created_at');
+
+  if (updateError) throw new Error(updateError.message || 'Failed to escalate ticket.');
+  const updated = updatedRows?.[0];
+  if (!updated) throw new Error('Ticket not found or permission denied.');
+
+  const { data: aeraAdminRows } = await supabase.from('profiles').select('id').eq('role', 'ADMIN');
+  if ((aeraAdminRows || []).length > 0) {
+    await supabase.from('notifications').insert(
+      (aeraAdminRows || []).map((admin: any) => ({
+        user_id: admin.id,
+        type: 'support_ticket_escalated',
+        related_id: normalizedId,
+        metadata: { subject: existing.data?.subject || '', orgName: orgMeta?.orgName || '', escalatedBy: adminName },
+      })),
+    );
+  }
+
+  await safeLogActivity({ action: 'UPDATE', entityType: 'help_requests', entityId: normalizedId, details: { requestType: 'CONTACT_SUPPORT', escalatedToAdmin: true, escalatedBy: authData.user.id } });
+  return mapContactSupportTicketRecord(updated);
+}
+
+export async function editContactSupportTicket(
+  ticketId: string,
+  updates: { subject?: string; category?: string; adminNote?: string; status?: ContactSupportTicketStatus },
+): Promise<ContactSupportTicketRecord> {
+  const normalizedId = String(ticketId || '').trim();
+  if (!normalizedId) throw new Error('Ticket ID is required.');
+
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user?.id) throw new Error('Not authenticated');
+
+  const actorProfile = await getProfileById(authData.user.id);
+  if (String(actorProfile?.role || '').toUpperCase() !== 'ADMIN') throw new Error('Only AERA admins can edit tickets.');
+
+  const { data: existing, error: existingError } = await supabase
+    .from('help_requests')
+    .select('id, user_id, org_id, status, priority, data, location, created_at')
+    .eq('id', normalizedId)
+    .maybeSingle();
+
+  if (existingError) throw new Error(existingError.message || 'Failed to load ticket.');
+  if (!existing?.id) throw new Error('Ticket not found.');
+
+  const now = new Date().toISOString();
+  const adminName = String(actorProfile?.full_name || authData.user.email || 'AERA Admin');
+  const existingMessages = Array.isArray(existing.data?.messages) ? existing.data.messages : [];
+  const nextData = {
+    ...(existing.data || {}),
+    ...(updates.subject ? { subject: String(updates.subject).trim() } : {}),
+    ...(updates.category ? { category: String(updates.category).trim().toUpperCase() } : {}),
+    updatedAt: now,
+    editedByAdminId: authData.user.id,
+    editedByAdminName: adminName,
+    ...(updates.status === 'RESOLVED' ? { resolvedAt: now, resolvedByAdminId: authData.user.id, resolvedByAdminName: adminName } : {}),
+    messages: updates.adminNote
+      ? [...existingMessages, { authorId: authData.user.id, authorName: adminName, authorRole: 'ADMIN', message: `[Admin Edit] ${updates.adminNote}`, createdAt: now, action: 'RESPONDED' as const }]
+      : existingMessages,
+  };
+
+  const nextStatus = updates.status === 'RESOLVED' ? 'RESOLVED' : updates.status === 'IN_PROGRESS' ? 'DISPATCHED' : (existing.status as string);
+
+  const { data: updatedRows, error: updateError } = await supabase
+    .from('help_requests')
+    .update({ status: nextStatus, data: nextData })
+    .eq('id', normalizedId)
+    .select('id, user_id, org_id, status, priority, data, location, created_at');
+
+  if (updateError) throw new Error(updateError.message || 'Failed to edit ticket.');
+  const updated = updatedRows?.[0];
+  if (!updated) throw new Error('Ticket not found or permission denied.');
+
+  await safeLogActivity({ action: 'UPDATE', entityType: 'help_requests', entityId: normalizedId, details: { requestType: 'CONTACT_SUPPORT', editedBy: authData.user.id } });
+  return mapContactSupportTicketRecord(updated);
+}
+
+export async function createFaqSelfResolvedRecord(payload: {
+  questionText: string;
+  suggestedAnswer: string;
+  subject: string;
+  category?: string;
+}): Promise<void> {
+  const { data: authData } = await supabase.auth.getUser();
+  if (!authData?.user?.id) return;
+
+  const requesterProfile = await getProfileById(authData.user.id);
+  const now = new Date().toISOString();
+  const dataPayload = {
+    requestType: 'CONTACT_SUPPORT',
+    resolvedViaFaq: true,
+    category: String(payload.category || 'GENERAL').toUpperCase(),
+    subject: String(payload.subject || payload.questionText || '').trim(),
+    message: String(payload.questionText || '').trim(),
+    faqSuggestedAnswer: String(payload.suggestedAnswer || '').trim(),
+    requesterName: String(requesterProfile?.full_name || 'AERA User'),
+    requesterRole: String(requesterProfile?.role || 'GENERAL_USER').toUpperCase(),
+    requesterEmail: String(requesterProfile?.email || ''),
+    createdAt: now,
+    updatedAt: now,
+    messages: [{
+      authorId: authData.user.id,
+      authorName: String(requesterProfile?.full_name || 'AERA User'),
+      authorRole: String(requesterProfile?.role || 'GENERAL_USER').toUpperCase(),
+      message: `[Self-Resolved via FAQ] ${payload.questionText}`,
+      createdAt: now,
+      action: 'CREATED' as const,
+    }],
+  };
+
+  try {
+    await supabase.from('help_requests').insert({
+      user_id: authData.user.id,
+      org_id: requesterProfile?.org_id || null,
+      status: 'RESOLVED',
+      priority: 'LOW',
+      data: dataPayload,
+    });
+    await safeLogActivity({ action: 'CREATE', entityType: 'help_requests', details: { requestType: 'CONTACT_SUPPORT', resolvedViaFaq: true } });
+  } catch { /* analytics-only — silent fail */ }
 }
 
 // Member CRUD
