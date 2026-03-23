@@ -24,12 +24,14 @@ import {
   Shield,
   ShieldAlert,
   ShieldCheck,
+  MessageSquare,
   Users,
   XCircle,
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { ViewState, VerifiedLead, LeadStatus, DEFAULT_LEAD_PRICING, BuyerAccount } from '../types';
+import { ContactSupportTicketRecord, ContactSupportTicketStatus, listContactSupportTicketsForAdmin, respondToContactSupportTicket } from '../services/api';
 import {
   SAMPLE_LEADS,
   SAMPLE_BUYERS,
@@ -40,7 +42,7 @@ import {
 } from '../services/leadService';
 import { fetchBuyerAccounts, fetchVerifiedLeads, updateLeadRecord } from '../services/leadSupabase';
 
-type AdminTab = 'LEADS' | 'BUYERS' | 'REPORTING' | 'COMPLIANCE' | 'PRICING';
+type AdminTab = 'LEADS' | 'BUYERS' | 'SUPPORT' | 'REPORTING' | 'COMPLIANCE' | 'PRICING';
 
 const STATUS_COLORS: Record<LeadStatus, string> = {
   NEW: 'bg-blue-100 text-blue-700',
@@ -49,6 +51,12 @@ const STATUS_COLORS: Record<LeadStatus, string> = {
   ACCEPTED: 'bg-emerald-100 text-emerald-700',
   REJECTED: 'bg-rose-100 text-rose-700',
   REFUNDED: 'bg-slate-200 text-slate-600',
+};
+
+const SUPPORT_STATUS_COLORS: Record<ContactSupportTicketStatus, string> = {
+  OPEN: 'bg-slate-200 text-slate-700',
+  IN_PROGRESS: 'bg-amber-100 text-amber-700',
+  RESOLVED: 'bg-emerald-100 text-emerald-700',
 };
 
 const fmt$ = (cents: number) =>
@@ -69,21 +77,33 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('LEADS');
   const [leads, setLeads] = useState<VerifiedLead[]>(SAMPLE_LEADS);
   const [buyers, setBuyers] = useState<BuyerAccount[]>(SAMPLE_BUYERS);
+  const [supportTickets, setSupportTickets] = useState<ContactSupportTicketRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedLead, setExpandedLead] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<LeadStatus | 'ALL'>('ALL');
+  const [supportReplyDrafts, setSupportReplyDrafts] = useState<Record<string, string>>({});
+  const [supportBusyId, setSupportBusyId] = useState<string | null>(null);
+  const [supportError, setSupportError] = useState<string | null>(null);
+  const [supportSuccess, setSupportSuccess] = useState<string | null>(null);
+
+  const loadSupportQueue = async () => {
+    const rows = await listContactSupportTicketsForAdmin(100);
+    setSupportTickets(rows);
+  };
 
   useEffect(() => {
     let mounted = true;
     const load = async () => {
       try {
-        const [leadRows, buyerRows] = await Promise.all([
+        const [leadRows, buyerRows, supportRows] = await Promise.all([
           fetchVerifiedLeads(),
           fetchBuyerAccounts(),
+          listContactSupportTicketsForAdmin(100),
         ]);
         if (!mounted) return;
         setLeads(leadRows);
         setBuyers(buyerRows);
+        setSupportTickets(supportRows);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -101,6 +121,12 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
     () => (filterStatus === 'ALL' ? leads : leads.filter((l) => l.status === filterStatus)),
     [leads, filterStatus],
   );
+
+  const supportCounts = useMemo(() => ({
+    open: supportTickets.filter((ticket) => ticket.status === 'OPEN').length,
+    inProgress: supportTickets.filter((ticket) => ticket.status === 'IN_PROGRESS').length,
+    resolved: supportTickets.filter((ticket) => ticket.status === 'RESOLVED').length,
+  }), [supportTickets]);
 
   const advanceStatus = (leadId: string, newStatus: LeadStatus) => {
     const now = new Date().toISOString();
@@ -133,6 +159,29 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
   };
 
   const getBuyerInviteLink = () => {
+
+  const handleSupportTicketAction = async (ticketId: string, status: ContactSupportTicketStatus) => {
+    setSupportError(null);
+    setSupportSuccess(null);
+    const message = String(supportReplyDrafts[ticketId] || '').trim();
+    if (!message) {
+      setSupportError('Add a response before updating the ticket.');
+      return;
+    }
+
+    setSupportBusyId(ticketId);
+    try {
+      await respondToContactSupportTicket(ticketId, { message, status });
+      const refreshed = await listContactSupportTicketsForAdmin(100);
+      setSupportTickets(refreshed);
+      setSupportReplyDrafts((prev) => ({ ...prev, [ticketId]: '' }));
+      setSupportSuccess(status === 'RESOLVED' ? 'Support ticket resolved and requester notified.' : 'Reply sent and requester notified.');
+    } catch (error: any) {
+      setSupportError(String(error?.message || 'Failed to update support ticket.'));
+    } finally {
+      setSupportBusyId(null);
+    }
+  };
     if (typeof window === 'undefined') return '/buyer-portal';
     return `${window.location.origin}/buyer-portal?invite=buyer`;
   };
@@ -153,6 +202,7 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
   const tabs: Array<{ id: AdminTab; label: string; icon: React.ReactNode }> = [
     { id: 'LEADS',      label: 'Leads',      icon: <ClipboardList size={15} /> },
     { id: 'BUYERS',     label: 'Buyers',     icon: <Building2 size={15} /> },
+    { id: 'SUPPORT',    label: 'Support',    icon: <MessageSquare size={15} /> },
     { id: 'REPORTING',  label: 'Reporting',  icon: <BarChart2 size={15} /> },
     { id: 'COMPLIANCE', label: 'Compliance', icon: <Shield size={15} /> },
     { id: 'PRICING',    label: 'Pricing',    icon: <CircleDollarSign size={15} /> },
@@ -362,6 +412,112 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
                 </div>
               </Card>
             ))}
+          </div>
+        )}
+
+        {/* ── SUPPORT Tab ───────────────────────────────────────────────── */}
+        {activeTab === 'SUPPORT' && (
+          <div className="space-y-4">
+            <section className="grid grid-cols-3 gap-3">
+              {[
+                { label: 'Open', value: supportCounts.open, color: 'bg-slate-100 text-slate-700' },
+                { label: 'In Progress', value: supportCounts.inProgress, color: 'bg-amber-100 text-amber-700' },
+                { label: 'Resolved', value: supportCounts.resolved, color: 'bg-emerald-100 text-emerald-700' },
+              ].map((kpi) => (
+                <Card key={kpi.label} className="border-slate-200 bg-white/95">
+                  <div className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold mb-1 ${kpi.color}`}>{kpi.label}</div>
+                  <p className="text-2xl font-bold text-slate-900">{kpi.value}</p>
+                </Card>
+              ))}
+            </section>
+
+            <Card className="border-slate-200 bg-white/95">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">AERA Support Queue</h2>
+                  <p className="text-xs text-slate-500 mt-1">Org admins and general users can submit tickets from Settings. Replies here notify the requester and persist the admin handling the issue.</p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => void loadSupportQueue()}>
+                  <RefreshCcw size={14} className="mr-1" /> Refresh
+                </Button>
+              </div>
+
+              {supportError && <p className="text-xs font-semibold text-rose-700 mb-3">{supportError}</p>}
+              {supportSuccess && <p className="text-xs font-semibold text-emerald-700 mb-3">{supportSuccess}</p>}
+
+              {supportTickets.length === 0 ? (
+                <p className="text-sm text-slate-500">No support tickets in the queue.</p>
+              ) : (
+                <div className="space-y-3">
+                  {supportTickets.map((ticket) => (
+                    <div key={ticket.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <p className="font-bold text-slate-900">{ticket.subject}</p>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${SUPPORT_STATUS_COLORS[ticket.status]}`}>{ticket.status === 'IN_PROGRESS' ? 'In Progress' : ticket.status}</span>
+                            <span className="text-[10px] font-bold bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full">{ticket.category}</span>
+                          </div>
+                          <p className="text-xs text-slate-500">
+                            {ticket.requesterName || 'Unknown user'} · {ticket.requesterRole || 'User'}
+                            {ticket.requesterEmail ? ` · ${ticket.requesterEmail}` : ''}
+                            {ticket.orgName ? ` · ${ticket.orgName}` : ''}
+                          </p>
+                          <p className="text-[11px] text-slate-400 mt-1">Submitted {formatDate(ticket.createdAt)} · Ticket {ticket.id}</p>
+                        </div>
+                        <div className="text-right text-xs text-slate-500">
+                          <p>{ticket.assignedAdminName ? `Handling: ${ticket.assignedAdminName}` : 'Unassigned'}</p>
+                          {ticket.resolvedByAdminName && <p>Resolved by {ticket.resolvedByAdminName}</p>}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        {ticket.messages.map((entry, index) => (
+                          <div key={`${ticket.id}-${entry.createdAt}-${index}`} className={`rounded-xl border px-3 py-2 ${entry.authorRole === 'ADMIN' ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-white'}`}>
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs font-semibold text-slate-800">{entry.authorName}</p>
+                              <p className="text-[10px] text-slate-400">{formatDate(entry.createdAt)}</p>
+                            </div>
+                            <p className="text-xs text-slate-600 mt-1">{entry.message}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {ticket.status !== 'RESOLVED' && (
+                        <div className="space-y-2 border-t border-slate-200 pt-3">
+                          <label className="block text-xs font-semibold text-slate-700">Admin response</label>
+                          <textarea
+                            className="w-full min-h-24 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-200"
+                            placeholder="Tell the requester what you need from them or what you did to help."
+                            value={supportReplyDrafts[ticket.id] || ''}
+                            onChange={(event) => setSupportReplyDrafts((prev) => ({ ...prev, [ticket.id]: event.target.value }))}
+                          />
+                          <div className="flex flex-wrap justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void handleSupportTicketAction(ticket.id, 'IN_PROGRESS')}
+                              disabled={supportBusyId === ticket.id}
+                            >
+                              {supportBusyId === ticket.id ? <RefreshCcw size={14} className="mr-1 animate-spin" /> : null}
+                              Send Update
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => void handleSupportTicketAction(ticket.id, 'RESOLVED')}
+                              disabled={supportBusyId === ticket.id}
+                            >
+                              {supportBusyId === ticket.id ? <RefreshCcw size={14} className="mr-1 animate-spin" /> : null}
+                              Resolve Ticket
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
           </div>
         )}
 

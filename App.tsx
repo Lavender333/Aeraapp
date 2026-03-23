@@ -450,7 +450,7 @@ export default function App() {
       case 'ORG_DASHBOARD':
         {
           const requestedTab = sessionStorage.getItem('orgDashboardInitialTab');
-          const initialOrgDashboardTab = requestedTab === 'INVENTORY' || requestedTab === 'PREPAREDNESS' || requestedTab === 'MEMBERS'
+          const initialOrgDashboardTab = requestedTab === 'INVENTORY' || requestedTab === 'PREPAREDNESS' || requestedTab === 'MEMBERS' || requestedTab === 'OUTREACH'
             ? requestedTab
             : 'MEMBERS';
           sessionStorage.removeItem('orgDashboardInitialTab');

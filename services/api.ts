@@ -1423,6 +1423,43 @@ export type AppNotificationRecord = {
   metadata?: Record<string, any>;
 };
 
+export type ContactSupportTicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
+export type ContactSupportTicketPriority = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export type ContactSupportTicketMessage = {
+  authorId: string;
+  authorName: string;
+  authorRole: string;
+  message: string;
+  createdAt: string;
+  action: 'CREATED' | 'RESPONDED' | 'RESOLVED';
+};
+
+export type ContactSupportTicketRecord = {
+  id: string;
+  userId: string;
+  orgId?: string;
+  orgCode?: string;
+  orgName?: string;
+  requesterName?: string;
+  requesterEmail?: string;
+  requesterPhone?: string;
+  requesterRole?: string;
+  subject: string;
+  message: string;
+  category: string;
+  status: ContactSupportTicketStatus;
+  priority: ContactSupportTicketPriority;
+  assignedAdminId?: string;
+  assignedAdminName?: string;
+  resolvedByAdminId?: string;
+  resolvedByAdminName?: string;
+  resolvedAt?: string;
+  createdAt: string;
+  updatedAt?: string;
+  messages: ContactSupportTicketMessage[];
+};
+
 export type HouseholdJoinResolutionAction = 'approved' | 'rejected';
 
 const mapJoinRequestRecord = (
@@ -1492,6 +1529,62 @@ const mapNotificationRecord = (row: any): AppNotificationRecord => ({
   createdAt: row.created_at,
   metadata: row.metadata || {},
 });
+
+const mapContactSupportTicketStatus = (status?: string | null): ContactSupportTicketStatus => {
+  const normalized = String(status || '').toUpperCase();
+  if (normalized === 'RESOLVED') return 'RESOLVED';
+  if (normalized === 'DISPATCHED') return 'IN_PROGRESS';
+  return 'OPEN';
+};
+
+const mapContactSupportTicketRecord = (row: any): ContactSupportTicketRecord => {
+  const data = row?.data || {};
+  const messages = Array.isArray(data?.messages)
+    ? data.messages
+        .map((entry: any) => ({
+          authorId: String(entry?.authorId || ''),
+          authorName: String(entry?.authorName || 'Unknown'),
+          authorRole: String(entry?.authorRole || ''),
+          message: String(entry?.message || '').trim(),
+          createdAt: String(entry?.createdAt || row?.created_at || new Date().toISOString()),
+          action: String(entry?.action || 'RESPONDED').toUpperCase() === 'CREATED'
+            ? 'CREATED'
+            : String(entry?.action || 'RESPONDED').toUpperCase() === 'RESOLVED'
+              ? 'RESOLVED'
+              : 'RESPONDED',
+        }))
+        .filter((entry: ContactSupportTicketMessage) => Boolean(entry.message))
+    : [];
+
+  return {
+    id: String(row?.id || ''),
+    userId: String(row?.user_id || ''),
+    orgId: row?.org_id || undefined,
+    orgCode: data?.requesterOrgCode || undefined,
+    orgName: data?.requesterOrgName || undefined,
+    requesterName: data?.requesterName || undefined,
+    requesterEmail: data?.requesterEmail || undefined,
+    requesterPhone: data?.requesterPhone || undefined,
+    requesterRole: data?.requesterRole || undefined,
+    subject: String(data?.subject || ''),
+    message: String(data?.message || messages[0]?.message || ''),
+    category: String(data?.category || 'GENERAL'),
+    status: mapContactSupportTicketStatus(row?.status),
+    priority: String(row?.priority || 'MEDIUM').toUpperCase() === 'HIGH'
+      ? 'HIGH'
+      : String(row?.priority || 'MEDIUM').toUpperCase() === 'LOW'
+        ? 'LOW'
+        : 'MEDIUM',
+    assignedAdminId: data?.assignedAdminId || undefined,
+    assignedAdminName: data?.assignedAdminName || undefined,
+    resolvedByAdminId: data?.resolvedByAdminId || undefined,
+    resolvedByAdminName: data?.resolvedByAdminName || undefined,
+    resolvedAt: data?.resolvedAt || undefined,
+    createdAt: String(row?.created_at || new Date().toISOString()),
+    updatedAt: data?.updatedAt || undefined,
+    messages,
+  };
+};
 
 const normalizeHouseholdCode = (code: string) =>
   String(code || '')
@@ -4735,6 +4828,239 @@ export async function updateHelpRequestLocation(id: string, location: string) {
     details: { location },
   });
   return { ok: true };
+}
+
+export async function createContactSupportTicket(payload: {
+  subject: string;
+  message: string;
+  category?: string;
+  priority?: ContactSupportTicketPriority;
+}): Promise<ContactSupportTicketRecord> {
+  const subject = String(payload.subject || '').trim();
+  const message = String(payload.message || '').trim();
+  if (!subject) throw new Error('Subject is required.');
+  if (!message) throw new Error('Message is required.');
+
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user?.id) throw new Error('Not authenticated');
+
+  const requesterProfile = await getProfileById(authData.user.id);
+  const orgMeta = requesterProfile?.org_id ? await getOrgMetaById(String(requesterProfile.org_id)) : null;
+  const now = new Date().toISOString();
+  const priority = payload.priority === 'HIGH' || payload.priority === 'LOW' ? payload.priority : 'MEDIUM';
+  const dataPayload = {
+    requestType: 'CONTACT_SUPPORT',
+    category: String(payload.category || 'GENERAL').trim().toUpperCase(),
+    subject,
+    message,
+    requesterName: String(requesterProfile?.full_name || authData.user.email || 'AERA User'),
+    requesterEmail: String(requesterProfile?.email || authData.user.email || ''),
+    requesterPhone: String(requesterProfile?.phone || ''),
+    requesterRole: String(requesterProfile?.role || 'GENERAL_USER').toUpperCase(),
+    requesterOrgCode: orgMeta?.orgCode || undefined,
+    requesterOrgName: orgMeta?.orgName || undefined,
+    createdAt: now,
+    updatedAt: now,
+    messages: [
+      {
+        authorId: authData.user.id,
+        authorName: String(requesterProfile?.full_name || authData.user.email || 'AERA User'),
+        authorRole: String(requesterProfile?.role || 'GENERAL_USER').toUpperCase(),
+        message,
+        createdAt: now,
+        action: 'CREATED',
+      },
+    ],
+  };
+
+  const { data, error } = await supabase
+    .from('help_requests')
+    .insert({
+      user_id: authData.user.id,
+      org_id: requesterProfile?.org_id || null,
+      status: 'RECEIVED',
+      priority,
+      data: dataPayload,
+      location: null,
+    })
+    .select('id, user_id, org_id, status, priority, data, location, created_at')
+    .single();
+
+  if (error || !data) throw new Error(error?.message || 'Failed to create support ticket.');
+
+  const { data: adminRows, error: adminError } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('role', 'ADMIN');
+
+  if (adminError) {
+    console.warn('Support ticket admin notification lookup failed', adminError);
+  }
+
+  const recipientIds = Array.from(new Set((adminRows || [])
+    .map((row: any) => String(row?.id || ''))
+    .filter((id: string) => Boolean(id) && id !== authData.user.id)));
+
+  if (recipientIds.length > 0) {
+    await supabase.from('notifications').insert(
+      recipientIds.map((recipientId) => ({
+        user_id: recipientId,
+        type: 'support_ticket_created',
+        related_id: data.id,
+        metadata: {
+          subject,
+          category: dataPayload.category,
+          requesterName: dataPayload.requesterName,
+          requesterRole: dataPayload.requesterRole,
+        },
+      })),
+    );
+  }
+
+  await safeLogActivity({
+    action: 'CREATE',
+    entityType: 'help_requests',
+    entityId: data.id,
+    details: {
+      requestType: 'CONTACT_SUPPORT',
+      category: dataPayload.category,
+      notifiedAdminCount: recipientIds.length,
+    },
+  });
+
+  return mapContactSupportTicketRecord(data);
+}
+
+export async function listMyContactSupportTickets(limit = 20): Promise<ContactSupportTicketRecord[]> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user?.id) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('help_requests')
+    .select('id, user_id, org_id, status, priority, data, location, created_at')
+    .eq('user_id', authData.user.id)
+    .contains('data', { requestType: 'CONTACT_SUPPORT' })
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(error.message || 'Failed to load support tickets.');
+  return (data || []).map(mapContactSupportTicketRecord);
+}
+
+export async function listContactSupportTicketsForAdmin(limit = 100): Promise<ContactSupportTicketRecord[]> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user?.id) throw new Error('Not authenticated');
+
+  const actorProfile = await getProfileById(authData.user.id);
+  if (String(actorProfile?.role || '').toUpperCase() !== 'ADMIN') {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('help_requests')
+    .select('id, user_id, org_id, status, priority, data, location, created_at')
+    .contains('data', { requestType: 'CONTACT_SUPPORT' })
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(error.message || 'Failed to load support queue.');
+  return (data || []).map(mapContactSupportTicketRecord);
+}
+
+export async function respondToContactSupportTicket(
+  ticketId: string,
+  payload: { message: string; status: ContactSupportTicketStatus },
+): Promise<ContactSupportTicketRecord> {
+  const normalizedTicketId = String(ticketId || '').trim();
+  const message = String(payload.message || '').trim();
+  if (!normalizedTicketId) throw new Error('Ticket id is required.');
+  if (!message) throw new Error('Response message is required.');
+
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user?.id) throw new Error('Not authenticated');
+
+  const actorProfile = await getProfileById(authData.user.id);
+  if (String(actorProfile?.role || '').toUpperCase() !== 'ADMIN') {
+    throw new Error('Only AERA admins can respond to support tickets.');
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from('help_requests')
+    .select('id, user_id, org_id, status, priority, data, location, created_at')
+    .eq('id', normalizedTicketId)
+    .maybeSingle();
+
+  if (existingError) throw new Error(existingError.message || 'Failed to load support ticket.');
+  if (!existing?.id || String(existing?.data?.requestType || '') !== 'CONTACT_SUPPORT') {
+    throw new Error('Support ticket not found.');
+  }
+
+  const now = new Date().toISOString();
+  const adminName = String(actorProfile?.full_name || authData.user.email || 'AERA Admin');
+  const existingMessages = Array.isArray(existing.data?.messages) ? existing.data.messages : [];
+  const nextStatus = payload.status === 'RESOLVED' ? 'RESOLVED' : 'DISPATCHED';
+  const nextData = {
+    ...(existing.data || {}),
+    assignedAdminId: authData.user.id,
+    assignedAdminName: adminName,
+    updatedAt: now,
+    lastResponseAt: now,
+    messages: [
+      ...existingMessages,
+      {
+        authorId: authData.user.id,
+        authorName: adminName,
+        authorRole: 'ADMIN',
+        message,
+        createdAt: now,
+        action: payload.status === 'RESOLVED' ? 'RESOLVED' : 'RESPONDED',
+      },
+    ],
+    ...(payload.status === 'RESOLVED'
+      ? {
+          resolvedAt: now,
+          resolvedByAdminId: authData.user.id,
+          resolvedByAdminName: adminName,
+        }
+      : {}),
+  };
+
+  const { data: updatedRows, error: updateError } = await supabase
+    .from('help_requests')
+    .update({
+      status: nextStatus,
+      data: nextData,
+    })
+    .eq('id', normalizedTicketId)
+    .select('id, user_id, org_id, status, priority, data, location, created_at');
+
+  if (updateError) throw new Error(updateError.message || 'Failed to update support ticket.');
+  const updated = updatedRows?.[0];
+  if (!updated) throw new Error('Support ticket not found or you do not have permission to update it.');
+
+  await supabase.from('notifications').insert({
+    user_id: existing.user_id,
+    type: payload.status === 'RESOLVED' ? 'support_ticket_resolved' : 'support_ticket_response',
+    related_id: normalizedTicketId,
+    metadata: {
+      subject: existing.data?.subject || '',
+      adminName,
+      category: existing.data?.category || 'GENERAL',
+    },
+  });
+
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'help_requests',
+    entityId: normalizedTicketId,
+    details: {
+      requestType: 'CONTACT_SUPPORT',
+      status: payload.status,
+      respondedBy: authData.user.id,
+    },
+  });
+
+  return mapContactSupportTicketRecord(updated);
 }
 
 // Member CRUD

@@ -13,7 +13,7 @@ import { Building2, CheckCircle, AlertTriangle, HelpCircle, Package, ArrowLeft, 
 import { Textarea } from '../components/Input';
 import { GoogleGenAI } from "../services/mockGenAI";
 
-type OrgDashboardTab = 'MEMBERS' | 'PREPAREDNESS' | 'INVENTORY';
+type OrgDashboardTab = 'MEMBERS' | 'OUTREACH' | 'PREPAREDNESS' | 'INVENTORY';
 type OrgSelectorOption = { id: string; org_code: string; name: string };
 
 const normalizeReplenishmentStatus = (status: string | undefined): ReplenishmentRequest['status'] => {
@@ -390,7 +390,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
   }, [communityId, viewOrgId, childOrgs, parentOrgName]);
 
   useEffect(() => {
-    if (activeTab !== 'PREPAREDNESS' || !activeOrgCode) return;
+    if (activeTab !== 'OUTREACH' || !activeOrgCode) return;
 
     let active = true;
     const loadOutreachPanel = async () => {
@@ -1333,6 +1333,12 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
            {t('org.tab.members')}
          </button>
          <button 
+           onClick={() => { setActiveTab('OUTREACH'); setSelectedMember(null); }}
+           className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'OUTREACH' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500'}`}
+         >
+           {t('org.tab.outreach')}
+         </button>
+         <button 
            onClick={() => { setActiveTab('PREPAREDNESS'); setSelectedMember(null); }}
            className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'PREPAREDNESS' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500'}`}
          >
@@ -1570,7 +1576,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
           )
         )}
 
-        {activeTab === 'PREPAREDNESS' && (
+        {activeTab === 'OUTREACH' && (
           <div className="space-y-3">
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-4">
               <div className="flex items-start justify-between gap-3">
@@ -1752,7 +1758,11 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                 )}
               </div>
             </div>
+          </div>
+        )}
 
+        {activeTab === 'PREPAREDNESS' && (
+          <div className="space-y-3">
             {outreachFlags.length > 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                 <h3 className="text-sm font-bold text-amber-900 mb-2">{t('org.outreach.title')}</h3>

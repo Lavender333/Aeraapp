@@ -7,7 +7,7 @@ import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
 import { buildCommunityInviteUrl, generateCommunityInviteQrDataUrl } from '../services/communityInvite';
-import { AppNotificationRecord, cancelMyHouseholdJoinRequest, ConnectedHouseholdMember, createHouseholdExpansionRequest, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestStatus, updateVitalsForUser } from '../services/api';
+import { AppNotificationRecord, cancelMyHouseholdJoinRequest, ConnectedHouseholdMember, ContactSupportTicketRecord, createContactSupportTicket, createHouseholdExpansionRequest, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyContactSupportTickets, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestStatus, updateVitalsForUser } from '../services/api';
 import { getOrgByCode, getOrgIdByCode } from '../services/supabase';
 import { listOrganizations as listOrganizationsSupabase } from '../services/supabaseApi';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
@@ -227,6 +227,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const isAdmin = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(normalizedRole);
   const isPlatformAdmin = normalizedRole === 'ADMIN';
   const isOrgScopedAdmin = normalizedRole === 'ORG_ADMIN' || normalizedRole === 'INSTITUTION_ADMIN';
+  const canSubmitContactSupport = normalizedRole === 'GENERAL_USER' || normalizedRole === 'ORG_ADMIN' || normalizedRole === 'INSTITUTION_ADMIN';
   const canManageOrgSettings = isOrgScopedAdmin || isPlatformAdmin;
   const orgScopeId = String(profile.communityId || '').trim();
   function getStoredProfileImage(userId?: string) {
@@ -436,6 +437,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [joinRequestBusyId, setJoinRequestBusyId] = useState<string | null>(null);
   const [notificationsBusy, setNotificationsBusy] = useState(false);
   const [showAllNotifications, setShowAllNotifications] = useState(false);
+  const [mySupportTickets, setMySupportTickets] = useState<ContactSupportTicketRecord[]>([]);
+  const [contactSupportSubject, setContactSupportSubject] = useState('');
+  const [contactSupportCategory, setContactSupportCategory] = useState('GENERAL');
+  const [contactSupportMessage, setContactSupportMessage] = useState('');
+  const [contactSupportBusy, setContactSupportBusy] = useState(false);
+  const [contactSupportError, setContactSupportError] = useState<string | null>(null);
+  const [contactSupportSuccess, setContactSupportSuccess] = useState<string | null>(null);
   const latestApprovedJoinRequestRef = useRef<string | null>(null);
   const accordionButtonIds: Record<SettingsAccordionKey, string> = {
     profile: 'settings-accordion-button-profile',
@@ -919,12 +927,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       }
 
       try {
-        const [ownerRequests, myRequests, myExpansion, adminExpansion, allowedExtraMembers] = await Promise.all([
+        const [ownerRequests, myRequests, myExpansion, adminExpansion, allowedExtraMembers, supportTickets] = await Promise.all([
           listHouseholdJoinRequestsForOwner(),
           listMyHouseholdJoinRequests(),
           listMyHouseholdExpansionRequests(),
           isAdmin ? listHouseholdExpansionRequestsForAdmin() : Promise.resolve([]),
           getAllowedAdditionalHouseholdMembers(profile.householdId),
+          canSubmitContactSupport ? listMyContactSupportTickets(20) : Promise.resolve([]),
         ]);
         if (!active) return;
         setOwnerJoinRequests(ownerRequests);
@@ -932,6 +941,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         setMyExpansionRequests(myExpansion);
         setAdminExpansionRequests(adminExpansion);
         setAllowedAdditionalMembers(Math.max(3, Number(allowedExtraMembers || 3)));
+        setMySupportTickets(supportTickets);
       } catch {
         if (!active) return;
         setOwnerJoinRequests([]);
@@ -939,6 +949,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         setMyExpansionRequests([]);
         setAdminExpansionRequests([]);
         setAllowedAdditionalMembers(3);
+        setMySupportTickets([]);
       }
 
       try {
@@ -953,7 +964,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     return () => {
       active = false;
     };
-  }, [profile.householdId, profile.householdRole, isAdmin]);
+  }, [profile.householdId, profile.householdRole, isAdmin, canSubmitContactSupport]);
 
   useEffect(() => {
     let unsub: (() => void) | null = null;
@@ -964,13 +975,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         unsub = await subscribeToNotifications(async () => {
           if (!active) return;
           try {
-            const [inbox, ownerRequests, myRequests, myExpansion, adminExpansion, allowedExtraMembers] = await Promise.all([
+            const [inbox, ownerRequests, myRequests, myExpansion, adminExpansion, allowedExtraMembers, supportTickets] = await Promise.all([
               listNotificationsForCurrentUser(50),
               listHouseholdJoinRequestsForOwner(),
               listMyHouseholdJoinRequests(),
               listMyHouseholdExpansionRequests(),
               isAdmin ? listHouseholdExpansionRequestsForAdmin() : Promise.resolve([]),
               getAllowedAdditionalHouseholdMembers(profile.householdId),
+              canSubmitContactSupport ? listMyContactSupportTickets(20) : Promise.resolve([]),
             ]);
             if (!active) return;
             setNotifications(inbox);
@@ -979,6 +991,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             setMyExpansionRequests(myExpansion);
             setAdminExpansionRequests(adminExpansion);
             setAllowedAdditionalMembers(Math.max(3, Number(allowedExtraMembers || 3)));
+            setMySupportTickets(supportTickets);
             await refreshHouseholdContext();
           } catch {
             // Ignore transient realtime refresh failures.
@@ -994,7 +1007,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       active = false;
       if (unsub) unsub();
     };
-  }, [isAdmin, profile.householdId]);
+  }, [isAdmin, profile.householdId, canSubmitContactSupport]);
 
   useEffect(() => {
     const approvedRequest = myJoinRequests.find((request) => request.status === 'approved');
@@ -1643,6 +1656,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const overflowMembers = (profile.household || []).slice(Math.max(0, allowedAdditionalMembers));
   const latestExpansionRequest = myExpansionRequests[0] || null;
   const pendingAdminExpansionRequests = adminExpansionRequests.filter((item) => item.status === 'pending');
+  const visibleSupportTickets = mySupportTickets.slice(0, 4);
 
   useEffect(() => {
     setExpansionRequestedAdditionalMembers((prev) => {
@@ -2069,6 +2083,45 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     }
   };
 
+  const handleSubmitContactSupport = async () => {
+    setContactSupportError(null);
+    setContactSupportSuccess(null);
+
+    const subject = String(contactSupportSubject || '').trim();
+    const message = String(contactSupportMessage || '').trim();
+    if (!subject) {
+      setContactSupportError('Please add a short subject.');
+      return;
+    }
+    if (!message) {
+      setContactSupportError('Please describe what you need help with.');
+      return;
+    }
+
+    setContactSupportBusy(true);
+    try {
+      await createContactSupportTicket({
+        subject,
+        message,
+        category: contactSupportCategory,
+      });
+      const [tickets, inbox] = await Promise.all([
+        listMyContactSupportTickets(20),
+        listNotificationsForCurrentUser(50),
+      ]);
+      setMySupportTickets(tickets);
+      setNotifications(inbox);
+      setContactSupportSubject('');
+      setContactSupportMessage('');
+      setContactSupportCategory('GENERAL');
+      setContactSupportSuccess('Your request was sent to the AERA admin team. Replies will appear here and in Notifications.');
+    } catch (error: any) {
+      setContactSupportError(String(error?.message || 'Failed to send your request.'));
+    } finally {
+      setContactSupportBusy(false);
+    }
+  };
+
   const handleLogout = () => {
     StorageService.logoutUser();
     setView('LOGIN');
@@ -2189,7 +2242,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     const localReqs = StorageService.getAllReplenishmentRequests();
     try {
       const remoteReqs = await listAllRequests();
-      const mergedReqs = mergeReplenishmentRequests(remoteReqs, localReqs);
+      const normalizedRemoteReqs: ReplenishmentRequest[] = (remoteReqs || []).map((request) => {
+        const normalizedStatus = String(request?.status || 'PENDING').toUpperCase();
+        return {
+          ...request,
+          status: ['PENDING', 'APPROVED', 'STOCKED', 'FULFILLED'].includes(normalizedStatus)
+            ? normalizedStatus as ReplenishmentRequest['status']
+            : 'PENDING',
+        };
+      });
+      const mergedReqs = mergeReplenishmentRequests(normalizedRemoteReqs, localReqs);
       const scopedMergedReqs = isOrgScopedAdmin
         ? mergedReqs.filter((req) => String(req.orgId || '') === orgScopeId)
         : mergedReqs;
@@ -5004,11 +5066,17 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                                   ? 'Your household expansion request was approved.'
                                   : item.type === 'household_expansion_rejected'
                                     ? 'Your household expansion request was rejected.'
-                              : item.type === 'household_member_reported_danger'
-                                ? `${String((item.metadata as any)?.reporterName || 'A household member')} reported DANGER.`
-                                : item.type === 'household_member_reported_safe'
-                                  ? `${String((item.metadata as any)?.reporterName || 'A household member')} reported SAFE.`
-                              : item.type}
+                                    : item.type === 'support_ticket_created'
+                                      ? `New support ticket from ${String((item.metadata as any)?.requesterName || 'a user')}.`
+                                      : item.type === 'support_ticket_response'
+                                        ? `AERA support replied to your ticket: ${String((item.metadata as any)?.subject || 'Support request')}`
+                                        : item.type === 'support_ticket_resolved'
+                                          ? `Your support ticket was marked resolved by ${String((item.metadata as any)?.adminName || 'AERA support')}.`
+                                          : item.type === 'household_member_reported_danger'
+                                            ? `${String((item.metadata as any)?.reporterName || 'A household member')} reported DANGER.`
+                                            : item.type === 'household_member_reported_safe'
+                                              ? `${String((item.metadata as any)?.reporterName || 'A household member')} reported SAFE.`
+                                              : item.type}
                       </p>
                       <p className="text-[10px] mt-0.5 opacity-80">{new Date(item.createdAt).toLocaleString()}</p>
                     </div>
@@ -5025,6 +5093,117 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 </div>
               )}
             </div>
+
+            {canSubmitContactSupport && (
+              <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Contact Us - Aera</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Send a question or assistance request to the AERA admin team. Replies and resolution updates will appear in your ticket history below.
+                    </p>
+                  </div>
+                  <div className="rounded-full bg-sky-50 border border-sky-200 px-2.5 py-1 text-[10px] font-bold text-sky-700">
+                    AERA Admin Queue
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-3">
+                  <Input
+                    label="Subject"
+                    value={contactSupportSubject}
+                    onChange={(e) => setContactSupportSubject(e.target.value)}
+                    placeholder="Short summary of the issue"
+                  />
+                  <label className="space-y-1 text-sm text-slate-700">
+                    <span className="font-medium">Category</span>
+                    <select
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-200"
+                      value={contactSupportCategory}
+                      onChange={(e) => setContactSupportCategory(e.target.value)}
+                    >
+                      <option value="GENERAL">General Help</option>
+                      <option value="ACCOUNT">Account Access</option>
+                      <option value="ORGANIZATION">Organization Setup</option>
+                      <option value="TECHNICAL">Technical Issue</option>
+                      <option value="OTHER">Other</option>
+                    </select>
+                  </label>
+                </div>
+
+                <Textarea
+                  label="How can AERA help?"
+                  value={contactSupportMessage}
+                  onChange={(e) => setContactSupportMessage(e.target.value)}
+                  placeholder="Describe the issue, what you tried, and what outcome you need."
+                  rows={4}
+                />
+
+                {contactSupportError && <p className="text-xs font-semibold text-amber-700">{contactSupportError}</p>}
+                {contactSupportSuccess && <p className="text-xs font-semibold text-emerald-700">{contactSupportSuccess}</p>}
+
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[11px] text-slate-500">Platform admins receive an in-app notification as soon as the ticket is submitted.</p>
+                  <Button size="sm" onClick={handleSubmitContactSupport} disabled={contactSupportBusy}>
+                    {contactSupportBusy ? <Loader2 size={14} className="mr-1 animate-spin" /> : null}
+                    Submit Ticket
+                  </Button>
+                </div>
+
+                <div className="border-t border-slate-100 pt-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">My Support Tickets</p>
+                    <span className="text-[11px] text-slate-500">{mySupportTickets.length} total</span>
+                  </div>
+
+                  {visibleSupportTickets.length === 0 ? (
+                    <p className="text-xs text-slate-600">No support tickets yet.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {visibleSupportTickets.map((ticket) => (
+                        <div key={ticket.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">{ticket.subject}</p>
+                              <p className="text-[11px] text-slate-500">
+                                {ticket.category} · Submitted {new Date(ticket.createdAt).toLocaleString()}
+                              </p>
+                            </div>
+                            <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${ticket.status === 'RESOLVED' ? 'bg-emerald-100 text-emerald-700' : ticket.status === 'IN_PROGRESS' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-700'}`}>
+                              {ticket.status === 'IN_PROGRESS' ? 'In Progress' : ticket.status}
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-slate-700">{ticket.message}</p>
+
+                          {(ticket.assignedAdminName || ticket.resolvedByAdminName) && (
+                            <p className="text-[11px] text-slate-500">
+                              {ticket.status === 'RESOLVED'
+                                ? `Resolved by ${ticket.resolvedByAdminName || ticket.assignedAdminName}`
+                                : `Assigned to ${ticket.assignedAdminName}`}
+                            </p>
+                          )}
+
+                          {ticket.messages.length > 1 && (
+                            <div className="space-y-2 border-t border-slate-200 pt-2">
+                              {ticket.messages.slice(-2).map((entry, index) => (
+                                <div key={`${ticket.id}-${entry.createdAt}-${index}`} className="rounded-lg bg-white border border-slate-200 p-2">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="text-[11px] font-semibold text-slate-700">{entry.authorName}</p>
+                                    <p className="text-[10px] text-slate-400">{new Date(entry.createdAt).toLocaleString()}</p>
+                                  </div>
+                                  <p className="text-xs text-slate-600 mt-1">{entry.message}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </>
         )}
 
