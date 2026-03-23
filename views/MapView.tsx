@@ -7,6 +7,8 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
 
+const MAP_PRESET_QUERY_KEY = 'aera.mapPresetQuery';
+
 export const MapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -28,6 +30,15 @@ export const MapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
         { enableHighAccuracy: true } // FORCE HIGH ACCURACY
       );
     }
+  }, []);
+
+  useEffect(() => {
+    const presetQuery = sessionStorage.getItem(MAP_PRESET_QUERY_KEY);
+    if (!presetQuery) return;
+
+    sessionStorage.removeItem(MAP_PRESET_QUERY_KEY);
+    setQuery(presetQuery);
+    void handleSearch(presetQuery);
   }, []);
 
   const handleSearch = async (searchQuery: string) => {

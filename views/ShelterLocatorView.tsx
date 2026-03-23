@@ -3,12 +3,22 @@ import { ArrowLeft, ExternalLink, MapPin } from 'lucide-react';
 import { ViewState } from '../types';
 
 const SHELTER_LOCATOR_URL = 'https://egateway.fema.gov/ESF6/DRCLocator';
+const MAP_PRESET_QUERY_KEY = 'aera.mapPresetQuery';
 
 export const ShelterLocatorView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const [showEmbedAttempt, setShowEmbedAttempt] = useState(false);
 
   const openOfficialLocator = () => {
     window.open(SHELTER_LOCATOR_URL, '_blank', 'noopener,noreferrer');
+  };
+
+  const openDirectLink = () => {
+    window.location.assign(SHELTER_LOCATOR_URL);
+  };
+
+  const useMapAssistant = () => {
+    sessionStorage.setItem(MAP_PRESET_QUERY_KEY, 'Nearest emergency shelter');
+    setView('MAP');
   };
 
   return (
@@ -61,20 +71,26 @@ export const ShelterLocatorView: React.FC<{ setView: (v: ViewState) => void }> =
 
               <a
                 href={SHELTER_LOCATOR_URL}
-                target="_blank"
-                rel="noopener noreferrer"
+                onClick={(e) => {
+                  e.preventDefault();
+                  openDirectLink();
+                }}
                 className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-slate-700 text-sm font-medium hover:bg-slate-100"
               >
-                Open Direct Link
+                Direct Link
               </a>
 
               <button
-                onClick={() => setView('MAP')}
+                onClick={useMapAssistant}
                 className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-slate-700 text-sm font-medium hover:bg-slate-100"
               >
                 Use Map Assistant Instead
               </button>
             </div>
+
+            <p className="mt-3 text-xs text-slate-500">
+              Map Assistant will start with a prefilled shelter search so responders can quickly find nearby options.
+            </p>
 
             <button
               onClick={() => setShowEmbedAttempt((prev) => !prev)}
