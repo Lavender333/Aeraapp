@@ -5093,6 +5093,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 </div>
               )}
             </div>
+          </>
+        )}
 
             {canSubmitContactSupport && (
               <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
@@ -5204,8 +5206,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 </div>
               </div>
             )}
-          </>
-        )}
 
         <button
           type="button"
