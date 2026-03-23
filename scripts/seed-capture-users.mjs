@@ -15,10 +15,11 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
 });
 
 const PASSWORD = 'AeraDemo!2026';
+// Default locations near Grace Community Church (Springfield, IL: 39.7817, -89.6501)
 const USERS = [
-  { email: 'pastor@example.com', fullName: 'Pastor John', role: 'INSTITUTION_ADMIN', phone: '555-0101', orgCode: 'CH-9921' },
-  { email: 'alice@example.com', fullName: 'Alice Johnson', role: 'GENERAL_USER', phone: '555-1001', orgCode: 'CH-9921' },
-  { email: 'david@example.com', fullName: 'David Brown', role: 'GENERAL_USER', phone: '555-1002', orgCode: 'CH-9921' },
+  { email: 'pastor@example.com', fullName: 'Pastor John', role: 'INSTITUTION_ADMIN', phone: '555-0101', orgCode: 'CH-9921', latitude: 39.7817, longitude: -89.6501 },
+  { email: 'alice@example.com', fullName: 'Alice Johnson', role: 'GENERAL_USER', phone: '555-1001', orgCode: 'CH-9921', latitude: 39.7900, longitude: -89.6400 },
+  { email: 'david@example.com', fullName: 'David Brown', role: 'GENERAL_USER', phone: '555-1002', orgCode: 'CH-9921', latitude: 39.7750, longitude: -89.6600 },
 ];
 
 async function getOrgIdByCode(orgCode) {
@@ -68,16 +69,24 @@ async function ensureAuthUser(user) {
 }
 
 async function upsertProfile(userId, user, orgId) {
+  const profileData = {
+    id: userId,
+    email: user.email,
+    full_name: user.fullName,
+    phone: user.phone,
+    role: user.role,
+    org_id: orgId,
+  };
+
+  // Add location if provided
+  if (typeof user.latitude === 'number' && typeof user.longitude === 'number') {
+    profileData.latitude = user.latitude;
+    profileData.longitude = user.longitude;
+  }
+
   const { error } = await supabase
     .from('profiles')
-    .upsert({
-      id: userId,
-      email: user.email,
-      full_name: user.fullName,
-      phone: user.phone,
-      role: user.role,
-      org_id: orgId,
-    });
+    .upsert(profileData);
 
   if (error) throw error;
   console.log(`Upserted profile: ${user.email} (${user.role}) -> ${user.orgCode}`);
