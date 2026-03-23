@@ -227,7 +227,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const isAdmin = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(normalizedRole);
   const isPlatformAdmin = normalizedRole === 'ADMIN';
   const isOrgScopedAdmin = normalizedRole === 'ORG_ADMIN' || normalizedRole === 'INSTITUTION_ADMIN';
-  const canSubmitContactSupport = normalizedRole === 'GENERAL_USER' || normalizedRole === 'ORG_ADMIN' || normalizedRole === 'INSTITUTION_ADMIN';
+  const canSubmitContactSupport = ['GENERAL_USER', 'MEMBER', 'ORG_ADMIN', 'INSTITUTION_ADMIN', 'ADMIN'].includes(normalizedRole);
   const canManageOrgSettings = isOrgScopedAdmin || isPlatformAdmin;
   const orgScopeId = String(profile.communityId || '').trim();
   function getStoredProfileImage(userId?: string) {

@@ -78,6 +78,38 @@ const getProfileById = async (userId: string) => {
   return data;
 };
 
+/**
+ * Attempts to capture the user's current geolocation using the Geolocation API.
+ * Returns { latitude, longitude } on success, or null if unavailable/denied.
+ */
+export const captureUserLocation = (): Promise<{ latitude: number; longitude: number } | null> => {
+  return new Promise((resolve) => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      resolve(null);
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      resolve(null);
+    }, 10000); // 10 second timeout
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        clearTimeout(timeoutId);
+        resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+      },
+      () => {
+        clearTimeout(timeoutId);
+        resolve(null);
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+    );
+  });
+};
+
 export type OrgMembershipActivityRecord = {
   id: string;
   action: 'ORG_CONNECT' | 'ORG_DISCONNECT';
