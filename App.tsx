@@ -120,12 +120,20 @@ export default function App() {
   const currentRole = String(StorageService.getProfile()?.role || 'GENERAL_USER').toUpperCase();
   const canAccessAdvancedViews = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN', 'FIRST_RESPONDER', 'LOCAL_AUTHORITY', 'CONTRACTOR'].includes(currentRole);
   const canAccessLeadIntake = ['ADMIN', 'ORG_ADMIN'].includes(currentRole);
-  const canAccessBuyerPortal = ['ADMIN', 'ORG_ADMIN'].includes(currentRole);
+  const canAccessBuyerPortal = ['ADMIN', 'BUYER'].includes(currentRole);
   const canAccessLeadAdmin = currentRole === 'ADMIN';
   const canAccessOrgDashboard = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(currentRole);
   const canAccessNewSignups = currentRole === 'ADMIN';
   const isPresentationPath = typeof window !== 'undefined' && window.location.pathname === '/presentation';
   const isPresentationView = currentView === 'PRESENTATION' || isPresentationPath;
+
+  const canRoleAccessBuyerPortal = (role: string) => ['ADMIN', 'BUYER'].includes(role);
+
+  const getStandaloneRequestedView = (): ViewState | null => {
+    if (typeof window === 'undefined') return null;
+    if (window.location.pathname === '/buyer-portal') return 'BUYER_PORTAL';
+    return null;
+  };
 
   const getEventIdFromUrl = () => {
     const searchId = new URLSearchParams(window.location.search).get('event');
@@ -141,7 +149,15 @@ export default function App() {
     const role = String(profile?.role || 'GENERAL_USER').toUpperCase();
     const onboardComplete = Boolean(profile?.onboardComplete);
 
+    const requestedStandaloneView = getStandaloneRequestedView() || (sessionStorage.getItem('postLoginView') as ViewState | null);
+
+    if (requestedStandaloneView === 'BUYER_PORTAL' && canRoleAccessBuyerPortal(role)) {
+      sessionStorage.removeItem('postLoginView');
+      return 'BUYER_PORTAL';
+    }
+
     if (!onboardComplete) return 'ACCOUNT_SETUP';
+    if (role === 'BUYER') return 'BUYER_PORTAL';
     if (role === 'INSTITUTION_ADMIN' || role === 'ORG_ADMIN') return 'ORG_DASHBOARD';
     return 'DASHBOARD';
   };
@@ -179,6 +195,7 @@ export default function App() {
       const isRecoveryHash = hash.includes('type=recovery') || search.includes('type=recovery') || hash.includes('reset-password');
       const isRecoveryUrl = isRecoveryPath || isRecoveryHash;
       const isPresentationUrl = window.location.pathname === '/presentation';
+      const requestedStandaloneView = getStandaloneRequestedView();
       const isEventRegistrationUrl = Boolean(eventIdFromUrl);
       try {
         const { data } = await supabase.auth.getSession();
@@ -249,6 +266,10 @@ export default function App() {
             setPostSplashView(nextView);
             setView(nextView);
           }
+        } else if (requestedStandaloneView === 'BUYER_PORTAL') {
+          sessionStorage.setItem('postLoginView', 'BUYER_PORTAL');
+          setPostSplashView('LOGIN');
+          setView('SPLASH');
         } else if (pendingInvite?.communityId) {
           setPostSplashView('REGISTRATION');
           setView('SPLASH');
@@ -294,6 +315,25 @@ export default function App() {
       subscription?.subscription?.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const currentPath = window.location.pathname;
+
+    if (currentView === 'BUYER_PORTAL' && currentPath !== '/buyer-portal') {
+      window.history.replaceState({}, '', '/buyer-portal');
+      return;
+    }
+
+    if (
+      currentPath === '/buyer-portal' &&
+      currentView !== 'BUYER_PORTAL' &&
+      currentView !== 'SPLASH' &&
+      currentView !== 'LOGIN'
+    ) {
+      window.history.replaceState({}, '', '/');
+    }
+  }, [currentView]);
 
   const handleSplashComplete = () => {
     sessionStorage.setItem('splashSeen', '1');

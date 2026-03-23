@@ -307,6 +307,7 @@ export interface HelpRequestRecord extends HelpRequestData {
 
 export type UserRole =
   | 'ADMIN'
+  | 'BUYER'
   | 'CONTRACTOR'
   | 'LOCAL_AUTHORITY'
   | 'FIRST_RESPONDER'

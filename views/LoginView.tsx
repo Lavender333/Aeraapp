@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { ViewState } from '../types';
+import { UserProfile, ViewState } from '../types';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { StorageService } from '../services/storage';
@@ -25,7 +25,7 @@ const formatPhoneNumber = (value: string) => {
 
 export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
     // Defensive: fallback for missing or malformed profile
-    const safeGetProfile = () => {
+    const safeGetProfile = (): Partial<UserProfile> => {
       try {
         const profile = StorageService.getProfile();
         if (!profile || typeof profile !== 'object') return {};
@@ -50,6 +50,19 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
   const pendingCommunityName = pendingCommunityId
     ? StorageService.getOrganization(pendingCommunityId)?.name || DEMO_COMMUNITY_QR_SEEDS.find((seed) => seed.communityId === pendingCommunityId)?.name || pendingCommunityId
     : '';
+
+  const resolvePostLoginView = (role: string, onboardComplete: boolean): ViewState => {
+    const requestedView = sessionStorage.getItem('postLoginView');
+    if (requestedView === 'BUYER_PORTAL' && ['ADMIN', 'BUYER'].includes(role) && onboardComplete) {
+      sessionStorage.removeItem('postLoginView');
+      return 'BUYER_PORTAL';
+    }
+    sessionStorage.removeItem('postLoginView');
+    if (!onboardComplete) return 'ACCOUNT_SETUP';
+    if (role === 'BUYER') return 'BUYER_PORTAL';
+    if (role === 'INSTITUTION_ADMIN' || role === 'ORG_ADMIN') return 'ORG_DASHBOARD';
+    return 'DASHBOARD';
+  };
 
   useEffect(() => {
     const hash = window.location.hash || '';
@@ -79,7 +92,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
       }
       console.log('Attempting login with email:', normalizedEmail);
       await StorageService.loginWithCredentials(normalizedEmail, enteredPassword);
-      let profile = safeGetProfile();
+      let profile: Partial<UserProfile> = safeGetProfile();
       const pendingInvite = getPendingCommunityInvite();
       if (pendingInvite?.communityId && !String((profile as any)?.communityId || '').trim()) {
         const updatedProfile = { ...profile, communityId: pendingInvite.communityId };
@@ -97,18 +110,12 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
         role, 
         onboardComplete 
       });
-      const needsSetup = !onboardComplete;
-      if (needsSetup) {
-        console.log('User needs setup, redirecting to ACCOUNT_SETUP');
-        setView('ACCOUNT_SETUP');
-      } else if (role === 'INSTITUTION_ADMIN' || role === 'ORG_ADMIN') {
-        console.log('Organization admin, redirecting to ORG_DASHBOARD');
-        setView('ORG_DASHBOARD');
-      } else {
-        console.log('Redirecting to DASHBOARD');
+      const nextView = resolvePostLoginView(String(role || '').toUpperCase(), Boolean(onboardComplete));
+      console.log('Redirecting to', nextView);
+      if (nextView === 'DASHBOARD') {
         sessionStorage.setItem('showCommunityConnectPromptOnLogin', '1');
-        setView('DASHBOARD');
       }
+      setView(nextView);
     } catch (e: any) {
       console.error('Login error:', e);
       const message = String(e?.message || 'Login failed.');
@@ -130,7 +137,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
     // We set the state and immediately trigger login logic to avoid double-click requirement
     setPhone(demoPhone);
     console.log('Demo login with phone:', demoPhone);
-    const result = StorageService.loginUser(demoPhone);
+    const result = (StorageService as unknown as { loginUser: (phone: string) => { success?: boolean; message?: string } }).loginUser(demoPhone);
     
     if (!result.success) {
       console.error('Demo login failed:', result.message);
@@ -139,7 +146,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
     }
     
     // Defensive: fallback for missing or malformed profile
-    let profile = safeGetProfile();
+    let profile: Partial<UserProfile> = safeGetProfile();
     const pendingInvite = getPendingCommunityInvite();
     if (pendingInvite?.communityId && !String((profile as any)?.communityId || '').trim()) {
       const updatedProfile = { ...profile, communityId: pendingInvite.communityId };
@@ -156,21 +163,12 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
       role, 
       onboardComplete 
     });
-    const needsSetup = !onboardComplete;
-    
-    if (needsSetup) {
-      console.log('User needs setup, redirecting to ACCOUNT_SETUP');
-      setView('ACCOUNT_SETUP');
-    }
-    else if (role === 'INSTITUTION_ADMIN' || role === 'ORG_ADMIN') {
-      console.log('Organization admin, redirecting to ORG_DASHBOARD');
-      setView('ORG_DASHBOARD');
-    }
-    else {
-      console.log('Regular user, redirecting to DASHBOARD');
+    const nextView = resolvePostLoginView(String(role || '').toUpperCase(), Boolean(onboardComplete));
+    console.log('Redirecting to', nextView);
+    if (nextView === 'DASHBOARD') {
       sessionStorage.setItem('showCommunityConnectPromptOnLogin', '1');
-      setView('DASHBOARD');
     }
+    setView(nextView);
   };
 
   const handleAboutAeraDownload = async () => {

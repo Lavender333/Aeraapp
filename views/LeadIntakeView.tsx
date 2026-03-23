@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle, FileText, Phone, Mail, MapPin, ShieldCheck, User } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ArrowLeft, ArrowRight, CheckCircle, Clock3, FileText, ShieldCheck, User, Users } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
-import { ViewState } from '../types';
-import { submitLeadIntake } from '../services/leadSupabase';
+import { VerifiedLead, ViewState } from '../types';
+import { fetchSubmittedReferralLeads, submitLeadIntake } from '../services/leadSupabase';
 
 type Step = 'IDENTITY' | 'SITUATION' | 'CONSENT' | 'CONFIRMATION';
 
@@ -67,6 +67,8 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
   const [step, setStep] = useState<Step>('IDENTITY');
   const [form, setForm] = useState<IntakeForm>(EMPTY_FORM);
   const [submittedId, setSubmittedId] = useState<string>('');
+  const [submittedLeads, setSubmittedLeads] = useState<VerifiedLead[]>([]);
+  const [isLoadingSubmitted, setIsLoadingSubmitted] = useState(true);
   const [errors, setErrors] = useState<Partial<Record<keyof IntakeForm, string>>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -74,6 +76,38 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
 
   const set = (field: keyof IntakeForm, value: string | boolean) =>
     setForm((prev) => ({ ...prev, [field]: value }));
+
+  useEffect(() => {
+    let mounted = true;
+    const loadSubmitted = async () => {
+      const rows = await fetchSubmittedReferralLeads();
+      if (!mounted) return;
+      setSubmittedLeads(rows);
+      setIsLoadingSubmitted(false);
+    };
+    void loadSubmitted();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const referralStatusLabel = (status: VerifiedLead['status']) => {
+    if (status === 'NEW') return 'Submitted';
+    if (status === 'VERIFIED') return 'Under Review';
+    if (status === 'DELIVERED') return 'Matched';
+    if (status === 'ACCEPTED') return 'Partner Engaged';
+    if (status === 'REJECTED') return 'Closed';
+    return 'Resolved';
+  };
+
+  const referralStatusBadge = (status: VerifiedLead['status']) => {
+    if (status === 'NEW') return 'bg-blue-100 text-blue-700';
+    if (status === 'VERIFIED') return 'bg-amber-100 text-amber-700';
+    if (status === 'DELIVERED') return 'bg-violet-100 text-violet-700';
+    if (status === 'ACCEPTED') return 'bg-emerald-100 text-emerald-700';
+    if (status === 'REJECTED') return 'bg-rose-100 text-rose-700';
+    return 'bg-slate-200 text-slate-700';
+  };
 
   const validateStep = (): boolean => {
     const errs: Partial<Record<keyof IntakeForm, string>> = {};
@@ -126,6 +160,7 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
         sourceTag: 'organic-web',
       });
       setSubmittedId(lead.id);
+      setSubmittedLeads((prev) => [lead, ...prev]);
       setStep('CONFIRMATION');
     } finally {
       setIsSubmitting(false);
@@ -143,7 +178,7 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
             <ArrowLeft size={16} />
             Cancel
           </button>
-          <span className="text-sm font-semibold text-slate-900">Lead Intake</span>
+          <span className="text-sm font-semibold text-slate-900">Referral Intake</span>
           <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 text-emerald-700 px-3 py-1 text-xs font-semibold border border-emerald-200">
             <ShieldCheck size={13} />
             Secure
@@ -188,7 +223,7 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
           <Card className="border-slate-200 bg-white">
             <div className="flex items-center gap-2 mb-4">
               <User size={18} className="text-slate-600" />
-              <h2 className="text-lg font-bold text-slate-900">Your Contact Information</h2>
+              <h2 className="text-lg font-bold text-slate-900">Referral Contact Information</h2>
             </div>
             <div className="space-y-3">
               <Input
@@ -254,7 +289,7 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
           <Card className="border-slate-200 bg-white">
             <div className="flex items-center gap-2 mb-4">
               <FileText size={18} className="text-slate-600" />
-              <h2 className="text-lg font-bold text-slate-900">Describe Your Situation</h2>
+              <h2 className="text-lg font-bold text-slate-900">Describe the Referral</h2>
             </div>
             <div className="space-y-3">
               <div>
@@ -313,7 +348,7 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
           <Card className="border-slate-200 bg-white">
             <div className="flex items-center gap-2 mb-4">
               <ShieldCheck size={18} className="text-slate-600" />
-              <h2 className="text-lg font-bold text-slate-900">Permissions & Consent</h2>
+              <h2 className="text-lg font-bold text-slate-900">Referral Permissions & Consent</h2>
             </div>
             <div className="space-y-4 text-sm">
               {[
@@ -364,10 +399,10 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
               <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center">
                 <CheckCircle size={32} className="text-emerald-600" />
               </div>
-              <h2 className="text-xl font-bold text-emerald-900">Intake Submitted</h2>
+              <h2 className="text-xl font-bold text-emerald-900">Referral Submitted</h2>
               <p className="text-sm text-emerald-800 max-w-sm">
-                Your lead has been received. A verification specialist will review your information
-                and a qualified partner will be in touch within 24 hours.
+                Your referral has been received. A verification specialist will review the context
+                and route it to a qualified partner if there is a match.
               </p>
               <div className="bg-white border border-emerald-200 rounded-xl px-6 py-3 text-sm font-mono font-bold text-slate-900">
                 {submittedId}
@@ -392,7 +427,7 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
             )}
             {step === 'CONSENT' ? (
               <Button onClick={submitIntake} disabled={isSubmitting}>
-                {isSubmitting ? 'Submitting...' : 'Submit Lead'}  <ArrowRight size={14} className="ml-1 inline" />
+                {isSubmitting ? 'Submitting...' : 'Submit Referral'}  <ArrowRight size={14} className="ml-1 inline" />
               </Button>
             ) : (
               <Button onClick={nextStep}>
@@ -401,6 +436,41 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
             )}
           </div>
         )}
+
+        <Card className="border-slate-200 bg-white">
+          <div className="flex items-center gap-2 mb-4">
+            <Users size={18} className="text-slate-600" />
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Referral Tracker</h2>
+              <p className="text-sm text-slate-500">Track whether someone was submitted, is under review, or has been matched.</p>
+            </div>
+          </div>
+
+          {isLoadingSubmitted ? (
+            <p className="text-sm text-slate-500">Loading submitted referrals…</p>
+          ) : submittedLeads.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center">
+              <Clock3 size={20} className="text-slate-400 mx-auto mb-2" />
+              <p className="text-sm font-semibold text-slate-700">No referrals submitted yet</p>
+              <p className="text-xs text-slate-500 mt-1">Once you submit a referral, its status will appear here.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {submittedLeads.slice(0, 6).map((lead) => (
+                <div key={lead.id} className="border border-slate-200 rounded-xl p-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900 truncate">{lead.applicantName}</p>
+                    <p className="text-xs text-slate-500">{lead.city}, {lead.state} · {lead.caseType}</p>
+                    <p className="text-[11px] text-slate-400 mt-1">Ref #{lead.id}</p>
+                  </div>
+                  <span className={`shrink-0 text-[10px] font-bold px-2 py-1 rounded-full ${referralStatusBadge(lead.status)}`}>
+                    {referralStatusLabel(lead.status)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
       </main>
     </div>
   );

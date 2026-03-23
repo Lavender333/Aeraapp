@@ -91,7 +91,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
 
   const normalizeRole = (role: any): UserRole => {
     const normalized = String(role || 'GENERAL_USER').toUpperCase();
-    const validRoles: UserRole[] = ['ADMIN', 'CONTRACTOR', 'LOCAL_AUTHORITY', 'FIRST_RESPONDER', 'GENERAL_USER', 'INSTITUTION_ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'MEMBER'];
+    const validRoles: UserRole[] = ['ADMIN', 'BUYER', 'CONTRACTOR', 'LOCAL_AUTHORITY', 'FIRST_RESPONDER', 'GENERAL_USER', 'INSTITUTION_ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'MEMBER'];
     return validRoles.includes(normalized as UserRole) ? (normalized as UserRole) : 'GENERAL_USER';
   };
 
@@ -449,7 +449,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const canOpenOrgDashboard = isOrgAdmin || userRole === 'ADMIN' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN';
   const isContractor = userRole === 'CONTRACTOR';
   const canAccessLeadIntake = ['ADMIN', 'ORG_ADMIN'].includes(userRole);
-  const canAccessBuyerPortal = ['ADMIN', 'ORG_ADMIN'].includes(userRole);
+  const canAccessBuyerPortal = ['ADMIN', 'BUYER'].includes(userRole);
   const canAccessLeadAdmin = userRole === 'ADMIN';
   const showCommunityBlocks = !isGeneralUser;
   const showCommunityAnnouncements = hasCommunity;
@@ -1698,11 +1698,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
               </div>
               <div className="flex-1">
                 <h3 className="text-xl font-bold text-slate-900">Submit a Verified Lead</h3>
-                <p className="text-sm text-slate-600">Refer a disaster-affected person for professional services and earn a referral reward.</p>
+                <p className="text-sm text-slate-600">Submit referrals, verify context, and track whether a person is submitted, under review, or matched.</p>
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                   <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">3-Step Intake</span>
-                  <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">TCPA Consent</span>
-                  <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Privacy Protected</span>
+                  <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Status Tracking</span>
+                  <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Context Verification</span>
                 </div>
               </div>
               <ChevronRight className="w-5 h-5 text-slate-400 flex-shrink-0" />

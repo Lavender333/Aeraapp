@@ -2,6 +2,7 @@ import { UserRole } from '../types';
 
 const VALID_ROLES: UserRole[] = [
   'ADMIN',
+  'BUYER',
   'CONTRACTOR',
   'LOCAL_AUTHORITY',
   'FIRST_RESPONDER',

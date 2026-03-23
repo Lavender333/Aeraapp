@@ -15,6 +15,13 @@ import {
   computeQualityScore,
 } from './leadService';
 
+async function getCurrentUserId(): Promise<string | null> {
+  if (!hasSupabaseConfig) return null;
+  const { data, error } = await supabase.auth.getUser();
+  if (error) return null;
+  return data.user?.id || null;
+}
+
 const addHours = (iso: string, hours: number) =>
   new Date(new Date(iso).getTime() + hours * 3_600_000).toISOString();
 
@@ -122,6 +129,28 @@ export async function fetchVerifiedLeads(): Promise<VerifiedLead[]> {
   return data.map(mapLeadRow);
 }
 
+export async function fetchSubmittedReferralLeads(): Promise<VerifiedLead[]> {
+  if (!hasSupabaseConfig) return SAMPLE_LEADS;
+
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from('verified_leads')
+    .select('*')
+    .eq('submitted_by', userId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error) {
+    console.warn('[leadSupabase] fetchSubmittedReferralLeads fallback:', error.message);
+    return SAMPLE_LEADS;
+  }
+
+  if (!data || data.length === 0) return [];
+  return data.map(mapLeadRow);
+}
+
 export async function fetchBuyerAccounts(): Promise<BuyerAccount[]> {
   if (!hasSupabaseConfig) return SAMPLE_BUYERS;
   const { data, error } = await supabase
@@ -158,6 +187,7 @@ export interface LeadIntakeInput {
 
 export async function submitLeadIntake(input: LeadIntakeInput): Promise<VerifiedLead> {
   const now = new Date().toISOString();
+  const userId = await getCurrentUserId();
   const phoneVerified = input.phone.replace(/\D/g, '').length >= 10;
   const emailVerified = input.email ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email) : false;
   const identityScore = 70 + Math.round(Math.random() * 25);
@@ -200,6 +230,7 @@ export async function submitLeadIntake(input: LeadIntakeInput): Promise<Verified
     case_type: input.caseType,
     status: 'NEW',
     notes: input.notes || null,
+    submitted_by: userId,
   };
 
   if (!hasSupabaseConfig) {

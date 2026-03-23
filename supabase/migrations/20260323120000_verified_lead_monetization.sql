@@ -222,7 +222,7 @@ AS $$
     SELECT 1
     FROM public.profiles p
     WHERE p.id = auth.uid()
-      AND UPPER(COALESCE(p.role, '')) IN (
+      AND UPPER(COALESCE(p.role::text, '')) IN (
         'ADMIN',
         'STATE_ADMIN',
         'COUNTY_ADMIN',
