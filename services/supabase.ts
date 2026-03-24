@@ -41,11 +41,42 @@ export async function getOrgByCode(orgCode: string): Promise<OrgLookup | null> {
     .replace(/\s+/g, '')
     .toUpperCase();
   if (!normalized) return null;
-  const { data, error } = await supabase
-    .from('organizations')
-    .select('id, org_code, name, latitude, longitude')
-    .eq('org_code', normalized)
-    .single();
+
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized);
+
+  let data: any = null;
+  let error: any = null;
+
+  if (isUuid) {
+    ({ data, error } = await supabase
+      .from('organizations')
+      .select('id, org_code, name, latitude, longitude')
+      .eq('id', normalized)
+      .maybeSingle());
+  } else {
+    ({ data, error } = await supabase
+      .from('organizations')
+      .select('id, org_code, name, latitude, longitude')
+      .eq('org_code', normalized)
+      .maybeSingle());
+  }
+
+  // Backward-compat fallback for records that were saved with the opposite identifier shape.
+  if (!data && !error) {
+    if (isUuid) {
+      ({ data, error } = await supabase
+        .from('organizations')
+        .select('id, org_code, name, latitude, longitude')
+        .eq('org_code', normalized)
+        .maybeSingle());
+    } else {
+      ({ data, error } = await supabase
+        .from('organizations')
+        .select('id, org_code, name, latitude, longitude')
+        .eq('id', normalized)
+        .maybeSingle());
+    }
+  }
 
   if (error || !data) return null;
   return {

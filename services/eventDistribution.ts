@@ -1441,7 +1441,7 @@ export async function getOrgLeaderOutreachCandidates(
 
     const { data: profileRows, error: candidateError } = await supabase
       .from('profiles')
-      .select('id, full_name, mobile_phone, phone, email, latitude, longitude, geofenced_outreach_radius_miles, geofenced_outreach_opt_in, org_id, is_active')
+      .select('id, full_name, mobile_phone, phone, email, latitude, longitude, geofenced_outreach_radius_miles, geofenced_outreach_opt_in, geocode_confidence, geocoded_at, org_id, is_active')
       .eq('is_active', true)
       .neq('id', authData.user.id)
       .not('latitude', 'is', null)
@@ -1544,7 +1544,7 @@ export async function getOrgLeaderOutreachCandidates(
   if (rpcIds.length > 0) {
     const { data: rpcMetaRows } = await supabase
       .from('profiles')
-      .select('id, org_id')
+      .select('id, org_id, geocode_confidence, geocoded_at')
       .in('id', rpcIds);
 
     rpcMetaMap = new Map(

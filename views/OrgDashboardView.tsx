@@ -181,6 +181,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
   const [loggingTargetId, setLoggingTargetId] = useState<string | null>(null);
   const [outreachOrgCenter, setOutreachOrgCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [outreachRadiusMiles, setOutreachRadiusMiles] = useState<number>(3);
+  const [outreachVisibleCount, setOutreachVisibleCount] = useState<number>(12);
   const [receiptPreviewRequest, setReceiptPreviewRequest] = useState<ReplenishmentRequest | null>(null);
 
   // Broadcast State
@@ -394,6 +395,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
 
     let active = true;
     const loadOutreachPanel = async () => {
+      setOutreachVisibleCount(12);
       setOutreachPanelLoading(true);
       setOutreachPanelError(null);
       try {
@@ -1669,7 +1671,10 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                 </div>
               ) : outreachCandidates.length > 0 ? (
                 <div className="space-y-2">
-                  {outreachCandidates.slice(0, 12).map((candidate) => (
+                  <p className="text-[11px] text-slate-500">
+                    Showing {Math.min(outreachVisibleCount, outreachCandidates.length)} of {outreachCandidates.length} candidates.
+                  </p>
+                  {outreachCandidates.slice(0, outreachVisibleCount).map((candidate) => (
                     <div key={candidate.profile_id} className="bg-white border border-emerald-100 rounded-lg p-3">
                       <div className="flex items-start justify-between gap-3">
                         <div>
@@ -1723,6 +1728,17 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                       </div>
                     </div>
                   ))}
+                  {outreachVisibleCount < outreachCandidates.length && (
+                    <div className="pt-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setOutreachVisibleCount((count) => Math.min(count + 12, outreachCandidates.length))}
+                      >
+                        Show more
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="bg-white border border-emerald-100 rounded-lg p-4 text-sm text-slate-600">
