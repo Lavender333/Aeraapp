@@ -14,7 +14,7 @@ import { subscribeToNotifications } from '../services/supabaseRealtime';
 import { listEvents, DistributionEvent } from '../services/eventDistribution';
 import { isValidPhoneForInvite, validateHouseholdMembers } from '../services/validation';
 import { t } from '../services/translations';
-import { User, Bell, Lock, LogOut, Check, Building2, ArrowLeft, ArrowRight, Link as LinkIcon, Loader2, HeartPulse, ShieldCheck, Users, ToggleLeft, ToggleRight, MoreVertical, Copy, CheckCircle, Database, X, XCircle, Globe, Search, Truck, Phone, Mail, MapPin, Power, Ban, Activity, Radio, AlertTriangle, HelpCircle, FileText, Printer, CheckSquare, Download, RefreshCcw, Clipboard, PenTool, ChevronDown, PlayCircle, Save, Calendar, MessageSquare } from 'lucide-react';
+import { User, Bell, Lock, LogOut, Check, Building2, ArrowLeft, ArrowRight, Link as LinkIcon, Loader2, HeartPulse, ShieldCheck, Users, ToggleLeft, ToggleRight, MoreVertical, Copy, CheckCircle, Database, X, XCircle, Globe, Search, Truck, Phone, Mail, MapPin, Power, Ban, Activity, Radio, AlertTriangle, HelpCircle, FileText, Printer, CheckSquare, Download, RefreshCcw, Clipboard, PenTool, ChevronDown, PlayCircle, Save, Calendar, MessageSquare, Send } from 'lucide-react';
 
 // Phone Formatter Utility
 const formatPhoneNumber = (value: string) => {
@@ -219,15 +219,17 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const contactsSectionRef = useRef<HTMLElement | null>(null);
   const householdSectionRef = useRef<HTMLElement | null>(null);
   const securitySectionRef = useRef<HTMLElement | null>(null);
+  const contactUsSectionRef = useRef<HTMLElement | null>(null);
   const hasPromptedMissingOrgLocationRef = useRef(false);
 
-  type SettingsAccordionKey = 'profile' | 'household' | 'contacts' | 'community' | 'security';
+  type SettingsAccordionKey = 'profile' | 'household' | 'contacts' | 'community' | 'security' | 'contactUs';
   const [expandedSections, setExpandedSections] = useState<Record<SettingsAccordionKey, boolean>>({
     profile: false,
     household: false,
     contacts: false,
     community: false,
     security: false,
+    contactUs: false,
   });
   const [showMoreSections, setShowMoreSections] = useState<Record<SettingsAccordionKey, boolean>>({
     profile: false,
@@ -235,6 +237,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     contacts: false,
     community: false,
     security: false,
+    contactUs: false,
   });
   const [householdAddToken, setHouseholdAddToken] = useState(0);
 
@@ -520,6 +523,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     contacts: 'settings-accordion-button-contacts',
     community: 'settings-accordion-button-community',
     security: 'settings-accordion-button-security',
+    contactUs: 'settings-accordion-button-contactUs',
   };
   const accordionPanelIds: Record<SettingsAccordionKey, string> = {
     profile: 'settings-accordion-panel-profile',
@@ -527,6 +531,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     contacts: 'settings-accordion-panel-contacts',
     community: 'settings-accordion-panel-community',
     security: 'settings-accordion-panel-security',
+    contactUs: 'settings-accordion-panel-contactUs',
   };
 
   const toggleSection = (section: SettingsAccordionKey) => {
@@ -6474,6 +6479,246 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         </div>
         )}
       </section>
+
+      {/* Contact Us */}
+      {canSubmitContactSupport && (
+        <section ref={contactUsSectionRef} className="bg-white/95 p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 border-l-4 border-l-amber-400 order-6">
+          <button
+            id={accordionButtonIds.contactUs}
+            type="button"
+            onClick={() => toggleSection('contactUs')}
+            aria-expanded={expandedSections.contactUs}
+            aria-controls={accordionPanelIds.contactUs}
+            className="w-full flex items-center justify-between gap-4"
+          >
+            <div className="flex items-center gap-4 text-left">
+              <div className="p-3 bg-amber-100 border border-amber-200 rounded-full text-amber-700">
+                <HelpCircle size={24} />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-800">Contact Us</h2>
+                <p className="text-xs text-slate-500">Get help, browse FAQs, or submit a support ticket</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold px-2 py-1 rounded-full bg-sky-100 text-sky-700">
+                AERA Support
+              </span>
+              <ChevronDown size={20} className={`text-slate-600 transition-transform ${expandedSections.contactUs ? 'rotate-180' : ''}`} />
+            </div>
+          </button>
+
+          {expandedSections.contactUs && (
+            <div
+              id={accordionPanelIds.contactUs}
+              role="region"
+              aria-labelledby={accordionButtonIds.contactUs}
+              className="space-y-4"
+            >
+              {(() => {
+                const activeFaqs = isOrgScopedAdmin ? [...GENERAL_FAQS, ...ORG_ADMIN_FAQS] : GENERAL_FAQS;
+                return (
+                  <>
+                    {/* Tab bar */}
+                    <div className="flex border-b border-slate-200">
+                      <button type="button" onClick={() => setContactUsTab('faq')} className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${contactUsTab === 'faq' ? 'border-sky-500 text-sky-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                        <HelpCircle size={13} />
+                        FAQ
+                        {isOrgScopedAdmin && <span className="ml-1 rounded-full bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 text-[9px] font-bold">+Org</span>}
+                      </button>
+                      <button type="button" onClick={() => setContactUsTab('contact')} className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${contactUsTab === 'contact' ? 'border-sky-500 text-sky-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                        <MessageSquare size={13} />
+                        Submit Ticket
+                        {mySupportTickets.length > 0 && <span className="rounded-full bg-slate-200 text-slate-700 px-1.5 py-0.5 text-[9px] font-bold">{mySupportTickets.length}</span>}
+                      </button>
+                      {isOrgScopedAdmin && (
+                        <button type="button" onClick={() => setContactUsTab('org_inbox')} className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${contactUsTab === 'org_inbox' ? 'border-fuchsia-500 text-fuchsia-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                          <Users size={13} />
+                          Member Inbox
+                          {orgInboxTickets.filter((t) => t.status !== 'RESOLVED').length > 0 && (
+                            <span className="rounded-full bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 text-[9px] font-bold">{orgInboxTickets.filter((t) => t.status !== 'RESOLVED').length}</span>
+                          )}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* FAQ Tab */}
+                    {contactUsTab === 'faq' && (
+                      <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden">
+                        {isOrgScopedAdmin && (
+                          <div className="px-4 py-2 bg-slate-50 flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">General</span>
+                            <span className="text-[10px] text-slate-400">({GENERAL_FAQS.length})</span>
+                            <span className="mx-1 text-slate-300">·</span>
+                            <span className="text-[10px] font-bold text-fuchsia-600 uppercase tracking-wider">Org Admin</span>
+                            <span className="text-[10px] text-slate-400">({ORG_ADMIN_FAQS.length})</span>
+                          </div>
+                        )}
+                        {activeFaqs.map((faq, i) => {
+                          const isOrgQ = isOrgScopedAdmin && i >= GENERAL_FAQS.length;
+                          const isOpen = openFaqIndex === i;
+                          return (
+                            <div key={i}>
+                              <button type="button" onClick={() => setOpenFaqIndex(isOpen ? null : i)} className="w-full flex items-start justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors">
+                                <div className="flex items-start gap-2 min-w-0">
+                                  {isOrgQ && <span className="mt-0.5 shrink-0 rounded-full bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 text-[9px] font-bold leading-tight">ORG</span>}
+                                  <span className="text-sm font-medium text-slate-800">{faq.q}</span>
+                                </div>
+                                <ChevronDown size={15} className={`shrink-0 text-slate-400 transition-transform mt-0.5 ${isOpen ? 'rotate-180' : ''}`} />
+                              </button>
+                              {isOpen && (
+                                <div className="px-4 pb-3 bg-slate-50">
+                                  <p className="text-sm text-slate-600 leading-relaxed">{faq.a}</p>
+                                  <button type="button" onClick={() => setContactUsTab('contact')} className="mt-2 text-xs font-semibold text-sky-600 hover:underline">
+                                    Still need help? Submit a ticket →
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Submit a Ticket Tab */}
+                    {contactUsTab === 'contact' && (
+                      <div className="space-y-4 border border-slate-200 rounded-lg p-4 bg-slate-50">
+                        {/* Routing hint */}
+                        <div className={`rounded-xl border px-3 py-2.5 flex items-start gap-2 ${profile.communityId ? 'border-fuchsia-200 bg-fuchsia-50' : 'border-sky-200 bg-sky-50'}`}>
+                          <div className={`mt-0.5 p-1 rounded-full ${profile.communityId ? 'bg-fuchsia-100 text-fuchsia-700' : 'bg-sky-100 text-sky-700'}`}>
+                            {profile.communityId ? <Users size={12} /> : <ShieldCheck size={12} />}
+                          </div>
+                          <p className="text-xs text-slate-700">
+                            {profile.communityId
+                              ? <>Your ticket goes to your <strong className="text-fuchsia-700">{profile.communityId}</strong> org first. If they can&apos;t resolve it, they&apos;ll escalate to AERA.</>
+                              : <>No organization connected — your ticket goes <strong className="text-sky-700">directly to AERA support</strong>.</>}
+                          </p>
+                        </div>
+
+                        <div className="grid md:grid-cols-2 gap-3">
+                          <Input
+                            label="Subject"
+                            value={contactSupportSubject}
+                            onChange={(e) => { setContactSupportSubject(e.target.value); setFaqSuggestionDismissed(false); setFaqSelfResolved(false); }}
+                            placeholder="Short summary of the issue"
+                          />
+                          <label className="space-y-1 text-sm text-slate-700">
+                            <span className="font-medium">Category</span>
+                            <select className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-200" value={contactSupportCategory} onChange={(e) => setContactSupportCategory(e.target.value)}>
+                              <option value="GENERAL">General Help</option>
+                              <option value="ACCOUNT">Account Access</option>
+                              <option value="ORGANIZATION">Organization Setup</option>
+                              <option value="TECHNICAL">Technical Issue</option>
+                              <option value="OTHER">Other</option>
+                            </select>
+                          </label>
+                        </div>
+
+                        {/* Smart FAQ suggestion */}
+                        {faqSuggestion && !faqSelfResolved && (
+                          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-xs font-bold text-amber-800">We found a related answer — does this help?</p>
+                              <button type="button" onClick={() => setFaqSuggestionDismissed(true)} className="text-slate-400 hover:text-slate-600 shrink-0"><X size={13} /></button>
+                            </div>
+                            <p className="text-xs font-semibold text-slate-800">{faqSuggestion.q}</p>
+                            <p className="text-xs text-slate-700 leading-relaxed">{faqSuggestion.a}</p>
+                            <div className="flex items-center gap-2 pt-1">
+                              <Button size="sm" onClick={() => void handleFaqSelfResolve(faqSuggestion)} disabled={faqSelfResolving} className="bg-emerald-600 hover:bg-emerald-500 text-white border-0">
+                                {faqSelfResolving ? <Loader2 size={12} className="mr-1 animate-spin" /> : <Check size={12} className="mr-1" />}
+                                Yes, this resolved it
+                              </Button>
+                              <button type="button" onClick={() => setFaqSuggestionDismissed(true)} className="text-xs font-semibold text-slate-600 hover:underline">No, I still need help</button>
+                            </div>
+                          </div>
+                        )}
+
+                        <Textarea
+                          label="Message"
+                          value={contactSupportMessage}
+                          onChange={(e) => setContactSupportMessage(e.target.value)}
+                          placeholder="Describe the issue you're experiencing..."
+                          rows={4}
+                        />
+
+                        {contactSupportPersonalInfo && (
+                          <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
+                            <p className="text-xs font-semibold text-sky-700">Your info: {contactSupportPersonalInfo}</p>
+                          </div>
+                        )}
+
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            onClick={handleSubmitContactSupport}
+                            disabled={contactSupportBusy || !contactSupportSubject.trim() || !contactSupportMessage.trim()}
+                            className="bg-sky-600 hover:bg-sky-700"
+                          >
+                            {contactSupportBusy ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Send size={16} className="mr-2" />}
+                            Send Support Ticket
+                          </Button>
+                        </div>
+
+                        {contactSupportError && <p className="text-xs text-red-700 font-semibold">{contactSupportError}</p>}
+                        {contactSupportSuccess && <p className="text-xs text-emerald-700 font-semibold">{contactSupportSuccess}</p>}
+
+                        <div className="pt-4 border-t border-slate-200 space-y-2">
+                          <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">My Support Tickets</p>
+                          {mySupportTickets.length === 0 ? (
+                            <p className="text-xs text-slate-600">No tickets submitted yet.</p>
+                          ) : (
+                            <div className="space-y-2 max-h-64 overflow-y-auto">
+                              {mySupportTickets.map((ticket) => (
+                                <div key={ticket.id} className={`rounded-lg border p-3 text-xs ${ticket.status === 'RESOLVED' ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div>
+                                      <p className="font-semibold text-slate-800">{ticket.subject || 'Untitled'}</p>
+                                      <p className="text-slate-600 mt-1">{ticket.message || 'No message'}</p>
+                                      <p className={`text-[10px] font-bold uppercase mt-1 ${ticket.status === 'RESOLVED' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                                        {ticket.status || 'PENDING'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Member Inbox Tab */}
+                    {contactUsTab === 'org_inbox' && isOrgScopedAdmin && (
+                      <div className="space-y-3 border border-slate-200 rounded-lg p-4 bg-slate-50">
+                        <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">Support Tickets from Your Members</p>
+                        {orgInboxTickets.length === 0 ? (
+                          <p className="text-xs text-slate-600">No tickets from your members.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {orgInboxTickets.map((ticket) => (
+                              <div key={ticket.id} className={`rounded-lg border p-3 text-xs space-y-2 ${ticket.status === 'RESOLVED' ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-semibold text-slate-800 break-words">{ticket.subject || 'Untitled'}</p>
+                                    <p className="text-slate-600 mt-1 break-words">{ticket.message || 'No message'}</p>
+                                    <p className="text-[10px] text-slate-500 mt-1">From: {ticket.requesterName || 'Unknown'}</p>
+                                  </div>
+                                  <span className={`text-[9px] font-bold px-2 py-1 rounded-full whitespace-nowrap ${ticket.status === 'RESOLVED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                    {ticket.status}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="bg-white/95 p-6 rounded-2xl shadow-sm space-y-4 order-7 border border-slate-200">
         <div className="flex items-center gap-4">
