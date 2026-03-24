@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowLeft, ExternalLink, MapPin } from 'lucide-react';
 import { ViewState } from '../types';
 
-const SHELTER_LOCATOR_URL = 'https://egateway.fema.gov/ESF6/DRCLocator';
+const SHELTER_LOCATOR_URL = 'https://www.redcross.org/get-help/disaster-relief-and-recovery-services/find-an-open-shelter.html?srsltid=AfmBOorv3dKWO5pfPruqLNig-etY2kHmX5pFl9sYh1EFHcS_bakK4COm';
 
 export const ShelterLocatorView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const openOfficialLocator = () => {
@@ -21,7 +21,7 @@ export const ShelterLocatorView: React.FC<{ setView: (v: ViewState) => void }> =
         </button>
         <div>
           <h1 className="font-bold text-lg text-slate-900">Shelter Locator</h1>
-          <p className="text-xs text-slate-500">FEMA Disaster Recovery Centers</p>
+          <p className="text-xs text-slate-500">Red Cross Shelters</p>
         </div>
       </div>
 
@@ -42,24 +42,24 @@ export const ShelterLocatorView: React.FC<{ setView: (v: ViewState) => void }> =
 
         <div className="flex-1 p-4 bg-slate-50 overflow-auto">
           <div className="max-w-4xl mx-auto bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-sm">
-            <h2 className="text-base md:text-lg font-semibold text-slate-900">Open the Official FEMA Locator</h2>
+            <h2 className="text-base md:text-lg font-semibold text-slate-900">Open the Official Red Cross Locator</h2>
             <p className="text-sm text-slate-600 mt-2">
-              For the most reliable experience, open the official FEMA Disaster Recovery Center locator in a new browser tab.
+              For the most reliable experience, open the official American Red Cross shelter finder in a new browser tab.
             </p>
 
             <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-              <span className="font-semibold">Disclaimer:</span> FEMA is an independent U.S. government agency. AERA is not affiliated with, endorsed by, or connected to FEMA or any of its programs. This link is provided solely for informational convenience.
+              <span className="font-semibold">Disclaimer:</span> The American Red Cross is an independent humanitarian organization. AERA is not affiliated with, endorsed by, or connected to the American Red Cross or any of its programs. This link is provided solely for informational convenience.
             </div>
 
             <div className="mt-4 space-y-3">
               <div className="rounded-lg border border-slate-200 p-3">
-                <p className="text-[11px] uppercase font-bold text-slate-500 mb-2">Official FEMA Tool</p>
+                <p className="text-[11px] uppercase font-bold text-slate-500 mb-2">Official Red Cross Tool</p>
                 <button
                   onClick={openOfficialLocator}
                   className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-white text-sm font-semibold hover:bg-brand-700"
                 >
                   <ExternalLink size={16} />
-                  Open FEMA Locator
+                  Open Red Cross Locator
                 </button>
               </div>
             </div>
