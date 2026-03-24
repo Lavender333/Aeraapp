@@ -200,6 +200,61 @@ const US_STATE_CODES = [
   'SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
 ];
 
+const ORG_TYPE_WHITELIST: Array<OrganizationProfile['type']> = ['CHURCH', 'NGO', 'COMMUNITY_CENTER', 'LOCAL_GOV'];
+
+const normalizeOrgType = (raw?: string | null): OrganizationProfile['type'] => {
+  const candidate = String(raw || '').trim().toUpperCase() as OrganizationProfile['type'];
+  return ORG_TYPE_WHITELIST.includes(candidate) ? candidate : 'NGO';
+};
+
+const mapSupabaseOrgRow = (row: any): OrganizationProfile => {
+  const sanitizedId = formatCommunityIdInput(String(row?.org_code || row?.id || ''));
+  return {
+    id: sanitizedId || String(row?.id || ''),
+    name: String(row?.name || 'Unnamed Organization'),
+    type: normalizeOrgType(row?.type),
+    address: String(row?.address || '').trim(),
+    latitude: Number.isFinite(Number(row?.latitude)) ? Number(row.latitude) : undefined,
+    longitude: Number.isFinite(Number(row?.longitude)) ? Number(row.longitude) : undefined,
+    adminContact: String(row?.contact_person || row?.admin_contact || ''),
+    adminPhone: String(row?.contact_phone || row?.phone || ''),
+    replenishmentProvider: String(row?.replenishment_provider || ''),
+    replenishmentEmail: String(row?.replenishment_email || row?.email || ''),
+    replenishmentPhone: String(row?.replenishment_phone || row?.phone || ''),
+    verified: Boolean(row?.verified),
+    active: row?.is_active !== false,
+    currentBroadcast: row?.current_broadcast ?? undefined,
+    lastBroadcastTime: row?.last_broadcast_time ?? undefined,
+    registeredPopulation: typeof row?.registered_population === 'number' ? row.registered_population : undefined,
+    parentOrgId: row?.parent_org_id ?? undefined,
+  };
+};
+
+type NearbyOrgResult = OrganizationProfile & { distanceMiles?: number | null };
+
+const calculateDistanceMiles = (
+  lat1?: number,
+  lon1?: number,
+  lat2?: number,
+  lon2?: number
+): number | null => {
+  const coords = [lat1, lon1, lat2, lon2];
+  if (coords.some((value) => typeof value !== 'number' || Number.isNaN(Number(value)))) {
+    return null;
+  }
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const R = 3958.8; // Earth radius in miles
+  const phi1 = toRadians(lat1 as number);
+  const phi2 = toRadians(lat2 as number);
+  const deltaPhi = toRadians((lat2 as number) - (lat1 as number));
+  const deltaLambda = toRadians((lon2 as number) - (lon1 as number));
+  const a =
+    Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+    Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
 export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const mergeReplenishmentRequests = (remoteRequests: ReplenishmentRequest[], localRequests: ReplenishmentRequest[]) => {
     const merged = new Map<string, ReplenishmentRequest>();
@@ -220,6 +275,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const householdSectionRef = useRef<HTMLElement | null>(null);
   const securitySectionRef = useRef<HTMLElement | null>(null);
   const contactUsSectionRef = useRef<HTMLElement | null>(null);
+  const localOrgCatalogRef = useRef<OrganizationProfile[] | null>(null);
+  const localOrgPrefillRef = useRef(false);
   const hasPromptedMissingOrgLocationRef = useRef(false);
 
   type SettingsAccordionKey = 'profile' | 'household' | 'contacts' | 'community' | 'security' | 'contactUs';
@@ -240,6 +297,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     contactUs: false,
   });
   const [householdAddToken, setHouseholdAddToken] = useState(0);
+  const [localOrgSearchQuery, setLocalOrgSearchQuery] = useState('');
+  const [localOrgResults, setLocalOrgResults] = useState<NearbyOrgResult[]>([]);
+  const [localOrgBusy, setLocalOrgBusy] = useState(false);
+  const [localOrgError, setLocalOrgError] = useState<string | null>(null);
+  const [localOrgRadiusMiles, setLocalOrgRadiusMiles] = useState(25);
+  const [localOrgUsedLocation, setLocalOrgUsedLocation] = useState(false);
 
   // Main Settings State
   const [profile, setProfile] = useState<UserProfile>({
@@ -381,6 +444,21 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     () => (selectedOrgDetails?.id ? buildCommunityInviteUrl(selectedOrgDetails.id) : ''),
     [selectedOrgDetails]
   );
+
+  useEffect(() => {
+    if (profile.communityId || localOrgPrefillRef.current) return;
+    const fallback = String(profile.zipCode || profile.city || '').trim();
+    if (!fallback) return;
+    setLocalOrgSearchQuery((current) => current || fallback);
+    localOrgPrefillRef.current = true;
+  }, [profile.communityId, profile.zipCode, profile.city]);
+
+  useEffect(() => {
+    if (profile.communityId) {
+      setLocalOrgResults([]);
+      setLocalOrgError(null);
+    }
+  }, [profile.communityId]);
 
   useEffect(() => {
     // Ensure localStorage always contains a current role set (older caches may be missing roles).
@@ -1909,12 +1987,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     }
   };
 
-  const verifyCommunityId = async () => {
-    const normalized = String(profile.communityId || '')
-      .trim()
-      .replace(/[–—−]/g, '-')
-      .replace(/\s+/g, '')
-      .toUpperCase();
+  const verifyCommunityId = async (overrideCommunityId?: string) => {
+    const normalized = formatCommunityIdInput(overrideCommunityId ?? profile.communityId ?? '');
 
     if (!normalized) return;
 
@@ -2702,6 +2776,118 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         }
       };
 
+      const loadActiveOrgCatalog = async (): Promise<OrganizationProfile[]> => {
+        if (localOrgCatalogRef.current && localOrgCatalogRef.current.length > 0) {
+          return localOrgCatalogRef.current;
+        }
+        const rows = await listOrganizationsSupabase({ activeOnly: true });
+        const mapped = (rows || []).map(mapSupabaseOrgRow).filter((org) => Boolean(org.id));
+        localOrgCatalogRef.current = mapped;
+        return mapped;
+      };
+
+      const resolveUserCoordinates = async (forceGeolocation?: boolean): Promise<{ latitude: number; longitude: number } | null> => {
+        const hasStoredCoords =
+          typeof profile.latitude === 'number' && Number.isFinite(profile.latitude) &&
+          typeof profile.longitude === 'number' && Number.isFinite(profile.longitude);
+
+        if (hasStoredCoords && !forceGeolocation) {
+          return { latitude: profile.latitude as number, longitude: profile.longitude as number };
+        }
+
+        if (!forceGeolocation && !hasStoredCoords) {
+          return null;
+        }
+
+        const coords = await captureUserLocation();
+        if (coords) {
+          setProfile((prev) => {
+            const updated = { ...prev, latitude: coords.latitude, longitude: coords.longitude };
+            StorageService.saveProfile(updated, { skipRemoteSync: true });
+            return updated;
+          });
+        }
+        return coords;
+      };
+
+      const handleFindLocalOrganizations = async (options?: { useGeolocation?: boolean }) => {
+        setLocalOrgBusy(true);
+        setLocalOrgError(null);
+        try {
+          const catalog = await loadActiveOrgCatalog();
+          const query = String(localOrgSearchQuery || '').trim().toLowerCase();
+          const shouldUseCoords = options?.useGeolocation || (Number.isFinite(profile.latitude) && Number.isFinite(profile.longitude));
+          const coords = shouldUseCoords ? await resolveUserCoordinates(options?.useGeolocation) : null;
+
+          if (!coords && options?.useGeolocation) {
+            setLocalOrgError('Location permission was denied. Enter a city or ZIP to search manually.');
+            setLocalOrgResults([]);
+            setLocalOrgUsedLocation(false);
+            return;
+          }
+
+          if (!coords && !query) {
+            setLocalOrgError('Enter a city/ZIP or use your location to discover nearby organizations.');
+            setLocalOrgResults([]);
+            setLocalOrgUsedLocation(false);
+            return;
+          }
+
+          setLocalOrgUsedLocation(Boolean(coords));
+          const radius = Math.max(5, Math.min(Number(localOrgRadiusMiles) || 25, 200));
+
+          const filtered = catalog
+            .filter((org) => org.id && org.active !== false)
+            .map((org) => {
+              const distanceMiles =
+                coords && org.latitude != null && org.longitude != null
+                  ? calculateDistanceMiles(coords.latitude, coords.longitude, org.latitude, org.longitude)
+                  : null;
+              return { ...org, distanceMiles } as NearbyOrgResult;
+            })
+            .filter((org) => {
+              if (coords && org.distanceMiles != null && org.distanceMiles > radius) {
+                return false;
+              }
+              if (!query) return true;
+              const haystack = [org.name, org.address, org.id, org.type].join(' ').toLowerCase();
+              return haystack.includes(query);
+            })
+            .sort((a, b) => {
+              if (coords) {
+                const distA = a.distanceMiles ?? Number.POSITIVE_INFINITY;
+                const distB = b.distanceMiles ?? Number.POSITIVE_INFINITY;
+                if (distA !== distB) return distA - distB;
+              }
+              return a.name.localeCompare(b.name);
+            })
+            .slice(0, 25);
+
+          setLocalOrgResults(filtered);
+          setLocalOrgError(null);
+        } catch (err: any) {
+          setLocalOrgError(err?.message || 'Unable to load organizations right now.');
+          setLocalOrgResults([]);
+        } finally {
+          setLocalOrgBusy(false);
+        }
+      };
+
+      const handleUseMyLocationSearch = () => {
+        void handleFindLocalOrganizations({ useGeolocation: true });
+      };
+
+      const handleConnectToOrg = (orgCode: string) => {
+        const normalized = formatCommunityIdInput(orgCode);
+        if (!normalized) return;
+        updateProfile('communityId', normalized);
+        setExpandedSections((prev) => ({ ...prev, community: true }));
+        window.requestAnimationFrame(() => {
+          document.getElementById('settings-community-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        void verifyCommunityId(normalized);
+      };
+
       const handleLogout = () => {
     StorageService.logoutUser();
     setView('LOGIN');
@@ -2729,23 +2915,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     (async () => {
       try {
         const rows = await listOrganizationsSupabase({ activeOnly: false });
-        const mapped: OrganizationProfile[] = (rows || []).map((row: any) => ({
-          id: String(row.org_code || ''),
-          name: String(row.name || ''),
-          type: (String(row.type || 'NGO') as OrganizationProfile['type']),
-          address: String(row.address || ''),
-          latitude: Number.isFinite(Number(row.latitude)) ? Number(row.latitude) : undefined,
-          longitude: Number.isFinite(Number(row.longitude)) ? Number(row.longitude) : undefined,
-          adminContact: String(row.contact_person || ''),
-          adminPhone: String(row.contact_phone || ''),
-          replenishmentProvider: String(row.replenishment_provider || ''),
-          replenishmentEmail: String(row.replenishment_email || row.email || ''),
-          replenishmentPhone: String(row.replenishment_phone || row.phone || ''),
-          verified: Boolean(row.verified),
-          active: row.is_active !== false,
-          registeredPopulation: row.registered_population ?? undefined,
-          parentOrgId: row.parent_org_id ?? undefined,
-        }));
+        const mapped: OrganizationProfile[] = (rows || [])
+          .map(mapSupabaseOrgRow)
+          .filter((org) => Boolean(org.id));
 
         const remoteScoped = isOrgScopedAdmin
           ? mapped.filter((org) => String(org.id || '') === orgScopeId)
@@ -6428,6 +6600,94 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               </div>
             )}
           </>
+        )}
+
+        {!profile.communityId && (
+          <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 space-y-4 relative z-10">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">Find a Local Organization</p>
+              <p className="text-sm text-slate-600 mt-1">Search nearby churches, NGOs, or hubs and connect instantly.</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+              <Input
+                label="City, ZIP, or name"
+                placeholder="e.g. Cleveland or CH-1234"
+                value={localOrgSearchQuery}
+                onChange={(e) => setLocalOrgSearchQuery(e.target.value)}
+              />
+              <Button
+                className="md:self-end"
+                onClick={() => void handleFindLocalOrganizations()}
+                disabled={localOrgBusy}
+              >
+                {localOrgBusy ? <Loader2 className="mr-2 animate-spin" size={16} /> : <Search className="mr-2" size={16} />}
+                Search
+              </Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+              <label className="font-semibold text-slate-700">Radius</label>
+              <input
+                type="range"
+                min={5}
+                max={150}
+                step={5}
+                value={localOrgRadiusMiles}
+                onChange={(e) => setLocalOrgRadiusMiles(Number(e.target.value))}
+                className="flex-1 max-w-xs"
+              />
+              <span className="font-semibold text-slate-900">{localOrgRadiusMiles} mi</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={handleUseMyLocationSearch}
+                disabled={localOrgBusy}
+                className="flex items-center gap-1 text-slate-700"
+              >
+                <MapPin size={14} />
+                Use My Location
+              </Button>
+            </div>
+            {localOrgError && (
+              <p className="text-xs font-semibold text-amber-700">{localOrgError}</p>
+            )}
+            {localOrgUsedLocation && !localOrgError && (
+              <p className="text-[11px] text-emerald-700 font-semibold">Showing results within {localOrgRadiusMiles} miles of your location.</p>
+            )}
+            {localOrgBusy && (
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <Loader2 className="animate-spin" size={16} />
+                Finding nearby organizations...
+              </div>
+            )}
+            {!localOrgBusy && localOrgResults.length === 0 && !localOrgError && (
+              <p className="text-xs text-slate-500">No matching organizations found. Try adjusting your search or expanding the radius.</p>
+            )}
+            {!localOrgBusy && localOrgResults.length > 0 && (
+              <div className="space-y-3">
+                {localOrgResults.map((org) => (
+                  <div key={org.id} className="rounded-xl border border-slate-200 bg-white p-3 flex flex-col gap-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{org.name}</p>
+                        <p className="text-xs text-slate-500">{org.address || 'Address unavailable'}</p>
+                        <div className="flex flex-wrap gap-2 text-[11px] text-slate-500 mt-1">
+                          <span className="font-semibold">{org.type.replace('_', ' ')}</span>
+                          {org.distanceMiles != null && (
+                            <span className="text-emerald-700 font-semibold">{org.distanceMiles.toFixed(1)} mi away</span>
+                          )}
+                          {org.verified && <span className="text-sky-700 font-semibold">Verified</span>}
+                        </div>
+                      </div>
+                      <Button size="sm" onClick={() => handleConnectToOrg(org.id)} disabled={isVerifying}>
+                        {isVerifying ? 'Connecting...' : 'Join'}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {canManageOrgSettings && (
