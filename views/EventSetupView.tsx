@@ -33,6 +33,7 @@ import {
   SupplyType,
   generateQrDataUrl,
   getEventPrimarySession,
+  buildEventRegistrationLink,
 } from '../services/eventDistribution';
 import { getOrgIdByCode } from '../services/supabase';
 import { StorageService } from '../services/storage';
@@ -220,15 +221,8 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
       .finally(() => setLoading(false));
   }, [isOrgScopedAdmin, orgId]);
 
-  const getRegistrationLink = (eventId: string) => {
-    const url = new URL(window.location.href);
-    url.searchParams.set('event', eventId);
-    url.hash = '';
-    return url.toString();
-  };
-
   const copyRegistrationLink = async (eventId: string) => {
-    const link = getRegistrationLink(eventId);
+    const link = buildEventRegistrationLink(eventId);
     await navigator.clipboard.writeText(link);
     setCopiedEventId(eventId);
     window.setTimeout(() => {
@@ -237,7 +231,7 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
   };
 
   const shareRegistrationLink = async (event: DistributionEvent) => {
-    const link = getRegistrationLink(event.id);
+    const link = buildEventRegistrationLink(event.id);
     const primarySession = getEventPrimarySession(event);
     const shareText = `Register for ${event.name}${primarySession ? ` on ${new Date(primarySession.start_at).toLocaleString()}` : ''}${primarySession?.location_name ? ` at ${primarySession.location_name}` : ''}`;
 
@@ -449,7 +443,7 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
       }
 
       // Generate registration QR link that encodes the event ID
-      const regLink = getRegistrationLink(event.id);
+      const regLink = buildEventRegistrationLink(event.id);
       const url = await generateQrDataUrl(regLink);
       setQrUrl(url);
       setSavedEvent(event);

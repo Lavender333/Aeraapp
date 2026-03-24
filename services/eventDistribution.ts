@@ -864,8 +864,58 @@ export async function getMyEventRegistration(
 // Scan & Distribution
 // ─────────────────────────────────────────
 
-/** Parse QR payload: "eventId:participantCode" or "eventId:sessionId:participantCode" */
+/**
+ * Parse QR payload strings. Supports:
+ *  - Direct event URLs with query params (preferred)
+ *  - JSON payloads stored by older clients
+ *  - Legacy colon-delimited strings (event:code or event:session:code)
+ */
 export function parseQrPayload(raw: string): { eventId: string; sessionId?: string; participantCode: string } | null {
+  // Attempt to parse as URL with query params
+  try {
+    const url = new URL(raw);
+    const searchSources = [url.searchParams];
+    if (url.hash.includes('?')) {
+      searchSources.push(new URLSearchParams(url.hash.slice(url.hash.indexOf('?') + 1)));
+    }
+
+    for (const params of searchSources) {
+      const eventId = params.get('event') || params.get('eventId');
+      const sessionId = params.get('session') || params.get('sessionId');
+      const participantCode =
+        params.get('code') ||
+        params.get('participant') ||
+        params.get('participantCode') ||
+        params.get('participant_code') ||
+        params.get('ticketCode');
+
+      if (eventId && participantCode) {
+        return {
+          eventId,
+          sessionId: sessionId || undefined,
+          participantCode,
+        };
+      }
+    }
+  } catch {
+    // Not a URL — fall through to other formats
+  }
+
+  // Attempt to parse JSON payloads
+  try {
+    const parsed = JSON.parse(raw) as Partial<EventTicketQrPayload>;
+    if (parsed && typeof parsed === 'object' && parsed.eventId && parsed.participantCode) {
+      return {
+        eventId: parsed.eventId,
+        sessionId: parsed.sessionId ?? undefined,
+        participantCode: parsed.participantCode,
+      };
+    }
+  } catch {
+    // Not JSON
+  }
+
+  // Legacy colon-delimited payload fallback
   const parts = raw.split(':');
   if (parts.length === 2) {
     const [eventId, participantCode] = parts;
@@ -1180,6 +1230,45 @@ export async function generateQrDataUrl(payload: string): Promise<string> {
   return QRCode.default.toDataURL(payload, { width: 256, margin: 2 });
 }
 
+export interface EventRegistrationLinkOptions {
+  baseUrl?: string;
+  extraParams?: Record<string, string | null | undefined>;
+}
+
+export function buildEventRegistrationLink(
+  eventId: string,
+  sessionId?: string | null,
+  options: EventRegistrationLinkOptions = {}
+): string {
+  const baseHref = options.baseUrl || (typeof window !== 'undefined' ? window.location.href : 'https://app.aera.org');
+  let target: URL;
+  try {
+    target = new URL(baseHref);
+  } catch {
+    target = new URL('https://app.aera.org');
+  }
+
+  target.searchParams.set('event', eventId);
+  if (sessionId) {
+    target.searchParams.set('session', sessionId);
+  } else {
+    target.searchParams.delete('session');
+  }
+
+  if (options.extraParams) {
+    for (const [key, value] of Object.entries(options.extraParams)) {
+      if (value == null) {
+        target.searchParams.delete(key);
+      } else {
+        target.searchParams.set(key, value);
+      }
+    }
+  }
+
+  target.hash = '';
+  return target.toString();
+}
+
 export interface EventTicketQrPayload {
   type: 'AERA_EVENT_TICKET';
   version: number;
@@ -1212,7 +1301,17 @@ export function buildQrPayload(input: {
     issuedAt: new Date().toISOString(),
   };
 
-  return JSON.stringify(payload);
+  return buildEventRegistrationLink(payload.eventId, payload.sessionId, {
+    extraParams: {
+      code: payload.participantCode,
+      ticket: payload.ticketId ?? undefined,
+      attendee: payload.attendeeName ?? undefined,
+      eventName: payload.eventName ?? undefined,
+      qrType: payload.type,
+      qrVersion: String(payload.version),
+      issuedAt: payload.issuedAt,
+    },
+  });
 }
 
 // ─────────────────────────────────────────
