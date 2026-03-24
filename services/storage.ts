@@ -698,6 +698,23 @@ export const StorageService = {
     };
   },
 
+  isProfileComplete(profile?: Partial<UserProfile> | null): boolean {
+    if (!profile) return false;
+    const basicsComplete =
+      hasText(profile.fullName) &&
+      hasText(profile.phone) &&
+      hasText(profile.address);
+    const locationComplete =
+      hasText(profile.city) &&
+      hasText(profile.state) &&
+      hasText(profile.zipCode);
+    const emergencyComplete =
+      hasText(profile.emergencyContactName) &&
+      hasText(profile.emergencyContactPhone) &&
+      hasText(profile.emergencyContactRelation);
+    return basicsComplete && locationComplete && emergencyComplete;
+  },
+
   getProfileImageAliases(userId?: string): string[] {
     const db = this.getDB();
     const aliases = new Set<string>();

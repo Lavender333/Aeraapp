@@ -165,6 +165,7 @@ export default function App() {
   const resolveAuthenticatedLandingView = (profile: Partial<UserProfile> | null | undefined): ViewState => {
     const role = String(profile?.role || 'GENERAL_USER').toUpperCase();
     const onboardComplete = Boolean(profile?.onboardComplete);
+    const profileComplete = StorageService.isProfileComplete(profile);
     const canRoleAccessLeadIntake = ['ADMIN', 'ORG_ADMIN'].includes(role);
     const canRoleAccessLeadAdmin = role === 'ADMIN';
 
@@ -183,7 +184,7 @@ export default function App() {
       return 'LEAD_ADMIN';
     }
 
-    if (!onboardComplete) return 'ACCOUNT_SETUP';
+    if (!onboardComplete && !profileComplete) return 'ACCOUNT_SETUP';
     if (role === 'BUYER') return 'BUYER_PORTAL';
     if (role === 'INSTITUTION_ADMIN' || role === 'ORG_ADMIN') return 'ORG_DASHBOARD';
     return 'DASHBOARD';
