@@ -1082,15 +1082,6 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
             </Card>
 
             <Card className="border-slate-200 bg-white space-y-3">
-              <h3 className="font-bold text-slate-900">Advances (If Enabled)</h3>
-              <p className="text-sm text-slate-600">Short-term assistance pending other funding.</p>
-              <Button fullWidth variant="outline" onClick={() => openGapForm('ADVANCE')}>Request Advance</Button>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs text-slate-700">Advance requests are reviewed alongside your hardship application to prevent duplicate awards.</p>
-              </div>
-            </Card>
-
-            <Card className="border-slate-200 bg-white space-y-3">
               <h3 className="font-bold text-slate-900">Grants</h3>
               <p className="text-sm text-slate-600">External resources.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
