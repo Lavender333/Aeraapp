@@ -130,7 +130,6 @@ export default function App() {
   const isPresentationView = currentView === 'PRESENTATION' || isPresentationPath;
 
   const canRoleAccessBuyerPortal = (role: string) => ['ADMIN', 'BUYER'].includes(role);
-  const hasPersistedAuthState = () => Boolean(StorageService.getAuthToken() || StorageService.getRefreshToken());
 
   const getStandaloneRequestedView = (): ViewState | null => {
     if (typeof window === 'undefined') return null;
@@ -150,6 +149,17 @@ export default function App() {
     const hashQuery = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
     const hashId = hashQuery ? new URLSearchParams(hashQuery).get('event') : null;
     return hashId || '';
+  };
+
+  const getStoredProfileForSessionUser = (sessionUser: { id?: string; email?: string | null }) => {
+    const db = StorageService.getDB();
+    const sessionUserId = String(sessionUser?.id || '').trim();
+    const sessionEmail = String(sessionUser?.email || '').trim().toLowerCase();
+    return db.users.find((user) => {
+      const userId = String(user.id || '').trim();
+      const userEmail = String(user.email || '').trim().toLowerCase();
+      return (sessionUserId && userId === sessionUserId) || (sessionEmail && userEmail === sessionEmail);
+    }) || null;
   };
 
   const resolveAuthenticatedLandingView = (profile: Partial<UserProfile> | null | undefined): ViewState => {
@@ -234,8 +244,14 @@ export default function App() {
           setPostSplashView('EVENT_REGISTRATION');
           setView('SPLASH');
         } else if (data?.session?.user) {
-          const localProfile = StorageService.getProfile();
+          const sessionUser = data.session.user;
+          const activeLocalProfile = StorageService.getProfile();
+          const storedSessionProfile = getStoredProfileForSessionUser(sessionUser);
+          const localProfile = activeLocalProfile?.id && activeLocalProfile.id !== 'guest'
+            ? activeLocalProfile
+            : storedSessionProfile;
           if (localProfile?.id && localProfile.id !== 'guest') {
+            StorageService.saveProfile(localProfile as UserProfile, { skipRemoteSync: true });
             const nextView = resolveAuthenticatedLandingView(localProfile);
             setPostSplashView(nextView);
             setView('SPLASH');
@@ -245,27 +261,26 @@ export default function App() {
               fetchVitalsForUser().catch(() => null),
             ]);
 
-            const sessionUser = data.session.user;
             const hydratedProfile: UserProfile = {
               id: sessionUser.id,
-              fullName: remoteProfile?.fullName || '',
-              email: remoteProfile?.email || sessionUser.email || '',
-              phone: remoteProfile?.phone || '',
-              address: remoteProfile?.address || '',
-              addressLine1: remoteProfile?.addressLine1,
-              addressLine2: remoteProfile?.addressLine2,
-              city: remoteProfile?.city,
-              state: remoteProfile?.state,
-              zipCode: remoteProfile?.zipCode,
-              latitude: remoteProfile?.latitude,
-              longitude: remoteProfile?.longitude,
-              googlePlaceId: remoteProfile?.googlePlaceId,
-              addressVerified: remoteProfile?.addressVerified,
-              addressVerifiedAt: remoteProfile?.addressVerifiedAt,
-              householdMembers: remoteVitals?.householdMembers || 1,
-              household: remoteVitals?.household || [],
-              petDetails: remoteVitals?.petDetails || '',
-              medicalNeeds: remoteVitals?.medicalNeeds || '',
+              fullName: remoteProfile?.fullName || storedSessionProfile?.fullName || '',
+              email: remoteProfile?.email || storedSessionProfile?.email || sessionUser.email || '',
+              phone: remoteProfile?.phone || storedSessionProfile?.phone || '',
+              address: remoteProfile?.address || storedSessionProfile?.address || '',
+              addressLine1: remoteProfile?.addressLine1 || storedSessionProfile?.addressLine1,
+              addressLine2: remoteProfile?.addressLine2 || storedSessionProfile?.addressLine2,
+              city: remoteProfile?.city || storedSessionProfile?.city,
+              state: remoteProfile?.state || storedSessionProfile?.state,
+              zipCode: remoteProfile?.zipCode || storedSessionProfile?.zipCode,
+              latitude: remoteProfile?.latitude ?? storedSessionProfile?.latitude,
+              longitude: remoteProfile?.longitude ?? storedSessionProfile?.longitude,
+              googlePlaceId: remoteProfile?.googlePlaceId || storedSessionProfile?.googlePlaceId,
+              addressVerified: remoteProfile?.addressVerified ?? storedSessionProfile?.addressVerified,
+              addressVerifiedAt: remoteProfile?.addressVerifiedAt || storedSessionProfile?.addressVerifiedAt,
+              householdMembers: remoteVitals?.householdMembers || storedSessionProfile?.householdMembers || 1,
+              household: remoteVitals?.household || storedSessionProfile?.household || [],
+              petDetails: remoteVitals?.petDetails || storedSessionProfile?.petDetails || '',
+              medicalNeeds: remoteVitals?.medicalNeeds || storedSessionProfile?.medicalNeeds || '',
               medicationDependency: remoteVitals?.medicationDependency,
               insulinDependency: remoteVitals?.insulinDependency,
               oxygenPoweredDevice: remoteVitals?.oxygenPoweredDevice,
@@ -274,15 +289,15 @@ export default function App() {
               financialStrain: remoteVitals?.financialStrain,
               consentPreparednessPlanning: remoteVitals?.consentPreparednessPlanning,
               consentTimestamp: remoteVitals?.consentTimestamp,
-              emergencyContactName: remoteProfile?.emergencyContactName || '',
-              emergencyContactPhone: remoteProfile?.emergencyContactPhone || '',
-              emergencyContactRelation: remoteProfile?.emergencyContactRelation || '',
-              communityId: remoteProfile?.communityId || '',
-              role: remoteProfile?.role || 'GENERAL_USER',
+              emergencyContactName: remoteProfile?.emergencyContactName || storedSessionProfile?.emergencyContactName || '',
+              emergencyContactPhone: remoteProfile?.emergencyContactPhone || storedSessionProfile?.emergencyContactPhone || '',
+              emergencyContactRelation: remoteProfile?.emergencyContactRelation || storedSessionProfile?.emergencyContactRelation || '',
+              communityId: remoteProfile?.communityId || storedSessionProfile?.communityId || '',
+              role: remoteProfile?.role || storedSessionProfile?.role || 'GENERAL_USER',
               language: 'en',
               active: true,
-              onboardComplete: Boolean(remoteVitals || localProfile?.onboardComplete),
-              notifications: { push: true, sms: true, email: true },
+              onboardComplete: Boolean(remoteVitals || storedSessionProfile?.onboardComplete),
+              notifications: storedSessionProfile?.notifications || { push: true, sms: true, email: true },
             };
 
             StorageService.saveProfile(hydratedProfile, { skipRemoteSync: true });
@@ -291,12 +306,7 @@ export default function App() {
             setView('SPLASH');
           }
         } else {
-          const localProfile = StorageService.getProfile();
-          if (hasPersistedAuthState() && localProfile?.id && localProfile.id !== 'guest') {
-            const nextView = resolveAuthenticatedLandingView(localProfile);
-            setPostSplashView(nextView);
-            setView('SPLASH');
-          } else if (requestedStandaloneView === 'PUBLIC_INTAKE') {
+          if (requestedStandaloneView === 'PUBLIC_INTAKE') {
             setPostSplashView('PUBLIC_INTAKE');
             setView('PUBLIC_INTAKE');
           } else if (requestedStandaloneView === 'BUYER_PORTAL') {
@@ -337,12 +347,7 @@ export default function App() {
           setPostSplashView('EVENT_REGISTRATION');
           setView('SPLASH');
         } else {
-          const localProfile = StorageService.getProfile();
-          if (hasPersistedAuthState() && localProfile?.id && localProfile.id !== 'guest') {
-            const nextView = resolveAuthenticatedLandingView(localProfile);
-            setPostSplashView(nextView);
-            setView('SPLASH');
-          } else if (pendingInvite?.communityId) {
+          if (pendingInvite?.communityId) {
             setPostSplashView('LOGIN');
             setView('SPLASH');
           } else {
