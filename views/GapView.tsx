@@ -236,6 +236,10 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
       program: request.gapApplication?.program,
       householdImpacted: request.gapApplication?.householdImpacted,
       fallbackPeopleCount: request.peopleCount,
+      revenueSettings,
+      monthlyIncomeLoss: request.gapApplication?.monthlyIncomeLoss,
+      urgencyRisk: request.gapApplication?.urgencyRisk,
+      immediateExpenseCategories: request.gapApplication?.immediateExpenseCategories,
     });
   };
 
@@ -467,7 +471,12 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
   };
 
   const householdForAmount = Math.max(1, Number(formState.householdImpacted || 1));
-  const suggestedAmount = calculateGapSuggestedAmount(formMode, householdForAmount);
+  const suggestedAmount = calculateGapSuggestedAmount(formMode, householdForAmount, {
+    revenueSettings,
+    monthlyIncomeLoss: Number(formState.monthlyIncomeLoss || 0),
+    urgencyRisk: formState.urgencyRisk,
+    immediateExpenseCategories: formState.immediateExpenseCategories,
+  });
   const customRequestedAmount = Number(formState.customRequestedAmount || 0);
   const finalRequestedAmount = customRequestedAmount > 0 ? customRequestedAmount : suggestedAmount;
 
@@ -1418,7 +1427,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                   <p className="text-xs text-emerald-800 font-semibold">Suggested request amount: {formatCurrency(suggestedAmount)}</p>
                   <p className="text-xs text-emerald-700 mt-1">
-                    Calculated as {formMode === 'ADVANCE' ? '$125' : '$250'} × {householdForAmount} household impacted. Suggested amount is based on estimated immediate hardship. Final award may vary.
+                    Calculated using household impact, immediate expense categories, urgency risk, reported income loss, and current G.A.P. revenue settings. Suggested amount is an estimate and final award may vary.
                   </p>
                 </div>
 
