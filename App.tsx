@@ -251,7 +251,59 @@ export default function App() {
             ? activeLocalProfile
             : storedSessionProfile;
           if (localProfile?.id && localProfile.id !== 'guest') {
-            StorageService.saveProfile(localProfile as UserProfile, { skipRemoteSync: true });
+            const baseProfile = localProfile as UserProfile;
+            StorageService.saveProfile(baseProfile, { skipRemoteSync: true });
+            // Background hydrate + sync so edits made on one device are pushed to Supabase and reloaded elsewhere.
+            void (async () => {
+              try {
+                const [remoteProfile, remoteVitals] = await Promise.all([
+                  fetchProfileForUser().catch(() => null),
+                  fetchVitalsForUser().catch(() => null),
+                ]);
+
+                const mergedProfile: UserProfile = {
+                  ...baseProfile,
+                  fullName: remoteProfile?.fullName || baseProfile.fullName || '',
+                  email: remoteProfile?.email || baseProfile.email || sessionUser.email || '',
+                  phone: remoteProfile?.phone || baseProfile.phone || '',
+                  address: remoteProfile?.address || baseProfile.address || '',
+                  addressLine1: remoteProfile?.addressLine1 || baseProfile.addressLine1,
+                  addressLine2: remoteProfile?.addressLine2 || baseProfile.addressLine2,
+                  city: remoteProfile?.city || baseProfile.city,
+                  state: remoteProfile?.state || baseProfile.state,
+                  zipCode: remoteProfile?.zipCode || baseProfile.zipCode,
+                  latitude: remoteProfile?.latitude ?? baseProfile.latitude,
+                  longitude: remoteProfile?.longitude ?? baseProfile.longitude,
+                  googlePlaceId: remoteProfile?.googlePlaceId || baseProfile.googlePlaceId,
+                  addressVerified: remoteProfile?.addressVerified ?? baseProfile.addressVerified,
+                  addressVerifiedAt: remoteProfile?.addressVerifiedAt || baseProfile.addressVerifiedAt,
+                  householdMembers: remoteVitals?.householdMembers || baseProfile.householdMembers || 1,
+                  household: remoteVitals?.household || baseProfile.household || [],
+                  petDetails: remoteVitals?.petDetails || baseProfile.petDetails || '',
+                  medicalNeeds: remoteVitals?.medicalNeeds || baseProfile.medicalNeeds || '',
+                  medicationDependency: remoteVitals?.medicationDependency ?? baseProfile.medicationDependency,
+                  insulinDependency: remoteVitals?.insulinDependency ?? baseProfile.insulinDependency,
+                  oxygenPoweredDevice: remoteVitals?.oxygenPoweredDevice ?? baseProfile.oxygenPoweredDevice,
+                  mobilityLimitation: remoteVitals?.mobilityLimitation ?? baseProfile.mobilityLimitation,
+                  transportationAccess: remoteVitals?.transportationAccess ?? baseProfile.transportationAccess,
+                  financialStrain: remoteVitals?.financialStrain ?? baseProfile.financialStrain,
+                  consentPreparednessPlanning:
+                    remoteVitals?.consentPreparednessPlanning ?? baseProfile.consentPreparednessPlanning,
+                  consentTimestamp: remoteVitals?.consentTimestamp ?? baseProfile.consentTimestamp,
+                  emergencyContactName: remoteProfile?.emergencyContactName || baseProfile.emergencyContactName || '',
+                  emergencyContactPhone: remoteProfile?.emergencyContactPhone || baseProfile.emergencyContactPhone || '',
+                  emergencyContactRelation:
+                    remoteProfile?.emergencyContactRelation || baseProfile.emergencyContactRelation || '',
+                  communityId: remoteProfile?.communityId || baseProfile.communityId || '',
+                  role: remoteProfile?.role || baseProfile.role || 'GENERAL_USER',
+                  notifications: baseProfile.notifications || { push: true, sms: true, email: true },
+                };
+
+                StorageService.saveProfile(mergedProfile);
+              } catch (err) {
+                console.warn('Background profile sync failed', err);
+              }
+            })();
             const nextView = resolveAuthenticatedLandingView(localProfile);
             setPostSplashView(nextView);
             setView('SPLASH');

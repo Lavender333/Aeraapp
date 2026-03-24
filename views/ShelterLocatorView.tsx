@@ -3,16 +3,10 @@ import { ArrowLeft, ExternalLink, MapPin } from 'lucide-react';
 import { ViewState } from '../types';
 
 const SHELTER_LOCATOR_URL = 'https://egateway.fema.gov/ESF6/DRCLocator';
-const MAP_PRESET_QUERY_KEY = 'aera.mapPresetQuery';
 
 export const ShelterLocatorView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const openOfficialLocator = () => {
     window.open(SHELTER_LOCATOR_URL, '_blank', 'noopener,noreferrer');
-  };
-
-  const useMapAssistant = () => {
-    sessionStorage.setItem(MAP_PRESET_QUERY_KEY, 'Nearest emergency shelter');
-    setView('MAP');
   };
 
   return (
@@ -68,21 +62,7 @@ export const ShelterLocatorView: React.FC<{ setView: (v: ViewState) => void }> =
                   Open FEMA Locator
                 </button>
               </div>
-
-              <div className="rounded-lg border border-slate-200 p-3">
-                <p className="text-[11px] uppercase font-bold text-slate-500 mb-2">Alternative Search</p>
-                <button
-                  onClick={useMapAssistant}
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-slate-700 text-sm font-medium hover:bg-slate-100"
-                >
-                  Use Map Assistant Instead
-                </button>
-              </div>
             </div>
-
-            <p className="mt-3 text-xs text-slate-500">
-              Map Assistant will start with a prefilled shelter search so responders can quickly find nearby options.
-            </p>
 
           </div>
         </div>

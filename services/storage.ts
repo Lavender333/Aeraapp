@@ -1473,9 +1473,11 @@ export const StorageService = {
         needs: m.needs || [],
         phone: m.phone || '',
         address: m.address || '',
-        emergencyContactName: m.emergencyContactName || '',
-        emergencyContactPhone: m.emergencyContactPhone || '',
-        emergencyContactRelation: m.emergencyContactRelation || ''
+        emergencyContactName: m.emergencyContactName || m.emergency_contact_name || '',
+        emergencyContactPhone: m.emergencyContactPhone || m.emergency_contact_phone || '',
+        emergencyContactRelation: m.emergencyContactRelation || m.emergency_contact_relation || '',
+        role: m.role || '',
+        isOrgCreator: Boolean(m.isOrgCreator || m.is_org_creator),
       }));
       const db = this.getDB();
       db.orgMembers = db.orgMembers || {};

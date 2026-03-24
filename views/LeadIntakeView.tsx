@@ -412,17 +412,45 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
               {[
                 {
                   field: 'consentToContact' as keyof IntakeForm,
-                  label: 'I consent to be contacted by phone, email, or text about my case.',
+                  label: (
+                    <>I consent to be contacted by phone, email, or text about my case.</>
+                  ),
                   subtext: 'A qualified specialist may reach out regarding your submission.',
                 },
                 {
                   field: 'tcpaComplianceAcknowledged' as keyof IntakeForm,
-                  label: 'I acknowledge I may receive automated calls or texts (TCPA).',
+                  label: (
+                    <>
+                      I acknowledge I may receive automated calls or texts (
+                      <a
+                        href="https://www.ecfr.gov/current/title-47/chapter-I/subchapter-A/part-64/subpart-L"
+                        className="font-semibold text-slate-900 hover:underline"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        TCPA
+                      </a>
+                      ).
+                    </>
+                  ),
                   subtext: 'Standard message & data rates may apply. Reply STOP to opt out at any time.',
                 },
                 {
                   field: 'privacyPolicyAccepted' as keyof IntakeForm,
-                  label: 'I have read and accept the AERA Privacy Policy.',
+                  label: (
+                    <>
+                      I have read and accept the{' '}
+                      <a
+                        href="/privacy-policy"
+                        className="font-semibold text-slate-900 hover:underline"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        AERA Privacy Policy
+                      </a>
+                      .
+                    </>
+                  ),
                   subtext: 'Your information is protected and will only be shared with licensed, verified partners.',
                 },
               ].map(({ field, label, subtext }) => (
@@ -441,11 +469,6 @@ export const LeadIntakeView: React.FC<LeadIntakeViewProps> = ({ setView }) => {
                 </label>
               ))}
 
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600 mt-2">
-                <strong>Data Handling:</strong> Your information is retained for 90 days and may be deleted upon request.
-                Leads are only delivered to buyers licensed to operate in your state. Consent is recorded with a timestamp
-                and IP address for compliance auditing.
-              </div>
             </div>
           </Card>
         )}

@@ -38,6 +38,15 @@ const mergeReplenishmentRequests = (remoteRequests: ReplenishmentRequest[], loca
 };
 
 export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initialTab?: OrgDashboardTab; communityIdOverride?: string }> = ({ setView, initialTab = 'MEMBERS', communityIdOverride }) => {
+  const OUTREACH_CACHE_TTL_MS = 60_000;
+
+  type OutreachPanelSnapshot = {
+    candidates: OrgOutreachCandidate[];
+    logs: OrgOutreachAuditLog[];
+    orgCenter: { lat: number; lng: number } | null;
+    fetchedAt: number;
+  };
+
   const isUuid = (value: string) =>
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
 
@@ -182,7 +191,9 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
   const [outreachOrgCenter, setOutreachOrgCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [outreachRadiusMiles, setOutreachRadiusMiles] = useState<number>(3);
   const [outreachVisibleCount, setOutreachVisibleCount] = useState<number>(12);
+  const [outreachRefreshNonce, setOutreachRefreshNonce] = useState(0);
   const [receiptPreviewRequest, setReceiptPreviewRequest] = useState<ReplenishmentRequest | null>(null);
+  const outreachCacheRef = useRef<Map<string, OutreachPanelSnapshot>>(new Map());
 
   // Broadcast State
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
@@ -394,10 +405,25 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     if (activeTab !== 'OUTREACH' || !activeOrgCode) return;
 
     let active = true;
+    const cacheKey = `${activeOrgCode}::${outreachRadiusMiles}`;
+    const cached = outreachCacheRef.current.get(cacheKey);
     const loadOutreachPanel = async () => {
       setOutreachVisibleCount(12);
-      setOutreachPanelLoading(true);
       setOutreachPanelError(null);
+
+      if (cached) {
+        setOutreachCandidates(cached.candidates);
+        setOutreachAuditLogs(cached.logs);
+        setOutreachOrgCenter(cached.orgCenter);
+      }
+
+      const cacheIsFresh = Boolean(cached && Date.now() - cached.fetchedAt < OUTREACH_CACHE_TTL_MS);
+      if (cacheIsFresh) {
+        setOutreachPanelLoading(false);
+        return;
+      }
+
+      setOutreachPanelLoading(!cached);
       try {
         const org = await getOrgByCode(activeOrgCode);
         if (!org?.orgId) throw new Error('Organization lookup failed');
@@ -408,19 +434,27 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
         ]);
 
         if (!active) return;
-        setOutreachCandidates(candidates);
-        setOutreachAuditLogs(logs);
-        if (typeof org.latitude === 'number' && typeof org.longitude === 'number') {
-          setOutreachOrgCenter({ lat: org.latitude, lng: org.longitude });
-        } else {
-          setOutreachOrgCenter(null);
-        }
+        const nextCenter = typeof org.latitude === 'number' && typeof org.longitude === 'number'
+          ? { lat: org.latitude, lng: org.longitude }
+          : null;
+        const snapshot: OutreachPanelSnapshot = {
+          candidates,
+          logs,
+          orgCenter: nextCenter,
+          fetchedAt: Date.now(),
+        };
+        outreachCacheRef.current.set(cacheKey, snapshot);
+        setOutreachCandidates(snapshot.candidates);
+        setOutreachAuditLogs(snapshot.logs);
+        setOutreachOrgCenter(snapshot.orgCenter);
       } catch (e: any) {
         if (!active) return;
         setOutreachPanelError(e?.message || 'Unable to load outreach panel.');
-        setOutreachCandidates([]);
-        setOutreachAuditLogs([]);
-        setOutreachOrgCenter(null);
+        if (!cached) {
+          setOutreachCandidates([]);
+          setOutreachAuditLogs([]);
+          setOutreachOrgCenter(null);
+        }
       } finally {
         if (active) setOutreachPanelLoading(false);
       }
@@ -430,7 +464,45 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     return () => {
       active = false;
     };
-  }, [activeTab, activeOrgCode, outreachRadiusMiles]);
+  }, [activeTab, activeOrgCode, outreachRadiusMiles, outreachRefreshNonce]);
+
+  useEffect(() => {
+    if (!activeOrgCode) return;
+    const cacheKey = `${activeOrgCode}::${outreachRadiusMiles}`;
+    const cached = outreachCacheRef.current.get(cacheKey);
+    if (cached && Date.now() - cached.fetchedAt < OUTREACH_CACHE_TTL_MS) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const org = await getOrgByCode(activeOrgCode);
+        if (!org?.orgId || cancelled) return;
+
+        const [candidates, logs] = await Promise.all([
+          getOrgLeaderOutreachCandidates(org.orgId, outreachRadiusMiles),
+          listOrgOutreachAuditLogs(org.orgId, 20),
+        ]);
+        if (cancelled) return;
+
+        const nextCenter = typeof org.latitude === 'number' && typeof org.longitude === 'number'
+          ? { lat: org.latitude, lng: org.longitude }
+          : null;
+
+        outreachCacheRef.current.set(cacheKey, {
+          candidates,
+          logs,
+          orgCenter: nextCenter,
+          fetchedAt: Date.now(),
+        });
+      } catch {
+        // Prefetch failures are non-blocking for primary dashboard actions.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeOrgCode, outreachRadiusMiles]);
 
   useEffect(() => {
     if (!activeOrgCode) return;
@@ -663,6 +735,13 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
         notes,
       });
 
+      for (const key of Array.from(outreachCacheRef.current.keys())) {
+        if (key.startsWith(`${activeOrgCode}::`)) {
+          outreachCacheRef.current.delete(key);
+        }
+      }
+      setOutreachRefreshNonce((v) => v + 1);
+
       const refreshedLogs = await listOrgOutreachAuditLogs(org.orgId, 20);
       setOutreachAuditLogs(refreshedLogs);
     } catch (e: any) {
@@ -719,6 +798,12 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
       const remoteSaved = await saveOrganizationOutreachRadiusByCode(activeOrgCode, localSaved);
       StorageService.setOrgOutreachRadiusMiles(activeOrgCode, remoteSaved);
       setOutreachRadiusMiles(remoteSaved);
+      for (const key of Array.from(outreachCacheRef.current.keys())) {
+        if (key.startsWith(`${activeOrgCode}::`)) {
+          outreachCacheRef.current.delete(key);
+        }
+      }
+      setOutreachRefreshNonce((v) => v + 1);
       alert(`Outreach radius saved at ${remoteSaved} miles for ${orgName}.`);
     } catch (err: any) {
       console.warn('Unable to save outreach radius to server; retained locally', err);

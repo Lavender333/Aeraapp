@@ -516,6 +516,13 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
             <div className="text-center">
               <h2 className="text-xl font-bold text-slate-900 mb-2">What was damaged?</h2>
               <p className="text-slate-600 text-sm">Select the category that best describes the issue.</p>
+              <div className="mt-3 inline-flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-left max-w-xl">
+                <AlertTriangle size={16} className="text-amber-700 mt-0.5 shrink-0" />
+                <p className="text-xs text-amber-900">
+                  Safety first: do not risk injury to answer this assessment. Only report what you can safely see from the ground.
+                  Do not climb on roofs, unstable structures, or debris.
+                </p>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
