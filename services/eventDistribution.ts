@@ -1180,8 +1180,39 @@ export async function generateQrDataUrl(payload: string): Promise<string> {
   return QRCode.default.toDataURL(payload, { width: 256, margin: 2 });
 }
 
-export function buildQrPayload(eventId: string, participantCode: string, sessionId?: string): string {
-  return sessionId ? `${eventId}:${sessionId}:${participantCode}` : `${eventId}:${participantCode}`;
+export interface EventTicketQrPayload {
+  type: 'AERA_EVENT_TICKET';
+  version: number;
+  eventId: string;
+  sessionId: string | null;
+  ticketId: string | null;
+  participantCode: string;
+  eventName?: string | null;
+  attendeeName?: string | null;
+  issuedAt: string;
+}
+
+export function buildQrPayload(input: {
+  eventId: string;
+  participantCode: string;
+  sessionId?: string | null;
+  ticketId?: string | null;
+  eventName?: string | null;
+  attendeeName?: string | null;
+}): string {
+  const payload: EventTicketQrPayload = {
+    type: 'AERA_EVENT_TICKET',
+    version: 1,
+    eventId: input.eventId,
+    sessionId: input.sessionId ?? null,
+    ticketId: input.ticketId ?? null,
+    participantCode: input.participantCode,
+    eventName: input.eventName ?? null,
+    attendeeName: input.attendeeName ?? null,
+    issuedAt: new Date().toISOString(),
+  };
+
+  return JSON.stringify(payload);
 }
 
 // ─────────────────────────────────────────
@@ -1248,6 +1279,18 @@ const mergeOutreachCandidates = (base: OrgOutreachCandidate[], extra: OrgOutreac
 
 const OUTREACH_MIN_GEOCODE_CONFIDENCE = 0.75;
 const OUTREACH_MAX_GEOCODE_AGE_DAYS = 180;
+
+const isMissingGeocodeConfidenceColumnError = (error?: { message?: string } | null) => {
+  const message = String(error?.message || '').toLowerCase();
+  if (!message) return false;
+  if (!message.includes('geocode_confidence')) return false;
+  return (
+    message.includes('does not exist') ||
+    message.includes('unknown column') ||
+    message.includes('undefined column') ||
+    message.includes('42703')
+  );
+};
 
 const isFreshGeocode = (geocodedAt?: string | null) => {
   if (!geocodedAt) return false;
@@ -1436,16 +1479,28 @@ export async function getOrgLeaderOutreachCandidates(
     }
 
     if (!Number.isFinite(orgLat) || !Number.isFinite(orgLng)) {
-      throw new Error('Organization location is missing. Add org coordinates or save your profile location to use Nearby Outreach.');
+      throw new Error('Organization location is missing. Add org coordinates or save your profile location to use the Local Outreach Panel.');
     }
 
-    const { data: profileRows, error: candidateError } = await supabase
-      .from('profiles')
-      .select('id, full_name, mobile_phone, phone, email, latitude, longitude, geofenced_outreach_radius_miles, geofenced_outreach_opt_in, geocode_confidence, geocoded_at, org_id, is_active')
-      .eq('is_active', true)
-      .neq('id', authData.user.id)
-      .not('latitude', 'is', null)
-      .not('longitude', 'is', null);
+    const candidateSelectWithGeocode = 'id, full_name, mobile_phone, phone, email, latitude, longitude, geofenced_outreach_radius_miles, geofenced_outreach_opt_in, geocode_confidence, geocoded_at, org_id, is_active';
+    const candidateSelectWithoutGeocode = 'id, full_name, mobile_phone, phone, email, latitude, longitude, geofenced_outreach_radius_miles, geofenced_outreach_opt_in, org_id, is_active';
+
+    const runCandidateQuery = (columns: string) =>
+      supabase
+        .from('profiles')
+        .select(columns)
+        .eq('is_active', true)
+        .neq('id', authData.user.id)
+        .not('latitude', 'is', null)
+        .not('longitude', 'is', null);
+
+    let profileRows: any[] | null | undefined;
+    let candidateError: { message?: string } | null | undefined;
+
+    ({ data: profileRows, error: candidateError } = await runCandidateQuery(candidateSelectWithGeocode));
+    if (candidateError && isMissingGeocodeConfidenceColumnError(candidateError)) {
+      ({ data: profileRows, error: candidateError } = await runCandidateQuery(candidateSelectWithoutGeocode));
+    }
 
     if (candidateError) throw new Error(candidateError.message);
 
@@ -1542,10 +1597,19 @@ export async function getOrgLeaderOutreachCandidates(
 
   let rpcMetaMap = new Map<string, any>();
   if (rpcIds.length > 0) {
-    const { data: rpcMetaRows } = await supabase
-      .from('profiles')
-      .select('id, org_id, geocode_confidence, geocoded_at')
-      .in('id', rpcIds);
+    const runRpcMetaQuery = (columns: string) =>
+      supabase
+        .from('profiles')
+        .select(columns)
+        .in('id', rpcIds);
+
+    let rpcMetaRows: any[] | null | undefined;
+    let rpcMetaError: { message?: string } | null | undefined;
+
+    ({ data: rpcMetaRows, error: rpcMetaError } = await runRpcMetaQuery('id, org_id, geocode_confidence, geocoded_at'));
+    if (rpcMetaError && isMissingGeocodeConfidenceColumnError(rpcMetaError)) {
+      ({ data: rpcMetaRows, error: rpcMetaError } = await runRpcMetaQuery('id, org_id'));
+    }
 
     rpcMetaMap = new Map(
       (rpcMetaRows || []).map((row: any) => [String(row?.id || '').trim(), row])

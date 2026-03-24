@@ -63,7 +63,14 @@ export const EventsView: React.FC<EventsViewProps> = ({ setView }) => {
 
       const nextEntries: Array<[string, string]> = [];
       for (const reg of pending) {
-        const payload = buildQrPayload(reg.event_id, reg.participant_code, reg.session_id);
+        const payload = buildQrPayload({
+          eventId: reg.event_id,
+          participantCode: reg.participant_code,
+          sessionId: reg.session_id,
+          ticketId: reg.ticket_id,
+          eventName: reg.event?.name ?? null,
+          attendeeName: reg.full_name,
+        });
         const dataUrl = await generateQrDataUrl(payload);
         nextEntries.push([reg.id, dataUrl]);
       }

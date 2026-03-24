@@ -533,7 +533,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
                   </span>
                 </label>
                 <p className="text-xs text-slate-500">
-                  This is optional. You can change it later in Settings. Nearby outreach only uses your saved location and consent.
+                  This is optional. You can change it later in Settings. Local outreach only uses your saved location and consent.
                 </p>
                 {outreachLocationStatus && (
                   <p className="text-xs text-slate-600 font-medium">{outreachLocationStatus}</p>

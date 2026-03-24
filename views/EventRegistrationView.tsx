@@ -10,7 +10,6 @@ import {
   AlertTriangle,
   Download,
   ArrowLeft,
-  Bell,
   Info,
   Package,
 } from 'lucide-react';
@@ -103,7 +102,6 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
   const [preferredLanguage, setPreferredLanguage] = useState('en');
 
   const [outreachOptIn, setOutreachOptIn] = useState(false);
-  const [locationGranted, setLocationGranted] = useState(false);
   const [locationLatLng, setLocationLatLng] = useState<{ lat: number; lng: number } | null>(null);
   const [profileDefaults, setProfileDefaults] = useState<{
     fullName: string;
@@ -212,7 +210,6 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
         if (defaults.outreachOptIn) setOutreachOptIn(true);
         if (defaults.location) {
           setLocationLatLng(defaults.location);
-          setLocationGranted(true);
         }
       } catch {
         // Anonymous/public users are allowed.
@@ -260,7 +257,6 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
 
         if (typeof existing.latitude === 'number' && typeof existing.longitude === 'number') {
           setLocationLatLng({ lat: existing.latitude, lng: existing.longitude });
-          setLocationGranted(true);
         }
       } catch {
         // Ignore lookup issues; user can still submit.
@@ -281,7 +277,6 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
     setEmail(profileDefaults.email || '');
     setOutreachOptIn(profileDefaults.outreachOptIn);
     setLocationLatLng(profileDefaults.location);
-    setLocationGranted(Boolean(profileDefaults.location));
   };
 
   const effectiveFields = () => {
@@ -298,22 +293,6 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
     () => Object.values(requestedBySupplyId).reduce((sum, qty) => sum + (Number(qty) || 0), 0),
     [requestedBySupplyId]
   );
-
-  const requestLocation = () => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocationLatLng({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setLocationGranted(true);
-      },
-      () => setLocationGranted(false)
-    );
-  };
-
-  const handleOutreachToggle = (val: boolean) => {
-    setOutreachOptIn(val);
-    if (val) requestLocation();
-  };
 
   const handleFormNext = () => {
     setError('');
@@ -385,7 +364,14 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
 
       setRegistration(reg);
       setEditingExisting(true);
-      const qrPayload = buildQrPayload(event.id, reg.participant_code, selectedSession.id);
+      const qrPayload = buildQrPayload({
+        eventId: event.id,
+        participantCode: reg.participant_code,
+        sessionId: selectedSession.id,
+        ticketId: reg.ticket_id,
+        eventName: event.name,
+        attendeeName: reg.full_name || fields.fullName,
+      });
       setQrUrl(await generateQrDataUrl(qrPayload));
       setStep('done');
     } catch (e: any) {
@@ -467,8 +453,7 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
           <button onClick={() => setStep('form')} className="flex items-center gap-1.5 text-slate-500 mb-6 text-[13px]">
             <ArrowLeft size={16} /> Back
           </button>
-          <h2 className="text-[20px] font-bold text-slate-900 mb-1">Final Step</h2>
-          <p className="text-[13px] text-slate-500 mb-6">Community alerts are optional</p>
+          <h2 className="text-[20px] font-bold text-slate-900 mb-4">Final Step</h2>
 
           <Card className="p-4 mb-4 border border-emerald-200 bg-emerald-50">
             <p className="text-[11px] uppercase font-bold text-emerald-700">Registering For</p>
@@ -479,42 +464,6 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
             <p className="text-[12px] text-emerald-800 mt-1">
               Location Address: {selectedSession?.location_name || event?.address || 'Not provided yet'}
             </p>
-          </Card>
-
-          <Card className="p-5 space-y-4">
-            <div className="flex items-start gap-3">
-              <Bell size={20} className="text-[#2F7A64] mt-0.5 shrink-0" />
-              <div>
-                <p className="text-[14px] font-semibold text-slate-800">Safety Alerts</p>
-                <p className="text-[13px] text-slate-600 mt-0.5">Receive nearby safety alerts from organizations?</p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => handleOutreachToggle(true)}
-                className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold border ${
-                  outreachOptIn ? 'bg-[#2F7A64] text-white border-[#2F7A64]' : 'bg-white text-slate-700 border-slate-300'
-                }`}
-              >
-                Yes
-              </button>
-              <button
-                onClick={() => setOutreachOptIn(false)}
-                className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold border ${
-                  !outreachOptIn ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-700 border-slate-300'
-                }`}
-              >
-                No
-              </button>
-            </div>
-
-            {outreachOptIn && (
-              <div className="bg-emerald-50 rounded-xl p-3 text-[12px] text-emerald-700">
-                {locationGranted
-                  ? 'Location captured. Alerts are limited to nearby radius.'
-                  : 'Location permission denied. ZIP code will be used when possible.'}
-              </div>
-            )}
           </Card>
 
           {error && (

@@ -162,6 +162,9 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
   };
 
   const getBuyerInviteLink = () => {
+    if (typeof window === 'undefined') return '/buyer-portal';
+    return `${window.location.origin}/buyer-portal?invite=buyer`;
+  };
 
   const handleSupportTicketAction = async (ticketId: string, status: ContactSupportTicketStatus) => {
     setSupportError(null);
@@ -185,10 +188,6 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
       setSupportBusyId(null);
     }
   };
-    if (typeof window === 'undefined') return '/buyer-portal';
-    return `${window.location.origin}/buyer-portal?invite=buyer`;
-  };
-
   const handleEditTicket = async (ticketId: string) => {
     const draft = editDrafts[ticketId] || {};
     setEditBusyId(ticketId);
@@ -258,10 +257,10 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
         {/* KPI Strip */}
         <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { label: 'Total Leads',       value: leads.length.toString(),               color: 'bg-blue-100 text-blue-700' },
-            { label: 'Acceptance Rate',   value: fmtPct(recon.acceptanceRate),          color: 'bg-emerald-100 text-emerald-700' },
-            { label: 'Net Revenue',       value: fmt$(recon.netRevenueCents),            color: 'bg-amber-100 text-amber-700' },
-            { label: 'Dispute Rate',      value: fmtPct(recon.disputeRate),             color: 'bg-rose-100 text-rose-700' },
+            { label: 'Total Leads', value: leads.length.toString(), color: 'bg-blue-100 text-blue-700' },
+            { label: 'Acceptance Rate', value: fmtPct(recon.acceptanceRate), color: 'bg-emerald-100 text-emerald-700' },
+            { label: 'Net Revenue', value: fmt$(recon.netRevenueCents), color: 'bg-amber-100 text-amber-700' },
+            { label: 'Dispute Rate', value: fmtPct(recon.disputeRate), color: 'bg-rose-100 text-rose-700' },
           ].map((kpi) => (
             <Card key={kpi.label} className="border-slate-200 bg-white/95">
               <div className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold mb-1 ${kpi.color}`}>{kpi.label}</div>

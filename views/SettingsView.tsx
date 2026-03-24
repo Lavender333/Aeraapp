@@ -272,7 +272,19 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const isAdmin = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(normalizedRole);
   const isPlatformAdmin = normalizedRole === 'ADMIN';
   const isOrgScopedAdmin = normalizedRole === 'ORG_ADMIN' || normalizedRole === 'INSTITUTION_ADMIN';
-  const canSubmitContactSupport = ['GENERAL_USER', 'MEMBER', 'ORG_ADMIN', 'INSTITUTION_ADMIN', 'ADMIN'].includes(normalizedRole);
+  const canSubmitContactSupport = [
+    'GENERAL_USER',
+    'MEMBER',
+    'ORG_ADMIN',
+    'INSTITUTION_ADMIN',
+    'ADMIN',
+    'STATE_ADMIN',
+    'COUNTY_ADMIN',
+    'BUYER',
+    'CONTRACTOR',
+    'LOCAL_AUTHORITY',
+    'FIRST_RESPONDER'
+  ].includes(normalizedRole);
   const canManageOrgSettings = isOrgScopedAdmin || isPlatformAdmin;
   const orgScopeId = String(profile.communityId || '').trim();
   function getStoredProfileImage(userId?: string) {
@@ -534,6 +546,434 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   const toggleShowMore = (section: SettingsAccordionKey) => {
     setShowMoreSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const renderContactSupportSection = () => {
+    if (!canSubmitContactSupport) return null;
+    const activeFaqs = isOrgScopedAdmin ? [...GENERAL_FAQS, ...ORG_ADMIN_FAQS] : GENERAL_FAQS;
+
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <div className="flex items-start justify-between gap-3 px-4 pt-4 pb-3">
+          <div>
+            <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Contact Us - Aera</p>
+            <p className="text-xs text-slate-500 mt-1">Browse common questions or send a ticket to the support team.</p>
+          </div>
+          <div className="rounded-full bg-sky-50 border border-sky-200 px-2.5 py-1 text-[10px] font-bold text-sky-700 shrink-0">AERA Admin Queue</div>
+        </div>
+
+        <div className="flex border-b border-slate-200 px-4">
+          <button
+            type="button"
+            onClick={() => setContactUsTab('faq')}
+            className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${contactUsTab === 'faq' ? 'border-sky-500 text-sky-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            <HelpCircle size={13} />
+            FAQ
+            {isOrgScopedAdmin && <span className="ml-1 rounded-full bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 text-[9px] font-bold">+Org Admin</span>}
+          </button>
+          <button
+            type="button"
+            onClick={() => setContactUsTab('contact')}
+            className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${contactUsTab === 'contact' ? 'border-sky-500 text-sky-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            <MessageSquare size={13} />
+            Submit a Ticket
+            {mySupportTickets.length > 0 && (
+              <span className="rounded-full bg-slate-200 text-slate-700 px-1.5 py-0.5 text-[9px] font-bold">{mySupportTickets.length}</span>
+            )}
+          </button>
+          {isOrgScopedAdmin && (
+            <button
+              type="button"
+              onClick={() => setContactUsTab('org_inbox')}
+              className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${contactUsTab === 'org_inbox' ? 'border-fuchsia-500 text-fuchsia-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            >
+              <Users size={13} />
+              Member Inbox
+              {orgInboxTickets.filter((t) => t.status !== 'RESOLVED').length > 0 && (
+                <span className="rounded-full bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 text-[9px] font-bold">
+                  {orgInboxTickets.filter((t) => t.status !== 'RESOLVED').length}
+                </span>
+              )}
+            </button>
+          )}
+        </div>
+
+        {contactUsTab === 'faq' && (
+          <div className="divide-y divide-slate-100">
+            {isOrgScopedAdmin && (
+              <div className="px-4 py-2 bg-slate-50 flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">General</span>
+                <span className="text-[10px] text-slate-400">({GENERAL_FAQS.length})</span>
+                <span className="mx-1 text-slate-300">·</span>
+                <span className="text-[10px] font-bold text-fuchsia-600 uppercase tracking-wider">Org Admin</span>
+                <span className="text-[10px] text-slate-400">({ORG_ADMIN_FAQS.length})</span>
+              </div>
+            )}
+            {activeFaqs.map((faq, i) => {
+              const isOrgQ = isOrgScopedAdmin && i >= GENERAL_FAQS.length;
+              const isOpen = openFaqIndex === i;
+              return (
+                <div key={i}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenFaqIndex(isOpen ? null : i)}
+                    className="w-full flex items-start justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors"
+                  >
+                    <div className="flex items-start gap-2 min-w-0">
+                      {isOrgQ && (
+                        <span className="mt-0.5 shrink-0 rounded-full bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 text-[9px] font-bold leading-tight">ORG</span>
+                      )}
+                      <span className="text-sm font-medium text-slate-800">{faq.q}</span>
+                    </div>
+                    <ChevronDown
+                      size={15}
+                      className={`shrink-0 text-slate-400 transition-transform mt-0.5 ${isOpen ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+                  {isOpen && (
+                    <div className="px-4 pb-3">
+                      <p className="text-sm text-slate-600 leading-relaxed">{faq.a}</p>
+                      <button
+                        type="button"
+                        onClick={() => setContactUsTab('contact')}
+                        className="mt-2 text-xs font-semibold text-sky-600 hover:underline"
+                      >
+                        Still need help? Submit a ticket →
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {contactUsTab === 'contact' && (
+          <div className="p-4 space-y-4">
+            <div
+              className={`rounded-xl border px-3 py-2.5 flex items-start gap-2 ${profile.communityId ? 'border-fuchsia-200 bg-fuchsia-50' : 'border-sky-200 bg-sky-50'}`}
+            >
+              <div className={`mt-0.5 p-1 rounded-full ${profile.communityId ? 'bg-fuchsia-100 text-fuchsia-700' : 'bg-sky-100 text-sky-700'}`}>
+                {profile.communityId ? <Users size={12} /> : <ShieldCheck size={12} />}
+              </div>
+              <p className="text-xs text-slate-700">
+                {profile.communityId ? (
+                  <>Your ticket will go to your <strong className="text-fuchsia-700">{profile.communityId}</strong> organization admin first. If they can't resolve it, they'll escalate it to AERA.</>
+                ) : (
+                  <>You're not connected to an organization — your ticket goes <strong className="text-sky-700">directly to the AERA admin team</strong>.</>
+                )}
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-3">
+              <Input
+                label="Subject"
+                value={contactSupportSubject}
+                onChange={(e) => {
+                  setContactSupportSubject(e.target.value);
+                  setFaqSuggestionDismissed(false);
+                  setFaqSelfResolved(false);
+                }}
+                placeholder="Short summary of the issue"
+              />
+              <label className="space-y-1 text-sm text-slate-700">
+                <span className="font-medium">Category</span>
+                <select
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-200"
+                  value={contactSupportCategory}
+                  onChange={(e) => setContactSupportCategory(e.target.value)}
+                >
+                  <option value="GENERAL">General Help</option>
+                  <option value="ACCOUNT">Account Access</option>
+                  <option value="ORGANIZATION">Organization Setup</option>
+                  <option value="TECHNICAL">Technical Issue</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </label>
+            </div>
+
+            {faqSuggestion && !faqSelfResolved && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-xs font-bold text-amber-800">We found a related answer — does this help?</p>
+                  <button type="button" onClick={() => setFaqSuggestionDismissed(true)} className="text-slate-400 hover:text-slate-600 shrink-0">
+                    <X size={13} />
+                  </button>
+                </div>
+                <p className="text-xs font-semibold text-slate-800">{faqSuggestion.q}</p>
+                <p className="text-xs text-slate-700 leading-relaxed">{faqSuggestion.a}</p>
+                <div className="flex items-center gap-2 pt-1">
+                  <Button size="sm" onClick={() => void handleFaqSelfResolve(faqSuggestion)} disabled={faqSelfResolving} className="bg-emerald-600 hover:bg-emerald-500 text-white border-0">
+                    {faqSelfResolving ? <Loader2 size={12} className="mr-1 animate-spin" /> : <Check size={12} className="mr-1" />}
+                    Yes, this resolved it
+                  </Button>
+                  <button type="button" onClick={() => setFaqSuggestionDismissed(true)} className="text-xs font-semibold text-slate-600 hover:underline">
+                    No, I still need help
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {faqSelfResolved && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                <p className="text-xs font-semibold text-emerald-700">
+                  Great! Your question has been noted as self-resolved. No ticket was submitted. The AERA team can still see it for analytics.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFaqSelfResolved(false);
+                    setFaqSuggestionDismissed(true);
+                  }}
+                  className="mt-1.5 text-xs font-semibold text-slate-600 hover:underline"
+                >
+                  I still need to submit a ticket
+                </button>
+              </div>
+            )}
+
+            {!faqSelfResolved && (faqSuggestionDismissed || !faqSuggestion) && (
+              <>
+                <Textarea
+                  label="How can AERA help?"
+                  value={contactSupportMessage}
+                  onChange={(e) => setContactSupportMessage(e.target.value)}
+                  placeholder="Describe the issue, what you tried, and what outcome you need."
+                  rows={4}
+                />
+                {contactSupportError && <p className="text-xs font-semibold text-amber-700">{contactSupportError}</p>}
+                {contactSupportSuccess && <p className="text-xs font-semibold text-emerald-700">{contactSupportSuccess}</p>}
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[11px] text-slate-500">
+                    {profile.communityId
+                      ? 'Org admins are notified immediately and can escalate to AERA if needed.'
+                      : 'AERA admins are notified immediately.'}
+                  </p>
+                  <Button size="sm" onClick={handleSubmitContactSupport} disabled={contactSupportBusy}>
+                    {contactSupportBusy ? <Loader2 size={14} className="mr-1 animate-spin" /> : null}
+                    Submit Ticket
+                  </Button>
+                </div>
+              </>
+            )}
+
+            <div className="border-t border-slate-100 pt-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">My Support Tickets</p>
+                <span className="text-[11px] text-slate-500">{mySupportTickets.length} total</span>
+              </div>
+              {visibleSupportTickets.length === 0 ? (
+                <p className="text-xs text-slate-600">No tickets yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {visibleSupportTickets.map((ticket) => (
+                    <div key={ticket.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{ticket.subject}</p>
+                          <p className="text-[11px] text-slate-500">
+                            {ticket.category} · {new Date(ticket.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {ticket.resolvedViaFaq && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">FAQ</span>
+                          )}
+                          {ticket.escalatedToAdmin && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700">Escalated</span>
+                          )}
+                          <span
+                            className={`text-[10px] font-bold px-2 py-1 rounded-full ${
+                              ticket.status === 'RESOLVED'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : ticket.status === 'IN_PROGRESS'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : 'bg-slate-200 text-slate-700'
+                            }`}
+                          >
+                            {ticket.status === 'IN_PROGRESS' ? 'In Progress' : ticket.status}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-700">{ticket.message}</p>
+                      {(ticket.assignedAdminName || ticket.resolvedByAdminName) && (
+                        <p className="text-[11px] text-slate-500">
+                          {ticket.status === 'RESOLVED'
+                            ? `Resolved by ${ticket.resolvedByAdminName || ticket.assignedAdminName}`
+                            : `Assigned to ${ticket.assignedAdminName}`}
+                        </p>
+                      )}
+                      {ticket.messages.length > 1 && (
+                        <div className="space-y-2 border-t border-slate-200 pt-2">
+                          {ticket.messages.slice(-2).map((entry, index) => (
+                            <div key={`${ticket.id}-${entry.createdAt}-${index}`} className="rounded-lg bg-white border border-slate-200 p-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-[11px] font-semibold text-slate-700">{entry.authorName}</p>
+                                <p className="text-[10px] text-slate-400">{new Date(entry.createdAt).toLocaleString()}</p>
+                              </div>
+                              <p className="text-xs text-slate-600 mt-1">{entry.message}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {contactUsTab === 'org_inbox' && isOrgScopedAdmin && (
+          <div className="p-4 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Member Support Inbox</p>
+                <p className="text-xs text-slate-500 mt-0.5">Tickets submitted by members of your organization. Resolve them or escalate to AERA if needed.</p>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setOrgInboxLoading(true);
+                  void listContactSupportTicketsForOrgAdmin(50)
+                    .then(setOrgInboxTickets)
+                    .catch(() => {})
+                    .finally(() => setOrgInboxLoading(false));
+                }}
+              >
+                <RefreshCcw size={13} className={orgInboxLoading ? 'animate-spin' : ''} />
+              </Button>
+            </div>
+
+            {orgInboxError && <p className="text-xs font-semibold text-rose-700">{orgInboxError}</p>}
+            {orgInboxSuccess && <p className="text-xs font-semibold text-emerald-700">{orgInboxSuccess}</p>}
+
+            {orgInboxLoading && orgInboxTickets.length === 0 && <p className="text-xs text-slate-500">Loading member tickets...</p>}
+            {!orgInboxLoading && orgInboxTickets.length === 0 && <p className="text-xs text-slate-600">No support tickets from your org members yet.</p>}
+
+            {orgInboxTickets.length > 0 && (
+              <div className="space-y-3">
+                {orgInboxTickets
+                  .filter((t) => !t.escalatedToAdmin && t.status !== 'RESOLVED' && !t.resolvedViaFaq)
+                  .map((ticket) => (
+                    <div key={ticket.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{ticket.subject}</p>
+                          <p className="text-[11px] text-slate-500">
+                            {ticket.requesterName || 'Member'} · {ticket.category} · {new Date(ticket.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${ticket.status === 'IN_PROGRESS' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-700'}`}>
+                          {ticket.status === 'IN_PROGRESS' ? 'In Progress' : 'Open'}
+                        </span>
+                      </div>
+
+                      {ticket.messages.map((entry, idx) => (
+                        <div
+                          key={`${ticket.id}-${idx}`}
+                          className={`rounded-lg border px-3 py-2 ${
+                            entry.authorRole === 'ORG_ADMIN' || entry.authorRole === 'INSTITUTION_ADMIN'
+                              ? 'border-fuchsia-200 bg-fuchsia-50'
+                              : 'border-slate-200 bg-white'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs font-semibold text-slate-800">{entry.authorName}</p>
+                            <p className="text-[10px] text-slate-400">{new Date(entry.createdAt).toLocaleString()}</p>
+                          </div>
+                          <p className="text-xs text-slate-600 mt-1">{entry.message}</p>
+                        </div>
+                      ))}
+
+                      <div className="space-y-2 border-t border-slate-200 pt-2">
+                        <label className="block text-xs font-semibold text-slate-700">Your response</label>
+                        <textarea
+                          className="w-full min-h-20 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-fuchsia-200"
+                          placeholder="Reply to the member or note what action you took..."
+                          value={orgInboxReplyDrafts[ticket.id] || ''}
+                          onChange={(e) => setOrgInboxReplyDrafts((prev) => ({ ...prev, [ticket.id]: e.target.value }))}
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <Button size="sm" variant="outline" onClick={() => void handleOrgAdminRespond(ticket.id, 'IN_PROGRESS')} disabled={orgInboxBusyId === ticket.id}>
+                            {orgInboxBusyId === ticket.id ? <Loader2 size={12} className="mr-1 animate-spin" /> : null}
+                            Send Reply
+                          </Button>
+                          <Button size="sm" onClick={() => void handleOrgAdminRespond(ticket.id, 'RESOLVED')} disabled={orgInboxBusyId === ticket.id}>
+                            Resolve
+                          </Button>
+                          <Button size="sm" variant="ghost" className="text-rose-600 hover:bg-rose-50" onClick={() => void handleEscalateTicket(ticket.id)} disabled={escalatingTicketId === ticket.id}>
+                            {escalatingTicketId === ticket.id ? <Loader2 size={12} className="mr-1 animate-spin" /> : null}
+                            Escalate to AERA
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                {orgInboxTickets.filter((t) => t.escalatedToAdmin).length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold text-rose-600 uppercase tracking-wider">Escalated to AERA</p>
+                    {orgInboxTickets
+                      .filter((t) => t.escalatedToAdmin)
+                      .map((ticket) => (
+                        <div key={ticket.id} className="rounded-xl border border-rose-200 bg-rose-50 p-3 space-y-1">
+                          <p className="text-sm font-semibold text-slate-900">{ticket.subject}</p>
+                          <p className="text-[11px] text-slate-500">
+                            {ticket.requesterName || 'Member'} · Escalated {ticket.escalatedAt ? new Date(ticket.escalatedAt).toLocaleString() : ''}
+                          </p>
+                          <p className="text-[11px] text-rose-700">Awaiting AERA admin response.</p>
+                        </div>
+                      ))}
+                  </div>
+                )}
+
+                {orgInboxTickets.filter((t) => t.status === 'RESOLVED' && !t.resolvedViaFaq).length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Resolved</p>
+                    {orgInboxTickets
+                      .filter((t) => t.status === 'RESOLVED' && !t.resolvedViaFaq)
+                      .map((ticket) => (
+                        <div key={ticket.id} className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 space-y-1">
+                          <p className="text-sm font-semibold text-slate-900">{ticket.subject}</p>
+                          <p className="text-[11px] text-slate-500">
+                            {ticket.requesterName || 'Member'} · Resolved by {ticket.resolvedByAdminName || 'Admin'}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
+                )}
+
+                {orgInboxTickets.filter((t) => t.resolvedViaFaq).length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Self-Resolved via FAQ (documentation only)</p>
+                    {orgInboxTickets
+                      .filter((t) => t.resolvedViaFaq)
+                      .map((ticket) => (
+                        <div key={ticket.id} className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-1">
+                          <p className="text-sm font-semibold text-slate-900">{ticket.subject}</p>
+                          <p className="text-[11px] text-slate-500">
+                            {ticket.requesterName || 'Member'} · {new Date(ticket.createdAt).toLocaleString()}
+                          </p>
+                          {ticket.faqSuggestedAnswer && (
+                            <p className="text-[11px] text-amber-800 italic">
+                              Answer shown: "{ticket.faqSuggestedAnswer.slice(0, 120)}
+                              {ticket.faqSuggestedAnswer.length > 120 ? '...' : ''}"
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const discardLocalChanges = () => {
@@ -2676,7 +3116,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           : prev
       );
 
-      setOrgLocationSavedMessage('Organization address saved. Coordinates were updated for Nearby Outreach.');
+      setOrgLocationSavedMessage('Organization address saved. Coordinates were updated for the Local Outreach Panel.');
     } catch (err: any) {
       setOrgLocationError(err?.message || 'Unable to save organization location.');
     } finally {
@@ -3589,7 +4029,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
                    <h3 className="font-bold text-emerald-900">Organization Location Setup</h3>
                    <p className="text-xs text-emerald-800">
-                     Nearby Outreach uses the organization latitude/longitude as the center point.
+                     The Local Outreach Panel uses the organization latitude/longitude as the center point.
                    </p>
 
                    <Input
@@ -6050,7 +6490,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-slate-800">Community Outreach Visibility</p>
-              <p className="text-xs text-slate-500 mt-0.5">Allow nearby community organizations to see you in their Nearby Outreach Panel. Your name and contact info may be shared with verified org leaders for emergency coordination.</p>
+              <p className="text-xs text-slate-500 mt-0.5">Allow nearby community organizations to see you in their Local Outreach Panel. Your name and contact info may be shared with verified org leaders for emergency coordination.</p>
             </div>
             <button
               type="button"

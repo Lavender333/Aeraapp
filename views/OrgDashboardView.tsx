@@ -1668,7 +1668,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-bold text-emerald-900">Nearby Outreach Panel</h3>
+                  <h3 className="text-sm font-bold text-emerald-900">Local Outreach Panel</h3>
                   <p className="text-xs text-emerald-800 mt-1">
                     Opted-in app users within range (same-org members plus unconnected users outside trusted networks).
                   </p>
@@ -1752,7 +1752,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
 
               {outreachPanelLoading ? (
                 <div className="bg-white border border-emerald-100 rounded-lg p-4 text-sm text-slate-600">
-                  Loading nearby outreach candidates…
+                  Loading local outreach candidates…
                 </div>
               ) : outreachCandidates.length > 0 ? (
                 <div className="space-y-2">
