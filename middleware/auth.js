@@ -2,6 +2,9 @@ import jwt from 'jsonwebtoken';
 import { RevokedToken } from '../models/revokedToken.js';
 import { logger } from '../utils/logger.js';
 
+const isTest = process.env.NODE_ENV === 'test';
+const JWT_SECRET = process.env.JWT_SECRET || (isTest ? 'test-secret-12345678901234567890123456789012' : undefined);
+
 /**
  * Authentication middleware that validates JWT tokens.
  * Requires JWT_SECRET to be properly configured on server boot.
@@ -24,7 +27,7 @@ export const auth = async (req, res, next) => {
   }
   
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET);
     if (decoded?.jti) {
       const revoked = await RevokedToken.findOne({ jti: decoded.jti }).lean();
       if (revoked) {
