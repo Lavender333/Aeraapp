@@ -1,8 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ViewState } from '../types';
 import { ArrowLeft, Mail, Send, CheckCircle } from 'lucide-react';
 import { Button } from '../components/Button';
+import { StorageService } from '../services/storage';
 
 interface ContactUsViewProps {
   setView: (view: ViewState) => void;
@@ -10,6 +11,7 @@ interface ContactUsViewProps {
 
 export const ContactUsView: React.FC<ContactUsViewProps> = ({ setView }) => {
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
@@ -17,9 +19,23 @@ export const ContactUsView: React.FC<ContactUsViewProps> = ({ setView }) => {
   const EMAIL = 'aerapp369@gmail.com';
   const RESPONSE_TIME = '7 business days';
 
+  // Pre-fill personal info from the stored profile
+  useEffect(() => {
+    try {
+      const contactSupportPersonalInfo = StorageService.getProfile();
+      if (contactSupportPersonalInfo) {
+        if (contactSupportPersonalInfo.fullName) setName(contactSupportPersonalInfo.fullName);
+        if (contactSupportPersonalInfo.email) setEmail(contactSupportPersonalInfo.email);
+      }
+    } catch {
+      // Ignore profile load errors; user can fill in manually
+    }
+  }, []);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const body = `Name: ${name}\n\n${message}`;
+    const from = email ? `From: ${email}\n` : '';
+    const body = `Name: ${name}\n${from}\n${message}`;
     window.location.href = `mailto:${EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     setSubmitted(true);
   };
@@ -80,6 +96,17 @@ export const ContactUsView: React.FC<ContactUsViewProps> = ({ setView }) => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Full name"
+              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Your email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
               className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
           </div>
