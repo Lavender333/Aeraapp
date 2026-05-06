@@ -55,6 +55,7 @@ const ResetPasswordView = lazyWithRetry(() => import('./views/ResetPasswordView'
 const BuildKitView = lazyWithRetry(() => import('./views/BuildKitView').then((m) => ({ default: m.BuildKitView })));
 const ReadinessView = lazyWithRetry(() => import('./views/ReadinessView').then((m) => ({ default: m.ReadinessView })));
 const ReadinessGapView = lazyWithRetry(() => import('./views/ReadinessGapView').then((m) => ({ default: m.ReadinessGapView })));
+const ContactUsView = lazyWithRetry(() => import('./views/ContactUsView').then((m) => ({ default: m.ContactUsView })));
 
 class ViewErrorBoundary extends React.Component<
   { onRecover: () => void; children: React.ReactNode },
@@ -234,6 +235,8 @@ export default function App() {
         return canAccessOrgDashboard ? <OrgDashboardView setView={setView} /> : <DashboardView setView={setView} />;
       case 'PRIVACY_POLICY':
         return <PrivacyPolicyView setView={setView} />;
+      case 'CONTACT_US':
+        return <ContactUsView setView={setView} />;
       default:
         return <DashboardView setView={setView} />;
     }
@@ -251,7 +254,8 @@ export default function App() {
                   currentView !== 'READINESS' &&
                   currentView !== 'READINESS_GAP' &&
                   currentView !== 'ORG_DASHBOARD' &&
-                  currentView !== 'PRIVACY_POLICY';
+                  currentView !== 'PRIVACY_POLICY' &&
+                  currentView !== 'CONTACT_US';
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50 shadow-2xl relative overflow-hidden md:border-x md:border-slate-200 print:max-w-none print:w-full print:h-auto print:overflow-visible print:shadow-none print:border-0">

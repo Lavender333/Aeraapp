@@ -3706,6 +3706,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           <span>View Privacy & Consent</span>
           <FileText size={18} />
         </Button>
+        <Button
+          onClick={() => setView('CONTACT_US')}
+          variant="outline"
+          className="w-full justify-between border-slate-300 hover:bg-slate-50"
+        >
+          <span>Contact Us</span>
+          <Mail size={18} />
+        </Button>
       </section>
 
       <div className="space-y-4 pt-4 border-t border-slate-200 order-60">
