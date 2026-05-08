@@ -161,7 +161,7 @@ export const PrivacyPolicyView: React.FC<PrivacyPolicyViewProps> = ({ setView })
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-slate-900">16. Contact Information</h2>
         <p className="text-sm text-slate-700">For privacy questions, data requests, or account deletion:</p>
-        <p className="text-sm text-slate-700">Email: aerapp369@gmail.com</p>
+        <p className="text-sm text-slate-700">Email: antoinette@infoaera.com</p>
         <p className="text-sm text-slate-700">We aim to respond to privacy-related inquiries within 7 business days.</p>
       </section>
 

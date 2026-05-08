@@ -16,7 +16,7 @@ export const ContactUsView: React.FC<ContactUsViewProps> = ({ setView }) => {
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  const EMAIL = 'aerapp369@gmail.com';
+  const EMAIL = 'antoinette@infoaera.com';
   const RESPONSE_TIME = '7 business days';
 
   // Pre-fill personal info from the stored profile
