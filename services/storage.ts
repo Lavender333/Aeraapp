@@ -495,6 +495,21 @@ export const StorageService = {
           onboardComplete: existing?.onboardComplete ?? profile.onboardComplete,
           notifications: existing?.notifications || profile.notifications,
         };
+
+        // If local data cannot confirm the user finished onboarding (e.g. cleared
+        // storage or first login on a new device), do a quick synchronous vitals
+        // check so we never wrongly redirect a returning user to ACCOUNT_SETUP.
+        if (!mergedLocalProfile.onboardComplete) {
+          try {
+            const remoteVitals = await fetchVitalsForUser();
+            if (remoteVitals) {
+              mergedLocalProfile.onboardComplete = true;
+            }
+          } catch {
+            // Network error or not yet confirmed — background hydration will correct.
+          }
+        }
+
         this.saveProfile(mergedLocalProfile, { skipRemoteSync: true });
 
         // Post-login hydration (profile/vitals/household) can be slow on some networks.
