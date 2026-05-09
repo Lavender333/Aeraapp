@@ -22,11 +22,9 @@ export const ContactUsView: React.FC<ContactUsViewProps> = ({ setView }) => {
   // Pre-fill personal info from the stored profile
   useEffect(() => {
     try {
-      const contactSupportPersonalInfo = StorageService.getProfile();
-      if (contactSupportPersonalInfo) {
-        if (contactSupportPersonalInfo.fullName) setName(contactSupportPersonalInfo.fullName);
-        if (contactSupportPersonalInfo.email) setEmail(contactSupportPersonalInfo.email);
-      }
+      const profile = StorageService.getProfile();
+      if (profile?.fullName) setName(profile.fullName);
+      if (profile?.email) setEmail(profile.email);
     } catch {
       // Ignore profile load errors; user can fill in manually
     }

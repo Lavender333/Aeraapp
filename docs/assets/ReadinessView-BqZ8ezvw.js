@@ -1,0 +1,1 @@
+import{j as r}from"./index-C9stVmNN.js";import{BuildKitView as t}from"./BuildKitView-DvaB5feb.js";import"./Button-CWcicyM8.js";import"./arrow-left-B8O7oP7P.js";import"./check-CmRWiddZ.js";import"./file-text-cB6qRfkW.js";import"./save-BcIwfocw.js";import"./sparkles-B9tcp8qu.js";import"./droplets-e2h-_f7K.js";const a=({setView:i})=>r.jsx(t,{setView:i});export{a as ReadinessView};
