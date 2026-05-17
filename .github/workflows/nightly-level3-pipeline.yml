@@ -35,9 +35,15 @@ jobs:
           pip install -r scripts/requirements-level3.txt
 
       - name: Validate required secrets
+        id: check-secrets
         run: |
-          test -n "$SUPABASE_URL"
-          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::warning::SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY secrets are not configured. Skipping pipeline run."
+            echo "secrets_available=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "secrets_available=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Run nightly Level 3 pipeline
+        if: steps.check-secrets.outputs.secrets_available == 'true'
         run: python scripts/nightly-level3-pipeline.py
