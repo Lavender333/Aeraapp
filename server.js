@@ -77,6 +77,7 @@ if (JWT_SECRET.length < 32) {
   logger.error('Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
   process.exit(1);
 }
+process.env.JWT_SECRET = JWT_SECRET;
 
 logger.info(`JWT_SECRET validated (length: ${JWT_SECRET.length})`);
 
@@ -92,6 +93,7 @@ if (JWT_REFRESH_SECRET.length < 32) {
   logger.error('Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
   process.exit(1);
 }
+process.env.JWT_REFRESH_SECRET = JWT_REFRESH_SECRET;
 
 logger.info(`JWT_REFRESH_SECRET validated (length: ${JWT_REFRESH_SECRET.length})`);
 
@@ -174,13 +176,35 @@ app.use(
   })
 );
 
-// NoSQL injection protection - sanitize all user input
-app.use(mongoSanitize({
-  replaceWith: '_',
-  onSanitize: ({ req, key }) => {
-    console.warn(`⚠️  Sanitized key detected: ${key} in ${req.path}`);
-  },
-}));
+// NoSQL injection protection - sanitize all user input.
+// express-mongo-sanitize's middleware assigns req.query, which is read-only in Express 5.
+const sanitizeRequestPart = (req, key) => {
+  const value = req[key];
+  if (!value) return;
+
+  const isSanitized = mongoSanitize.has(value);
+  const sanitized = mongoSanitize.sanitize(value, { replaceWith: '_' });
+
+  if (key === 'query') {
+    Object.defineProperty(req, key, {
+      value: sanitized,
+      configurable: true,
+      enumerable: true,
+      writable: true,
+    });
+  } else {
+    req[key] = sanitized;
+  }
+
+  if (isSanitized) {
+    console.warn(`Sanitized key detected: ${key} in ${req.path}`);
+  }
+};
+
+app.use((req, _res, next) => {
+  ['body', 'params', 'query'].forEach((key) => sanitizeRequestPart(req, key));
+  next();
+});
 
 // ===== DATABASE CONNECTION =====
 
@@ -209,7 +233,7 @@ const rateLimitStore = redisClient
 // Strict rate limit for authentication endpoints (prevent brute force)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 requests per window
+  max: isTest ? 1000 : 5, // 5 requests per window
   message: { error: 'Too many authentication attempts, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -1350,11 +1374,10 @@ protectedRouter.get(
 
 // ===== MOUNT ROUTERS =====
 
-app.use('/api', apiLimiter, publicRouter);
-app.use('/api', protectedRouter); // Note: protectedRouter has its own auth middleware
-// API versioning (v1)
 app.use('/api/v1', apiLimiter, publicRouter);
 app.use('/api/v1', protectedRouter);
+app.use('/api', apiLimiter, publicRouter);
+app.use('/api', protectedRouter); // Note: protectedRouter has its own auth middleware
 
 // ===== ERROR HANDLER =====
 

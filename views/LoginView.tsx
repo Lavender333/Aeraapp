@@ -51,22 +51,23 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
     ? StorageService.getOrganization(pendingCommunityId)?.name || DEMO_COMMUNITY_QR_SEEDS.find((seed) => seed.communityId === pendingCommunityId)?.name || pendingCommunityId
     : '';
 
-  const resolvePostLoginView = (role: string, onboardComplete: boolean): ViewState => {
+  const resolvePostLoginView = (role: string, profile: Partial<UserProfile>): ViewState => {
+    const setupComplete = Boolean(profile.onboardComplete) || StorageService.isProfileComplete(profile);
     const requestedView = sessionStorage.getItem('postLoginView');
-    if (requestedView === 'BUYER_PORTAL' && ['ADMIN', 'BUYER'].includes(role) && onboardComplete) {
+    if (requestedView === 'BUYER_PORTAL' && ['ADMIN', 'BUYER'].includes(role) && setupComplete) {
       sessionStorage.removeItem('postLoginView');
       return 'BUYER_PORTAL';
     }
-    if (requestedView === 'LEAD_INTAKE' && ['ADMIN', 'ORG_ADMIN'].includes(role) && onboardComplete) {
+    if (requestedView === 'LEAD_INTAKE' && ['ADMIN', 'ORG_ADMIN'].includes(role) && setupComplete) {
       sessionStorage.removeItem('postLoginView');
       return 'LEAD_INTAKE';
     }
-    if (requestedView === 'LEAD_ADMIN' && role === 'ADMIN' && onboardComplete) {
+    if (requestedView === 'LEAD_ADMIN' && role === 'ADMIN' && setupComplete) {
       sessionStorage.removeItem('postLoginView');
       return 'LEAD_ADMIN';
     }
     sessionStorage.removeItem('postLoginView');
-    if (!onboardComplete) return 'ACCOUNT_SETUP';
+    if (!setupComplete) return 'ACCOUNT_SETUP';
     if (role === 'BUYER') return 'BUYER_PORTAL';
     if (role === 'INSTITUTION_ADMIN' || role === 'ORG_ADMIN') return 'ORG_DASHBOARD';
     return 'DASHBOARD';
@@ -111,14 +112,16 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
       const id = profile.id || '';
       const name = profile.fullName || '';
       const role = profile.role || 'GENERAL_USER';
-      const onboardComplete = profile.onboardComplete || false;
+      const onboardComplete = Boolean(profile.onboardComplete);
+      const setupComplete = onboardComplete || StorageService.isProfileComplete(profile);
       console.log('Login successful! Profile:', { 
         id, 
         name, 
         role, 
-        onboardComplete 
+        onboardComplete,
+        setupComplete,
       });
-      const nextView = resolvePostLoginView(String(role || '').toUpperCase(), Boolean(onboardComplete));
+      const nextView = resolvePostLoginView(String(role || '').toUpperCase(), profile);
       console.log('Redirecting to', nextView);
       if (nextView === 'DASHBOARD') {
         sessionStorage.setItem('showCommunityConnectPromptOnLogin', '1');
@@ -164,14 +167,16 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
     const id = profile.id || '';
     const name = profile.fullName || '';
     const role = profile.role || 'GENERAL_USER';
-    const onboardComplete = profile.onboardComplete || false;
+    const onboardComplete = Boolean(profile.onboardComplete);
+    const setupComplete = onboardComplete || StorageService.isProfileComplete(profile);
     console.log('Demo login successful! Profile:', { 
       id, 
       name, 
       role, 
-      onboardComplete 
+      onboardComplete,
+      setupComplete,
     });
-    const nextView = resolvePostLoginView(String(role || '').toUpperCase(), Boolean(onboardComplete));
+    const nextView = resolvePostLoginView(String(role || '').toUpperCase(), profile);
     console.log('Redirecting to', nextView);
     if (nextView === 'DASHBOARD') {
       sessionStorage.setItem('showCommunityConnectPromptOnLogin', '1');
