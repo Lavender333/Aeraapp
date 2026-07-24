@@ -15,7 +15,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
 });
 
 const PASSWORD = 'AeraDemo!2026';
-// Default locations near Grace Community Church (Springfield, IL: 39.7817, -89.6501)
+// Default locations near Church (Springfield, IL: 39.7817, -89.6501)
 const USERS = [
   { email: 'pastor@example.com', fullName: 'Pastor John', role: 'INSTITUTION_ADMIN', phone: '555-0101', orgCode: 'CH-9921', latitude: 39.7817, longitude: -89.6501 },
   { email: 'alice@example.com', fullName: 'Alice Johnson', role: 'GENERAL_USER', phone: '555-1001', orgCode: 'CH-9921', latitude: 39.7900, longitude: -89.6400 },

@@ -456,7 +456,7 @@ npm run build
 | Pastor John | 555-0101 | INSTITUTION_ADMIN | CH-9921 |
 | Sarah Connor | 555-9111 | FIRST_RESPONDER | - |
 
-**Organization**: Grace Community Church (CH-9921)
+**Organization**: Church (CH-9921)
 
 ---
 

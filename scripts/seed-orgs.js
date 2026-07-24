@@ -14,7 +14,7 @@ const supabase = createClient(supabaseUrl, serviceRoleKey);
 const organizations = [
   {
     org_code: 'CH-9921',
-    name: 'Grace Community Church',
+    name: 'Church',
     type: 'CHURCH',
     address: '4500 Main St',
     contact_person: 'Pastor John',

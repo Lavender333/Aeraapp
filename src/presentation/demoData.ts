@@ -18,7 +18,7 @@ export const presentationOrganizations: OrganizationProfile[] = [
   },
   {
     id: 'CH-9921',
-    name: 'Grace Community Church',
+    name: 'Church',
     type: 'CHURCH',
     address: '4500 Main St',
     adminContact: 'Pastor John',

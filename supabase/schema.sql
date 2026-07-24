@@ -822,7 +822,7 @@ GROUP BY org_id;
 -- Insert sample organization
 INSERT INTO organizations (org_code, name, type, address, city, state, phone, email, contact_person)
 VALUES 
-  ('CH-9921', 'Grace Community Church', 'CHURCH', '123 Main St', 'Springfield', 'IL', '555-0100', 'info@gracechurch.org', 'Pastor John'),
+  ('CH-9921', 'Church', 'CHURCH', '123 Main St', 'Springfield', 'IL', '555-0100', 'info@gracechurch.org', 'Pastor John'),
   ('NG-1001', 'Red Cross Local Chapter', 'NGO', '456 Oak Ave', 'Springfield', 'IL', '555-0200', 'contact@redcross.local', 'Sarah Connor')
 ON CONFLICT (org_code) DO NOTHING;
 

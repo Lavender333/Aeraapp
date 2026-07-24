@@ -52,7 +52,7 @@ describe('Auth + Org + Members API', () => {
       .post('/api/organizations')
       .set('Authorization', `Bearer ${token}`)
       .send({
-        name: 'Grace Community Church',
+        name: 'Church',
         type: 'CHURCH',
         address: '456 Faith Avenue',
         adminContact: 'Pastor John',
@@ -61,7 +61,7 @@ describe('Auth + Org + Members API', () => {
       });
 
     expect(createRes.status).toBe(201);
-    expect(createRes.body.name).toBe('Grace Community Church');
+    expect(createRes.body.name).toBe('Church');
 
     const listRes = await request(app).get('/api/organizations?limit=10&page=1');
     expect(listRes.status).toBe(200);

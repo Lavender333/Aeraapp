@@ -17,7 +17,7 @@ export const DEFAULT_COMMUNITY_INVITE_BASE_URL = 'https://appandwebsitetesting.s
 
 export const DEMO_COMMUNITY_QR_SEEDS: CommunityQrSeed[] = [
   { communityId: 'NG-1001', name: 'Network Response Hub', type: 'NGO' },
-  { communityId: 'CH-9921', name: 'Grace Community Church', type: 'CHURCH' },
+  { communityId: 'CH-9921', name: 'Church', type: 'CHURCH' },
   { communityId: 'NGO-5500', name: 'Regional Aid Network', type: 'NGO' },
   { communityId: 'TX-HOPE-HUB-03', name: 'Hope Hub Church', type: 'CHURCH' },
 ];

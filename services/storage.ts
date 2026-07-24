@@ -118,7 +118,7 @@ const inferOnboardingComplete = (
 const SEED_ORGS: OrganizationProfile[] = [
   { 
     id: 'CH-9921', 
-    name: 'Grace Community Church', 
+    name: 'Church',
     type: 'CHURCH', 
     address: '4500 Main St', 
     adminContact: 'Pastor John', 
@@ -198,7 +198,7 @@ const SEED_INVENTORY: Record<string, OrgInventory> = {
 };
 
 const SEED_REPLENISHMENT_REQUESTS: ReplenishmentRequest[] = [
-  { id: 'req-1', orgId: 'CH-9921', orgName: 'Grace Community Church', item: 'Water Cases', quantity: 50, status: 'PENDING', timestamp: new Date(Date.now() - 3600000).toISOString(), provider: 'Diocese HQ', synced: true },
+  { id: 'req-1', orgId: 'CH-9921', orgName: 'Church', item: 'Water Cases', quantity: 50, status: 'PENDING', timestamp: new Date(Date.now() - 3600000).toISOString(), provider: 'Diocese HQ', synced: true },
   { id: 'req-2', orgId: 'NGO-5500', orgName: 'Regional Aid Network', item: 'Medical Kits', quantity: 200, status: 'FULFILLED', timestamp: new Date(Date.now() - 86400000).toISOString(), provider: 'FEMA Region 4', synced: true }
 ];
 
