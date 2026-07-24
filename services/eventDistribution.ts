@@ -1235,17 +1235,23 @@ export interface EventRegistrationLinkOptions {
   extraParams?: Record<string, string | null | undefined>;
 }
 
+export const DEFAULT_EVENT_REGISTRATION_BASE_URL = 'https://getaeraapp.com/';
+
 export function buildEventRegistrationLink(
   eventId: string,
   sessionId?: string | null,
   options: EventRegistrationLinkOptions = {}
 ): string {
-  const baseHref = options.baseUrl || (typeof window !== 'undefined' ? window.location.href : 'https://app.aera.org');
+  const baseHref = options.baseUrl || (
+    typeof window !== 'undefined'
+      ? new URL('/', window.location.origin).toString()
+      : DEFAULT_EVENT_REGISTRATION_BASE_URL
+  );
   let target: URL;
   try {
     target = new URL(baseHref);
   } catch {
-    target = new URL('https://app.aera.org');
+    target = new URL(DEFAULT_EVENT_REGISTRATION_BASE_URL);
   }
 
   target.searchParams.set('event', eventId);

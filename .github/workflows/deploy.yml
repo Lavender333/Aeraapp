@@ -39,7 +39,7 @@ jobs:
 
       - name: Add CNAME
         run: |
-          echo "appandwebsitetesting.site" > dist/CNAME
+          echo "getaeraapp.com" > dist/CNAME
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

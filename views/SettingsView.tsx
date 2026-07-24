@@ -6,7 +6,13 @@ import { Button } from '../components/Button';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
-import { buildCommunityInviteUrl, generateCommunityInviteQrDataUrl } from '../services/communityInvite';
+import {
+  buildCommunityInviteUrl,
+  clearPendingCommunityInvite,
+  generateCommunityInviteQrDataUrl,
+  getPendingCommunityInvite,
+  PendingCommunityInvite,
+} from '../services/communityInvite';
 import { AppNotificationRecord, cancelMyHouseholdJoinRequest, captureUserLocation, ConnectedHouseholdMember, ContactSupportTicketRecord, ContactSupportTicketStatus, createContactSupportTicket, createFaqSelfResolvedRecord, createHouseholdExpansionRequest, createHouseholdInvitationForMember, deleteProfileAvatarForCurrentUser, ensureHouseholdForCurrentUser, escalateContactSupportTicket, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listContactSupportTicketsForOrgAdmin, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyContactSupportTickets, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, respondToContactSupportTicketAsOrgAdmin, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestStatus, updateVitalsForUser, uploadProfileAvatarDataUrl } from '../services/api';
 import { getOrgByCode, getOrgIdByCode } from '../services/supabase';
 import { listOrganizations as listOrganizationsSupabase } from '../services/supabaseApi';
@@ -412,6 +418,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [isVerifying, setIsVerifying] = useState(false);
   const [connectedOrg, setConnectedOrg] = useState<string | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [pendingCommunityInvite, setPendingCommunityInvite] = useState<PendingCommunityInvite | null>(
+    () => getPendingCommunityInvite(),
+  );
   const [isDisconnectingOrg, setIsDisconnectingOrg] = useState(false);
   const connectedOrgLabel = connectedOrg || String(profile.communityId || '').trim() || null;
 
@@ -2021,10 +2030,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     }
   };
 
-  const verifyCommunityId = async (overrideCommunityId?: string) => {
+  const verifyCommunityId = async (overrideCommunityId?: string): Promise<boolean> => {
     const normalized = formatCommunityIdInput(overrideCommunityId ?? profile.communityId ?? '');
 
-    if (!normalized) return;
+    if (!normalized) return false;
 
     setIsVerifying(true);
     setVerifyError(null);
@@ -2036,7 +2045,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
       if (!remoteOrg) {
         setVerifyError('Invalid Community ID');
-        return;
+        return false;
       }
 
       const orgName = remoteOrg.orgName || localOrg?.name || normalized;
@@ -2049,8 +2058,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       StorageService.saveProfile(nextProfile, { skipRemoteSync: true });
       setConnectedOrg(orgName);
 
-      try {
-        await updateProfileForUser({
+      await updateProfileForUser({
           fullName: nextProfile.fullName,
           phone: nextProfile.phone,
           email: nextProfile.email,
@@ -2070,15 +2078,27 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           emergencyContactRelation: nextProfile.emergencyContactRelation,
           communityId: normalized,
           role: nextProfile.role,
-        });
-      } catch {
-        // Keep local connection state; profile update will retry on next explicit save.
-      }
+      });
+      return true;
     } catch {
       setVerifyError('Unable to verify Community ID right now. Please try again.');
+      return false;
     } finally {
       setIsVerifying(false);
     }
+  };
+
+  const acceptPendingCommunityInvite = async () => {
+    if (!pendingCommunityInvite?.communityId) return;
+    const connected = await verifyCommunityId(pendingCommunityInvite.communityId);
+    if (!connected) return;
+    clearPendingCommunityInvite();
+    setPendingCommunityInvite(null);
+  };
+
+  const dismissPendingCommunityInvite = () => {
+    clearPendingCommunityInvite();
+    setPendingCommunityInvite(null);
   };
 
   const linkParentOrganization = async () => {
@@ -6384,6 +6404,39 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
       {/* Community Onboarding */}
       <section id="settings-community-section" ref={trustedCommunityRef} className="bg-white/95 p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 order-5">
+        {pendingCommunityInvite && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="rounded-2xl border border-sky-200 bg-sky-50 p-4 space-y-3"
+          >
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-sky-700">Member join invitation</p>
+              <p className="text-sm font-semibold text-sky-950">
+                Join the community with ID {pendingCommunityInvite.communityId}?
+              </p>
+              {profile.communityId && profile.communityId !== pendingCommunityInvite.communityId && (
+                <p className="mt-1 text-xs text-sky-800">
+                  This will replace your current community connection ({profile.communityId}).
+                </p>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                className="bg-sky-600 hover:bg-sky-700"
+                onClick={acceptPendingCommunityInvite}
+                disabled={isVerifying}
+              >
+                {isVerifying ? <Loader2 className="mr-2 animate-spin" size={16} /> : <LinkIcon className="mr-2" size={16} />}
+                Join Community
+              </Button>
+              <Button size="sm" variant="ghost" onClick={dismissPendingCommunityInvite} disabled={isVerifying}>
+                Keep Current Community
+              </Button>
+            </div>
+          </div>
+        )}
         <button
           id={accordionButtonIds.community}
           type="button"
@@ -6533,7 +6586,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 <div className="flex flex-col items-center">
                   <Button 
                     className={`mb-[1px] min-w-[50px] ${connectedOrg ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-sky-600 hover:bg-sky-700'}`}
-                    onClick={verifyCommunityId}
+                    onClick={() => void verifyCommunityId()}
                     disabled={isVerifying || !profile.communityId}
                   >
                     {isVerifying ? <Loader2 className="animate-spin" size={20} /> : connectedOrg ? <Check size={20} /> : <LinkIcon size={20} />}
@@ -6603,7 +6656,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               <div className="flex flex-col items-center">
                 <Button 
                   className={`mb-[1px] min-w-[50px] ${connectedOrg ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-sky-600 hover:bg-sky-700'}`}
-                  onClick={verifyCommunityId}
+                  onClick={() => void verifyCommunityId()}
                   disabled={isVerifying || !profile.communityId}
                 >
                   {isVerifying ? <Loader2 className="animate-spin" size={20} /> : connectedOrg ? <Check size={20} /> : <LinkIcon size={20} />}

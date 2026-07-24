@@ -5,7 +5,11 @@ import { Button } from '../components/Button';
 import { Input, Textarea } from '../components/Input';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { StorageService } from '../services/storage';
-import { DEMO_COMMUNITY_QR_SEEDS, getPendingCommunityInvite } from '../services/communityInvite';
+import {
+  clearPendingCommunityInvite,
+  DEMO_COMMUNITY_QR_SEEDS,
+  getPendingCommunityInvite,
+} from '../services/communityInvite';
 import { ensureHouseholdForCurrentUser, syncHouseholdMembersForUser, updateProfileForUser, updateVitalsForUser } from '../services/api';
 import { validateHouseholdMembers } from '../services/validation';
 import { supabase } from '../services/supabase';
@@ -304,6 +308,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
         householdRole: household.householdRole,
       });
       sessionStorage.setItem('aera.playWelcomeVideoOnDashboard', '1');
+      clearPendingCommunityInvite();
       setView('DASHBOARD');
     } catch (e: any) {
       const currentProfile = StorageService.getProfile();

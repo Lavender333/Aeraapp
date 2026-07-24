@@ -3,7 +3,12 @@ import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { BottomNav } from './components/BottomNav';
 import { ViewState, UserProfile } from './types';
 import { StorageService } from './services/storage';
-import { capturePendingCommunityInviteFromUrl, getPendingCommunityInvite } from './services/communityInvite';
+import {
+  capturePendingCommunityInviteFromUrl,
+  clearPendingCommunityInvite,
+  getPendingCommunityInvite,
+  resolveCommunityInvite,
+} from './services/communityInvite';
 import { fetchProfileForUser, fetchVitalsForUser, getPeopleRegisteredCount as fetchPeopleRegisteredCount } from './services/api';
 import { hasSupabaseConfig, supabaseConfigMessage, supabase } from './services/supabase';
 
@@ -317,7 +322,12 @@ export default function App() {
                 console.warn('Background profile sync failed', err);
               }
             })();
-            const nextView = resolveAuthenticatedLandingView(localProfile);
+            const inviteResolution = resolveCommunityInvite(localProfile.communityId, pendingInvite);
+            if (inviteResolution === 'already-connected') clearPendingCommunityInvite();
+            const nextView = inviteResolution === 'needs-confirmation' &&
+              Boolean(localProfile.onboardComplete || StorageService.isProfileComplete(localProfile))
+              ? 'SETTINGS'
+              : resolveAuthenticatedLandingView(localProfile);
             setPostSplashView(nextView);
             setView('SPLASH');
           } else {
@@ -366,7 +376,12 @@ export default function App() {
             };
 
             StorageService.saveProfile(hydratedProfile, { skipRemoteSync: true });
-            const nextView = resolveAuthenticatedLandingView(hydratedProfile);
+            const inviteResolution = resolveCommunityInvite(hydratedProfile.communityId, pendingInvite);
+            if (inviteResolution === 'already-connected') clearPendingCommunityInvite();
+            const nextView = inviteResolution === 'needs-confirmation' &&
+              Boolean(hydratedProfile.onboardComplete || StorageService.isProfileComplete(hydratedProfile))
+              ? 'SETTINGS'
+              : resolveAuthenticatedLandingView(hydratedProfile);
             setPostSplashView(nextView);
             setView('SPLASH');
           }

@@ -12,8 +12,10 @@ export type CommunityQrSeed = {
   type: 'CHURCH' | 'NGO';
 };
 
+export type CommunityInviteResolution = 'none' | 'already-connected' | 'needs-confirmation';
+
 const PENDING_COMMUNITY_INVITE_KEY = 'aera_pending_community_invite_v1';
-export const DEFAULT_COMMUNITY_INVITE_BASE_URL = 'https://appandwebsitetesting.site/';
+export const DEFAULT_COMMUNITY_INVITE_BASE_URL = 'https://getaeraapp.com/';
 
 export const DEMO_COMMUNITY_QR_SEEDS: CommunityQrSeed[] = [
   { communityId: 'NG-1001', name: 'Network Response Hub', type: 'NGO' },
@@ -29,6 +31,15 @@ export function normalizeCommunityInviteCode(value: unknown): string {
     .replace(/[–—−]/g, '-')
     .replace(/[^A-Z0-9-]/g, '')
     .replace(/-+/g, '-');
+}
+
+export function resolveCommunityInvite(
+  currentCommunityId: unknown,
+  pendingInvite: PendingCommunityInvite | null,
+): CommunityInviteResolution {
+  if (!pendingInvite?.communityId) return 'none';
+  const current = normalizeCommunityInviteCode(currentCommunityId);
+  return current === pendingInvite.communityId ? 'already-connected' : 'needs-confirmation';
 }
 
 export function buildCommunityInviteUrl(

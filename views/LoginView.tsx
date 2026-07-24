@@ -4,7 +4,12 @@ import { UserProfile, ViewState } from '../types';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { StorageService } from '../services/storage';
-import { DEMO_COMMUNITY_QR_SEEDS, getPendingCommunityInvite } from '../services/communityInvite';
+import {
+  clearPendingCommunityInvite,
+  DEMO_COMMUNITY_QR_SEEDS,
+  getPendingCommunityInvite,
+  resolveCommunityInvite,
+} from '../services/communityInvite';
 import { supabase } from '../services/supabase';
 import { t } from '../services/translations';
 import { LogIn, AlertOctagon, Mail, KeyRound, HelpCircle, FileDown } from 'lucide-react';
@@ -100,13 +105,8 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
       }
       console.log('Attempting login with email:', normalizedEmail);
       await StorageService.loginWithCredentials(normalizedEmail, enteredPassword);
-      let profile: Partial<UserProfile> = safeGetProfile();
+      const profile: Partial<UserProfile> = safeGetProfile();
       const pendingInvite = getPendingCommunityInvite();
-      if (pendingInvite?.communityId && !String((profile as any)?.communityId || '').trim()) {
-        const updatedProfile = { ...profile, communityId: pendingInvite.communityId };
-        StorageService.saveProfile(updatedProfile as any);
-        profile = updatedProfile;
-      }
       // Defensive: fallback values for missing fields
       const id = profile.id || '';
       const name = profile.fullName || '';
@@ -118,7 +118,11 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
         role, 
         onboardComplete 
       });
-      const nextView = resolvePostLoginView(String(role || '').toUpperCase(), Boolean(onboardComplete));
+      const inviteResolution = resolveCommunityInvite(profile.communityId, pendingInvite);
+      if (inviteResolution === 'already-connected') clearPendingCommunityInvite();
+      const nextView = inviteResolution === 'needs-confirmation' && onboardComplete
+        ? 'SETTINGS'
+        : resolvePostLoginView(String(role || '').toUpperCase(), Boolean(onboardComplete));
       console.log('Redirecting to', nextView);
       if (nextView === 'DASHBOARD') {
         sessionStorage.setItem('showCommunityConnectPromptOnLogin', '1');
@@ -154,13 +158,8 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
     }
     
     // Defensive: fallback for missing or malformed profile
-    let profile: Partial<UserProfile> = safeGetProfile();
+    const profile: Partial<UserProfile> = safeGetProfile();
     const pendingInvite = getPendingCommunityInvite();
-    if (pendingInvite?.communityId && !String((profile as any)?.communityId || '').trim()) {
-      const updatedProfile = { ...profile, communityId: pendingInvite.communityId };
-      StorageService.saveProfile(updatedProfile as any);
-      profile = updatedProfile;
-    }
     const id = profile.id || '';
     const name = profile.fullName || '';
     const role = profile.role || 'GENERAL_USER';
@@ -171,7 +170,11 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
       role, 
       onboardComplete 
     });
-    const nextView = resolvePostLoginView(String(role || '').toUpperCase(), Boolean(onboardComplete));
+    const inviteResolution = resolveCommunityInvite(profile.communityId, pendingInvite);
+    if (inviteResolution === 'already-connected') clearPendingCommunityInvite();
+    const nextView = inviteResolution === 'needs-confirmation' && onboardComplete
+      ? 'SETTINGS'
+      : resolvePostLoginView(String(role || '').toUpperCase(), Boolean(onboardComplete));
     console.log('Redirecting to', nextView);
     if (nextView === 'DASHBOARD') {
       sessionStorage.setItem('showCommunityConnectPromptOnLogin', '1');
