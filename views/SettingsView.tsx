@@ -7,7 +7,7 @@ import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
 import { buildCommunityInviteUrl, generateCommunityInviteQrDataUrl } from '../services/communityInvite';
-import { AppNotificationRecord, cancelMyHouseholdJoinRequest, captureUserLocation, ConnectedHouseholdMember, ContactSupportTicketRecord, ContactSupportTicketStatus, createContactSupportTicket, createFaqSelfResolvedRecord, createHouseholdExpansionRequest, createHouseholdInvitationForMember, ensureHouseholdForCurrentUser, escalateContactSupportTicket, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listContactSupportTicketsForOrgAdmin, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyContactSupportTickets, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, respondToContactSupportTicketAsOrgAdmin, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestStatus, updateVitalsForUser } from '../services/api';
+import { AppNotificationRecord, cancelMyHouseholdJoinRequest, captureUserLocation, ConnectedHouseholdMember, ContactSupportTicketRecord, ContactSupportTicketStatus, createContactSupportTicket, createFaqSelfResolvedRecord, createHouseholdExpansionRequest, createHouseholdInvitationForMember, deleteProfileAvatarForCurrentUser, ensureHouseholdForCurrentUser, escalateContactSupportTicket, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listContactSupportTicketsForOrgAdmin, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyContactSupportTickets, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, respondToContactSupportTicketAsOrgAdmin, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestStatus, updateVitalsForUser, uploadProfileAvatarDataUrl } from '../services/api';
 import { getOrgByCode, getOrgIdByCode } from '../services/supabase';
 import { listOrganizations as listOrganizationsSupabase } from '../services/supabaseApi';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
@@ -1105,8 +1105,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      setProfileSaveError('Please select a valid image file.');
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setProfileSaveError('Please select a JPEG, PNG, or WebP image.');
       event.target.value = '';
       return;
     }
@@ -1119,20 +1119,37 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     }
 
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       const dataUrl = String(reader.result || '');
       if (!dataUrl.startsWith('data:image/')) {
         setProfileSaveError('Could not read image. Please try a different file.');
         return;
       }
-      const saved = StorageService.saveProfileImageDataUrl(dataUrl, profile.id);
-      if (!saved) {
-        setProfileSaveError('Could not save image (storage limit reached). Try a smaller file.');
-        return;
+      try {
+        setProfileSaveError(null);
+        const avatarUrl = await uploadProfileAvatarDataUrl(dataUrl);
+        await updateProfileForUser({
+          fullName: profile.fullName,
+          phone: profile.phone,
+          email: profile.email,
+          address: profile.address,
+          emergencyContactName: profile.emergencyContactName,
+          emergencyContactPhone: profile.emergencyContactPhone,
+          emergencyContactRelation: profile.emergencyContactRelation,
+          communityId: profile.communityId,
+          role: profile.role,
+          avatarDataUrl: avatarUrl,
+        });
+        const saved = StorageService.saveProfileImageDataUrl(avatarUrl, profile.id, { skipRemoteSync: true });
+        if (!saved) {
+          setProfileSaveError('Photo was uploaded, but it could not be cached on this device.');
+          return;
+        }
+        setProfileImageDataUrl(avatarUrl);
+        showSavedIndicator('profile');
+      } catch (error: any) {
+        setProfileSaveError(error?.message || 'Could not upload profile image. Please try again.');
       }
-      setProfileImageDataUrl(dataUrl);
-      setProfileSaveError(null);
-      showSavedIndicator('profile');
     };
     reader.onerror = () => {
       setProfileSaveError('Could not read image. Please try again.');
@@ -1141,15 +1158,32 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     event.target.value = '';
   };
 
-  const removeProfileImage = () => {
-    const cleared = StorageService.clearProfileImageDataUrl(profile.id);
-    if (!cleared) {
-      setProfileSaveError('Could not remove profile image. Please try again.');
-      return;
+  const removeProfileImage = async () => {
+    try {
+      await deleteProfileAvatarForCurrentUser();
+      await updateProfileForUser({
+        fullName: profile.fullName,
+        phone: profile.phone,
+        email: profile.email,
+        address: profile.address,
+        emergencyContactName: profile.emergencyContactName,
+        emergencyContactPhone: profile.emergencyContactPhone,
+        emergencyContactRelation: profile.emergencyContactRelation,
+        communityId: profile.communityId,
+        role: profile.role,
+        avatarDataUrl: '',
+      });
+      const cleared = StorageService.clearProfileImageDataUrl(profile.id, { skipRemoteSync: true });
+      if (!cleared) {
+        setProfileSaveError('Photo was removed remotely, but the local cache could not be cleared.');
+        return;
+      }
+      setProfileImageDataUrl('');
+      setProfileSaveError(null);
+      showSavedIndicator('profile');
+    } catch (error: any) {
+      setProfileSaveError(error?.message || 'Could not remove profile image. Please try again.');
     }
-    setProfileImageDataUrl('');
-    setProfileSaveError(null);
-    showSavedIndicator('profile');
   };
 
   // Broadcast Control State
@@ -5061,7 +5095,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                   <input
                     ref={profileImageInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png,image/webp"
                     className="hidden"
                     onChange={handleProfileImageUpload}
                   />

@@ -1226,16 +1226,22 @@ export async function uploadProfileAvatarDataUrl(dataUrl: string): Promise<strin
 
   const userId = authData.user.id;
   const blob = await dataUrlToBlob(raw);
-  const ext = blob.type?.includes('png') ? 'png' : blob.type?.includes('webp') ? 'webp' : 'jpg';
-  const path = `${userId}/avatar-${Date.now()}.${ext}`;
+  const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+  if (!allowedTypes.has(blob.type)) {
+    throw new Error('Profile images must be JPEG, PNG, or WebP.');
+  }
+  if (blob.size > 2 * 1024 * 1024) {
+    throw new Error('Profile image must be smaller than 2MB.');
+  }
+  const path = `${userId}/avatar`;
 
   const { error: uploadError } = await supabase
     .storage
-    .from('profile_avatars')
+    .from('avatars')
     .upload(path, blob, {
       cacheControl: '3600',
       upsert: true,
-      contentType: blob.type || 'image/jpeg',
+      contentType: blob.type,
     });
 
   if (uploadError) {
@@ -1244,10 +1250,26 @@ export async function uploadProfileAvatarDataUrl(dataUrl: string): Promise<strin
 
   const { data: publicData } = supabase
     .storage
-    .from('profile_avatars')
+    .from('avatars')
     .getPublicUrl(path);
 
-  return String(publicData?.publicUrl || '').trim() || path;
+  const publicUrl = String(publicData?.publicUrl || '').trim();
+  if (!publicUrl) throw new Error('Avatar upload succeeded but no public URL was returned.');
+  return `${publicUrl}?v=${Date.now()}`;
+}
+
+export async function deleteProfileAvatarForCurrentUser(): Promise<void> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) throw new Error('Not authenticated');
+
+  const { error } = await supabase
+    .storage
+    .from('avatars')
+    .remove([`${authData.user.id}/avatar`]);
+
+  if (error) {
+    throw new Error(`Avatar removal failed: ${error.message || 'unknown error'}`);
+  }
 }
 
 export async function uploadGapDocumentForCurrentUser(file: File, label: string): Promise<{
