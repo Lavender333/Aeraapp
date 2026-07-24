@@ -4,6 +4,10 @@
 
 [build.environment]
   NODE_VERSION = "18"
+  # These are public browser credentials (not the Supabase service-role key).
+  # Vite embeds them into the production bundle at build time.
+  VITE_SUPABASE_URL = "https://zghyxeieetqubodgplgo.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpnaHl4ZWllZXRxdWJvZGdwbGdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1MDkwNzcsImV4cCI6MjA4NjA4NTA3N30.4ML7Ce1VsVQfhbmuChWk6_tRdx_doRWIzxC9nS873B8"
 
 [[redirects]]
   from = "/*"
