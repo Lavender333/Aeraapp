@@ -22,16 +22,17 @@ alter table public.memberships
   add constraint memberships_funding_source_check
   check (funding_source in ('organization', 'personal'));
 
--- Existing active memberships were created as organization-funded seats.
+-- The original global index allowed only one active organization relationship
+-- per AERA account. Keep uniqueness per organization instead, so one account can
+-- connect to multiple organizations without duplicating a seat inside one org.
+drop index if exists public.memberships_one_active_org_seat_per_user;
+
+-- Existing memberships were created as organization-funded seats.
 update public.memberships
 set consumes_organization_seat = true,
     funding_source = 'organization',
-    access_type = 'organization'
-where funding_source is null
-   or access_type not in ('organization', 'personal_affiliate');
+    access_type = 'organization';
 
--- A user may be connected to an organization while their paid Apple/Google
--- subscription remains the entitlement that unlocks AERA.
 create or replace function public.user_has_active_personal_subscription(p_user_id uuid)
 returns boolean
 language sql
@@ -52,10 +53,11 @@ $$;
 revoke all on function public.user_has_active_personal_subscription(uuid) from public, anon;
 grant execute on function public.user_has_active_personal_subscription(uuid) to authenticated, service_role;
 
--- Connect the signed-in user to an organization.
--- Personal subscribers do not consume a seat and are not blocked by seat capacity.
--- Users without a personal entitlement receive an organization-funded seat.
-create or replace function public.redeem_organization_code(p_code text)
+-- PostgreSQL cannot change an existing function's return-table shape with
+-- CREATE OR REPLACE, so drop the old signature before recreating it.
+drop function if exists public.redeem_organization_code(text);
+
+create function public.redeem_organization_code(p_code text)
 returns table (
   membership_id uuid,
   organization_id uuid,
@@ -111,7 +113,8 @@ begin
     raise exception 'Organization code has expired';
   end if;
 
-  if v_code.max_redemptions is not null and v_code.redemption_count >= v_code.max_redemptions then
+  if v_code.max_redemptions is not null
+     and v_code.redemption_count >= v_code.max_redemptions then
     raise exception 'Organization code has reached its redemption limit';
   end if;
 
@@ -131,6 +134,7 @@ begin
     raise exception 'Organization contract has expired';
   end if;
 
+  -- Lock the seat pool before counting or assigning organization-funded seats.
   select * into v_pool
   from public.seat_pools
   where organization_id = v_code.organization_id
@@ -150,9 +154,13 @@ begin
     raise exception 'This AERA account is already connected to this organization';
   end if;
 
-  v_has_personal_subscription := public.user_has_active_personal_subscription(v_user_id);
+  v_has_personal_subscription :=
+    public.user_has_active_personal_subscription(v_user_id);
   v_consumes_seat := not v_has_personal_subscription;
-  v_funding_source := case when v_has_personal_subscription then 'personal' else 'organization' end;
+  v_funding_source := case
+    when v_has_personal_subscription then 'personal'
+    else 'organization'
+  end;
 
   select count(*)::integer into v_funded_count
   from public.memberships m
@@ -160,7 +168,6 @@ begin
     and m.status = 'active'
     and m.consumes_organization_seat = true;
 
-  -- Capacity applies only when the organization must fund this person's access.
   if v_consumes_seat and v_funded_count >= v_pool.seat_limit then
     raise exception 'This organization has no available funded seats. A personally subscribed user may still connect.';
   end if;
@@ -178,7 +185,10 @@ begin
     v_org.id,
     v_pool.id,
     v_user_id,
-    case when v_has_personal_subscription then 'personal_affiliate' else 'organization' end,
+    case when v_has_personal_subscription
+      then 'personal_affiliate'
+      else 'organization'
+    end,
     v_funding_source,
     v_consumes_seat,
     'active',
@@ -189,7 +199,6 @@ begin
   set redemption_count = redemption_count + 1
   where id = v_code.id;
 
-  -- Create an organization subscription entitlement only when an org seat is used.
   if v_consumes_seat then
     insert into public.subscriptions (user_id, provider, organization_id, status)
     values (v_user_id, 'organization', v_org.id, 'active');
@@ -205,7 +214,10 @@ begin
     v_org.id,
     v_user_id,
     v_user_id,
-    case when v_consumes_seat then 'organization_seat_activated' else 'personal_subscriber_connected' end,
+    case when v_consumes_seat
+      then 'organization_seat_activated'
+      else 'personal_subscriber_connected'
+    end,
     jsonb_build_object(
       'membership_id', v_membership_id,
       'funding_source', v_funding_source,
@@ -214,8 +226,12 @@ begin
   );
 
   select
-    count(*) filter (where m.status = 'active' and m.consumes_organization_seat)::integer,
-    count(*) filter (where m.status = 'active' and not m.consumes_organization_seat)::integer,
+    count(*) filter (
+      where m.status = 'active' and m.consumes_organization_seat
+    )::integer,
+    count(*) filter (
+      where m.status = 'active' and not m.consumes_organization_seat
+    )::integer,
     count(*) filter (where m.status = 'active')::integer
   into v_funded_count, v_personal_count, v_connected_count
   from public.memberships m
@@ -234,14 +250,19 @@ begin
 end;
 $$;
 
+revoke all on function public.redeem_organization_code(text) from public, anon;
 grant execute on function public.redeem_organization_code(text) to authenticated;
 
--- Dashboard metrics intentionally separate affiliation from licensing.
-create or replace view public.organization_seat_metrics as
+-- PostgreSQL view replacement cannot rename/reorder existing output columns.
+drop view if exists public.organization_seat_metrics;
+
+create view public.organization_seat_metrics as
 select
   sp.organization_id,
   sp.seat_limit as purchased_seats,
-  count(distinct m.user_id) filter (where m.status = 'active')::integer as connected_members,
+  count(distinct m.user_id) filter (
+    where m.status = 'active'
+  )::integer as connected_members,
   count(distinct m.user_id) filter (
     where m.status = 'active' and m.consumes_organization_seat = true
   )::integer as organization_funded_members,
@@ -262,8 +283,14 @@ select
   )::integer as google_users,
   count(distinct m.user_id) filter (
     where m.status = 'active'
-      and exists (select 1 from public.platform_identities a where a.user_id = m.user_id and a.platform = 'apple')
-      and exists (select 1 from public.platform_identities g where g.user_id = m.user_id and g.platform = 'google')
+      and exists (
+        select 1 from public.platform_identities a
+        where a.user_id = m.user_id and a.platform = 'apple'
+      )
+      and exists (
+        select 1 from public.platform_identities g
+        where g.user_id = m.user_id and g.platform = 'google'
+      )
   )::integer as users_on_both
 from public.seat_pools sp
 left join public.memberships m on m.seat_pool_id = sp.id
@@ -277,5 +304,5 @@ comment on column public.memberships.consumes_organization_seat is
 comment on column public.memberships.funding_source is
   'Who currently funds AERA access: organization or personal Apple/Google subscription.';
 
-comment on function public.redeem_organization_code is
+comment on function public.redeem_organization_code(text) is
   'Connects a signed-in user to an organization. Personally subscribed Apple/Google users bypass organization seat capacity and do not consume a purchased seat.';
