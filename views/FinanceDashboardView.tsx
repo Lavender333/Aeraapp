@@ -3,6 +3,11 @@ import { ArrowLeft, BarChart3, Copy, ExternalLink, LineChart as LineChartIcon, T
 import { Button } from '../components/Button';
 import { ViewState } from '../types';
 import {
+  averageMonthlyCost,
+  buildFinanceProjection,
+  calculateFinanceMetrics,
+} from '../services/financeCalculations';
+import {
   ResponsiveContainer,
   LineChart,
   Line,
@@ -75,34 +80,30 @@ export const FinanceDashboardView: React.FC<{ setView: (v: ViewState) => void }>
   const [appleFeePercent, setAppleFeePercent] = useState<number>(defaults.fee);
 
   const tier = financeTierDefaults[tierKey];
-  const monthlyCost = Math.round((tier.costs[scenario][0] + tier.costs[scenario][1]) / 2);
-  const gross = users * price;
-  const feeRate = Math.max(0, Math.min(1, appleFeePercent / 100));
-  const appleFee = gross * feeRate;
-  const netRevenue = Math.max(0, gross - appleFee);
-  const monthlyProfit = netRevenue - monthlyCost;
-  const netPricePerUser = price * (1 - feeRate);
-  const breakEvenUsers = netPricePerUser > 0 ? Math.ceil(monthlyCost / netPricePerUser) : null;
+  const monthlyCost = averageMonthlyCost(tier.costs[scenario]);
+  const {
+    gross,
+    marketplaceFee,
+    netRevenue,
+    monthlyProfit,
+    breakEvenUsers,
+  } = calculateFinanceMetrics({
+    users,
+    pricePerUser: price,
+    marketplaceFeePercent: appleFeePercent,
+    monthlyCost,
+  });
 
   const series = useMemo(() => {
-    return Array.from({ length: 12 }).map((_, idx) => {
-      const month = idx + 1;
-      const projectedUsers = Math.round(users * Math.pow(1.08, idx));
-      const projectedGross = projectedUsers * price;
-      const projectedFee = projectedGross * feeRate;
-      const projectedNet = Math.max(0, projectedGross - projectedFee);
-      const projectedProfit = projectedNet - monthlyCost;
-      return {
-        month,
-        users: projectedUsers,
-        gross: projectedGross,
-        appleFee: projectedFee,
-        net: projectedNet,
-        cost: monthlyCost,
-        profit: projectedProfit,
-      };
+    return buildFinanceProjection({
+      startingUsers: users,
+      pricePerUser: price,
+      marketplaceFeePercent: appleFeePercent,
+      monthlyCost,
+      monthlyGrowthRate: 0.08,
+      months: 12,
     });
-  }, [users, price, feeRate, monthlyCost]);
+  }, [users, price, appleFeePercent, monthlyCost]);
 
   const copyShareLink = async () => {
     const params = new URLSearchParams({
@@ -129,7 +130,7 @@ export const FinanceDashboardView: React.FC<{ setView: (v: ViewState) => void }>
             <ArrowLeft size={24} />
           </button>
           <div className="flex-1">
-            <h1 className="font-bold text-lg text-slate-900">Financial Dashboard</h1>
+            <h1 className="font-bold text-lg text-slate-900">AERA Financial Intelligence Dashboard</h1>
             <p className="text-xs text-slate-500">Public share mode: editable assumptions for collaborators</p>
           </div>
           <Button size="sm" variant="outline" onClick={copyShareLink}>
@@ -185,7 +186,7 @@ export const FinanceDashboardView: React.FC<{ setView: (v: ViewState) => void }>
           </div>
           <div className="bg-white border border-slate-200 rounded-xl p-3">
             <p className="text-[11px] font-bold uppercase text-slate-500">Apple Fee</p>
-            <p className="text-lg font-bold text-slate-900">-${appleFee.toLocaleString()}</p>
+            <p className="text-lg font-bold text-slate-900">-${marketplaceFee.toLocaleString()}</p>
           </div>
           <div className="bg-white border border-slate-200 rounded-xl p-3">
             <p className="text-[11px] font-bold uppercase text-slate-500">Net Revenue</p>
@@ -231,7 +232,7 @@ export const FinanceDashboardView: React.FC<{ setView: (v: ViewState) => void }>
                 <Tooltip formatter={(val: number | string) => `$${Number(val).toLocaleString()}`} />
                 <Legend />
                 <Bar dataKey="gross" fill="#0ea5e9" name="Gross" />
-                <Bar dataKey="appleFee" fill="#f97316" name="Apple Fee" />
+                <Bar dataKey="marketplaceFee" fill="#f97316" name="Apple Fee" />
                 <Bar dataKey="net" fill="#22c55e" name="Net" />
               </BarChart>
             </ResponsiveContainer>
