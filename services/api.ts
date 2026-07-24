@@ -1068,6 +1068,7 @@ export async function updateProfileForUser(payload: {
   geofencedOutreachOptIn?: boolean;
   geofencedOutreachRadiusMiles?: number;
   geofencedOutreachConsentAt?: string;
+  onboardComplete?: boolean;
 }) {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData?.user) throw new Error('Not authenticated');
@@ -1136,6 +1137,9 @@ export async function updateProfileForUser(payload: {
   }
   if (Object.prototype.hasOwnProperty.call(payload, 'geofencedOutreachConsentAt')) {
     profileUpdate.geofenced_outreach_consent_at = payload.geofencedOutreachConsentAt || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'onboardComplete')) {
+    profileUpdate.onboarding_completed = Boolean(payload.onboardComplete);
   }
 
   const { error } = await supabase
@@ -3774,7 +3778,7 @@ export async function fetchProfileForUser(): Promise<Partial<UserProfile> | null
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('full_name, phone, mobile_phone, email, role, org_id, home_address, address_line_1, address_line_2, city, state, zip, latitude, longitude, google_place_id, address_verified, address_verified_at, emergency_contact, avatar_url, geofenced_outreach_opt_in, geofenced_outreach_radius_miles, geofenced_outreach_consent_at, organizations(org_code)')
+    .select('full_name, phone, mobile_phone, email, role, org_id, home_address, address_line_1, address_line_2, city, state, zip, latitude, longitude, google_place_id, address_verified, address_verified_at, emergency_contact, avatar_url, geofenced_outreach_opt_in, geofenced_outreach_radius_miles, geofenced_outreach_consent_at, onboarding_completed, organizations(org_code)')
     .eq('id', authData.user.id)
     .single();
 
@@ -3809,6 +3813,7 @@ export async function fetchProfileForUser(): Promise<Partial<UserProfile> | null
     emergencyContactPhone: data.emergency_contact?.phone || '',
     emergencyContactRelation: data.emergency_contact?.relation || '',
     avatarDataUrl: data.avatar_url || '',
+    onboardComplete: Boolean((data as any).onboarding_completed),
   };
 }
 

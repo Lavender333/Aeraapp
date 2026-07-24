@@ -111,7 +111,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
       const id = profile.id || '';
       const name = profile.fullName || '';
       const role = profile.role || 'GENERAL_USER';
-      const onboardComplete = profile.onboardComplete || false;
+      const onboardComplete = Boolean(profile.onboardComplete || StorageService.isProfileComplete(profile));
       console.log('Login successful! Profile:', { 
         id, 
         name, 
@@ -164,7 +164,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
     const id = profile.id || '';
     const name = profile.fullName || '';
     const role = profile.role || 'GENERAL_USER';
-    const onboardComplete = profile.onboardComplete || false;
+    const onboardComplete = Boolean(profile.onboardComplete || StorageService.isProfileComplete(profile));
     console.log('Demo login successful! Profile:', { 
       id, 
       name, 

@@ -185,7 +185,8 @@ CREATE TABLE IF NOT EXISTS profiles (
 ALTER TABLE profiles
   ADD COLUMN IF NOT EXISTS mobile_phone VARCHAR(50),
   ADD COLUMN IF NOT EXISTS home_address TEXT,
-  ADD COLUMN IF NOT EXISTS emergency_contact JSONB;
+  ADD COLUMN IF NOT EXISTS emergency_contact JSONB,
+  ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN NOT NULL DEFAULT false;
 
 -- Create indexes for fast lookups
 CREATE INDEX IF NOT EXISTS idx_profiles_org_id ON profiles(org_id);

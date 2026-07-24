@@ -114,7 +114,7 @@ class ViewErrorBoundary extends React.Component<
 }
 
 export default function App() {
-  const [currentView, setView] = useState<ViewState>('SPLASH');
+  const [currentView, setCurrentView] = useState<ViewState>('SPLASH');
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [postSplashView, setPostSplashView] = useState<ViewState>('LOGIN');
   const [peopleRegisteredCount, setPeopleRegisteredCount] = useState(0);
@@ -188,6 +188,17 @@ export default function App() {
     if (role === 'BUYER') return 'BUYER_PORTAL';
     if (role === 'INSTITUTION_ADMIN' || role === 'ORG_ADMIN') return 'ORG_DASHBOARD';
     return 'DASHBOARD';
+  };
+
+  const setView = (nextView: ViewState) => {
+    if (nextView === 'ACCOUNT_SETUP') {
+      const profile = StorageService.getProfile();
+      if (profile?.onboardComplete || StorageService.isProfileComplete(profile)) {
+        setCurrentView(resolveAuthenticatedLandingView(profile));
+        return;
+      }
+    }
+    setCurrentView(nextView);
   };
 
   useEffect(() => {
@@ -297,6 +308,7 @@ export default function App() {
                     remoteProfile?.emergencyContactRelation || baseProfile.emergencyContactRelation || '',
                   communityId: remoteProfile?.communityId || baseProfile.communityId || '',
                   role: remoteProfile?.role || baseProfile.role || 'GENERAL_USER',
+                  onboardComplete: remoteProfile?.onboardComplete ?? baseProfile.onboardComplete,
                   notifications: baseProfile.notifications || { push: true, sms: true, email: true },
                 };
 
@@ -349,7 +361,7 @@ export default function App() {
               role: remoteProfile?.role || storedSessionProfile?.role || 'GENERAL_USER',
               language: 'en',
               active: true,
-              onboardComplete: Boolean(remoteVitals || storedSessionProfile?.onboardComplete),
+              onboardComplete: remoteProfile?.onboardComplete ?? Boolean(remoteVitals || storedSessionProfile?.onboardComplete),
               notifications: storedSessionProfile?.notifications || { push: true, sms: true, email: true },
             };
 

@@ -274,6 +274,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
         geofencedOutreachOptIn: Boolean(payload.geofencedOutreachOptIn),
         geofencedOutreachRadiusMiles: payload.geofencedOutreachRadiusMiles || 3,
         geofencedOutreachConsentAt: payload.geofencedOutreachOptIn ? (payload.geofencedOutreachConsentAt || new Date().toISOString()) : undefined,
+        onboardComplete: true,
       });
       
       // Save preparedness/vitals data
