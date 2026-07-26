@@ -1,16 +1,36 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '../components/Button';
 import splashLogo from '../logo4.png';
 
 interface SplashViewProps {
   onEnter: () => void;
-  onOrganizationCode?: () => void;
+  onOrganizationCode?: (code: string) => void;
   onPrivacy?: () => void;
   peopleRegisteredCount?: number;
 }
 
 export const SplashView: React.FC<SplashViewProps> = ({ onEnter, onOrganizationCode, onPrivacy, peopleRegisteredCount = 0 }) => {
+  const [showCommunityCode, setShowCommunityCode] = useState(false);
+  const [communityCode, setCommunityCode] = useState('');
+  const [communityCodeError, setCommunityCodeError] = useState('');
+
+  const normalizeCommunityCode = (value: string) => String(value || '')
+    .toUpperCase()
+    .replace(/[–—−]/g, '-')
+    .replace(/[^A-Z0-9-]/g, '')
+    .replace(/-+/g, '-');
+
+  const continueWithCommunityCode = () => {
+    const normalized = normalizeCommunityCode(communityCode).trim();
+    if (!normalized) {
+      setCommunityCodeError('Enter the community access code you received.');
+      return;
+    }
+    setCommunityCodeError('');
+    onOrganizationCode?.(normalized);
+  };
+
   return (
     <div className="min-h-screen bg-[#F6F8F7] flex items-center justify-center px-6 py-10">
       <div className="w-full max-w-[420px] text-center flex flex-col items-center">
@@ -44,14 +64,56 @@ export const SplashView: React.FC<SplashViewProps> = ({ onEnter, onOrganizationC
             Continue
           </Button>
           <Button
-            onClick={() => onOrganizationCode?.()}
+            onClick={() => {
+              setShowCommunityCode((current) => !current);
+              setCommunityCodeError('');
+            }}
             variant="outline"
             size="lg"
             fullWidth
             className="mt-3 h-[50px] rounded-xl border-[#2F7A64] text-[#2F7A64] font-semibold"
           >
-            I have an organization code
+            Enter Community Access Code
           </Button>
+          {showCommunityCode && (
+            <div className="mt-3 rounded-xl border border-[#B7D5CB] bg-white p-3 text-left">
+              <label htmlFor="splash-community-code" className="block text-[12px] font-semibold text-[#374151]">
+                Community access code
+              </label>
+              <input
+                id="splash-community-code"
+                type="text"
+                autoCapitalize="characters"
+                autoComplete="off"
+                spellCheck={false}
+                value={communityCode}
+                onChange={(event) => {
+                  setCommunityCode(normalizeCommunityCode(event.target.value));
+                  setCommunityCodeError('');
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') continueWithCommunityCode();
+                }}
+                placeholder="Enter code"
+                className="mt-2 w-full rounded-lg border border-[#9CA3AF] bg-white px-3 py-3 text-[16px] font-semibold uppercase tracking-wider text-[#1F2937] outline-none focus:border-[#2F7A64] focus:ring-2 focus:ring-[#B7D5CB]"
+              />
+              {communityCodeError && (
+                <p role="alert" className="mt-2 text-[12px] font-semibold text-red-700">{communityCodeError}</p>
+              )}
+              <Button
+                onClick={continueWithCommunityCode}
+                size="lg"
+                fullWidth
+                disabled={!communityCode.trim()}
+                className="mt-3 h-[48px] rounded-lg bg-[#2F7A64] hover:bg-[#296A57] text-white font-semibold"
+              >
+                Continue with Code
+              </Button>
+              <p className="mt-2 text-[11px] leading-snug text-[#6B7280]">
+                You will sign in or create a verified account before the funded seat is activated.
+              </p>
+            </div>
+          )}
 
           <p className="mt-4 text-[12px] leading-snug text-[#6B7280]">Not a substitute for 911</p>
           <button

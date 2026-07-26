@@ -53,6 +53,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
   const [isDownloadingAbout, setIsDownloadingAbout] = useState(false);
   const [pendingCommunityId, setPendingCommunityId] = useState('');
   const organizationCodeIntent = sessionStorage.getItem('aera.organizationCodeIntent') === '1';
+  const pendingOrganizationCode = sessionStorage.getItem('aera.pendingOrganizationCode') || '';
   const pendingCommunityName = pendingCommunityId
     ? StorageService.getOrganization(pendingCommunityId)?.name || DEMO_COMMUNITY_QR_SEEDS.find((seed) => seed.communityId === pendingCommunityId)?.name || pendingCommunityId
     : '';
@@ -453,8 +454,11 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
       <div className="mt-8 text-center">
         {organizationCodeIntent && (
           <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-left">
-            <p className="text-sm font-bold text-emerald-900">Organization code ready</p>
-            <p className="mt-1 text-xs text-emerald-800">Sign in, or create a verified account, then AERA will take you to the organization-code activation form.</p>
+            <p className="text-sm font-bold text-emerald-900">Community access code saved</p>
+            <p className="mt-1 text-xs text-emerald-800">
+              {pendingOrganizationCode ? `Code ${pendingOrganizationCode} is ready. ` : ''}
+              Sign in, or create a verified account, to activate the funded seat.
+            </p>
           </div>
         )}
         <p className="text-slate-600">{t('login.no_account')}</p>

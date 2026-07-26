@@ -424,7 +424,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [isSaved, setIsSaved] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [connectedOrg, setConnectedOrg] = useState<string | null>(null);
-  const [organizationCodeInput, setOrganizationCodeInput] = useState('');
+  const [organizationCodeInput, setOrganizationCodeInput] = useState(
+    () => sessionStorage.getItem('aera.pendingOrganizationCode') || '',
+  );
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [pendingCommunityInvite, setPendingCommunityInvite] = useState<PendingCommunityInvite | null>(
     () => getPendingCommunityInvite(),
@@ -2094,6 +2096,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           role: nextProfile.role,
       });
       sessionStorage.removeItem('aera.organizationCodeIntent');
+      sessionStorage.removeItem('aera.pendingOrganizationCode');
       setContactSupportSuccess(
         redemption.consumesOrganizationSeat
           ? `Organization access activated. ${redemption.availableSeats.toLocaleString()} funded seats remain.`

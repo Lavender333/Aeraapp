@@ -91,6 +91,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
   useEffect(() => {
     const profile = StorageService.getProfile();
     const pendingInvite = getPendingCommunityInvite();
+    const pendingOrganizationCode = sessionStorage.getItem('aera.pendingOrganizationCode') || '';
     if (pendingInvite?.communityId) {
       setPendingCommunityId(pendingInvite.communityId);
     }
@@ -104,14 +105,14 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
          fullName: profile.fullName || prev.fullName,
          email: profile.email || prev.email,
          phone: profile.phone || prev.phone,
-         communityId: profile.communityId || pendingInvite?.communityId || prev.communityId,
+         communityId: profile.communityId || pendingOrganizationCode || pendingInvite?.communityId || prev.communityId,
          role: profile.role || prev.role,
          geofencedOutreachOptIn: Boolean(profile.geofencedOutreachOptIn),
          geofencedOutreachRadiusMiles: profile.geofencedOutreachRadiusMiles || 3,
          geofencedOutreachConsentAt: profile.geofencedOutreachConsentAt,
        }));
-    } else if (pendingInvite?.communityId) {
-      setFormData(prev => ({ ...prev, communityId: prev.communityId || pendingInvite.communityId }));
+    } else if (pendingOrganizationCode || pendingInvite?.communityId) {
+      setFormData(prev => ({ ...prev, communityId: prev.communityId || pendingOrganizationCode || pendingInvite?.communityId || '' }));
     }
   }, []);
 
@@ -322,6 +323,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       sessionStorage.setItem('aera.playWelcomeVideoOnDashboard', '1');
       clearPendingCommunityInvite();
       sessionStorage.removeItem('aera.organizationCodeIntent');
+      sessionStorage.removeItem('aera.pendingOrganizationCode');
       setView('DASHBOARD');
     } catch (e: any) {
       const currentProfile = StorageService.getProfile();

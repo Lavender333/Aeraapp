@@ -503,8 +503,9 @@ export default function App() {
     window.dispatchEvent(new Event('finance-open'));
   };
 
-  const handleOrganizationCodeFromSplash = () => {
+  const handleOrganizationCodeFromSplash = (code: string) => {
     sessionStorage.setItem('aera.organizationCodeIntent', '1');
+    sessionStorage.setItem('aera.pendingOrganizationCode', code);
     setView('LOGIN');
   };
 
