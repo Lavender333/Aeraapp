@@ -315,6 +315,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [localOrgError, setLocalOrgError] = useState<string | null>(null);
   const [localOrgRadiusMiles, setLocalOrgRadiusMiles] = useState(25);
   const [localOrgUsedLocation, setLocalOrgUsedLocation] = useState(false);
+  const [adminMenuSearch, setAdminMenuSearch] = useState('');
 
   // Main Settings State
   const [profile, setProfile] = useState<UserProfile>({
@@ -3213,6 +3214,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setSelectedUser(null);
   };
 
+  const openRoleDefinitions = async () => {
+    await openAccessControl();
+    setActiveTab('ROLE_DEFINITIONS');
+  };
+
   const openBroadcastControl = () => {
     if (!isAdmin) return;
     const db = StorageService.getDB();
@@ -5142,6 +5148,169 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const preparednessReady = Boolean(profile.consentPreparednessPlanning);
   const communityReady = Boolean(String(profile.communityId || '').trim());
   const profileInitial = (profile.fullName || 'A').trim().charAt(0).toUpperCase();
+  const adminAreaGroups = [
+    {
+      title: 'People & Access',
+      description: 'Users, permissions, signups, and member history',
+      accent: 'bg-sky-50 border-sky-200 text-sky-800',
+      items: [
+        {
+          label: isOrgScopedAdmin ? 'Member Directory' : 'User Directory',
+          description: isOrgScopedAdmin ? 'Find and manage your organization members' : 'Find and manage people across AERA',
+          icon: Users,
+          action: openAccessControl,
+          visible: true,
+        },
+        {
+          label: 'Roles & Access',
+          description: isOrgScopedAdmin ? 'Review access available to organization members' : 'Review roles and permission settings',
+          icon: Lock,
+          action: openRoleDefinitions,
+          visible: true,
+        },
+        {
+          label: 'New Signups',
+          description: 'Review recently registered people',
+          icon: CheckCircle,
+          action: () => setView('NEW_SIGNUPS'),
+          visible: isPlatformAdmin,
+        },
+        {
+          label: 'Member Activity Log',
+          description: 'See organization membership changes',
+          icon: Activity,
+          action: openMemberActivity,
+          visible: true,
+        },
+      ],
+    },
+    {
+      title: 'Organizations & Seats',
+      description: 'Organizations, contracts, seats, codes, and addresses',
+      accent: 'bg-emerald-50 border-emerald-200 text-emerald-800',
+      items: [
+        {
+          label: isOrgScopedAdmin ? 'Organization Profile' : 'Registered Organizations',
+          description: isOrgScopedAdmin ? 'Open your organization record' : 'Find and review registered organizations',
+          icon: Building2,
+          action: openOrgDirectory,
+          visible: true,
+        },
+        {
+          label: 'Seat & Access Management',
+          description: isOrgScopedAdmin ? 'See seats purchased, used, and available' : 'Assign seats and monitor usage',
+          icon: Users,
+          action: openOrgDirectory,
+          visible: true,
+        },
+        {
+          label: 'Community Access Codes',
+          description: isOrgScopedAdmin ? 'Create and share codes for your organization' : 'Create organization-bound access codes',
+          icon: LinkIcon,
+          action: openOrgDirectory,
+          visible: true,
+        },
+        {
+          label: 'Organization Address',
+          description: 'Update the organization location',
+          icon: MapPin,
+          action: openOrganizationAddressSettings,
+          visible: canManageOrgSettings,
+        },
+      ],
+    },
+    {
+      title: 'Outreach & Enrollment',
+      description: 'Referrals, share links, leads, and buyers',
+      accent: 'bg-violet-50 border-violet-200 text-violet-800',
+      items: [
+        {
+          label: 'Referral Intake & Share Links',
+          description: 'Open referral forms, links, and QR sharing',
+          icon: Clipboard,
+          action: () => setView('LEAD_INTAKE'),
+          visible: true,
+        },
+        {
+          label: 'Lead Pipeline',
+          description: 'Review and manage incoming opportunities',
+          icon: CheckSquare,
+          action: () => setView('LEAD_ADMIN'),
+          visible: isPlatformAdmin,
+        },
+        {
+          label: 'Buyer Portal',
+          description: 'Open buyer access and lead delivery',
+          icon: Users,
+          action: () => setView('BUYER_PORTAL'),
+          visible: isPlatformAdmin,
+        },
+      ],
+    },
+    {
+      title: 'Operations',
+      description: 'Inventory, events, and emergency communication',
+      accent: 'bg-amber-50 border-amber-200 text-amber-800',
+      items: [
+        {
+          label: isOrgScopedAdmin ? 'Organization Inventory' : 'Master Inventory',
+          description: 'Review supplies, expiration dates, and replenishment',
+          icon: FileText,
+          action: openMasterInventory,
+          visible: true,
+        },
+        {
+          label: 'Event Management',
+          description: 'Create and manage distribution events',
+          icon: Calendar,
+          action: openEventManagement,
+          visible: true,
+        },
+        {
+          label: 'Manage Broadcasts',
+          description: 'Send important messages and alerts',
+          icon: Radio,
+          action: openBroadcastControl,
+          visible: true,
+        },
+      ],
+    },
+    {
+      title: 'Finance',
+      description: 'Revenue, contracts, subscribers, and break-even',
+      accent: 'bg-fuchsia-50 border-fuchsia-200 text-fuchsia-800',
+      items: [
+        {
+          label: 'Financial Dashboard',
+          description: 'See revenue, costs, and subscribers needed at $1.99',
+          icon: Activity,
+          action: openFinancialDashboard,
+          visible: isPlatformAdmin,
+        },
+      ],
+    },
+  ];
+  const normalizedAdminMenuSearch = adminMenuSearch.trim().toLowerCase();
+  const visibleAdminAreaGroups = adminAreaGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => {
+        if (!item.visible) return false;
+        if (!normalizedAdminMenuSearch) return true;
+        return `${group.title} ${item.label} ${item.description}`
+          .toLowerCase()
+          .includes(normalizedAdminMenuSearch);
+      }),
+    }))
+    .filter((group) => group.items.length > 0);
+  const quickAdminActions = [
+    adminAreaGroups[0].items[0],
+    ...(isPlatformAdmin ? [adminAreaGroups[0].items[2]] : []),
+    adminAreaGroups[1].items[0],
+    adminAreaGroups[1].items[2],
+    adminAreaGroups[3].items[0],
+    adminAreaGroups[3].items[2],
+  ].filter((item) => item.visible);
 
   const handleCloseWelcomeVideoModal = () => {
     setWelcomeVideoPlaybackMessage('');
@@ -5317,122 +5486,119 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       {isAdmin && (
-        <section className="bg-gradient-to-br from-slate-800 to-teal-900 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-6 opacity-10">
-            <ShieldCheck size={80} />
-          </div>
-          <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-2 text-slate-300 font-bold text-xs uppercase tracking-wider">
-              <Lock size={12} /> {t('settings.admin_area')}
+        <section className="bg-white/95 border border-slate-200 p-5 sm:p-6 rounded-2xl shadow-sm space-y-6 order-7">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-[#2F7A64] font-bold text-xs uppercase tracking-wider">
+                <ShieldCheck size={15} /> {t('settings.admin_area')}
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900 mt-1">What do you need to manage?</h2>
+              <p className="text-sm text-slate-600 mt-1">
+                {isOrgScopedAdmin
+                  ? 'Your dashboard shows only this organization’s members, seats, resources, and activity.'
+                  : 'Find people, organizations, outreach, operations, and finance in one place.'}
+              </p>
             </div>
-            <h2 className="text-xl font-bold mb-4 text-slate-300">{t('settings.admin_roles_dashboards')}</h2>
-            <div className="space-y-3">
-              <Button 
-                onClick={openAccessControl} 
-                className="bg-brand-600 hover:bg-brand-500 text-white border-0 w-full justify-between"
-              >
-                <span>{isOrgScopedAdmin ? 'Member Directory' : t('settings.user_directory_access')}</span>
-                <Users size={18} />
-              </Button>
-              {isPlatformAdmin && (
-                <Button
-                  onClick={() => setView('NEW_SIGNUPS')}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white border-0 w-full justify-between"
-                >
-                  <span>{t('settings.new_signups')}</span>
-                  <Users size={18} />
-                </Button>
-              )}
-              {isPlatformAdmin && (
-                <Button
-                  onClick={openFinancialDashboard}
-                  className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white border-0 w-full justify-between"
-                >
-                  <span>{t('settings.financial_dashboard')}</span>
-                  <Activity size={18} />
-                </Button>
-              )}
-              <Button
-                onClick={() => setView('LEAD_INTAKE')}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white border-0 w-full justify-between"
-              >
-                <span>Referral Intake & Share Links</span>
-                <Clipboard size={18} />
-              </Button>
-              {isPlatformAdmin && (
-                <Button
-                  onClick={() => setView('LEAD_ADMIN')}
-                  className="bg-violet-600 hover:bg-violet-500 text-white border-0 w-full justify-between"
-                >
-                  <span>Lead Pipeline Admin</span>
-                  <CheckSquare size={18} />
-                </Button>
-              )}
-              {isPlatformAdmin && (
-                <Button
-                  onClick={() => setView('BUYER_PORTAL')}
-                  className="bg-cyan-600 hover:bg-cyan-500 text-white border-0 w-full justify-between"
-                >
-                  <span>Buyer Portal</span>
-                  <Users size={18} />
-                </Button>
-              )}
-              <Button 
-                onClick={openOrgDirectory} 
-                className="bg-sky-600 hover:bg-sky-500 text-white border-0 w-full justify-between"
-              >
-                <span>{isOrgScopedAdmin ? 'Organization Profile & Seats' : 'Registered Organizations & Seats'}</span>
-                <Building2 size={18} />
-              </Button>
-              {canManageOrgSettings && (
-                <Button
-                  onClick={openOrganizationAddressSettings}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white border-0 w-full justify-between"
-                >
-                  <span>Organization Address</span>
-                  <MapPin size={18} />
-                </Button>
-              )}
-              <Button 
-                onClick={openMasterInventory} 
-                className="bg-teal-600 hover:bg-teal-500 text-white border-0 w-full justify-between"
-              >
-                <span>{isOrgScopedAdmin ? 'Hub Inventory' : t('settings.master_inventory')}</span>
-                <FileText size={18} />
-              </Button>
-              <Button 
-                onClick={openEventManagement} 
-                className="bg-indigo-600 hover:bg-indigo-500 text-white border-0 w-full justify-between"
-              >
-                <span>Event Management</span>
-                <Calendar size={18} />
-              </Button>
-              <Button 
-                onClick={openBroadcastControl} 
-                className="bg-amber-600 hover:bg-amber-500 text-white border-0 w-full justify-between"
-              >
-                <span>{t('settings.manage_broadcasts')}</span>
-                <Radio size={18} />
-              </Button>
-              <Button
-                onClick={openMemberActivity}
-                className="bg-cyan-600 hover:bg-cyan-500 text-white border-0 w-full justify-between"
-              >
-                <span>Member Activity Log</span>
-                <Activity size={18} />
-              </Button>
-              {!isOrgScopedAdmin && (
-                <Button 
-                  onClick={openDbViewer}
-                  variant="outline"
-                  className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 w-full justify-between"
-                >
-                   <span>{t('settings.view_raw_database')}</span>
-                   <Database size={18} />
-                </Button>
-              )}
-            </div>
+            <span className="self-start rounded-full bg-slate-100 border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700">
+              {isPlatformAdmin ? 'Head Administrator' : 'Organization Administrator'}
+            </span>
           </div>
+
+          <div className="relative">
+            <Search size={19} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              type="search"
+              value={adminMenuSearch}
+              onChange={(event) => setAdminMenuSearch(event.target.value)}
+              placeholder="Find users, organizations, codes, inventory…"
+              aria-label="Search administrator tools"
+              className="w-full min-h-[50px] rounded-xl border border-slate-300 bg-white pl-11 pr-4 text-slate-900 outline-none transition focus:border-[#2F7A64] focus:ring-2 focus:ring-[#2F7A64]/20"
+            />
+          </div>
+
+          {!normalizedAdminMenuSearch && (
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Quick actions</h3>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                {quickAdminActions.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={`quick-${item.label}`}
+                      type="button"
+                      onClick={item.action}
+                      className="min-h-[82px] rounded-xl border border-slate-200 bg-slate-50 p-3 text-left hover:border-[#2F7A64] hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#2F7A64]/30 transition"
+                    >
+                      <Icon size={20} className="text-[#2F7A64] mb-2" />
+                      <span className="block text-sm font-bold text-slate-900">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-5">
+            {visibleAdminAreaGroups.map((group) => (
+              <section key={group.title} aria-labelledby={`admin-group-${group.title.replace(/\s+/g, '-').toLowerCase()}`}>
+                <div className="mb-2">
+                  <h3
+                    id={`admin-group-${group.title.replace(/\s+/g, '-').toLowerCase()}`}
+                    className="text-base font-bold text-slate-900"
+                  >
+                    {group.title}
+                  </h3>
+                  <p className="text-xs text-slate-500">{group.description}</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={`${group.title}-${item.label}`}
+                        type="button"
+                        onClick={item.action}
+                        className={`min-h-[76px] rounded-xl border p-3.5 text-left flex items-start gap-3 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-[#2F7A64]/30 transition ${group.accent}`}
+                      >
+                        <span className="mt-0.5 rounded-lg bg-white/80 p-2 shrink-0">
+                          <Icon size={19} aria-hidden="true" />
+                        </span>
+                        <span>
+                          <span className="block text-sm font-bold text-slate-900">{item.label}</span>
+                          <span className="block text-xs text-slate-600 mt-0.5 leading-relaxed">{item.description}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+            {visibleAdminAreaGroups.length === 0 && (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+                <p className="font-bold text-slate-800">No administrator tools match “{adminMenuSearch}”.</p>
+                <button
+                  type="button"
+                  onClick={() => setAdminMenuSearch('')}
+                  className="mt-2 text-sm font-semibold text-[#2F7A64] hover:underline"
+                >
+                  Clear search
+                </button>
+              </div>
+            )}
+          </div>
+
+          {!isOrgScopedAdmin && !normalizedAdminMenuSearch && (
+            <div className="border-t border-slate-200 pt-4">
+              <button
+                type="button"
+                onClick={openDbViewer}
+                className="flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-slate-800"
+              >
+                <Database size={15} />
+                Advanced: {t('settings.view_raw_database')}
+              </button>
+            </div>
+          )}
         </section>
       )}
 
