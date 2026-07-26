@@ -59,6 +59,11 @@ const formatCommunityIdInput = (value: string) => {
   return cleaned;
 };
 
+// Keep account closure unavailable until the matching Supabase migration and
+// Edge Function deployment have completed. This prevents the older hard-delete
+// function from being called with the newer soft-closure interface.
+const SECURE_ACCOUNT_CLOSURE_ENABLED = false;
+
 const maskPhoneNumber = (value: string) => {
   const digits = String(value || '').replace(/\D/g, '');
   if (digits.length < 4) return value;
@@ -181,7 +186,7 @@ const GENERAL_FAQS: Array<{ q: string; a: string }> = [
   { q: 'What is the supply inventory for?', a: 'The inventory helps you track essential supplies (food, water, medications, etc.) your household has on hand. AERA uses this data to identify gaps and prioritize community resource sharing during a disaster.' },
   { q: 'How does geofenced outreach work?', a: 'If you opt in under Privacy settings, nearby organizations can see that there is an unconnected household in their area and may reach out to invite you. No identifying details are shared until you accept.' },
   { q: 'Can I use AERA without a smartphone?', a: 'AERA is a web-based progressive web app accessible on any modern browser. While a smartphone is recommended for location features, you can use AERA on a tablet or desktop computer.' },
-  { q: 'How do I close my account?', a: 'Use "Close My Account" at the bottom of Settings. Access is disabled, active seats and subscriptions are released, personal profile details are minimized, and required audit history is retained. Contact support if you need the account reopened.' },
+  { q: 'How do I close my account?', a: 'Secure self-service account closure is temporarily unavailable while AERA completes its protected backend deployment. Contact support for assistance in the meantime.' },
 ];
 
 const ORG_ADMIN_FAQS: Array<{ q: string; a: string }> = [
@@ -3088,6 +3093,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       };
 
   const handleCloseAccount = async () => {
+    if (!SECURE_ACCOUNT_CLOSURE_ENABLED) {
+      window.alert(
+        'Secure account closure is temporarily unavailable while the protected backend update is being completed.',
+      );
+      return;
+    }
+
     const confirmed = window.confirm(
       'Close your AERA account? You will lose access, active memberships and subscriptions will end, and required audit history will be retained.',
     );
@@ -8205,15 +8217,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
           <p className="text-sm font-bold text-slate-900">Close your account</p>
           <p className="mt-1 text-xs leading-relaxed text-slate-600">
-            You will no longer be able to sign in. Active seats and subscriptions will be released,
-            personal profile details will be minimized, and required audit history will remain in AERA.
+            Secure account closure is temporarily unavailable while AERA completes the protected
+            backend deployment. Your account and data will not be changed by this disabled control.
           </p>
           <button
             type="button"
             onClick={() => void handleCloseAccount()}
-            className="mt-3 w-full min-h-[48px] rounded-lg border border-red-300 bg-white px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+            disabled={!SECURE_ACCOUNT_CLOSURE_ENABLED}
+            className="mt-3 w-full min-h-[48px] rounded-lg border border-slate-300 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-500 disabled:cursor-not-allowed"
           >
-            Close My Account
+            Secure Account Closure Temporarily Unavailable
           </button>
         </div>
       </div>
