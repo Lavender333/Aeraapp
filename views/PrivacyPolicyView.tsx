@@ -177,7 +177,7 @@ export const PrivacyPolicyView: React.FC<PrivacyPolicyViewProps> = ({ setView })
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-slate-900">18. Google Tag Notice</h2>
-        <p className="text-sm text-slate-700">AERA currently uses a Google tag with measurement ID G-V5CQN2XZFL on supported web entry pages. This tag helps us understand overall traffic and product usage patterns on https://appandwebsitetesting.site.</p>
+        <p className="text-sm text-slate-700">With your analytics consent, AERA uses Google tag measurement ID G-V5CQN2XZFL to understand overall traffic and product usage patterns on https://getaeraapp.com. Analytics does not load until consent is granted.</p>
         <p className="text-sm text-slate-700">The Google tag is used for analytics reporting only. It is not intended to identify you personally through advertising profiles, and we do not use it to sell your personal information.</p>
       </section>
     </div>

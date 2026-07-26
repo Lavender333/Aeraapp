@@ -459,7 +459,7 @@ export const EventDashboardView: React.FC<EventDashboardViewProps> = ({ setView,
                           Requested {row.requested_quantity} • Distributed {row.distributed_quantity} • Remaining Need {row.remaining_demand} • In Stock {row.available_now}
                         </p>
                         <div className="mt-2">
-                          <ProgressBar value={fulfillmentPct} color={fulfillmentPct >= 80 ? 'green' : fulfillmentPct >= 50 ? 'yellow' : 'red'} />
+                          <ProgressBar current={fulfillmentPct} total={100} />
                         </div>
                       </div>
                     );

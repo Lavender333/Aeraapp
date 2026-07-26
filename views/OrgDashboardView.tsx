@@ -736,7 +736,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
       });
 
       for (const key of Array.from(outreachCacheRef.current.keys())) {
-        if (key.startsWith(`${activeOrgCode}::`)) {
+        if (String(key).startsWith(`${activeOrgCode}::`)) {
           outreachCacheRef.current.delete(key);
         }
       }
@@ -799,7 +799,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
       StorageService.setOrgOutreachRadiusMiles(activeOrgCode, remoteSaved);
       setOutreachRadiusMiles(remoteSaved);
       for (const key of Array.from(outreachCacheRef.current.keys())) {
-        if (key.startsWith(`${activeOrgCode}::`)) {
+        if (String(key).startsWith(`${activeOrgCode}::`)) {
           outreachCacheRef.current.delete(key);
         }
       }
@@ -845,7 +845,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
         setMembers((prev) => {
           const updated = prev.map((member) =>
             member.id === selectedMember.id
-              ? { ...member, status: 'UNKNOWN', lastUpdate: new Date().toISOString() }
+              ? { ...member, status: 'UNKNOWN' as const, lastUpdate: new Date().toISOString() }
               : member
           );
           setStatusCounts(computeStatusCounts(updated));
@@ -879,7 +879,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     const nowIso = new Date().toISOString();
     if (sentCount > 0) {
       setMembers((prev) => {
-        const updated = prev.map((member) => ({ ...member, status: 'UNKNOWN', lastUpdate: nowIso }));
+        const updated = prev.map((member) => ({ ...member, status: 'UNKNOWN' as const, lastUpdate: nowIso }));
         setStatusCounts(computeStatusCounts(updated));
         return updated;
       });

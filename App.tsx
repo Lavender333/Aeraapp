@@ -402,10 +402,7 @@ export default function App() {
             setView('SPLASH');
           }
         } else {
-          if (requestedStandaloneView === 'PUBLIC_INTAKE') {
-            setPostSplashView('PUBLIC_INTAKE');
-            setView('PUBLIC_INTAKE');
-          } else if (requestedStandaloneView === 'BUYER_PORTAL') {
+          if (requestedStandaloneView === 'BUYER_PORTAL') {
             sessionStorage.setItem('postLoginView', 'BUYER_PORTAL');
             setPostSplashView('LOGIN');
             setView('SPLASH');

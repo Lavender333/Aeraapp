@@ -167,7 +167,6 @@ export const downloadAdminPresentationPptx = async (): Promise<void> => {
       y: 2.4,
       w: 12,
       h: 4.3,
-      radius: 0.15,
       fill: { color: '1E293B', transparency: 20 },
       line: { color: '475569', pt: 2 }
     });

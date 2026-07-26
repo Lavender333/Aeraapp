@@ -176,14 +176,6 @@ export interface GapRevenueSettings {
 }
 
 /** Bank / ACH profile submitted by an org for G.A.P. fund disbursement */
-export interface GapDocumentAttachment {
-  id?: string;
-  fileName: string;
-  url: string;
-  uploadedAt: string;
-}
-
-/** Bank / ACH profile submitted by an org for G.A.P. fund disbursement */
 export interface OrgBankInfo {
   id?: string;
   orgCode: string;
@@ -225,6 +217,7 @@ export interface GapDocumentAttachment {
   uploadedAt: string;
   storagePath?: string;
   accessUrl?: string;
+  url?: string;
 }
 
 export interface GapReviewTrailEntry {
@@ -237,6 +230,9 @@ export interface GapReviewTrailEntry {
 }
 
 export interface HelpRequestData {
+  fullName?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
   // Step 1: Safety
   isSafe: boolean | null;
   location: string;

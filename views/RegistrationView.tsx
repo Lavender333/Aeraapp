@@ -288,8 +288,6 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
         emergencyContactName: payload.emergencyContactName,
         emergencyContactPhone: payload.emergencyContactPhone,
         emergencyContactRelation: payload.emergencyContactRelation,
-        communityId: payload.communityId,
-        role: payload.role,
         geofencedOutreachOptIn: Boolean(payload.geofencedOutreachOptIn),
         geofencedOutreachRadiusMiles: payload.geofencedOutreachRadiusMiles || 3,
         geofencedOutreachConsentAt: payload.geofencedOutreachOptIn ? (payload.geofencedOutreachConsentAt || new Date().toISOString()) : undefined,

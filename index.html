@@ -1,20 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-V5CQN2XZFL"></script>
+    <!-- Analytics is opt-in. Set aera.analytics_consent=granted after consent. -->
     <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-
-      gtag('config', 'G-V5CQN2XZFL');
+      if (window.localStorage.getItem('aera.analytics_consent') === 'granted') {
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = function(){window.dataLayer.push(arguments);};
+        window.gtag('js', new Date());
+        window.gtag('config', 'G-V5CQN2XZFL', { anonymize_ip: true });
+        var analyticsScript = document.createElement('script');
+        analyticsScript.async = true;
+        analyticsScript.src = 'https://www.googletagmanager.com/gtag/js?id=G-V5CQN2XZFL';
+        document.head.appendChild(analyticsScript);
+      }
     </script>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
-    <title>AERA</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AERA | Accelerated Emergency Response</title>
+    <meta name="description" content="AERA helps households and trusted community organizations prepare, coordinate resources, and respond during emergencies." />
+    <link rel="canonical" href="https://getaeraapp.com/" />
+    <meta property="og:title" content="AERA | Accelerated Emergency Response" />
+    <meta property="og:description" content="Prepare with clarity. Coordinate trusted community emergency response." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://getaeraapp.com/" />
+    <meta property="og:image" content="https://getaeraapp.com/logo4.png" />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" type="image/png" href="./logo4.png" />
     <link rel="apple-touch-icon" href="./logo4.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#2F7A64" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>

@@ -30,7 +30,6 @@ const organizationSchema = new mongoose.Schema(
 );
 
 organizationSchema.index({ name: 'text' });
-organizationSchema.index({ code: 1 });
 organizationSchema.index({ type: 1 });
 organizationSchema.index({ verified: 1, active: 1 });
 

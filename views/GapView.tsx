@@ -1116,7 +1116,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 <div className="rounded-lg border border-slate-200 p-3"><p className="text-[10px] text-slate-500 uppercase font-bold">Participation Percentage</p><p className="text-lg font-black text-slate-900">{participationPct}%</p></div>
                 <div className="rounded-lg border border-slate-200 p-3">
-                  <p className="text-[10px] text-slate-500 uppercase font-bold flex items-center gap-1">Allocation Capacity <Info size={12} className="text-slate-400" title="Allocation capacity represents the maximum potential hardship support available to your organization during the current review period." /></p>
+                  <p className="text-[10px] text-slate-500 uppercase font-bold flex items-center gap-1">Allocation Capacity <span title="Allocation capacity represents the maximum potential hardship support available to your organization during the current review period."><Info size={12} className="text-slate-400" aria-hidden="true" /></span></p>
                   <p className="text-lg font-black text-slate-900">{formatCurrency(allocationCapacity)}</p>
                 </div>
                 <div className="rounded-lg border border-slate-200 p-3"><p className="text-[10px] text-slate-500 uppercase font-bold">Amount Disbursed</p><p className="text-lg font-black text-slate-900">{formatCurrency(amountDisbursed)}</p></div>

@@ -15,8 +15,6 @@ export const registerSchema = z.object({
   phone: z.string().min(10).optional(),
   password: passwordComplexity,
   fullName: z.string().optional().default(''),
-  role: z.enum(['ADMIN', 'CONTRACTOR', 'LOCAL_AUTHORITY', 'FIRST_RESPONDER', 'GENERAL_USER', 'INSTITUTION_ADMIN']).optional().default('GENERAL_USER'),
-  orgId: z.string().optional(),
 }).refine(data => data.email || data.phone, {
   message: 'Either email or phone is required',
 });

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
+import { User } from '../models/user.js';
 
 let app;
 let mongod;
@@ -26,7 +27,11 @@ beforeAll(async () => {
       role: 'ADMIN',
     });
 
-  token = registerRes.body.accessToken;
+  await User.updateOne({ email: 'admin2@example.com' }, { $set: { role: 'ADMIN' } });
+  const loginRes = await request(app)
+    .post('/api/v1/auth/login')
+    .send({ email: 'admin2@example.com', password: 'SecurePass123!' });
+  token = loginRes.body.accessToken;
 });
 
 afterAll(async () => {

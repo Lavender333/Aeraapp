@@ -95,6 +95,14 @@ if (JWT_REFRESH_SECRET.length < 32) {
 
 logger.info(`JWT_REFRESH_SECRET validated (length: ${JWT_REFRESH_SECRET.length})`);
 
+// The authentication middleware reads the configured secret at request time.
+// Keep test fallbacks consistent with the signer without weakening production,
+// where both environment variables are mandatory.
+if (isTest) {
+  process.env.JWT_SECRET ||= JWT_SECRET;
+  process.env.JWT_REFRESH_SECRET ||= JWT_REFRESH_SECRET;
+}
+
 // ===== EXPRESS APP SETUP =====
 
 export const app = express();
@@ -175,12 +183,19 @@ app.use(
 );
 
 // NoSQL injection protection - sanitize all user input
-app.use(mongoSanitize({
-  replaceWith: '_',
-  onSanitize: ({ req, key }) => {
-    console.warn(`⚠️  Sanitized key detected: ${key} in ${req.path}`);
-  },
-}));
+app.use((req, res, next) => {
+  // Express 5 exposes req.query as a getter, so middleware must not assign it.
+  // Reject malicious query keys and sanitize mutable request containers in place.
+  if (req.query && mongoSanitize.has(req.query)) {
+    return res.status(400).json({ error: 'Invalid query parameters' });
+  }
+  for (const key of ['body', 'params']) {
+    if (req[key]) {
+      mongoSanitize.sanitize(req[key], { replaceWith: '_' });
+    }
+  }
+  return next();
+});
 
 // ===== DATABASE CONNECTION =====
 
@@ -213,6 +228,7 @@ const authLimiter = rateLimit({
   message: { error: 'Too many authentication attempts, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
+  skipSuccessfulRequests: true,
   store: rateLimitStore,
 });
 
@@ -443,7 +459,7 @@ publicRouter.post(
   authLimiter,
   validate(registerSchema),
   async (req, res) => {
-    const { email, phone, password, fullName, role, orgId } = req.body;
+    const { email, phone, password, fullName } = req.body;
 
     logger.info('Auth register attempt', { requestId: req.requestId, email, phone, ip: req.ip });
 
@@ -454,7 +470,16 @@ publicRouter.post(
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await User.create({ email, phone, passwordHash, role, orgId, fullName });
+    // Public registration can only create a general user. Privileged roles and
+    // organization access are assigned by protected administrative workflows.
+    const user = await User.create({
+      email,
+      phone,
+      passwordHash,
+      role: 'GENERAL_USER',
+      orgId: null,
+      fullName,
+    });
     const accessToken = signAccessToken(user);
     const refreshToken = signRefreshToken(user);
 
@@ -894,7 +919,7 @@ protectedRouter.post(
     const doc = await Request.findByIdAndUpdate(
       id,
       { $set: updates },
-      { new: true }
+      { returnDocument: 'after' }
     ).lean();
 
     if (!doc) {
@@ -985,7 +1010,7 @@ protectedRouter.post(
     const member = await Member.findOneAndUpdate(
       { _id: memberId, orgId },
       { $set: updates },
-      { new: true }
+      { returnDocument: 'after' }
     ).lean();
 
     if (!member) {
@@ -1147,7 +1172,7 @@ protectedRouter.post(
     const doc = await HelpRequest.findByIdAndUpdate(
       id,
       { $set: { location } },
-      { new: true }
+      { returnDocument: 'after' }
     ).lean();
 
     if (!doc) {
@@ -1234,7 +1259,7 @@ protectedRouter.put(
     const doc = await Member.findOneAndUpdate(
       { _id: id, orgId },
       { $set: payload },
-      { new: true }
+      { returnDocument: 'after' }
     ).lean();
 
     if (!doc) {
@@ -1289,7 +1314,11 @@ protectedRouter.put(
       return res.status(403).json({ error: 'access denied to this organization' });
     }
 
-    const org = await Organization.findByIdAndUpdate(id, { $set: req.body }, { new: true }).lean();
+    const org = await Organization.findByIdAndUpdate(
+      id,
+      { $set: req.body },
+      { returnDocument: 'after' }
+    ).lean();
     if (!org) return respondError(res, 404, 'Organization not found');
     res.json(org);
   }
@@ -1304,7 +1333,7 @@ protectedRouter.delete(
     const org = await Organization.findByIdAndUpdate(
       id,
       { $set: { active: false } },
-      { new: true }
+      { returnDocument: 'after' }
     ).lean();
     if (!org) return respondError(res, 404, 'Organization not found');
     res.json({ ok: true, organization: org });
@@ -1350,11 +1379,12 @@ protectedRouter.get(
 
 // ===== MOUNT ROUTERS =====
 
-app.use('/api', apiLimiter, publicRouter);
-app.use('/api', protectedRouter); // Note: protectedRouter has its own auth middleware
-// API versioning (v1)
+// Mount the more specific versioned prefix first. Otherwise `/api`'s protected
+// router intercepts `/api/v1/auth/*` before the public v1 routes can match.
 app.use('/api/v1', apiLimiter, publicRouter);
 app.use('/api/v1', protectedRouter);
+app.use('/api', apiLimiter, publicRouter);
+app.use('/api', protectedRouter); // Note: protectedRouter has its own auth middleware
 
 // ===== ERROR HANDLER =====
 

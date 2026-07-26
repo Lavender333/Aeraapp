@@ -1,0 +1,4 @@
+Contact: mailto:aerapp369@gmail.com
+Canonical: https://getaeraapp.com/.well-known/security.txt
+Preferred-Languages: en
+Expires: 2027-07-26T00:00:00.000Z

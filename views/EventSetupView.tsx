@@ -30,6 +30,7 @@ import {
   updateEventDetails,
   updateEventStatus,
   DistributionEvent,
+  EventStatus,
   SupplyType,
   generateQrDataUrl,
   getEventPrimarySession,
@@ -382,7 +383,7 @@ export const EventSetupView: React.FC<EventSetupViewProps> = ({ setView }) => {
 
         return {
           id: session.id,
-          status: session.status === 'CANCELLED' ? 'CANCELLED' : 'ACTIVE',
+          status: (session.status === 'CANCELLED' ? 'CANCELLED' : 'ACTIVE') as EventStatus,
           session_name: session.session_name.trim(),
           start_at: startAt,
           end_at: endAt,

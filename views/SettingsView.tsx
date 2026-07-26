@@ -13,7 +13,7 @@ import {
   getPendingCommunityInvite,
   PendingCommunityInvite,
 } from '../services/communityInvite';
-import { AppNotificationRecord, cancelMyHouseholdJoinRequest, captureUserLocation, ConnectedHouseholdMember, ContactSupportTicketRecord, ContactSupportTicketStatus, createContactSupportTicket, createFaqSelfResolvedRecord, createHouseholdExpansionRequest, createHouseholdInvitationForMember, deleteProfileAvatarForCurrentUser, ensureHouseholdForCurrentUser, escalateContactSupportTicket, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listContactSupportTicketsForOrgAdmin, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyContactSupportTickets, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, redeemOrganizationCode, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, respondToContactSupportTicketAsOrgAdmin, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestExpiration, updateRequestStatus, updateVitalsForUser, uploadProfileAvatarDataUrl } from '../services/api';
+import { AppNotificationRecord, cancelMyHouseholdJoinRequest, captureUserLocation, ConnectedHouseholdMember, ContactSupportTicketRecord, ContactSupportTicketStatus, createContactSupportTicket, createFaqSelfResolvedRecord, createHouseholdExpansionRequest, createHouseholdInvitationForMember, deleteCurrentAccount, deleteProfileAvatarForCurrentUser, ensureHouseholdForCurrentUser, escalateContactSupportTicket, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, leaveCurrentOrganization, listAllRequests, listConnectedHouseholdMembers, listContactSupportTicketsForOrgAdmin, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyContactSupportTickets, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, redeemOrganizationCode, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, respondToContactSupportTicketAsOrgAdmin, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestExpiration, updateRequestStatus, updateVitalsForUser, uploadProfileAvatarDataUrl } from '../services/api';
 import { createOrganizationAccessCode, listOrganizationSeatManagement, OrganizationSeatManagement, setOrganizationSeatLimit } from '../services/api';
 import { getOrgByCode, getOrgIdByCode } from '../services/supabase';
 import { listOrganizations as listOrganizationsSupabase } from '../services/supabaseApi';
@@ -1171,8 +1171,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           emergencyContactName: profile.emergencyContactName,
           emergencyContactPhone: profile.emergencyContactPhone,
           emergencyContactRelation: profile.emergencyContactRelation,
-          communityId: profile.communityId,
-          role: profile.role,
           avatarDataUrl: avatarUrl,
         });
         const saved = StorageService.saveProfileImageDataUrl(avatarUrl, profile.id, { skipRemoteSync: true });
@@ -1204,8 +1202,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         emergencyContactName: profile.emergencyContactName,
         emergencyContactPhone: profile.emergencyContactPhone,
         emergencyContactRelation: profile.emergencyContactRelation,
-        communityId: profile.communityId,
-        role: profile.role,
         avatarDataUrl: '',
       });
       const cleared = StorageService.clearProfileImageDataUrl(profile.id, { skipRemoteSync: true });
@@ -1850,8 +1846,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         emergencyContactName: profile.emergencyContactName,
         emergencyContactPhone: profile.emergencyContactPhone,
         emergencyContactRelation: profile.emergencyContactRelation,
-        communityId: profile.communityId,
-        role: profile.role,
       });
       StorageService.saveProfile(profile);
       if (section) {
@@ -1992,8 +1986,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               emergencyContactName: snapshot.emergencyContactName,
               emergencyContactPhone: snapshot.emergencyContactPhone,
               emergencyContactRelation: snapshot.emergencyContactRelation,
-              communityId: snapshot.communityId,
-              role: snapshot.role,
             });
             showSavedIndicator(targetSection);
             setProfileSaveError(null);
@@ -2111,8 +2103,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           emergencyContactName: nextProfile.emergencyContactName,
           emergencyContactPhone: nextProfile.emergencyContactPhone,
           emergencyContactRelation: nextProfile.emergencyContactRelation,
-          communityId: organizationCode,
-          role: nextProfile.role,
       });
       sessionStorage.removeItem('aera.organizationCodeIntent');
       sessionStorage.removeItem('aera.pendingOrganizationCode');
@@ -2154,8 +2144,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         emergencyContactName: profile.emergencyContactName,
         emergencyContactPhone: profile.emergencyContactPhone,
         emergencyContactRelation: profile.emergencyContactRelation,
-        communityId: organization.orgCode || normalized,
-        role: profile.role,
       });
     } catch (error: any) {
       setVerifyError(String(error?.message || 'Unable to verify Organization ID.'));
@@ -2229,17 +2217,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setIsDisconnectingOrg(true);
     setVerifyError(null);
     try {
-      await updateProfileForUser({
-        fullName: profile.fullName,
-        phone: profile.phone,
-        email: profile.email,
-        address: profile.address,
-        emergencyContactName: profile.emergencyContactName,
-        emergencyContactPhone: profile.emergencyContactPhone,
-        emergencyContactRelation: profile.emergencyContactRelation,
-        communityId: '',
-        role: profile.role,
-      });
+      await leaveCurrentOrganization();
 
       const nextProfile: UserProfile = {
         ...profile,
@@ -3052,6 +3030,25 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       const handleLogout = () => {
     StorageService.logoutUser();
     setView('LOGIN');
+  };
+
+  const handleDeleteAccount = async () => {
+    const confirmed = window.confirm(
+      'Permanently delete your AERA account and personal data? This cannot be undone.',
+    );
+    if (!confirmed) return;
+    const confirmedAgain = window.confirm(
+      'Final confirmation: delete this account now?',
+    );
+    if (!confirmedAgain) return;
+
+    try {
+      await deleteCurrentAccount();
+      StorageService.logoutUser();
+      setView('LOGIN');
+    } catch (error: any) {
+      window.alert(error?.message || 'Unable to delete your account right now. Please contact support.');
+    }
   };
 
   const openDbViewer = () => {
@@ -6777,7 +6774,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             onChange={(e) => updateProfile('consentPreparednessPlanning', e.target.checked)}
           />
           <span className="text-sm text-slate-700 font-semibold">
-            I understand this data is used to personalize my household planning and service operations, and that AERA also uses Google Analytics on its web experience to measure usage. My data can be deleted anytime.
+            I understand this data is used to personalize my household planning and service operations. My data can be deleted anytime from Settings.
           </span>
         </label>
 
@@ -7548,6 +7545,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           <LogOut className="mr-2" size={18} />
           Log Out
         </Button>
+        <button
+          type="button"
+          onClick={() => void handleDeleteAccount()}
+          className="w-full min-h-[48px] rounded-lg border border-red-300 bg-white px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+        >
+          Delete Account Permanently
+        </button>
       </div>
 
       {leaveConfirmation.open && (

@@ -290,7 +290,7 @@ export const EventRegistrationView: React.FC<EventRegistrationViewProps> = ({
   };
 
   const requestedSummaryCount = useMemo(
-    () => Object.values(requestedBySupplyId).reduce((sum, qty) => sum + (Number(qty) || 0), 0),
+    () => Object.values(requestedBySupplyId).reduce<number>((sum, qty) => sum + (Number(qty) || 0), 0),
     [requestedBySupplyId]
   );
 

@@ -27,8 +27,14 @@ export const validate = (schema, source = 'body') => {
       });
     }
     
-    // Replace req[source] with validated and coerced data
-    req[source] = result.data;
+    // Express 5 exposes req.query as a getter. Mutate its object instead of
+    // assigning to the request property; body and params remain assignable.
+    if (source === 'query') {
+      for (const key of Object.keys(req.query || {})) delete req.query[key];
+      Object.assign(req.query, result.data);
+    } else {
+      req[source] = result.data;
+    }
     return next();
   };
 };

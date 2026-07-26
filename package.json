@@ -41,7 +41,7 @@
     "mongodb": "^7.0.0",
     "mongoose": "^9.0.1",
     "morgan": "^1.10.0",
-    "nodemailer": "^6.9.16",
+    "nodemailer": "^9.0.3",
     "pptxgenjs": "^4.0.1",
     "qrcode": "^1.5.4",
     "rate-limit-redis": "^4.2.0",
@@ -49,14 +49,16 @@
     "react-dom": "^19.2.1",
     "react-leaflet": "^5.0.0",
     "react-leaflet-cluster": "^4.0.0",
-    "react-router-dom": "^7.13.0",
     "recharts": "^3.5.1",
     "tailwind-merge": "^3.4.0",
     "winston": "^3.13.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@types/leaflet": "^1.9.21",
     "@types/node": "^22.14.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-legacy": "^6.1.1",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.21",
@@ -66,6 +68,9 @@
     "tailwindcss": "^3.4.17",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
-    "vitest": "^2.1.9"
+    "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "brace-expansion": "5.0.8"
   }
 }

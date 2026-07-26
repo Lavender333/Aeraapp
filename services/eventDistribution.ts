@@ -52,6 +52,8 @@ export interface DistributionEvent {
   updated_at: string;
   timezone?: string | null;
   sessions?: DistributionEventSession[];
+  description?: string | null;
+  registrations_count?: number;
 }
 
 export interface EventSupplyItem {

@@ -1,4 +1,4 @@
-import type { GapDisbursement, GapRevenueSettings, HouseholdMember, OrgBankInfo, OrgInventory, UserProfile } from '../types';
+import type { GapDisbursement, GapRevenueSettings, HouseholdMember, OrgBankInfo, OrgInventory, ReplenishmentRequest, UserProfile } from '../types';
 import { supabase, getOrgByCode, getOrgIdByCode } from './supabase';
 import { calculateAgeFromDob, isValidPhoneForInvite, normalizePhoneDigits, validateHouseholdMembers } from './validation';
 import type { VisionAssessmentResult } from './visionAssessment';
@@ -12,10 +12,11 @@ const mapInventory = (row: any): OrgInventory => ({
   medicalKits: Number(row?.medical_kits || 0),
 });
 
-const normalizeRequestStatus = (status?: string | null) => {
+const normalizeRequestStatus = (status?: string | null): ReplenishmentRequest['status'] => {
   if (!status) return 'PENDING';
   if (status === 'APPROVED') return 'PENDING';
-  return status;
+  if (status === 'FULFILLED' || status === 'STOCKED') return status;
+  return 'PENDING';
 };
 
 const getOrgCodeById = async (orgId: string): Promise<string | null> => {
@@ -1020,30 +1021,6 @@ export async function saveOrganizationOutreachRadiusByCode(orgCode: string, mile
   return Math.max(1, Math.min(25, Math.round(Number(row.outreach_radius_miles) || clamped)));
 }
 
-export async function updateProfile(profile: Partial<UserProfile> & { id: string }) {
-  const orgId = profile.communityId ? await getOrgIdByCode(profile.communityId) : null;
-
-  const { error } = await supabase
-    .from('profiles')
-    .upsert({
-      id: profile.id,
-      email: profile.email || null,
-      phone: profile.phone || null,
-      full_name: profile.fullName || null,
-      role: profile.role || 'GENERAL_USER',
-      org_id: orgId,
-    });
-
-  if (error) throw error;
-  await safeLogActivity({
-    action: 'UPDATE',
-    entityType: 'profiles',
-    entityId: profile.id,
-    orgCode: profile.communityId || null,
-  });
-  return { ok: true };
-}
-
 export async function updateProfileForUser(payload: {
   fullName: string;
   phone: string;
@@ -1063,8 +1040,6 @@ export async function updateProfileForUser(payload: {
   emergencyContactName?: string;
   emergencyContactPhone?: string;
   emergencyContactRelation?: string;
-  communityId?: string;
-  role?: string;
   geofencedOutreachOptIn?: boolean;
   geofencedOutreachRadiusMiles?: number;
   geofencedOutreachConsentAt?: string;
@@ -1072,10 +1047,6 @@ export async function updateProfileForUser(payload: {
 }) {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData?.user) throw new Error('Not authenticated');
-
-  const previousProfile = await getProfileById(authData.user.id);
-  const previousOrgId = String(previousProfile?.org_id || '').trim() || null;
-  const orgId = payload.communityId ? await getOrgIdByCode(payload.communityId) : null;
 
   const emergencyContact = {
     name: payload.emergencyContactName || null,
@@ -1088,8 +1059,6 @@ export async function updateProfileForUser(payload: {
     phone: payload.phone || null,
     mobile_phone: payload.phone || null,
     email: payload.email || null,
-    role: payload.role || undefined,
-    org_id: orgId,
     home_address: payload.address || null,
     emergency_contact: emergencyContact,
   };
@@ -1152,7 +1121,6 @@ export async function updateProfileForUser(payload: {
   const { error: syncVpError } = await supabase
     .from('vulnerability_profiles')
     .update({
-      organization_id: orgId,
       updated_by: authData.user.id,
       updated_at: new Date().toISOString(),
     })
@@ -1164,53 +1132,8 @@ export async function updateProfileForUser(payload: {
     action: 'UPDATE',
     entityType: 'profiles',
     entityId: authData.user.id,
-    orgCode: payload.communityId || null,
+    orgCode: null,
   });
-
-  if (previousOrgId !== (orgId || null)) {
-    const [previousOrgMeta, nextOrgMeta] = await Promise.all([
-      previousOrgId ? getOrgMetaById(previousOrgId) : Promise.resolve(null),
-      orgId ? getOrgMetaById(orgId) : Promise.resolve(null),
-    ]);
-
-    const memberName = String(payload.fullName || previousProfile?.full_name || 'Unknown Member');
-    const details = {
-      memberId: authData.user.id,
-      memberName,
-      previousOrgCode: previousOrgMeta?.orgCode || null,
-      previousOrgName: previousOrgMeta?.orgName || null,
-      nextOrgCode: nextOrgMeta?.orgCode || (payload.communityId ? String(payload.communityId) : null),
-      nextOrgName: nextOrgMeta?.orgName || null,
-    };
-
-    if (previousOrgMeta?.orgCode) {
-      await safeLogActivity({
-        action: 'ORG_DISCONNECT',
-        entityType: 'org_membership',
-        entityId: authData.user.id,
-        orgCode: previousOrgMeta.orgCode,
-        details: {
-          ...details,
-          orgCode: previousOrgMeta.orgCode,
-          orgName: previousOrgMeta.orgName || null,
-        },
-      });
-    }
-
-    if ((nextOrgMeta?.orgCode || payload.communityId) && orgId) {
-      await safeLogActivity({
-        action: 'ORG_CONNECT',
-        entityType: 'org_membership',
-        entityId: authData.user.id,
-        orgCode: nextOrgMeta?.orgCode || payload.communityId || null,
-        details: {
-          ...details,
-          orgCode: nextOrgMeta?.orgCode || payload.communityId || null,
-          orgName: nextOrgMeta?.orgName || null,
-        },
-      });
-    }
-  }
 
   return { ok: true };
 }
@@ -4461,12 +4384,16 @@ export async function redeemOrganizationCode(code: string): Promise<Organization
   const normalizedCode = String(code || '').trim().toUpperCase();
   if (!normalizedCode) throw new Error('Enter your organization code.');
 
-  const { data, error } = await supabase.rpc('redeem_organization_code', {
-    p_code: normalizedCode,
+  const { data: response, error } = await supabase.functions.invoke('redeem-organization-code', {
+    body: { code: normalizedCode },
   });
   if (error) throw new Error(error.message || 'Unable to activate organization access.');
 
-  const row = Array.isArray(data) ? data[0] : data;
+  if ((response as any)?.error) {
+    throw new Error(String((response as any).error));
+  }
+  const rows = (response as any)?.data ?? response;
+  const row = Array.isArray(rows) ? rows[0] : rows;
   if (!row?.membership_id || !row?.organization_id) {
     throw new Error('Organization access could not be activated.');
   }
@@ -4484,6 +4411,21 @@ export async function redeemOrganizationCode(code: string): Promise<Organization
   };
 }
 
+export async function leaveCurrentOrganization(): Promise<{ ok: true; releasedSeat: boolean }> {
+  const { data, error } = await supabase.rpc('leave_current_organization');
+  if (error) throw new Error(error.message || 'Unable to leave the organization');
+  const result = (data || {}) as { ok?: boolean; releasedSeat?: boolean };
+  return { ok: true, releasedSeat: Boolean(result.releasedSeat) };
+}
+
+export async function deleteCurrentAccount(): Promise<void> {
+  const { error } = await supabase.functions.invoke('delete-account', {
+    body: { confirmation: 'DELETE' },
+  });
+  if (error) throw new Error(error.message || 'Unable to delete the account');
+  await supabase.auth.signOut({ scope: 'local' });
+}
+
 export async function incrementPeopleRegisteredCount() {
   const { data, error } = await supabase.rpc('increment_people_registered');
   if (error) throw new Error('Failed to increment people registered count');
@@ -4493,9 +4435,9 @@ export async function incrementPeopleRegisteredCount() {
 }
 
 // Auth
-export async function registerAuth(payload: { email?: string; phone?: string; password: string; fullName?: string; role?: string; orgId?: string }) {
+export async function registerAuth(payload: { email?: string; phone?: string; password: string; fullName?: string }) {
   const normalizedEmail = payload.email ? String(payload.email).trim().toLowerCase() : undefined;
-  const { phone, password, fullName, role, orgId } = payload;
+  const { phone, password, fullName } = payload;
   const { data, error } = await supabase.auth.signUp({
     email: normalizedEmail || undefined,
     phone: phone || undefined,
@@ -4503,8 +4445,6 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
     options: {
       data: {
         full_name: fullName || '',
-        role: role || 'GENERAL_USER',
-        org_code: orgId || '',
       },
     },
   });
@@ -4518,17 +4458,14 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
   }
 
   const userId = data.user?.id;
-  let resolvedOrgId: string | null = null;
-  if (orgId) resolvedOrgId = await getOrgIdByCode(orgId);
-
   if (userId && data.session?.access_token) {
     const { error: profileError } = await supabase.from('profiles').upsert({
       id: userId,
       email: data.user?.email || normalizedEmail || null,
       phone: phone || null,
       full_name: fullName || null,
-      role: role || 'GENERAL_USER',
-      org_id: resolvedOrgId,
+      role: 'GENERAL_USER',
+      org_id: null,
     });
 
     if (profileError) {
@@ -4557,8 +4494,8 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
       email: data.user?.email || normalizedEmail || '',
       phone: phone || '',
       fullName: fullName || '',
-      role: role || 'GENERAL_USER',
-      orgId: orgId || '',
+      role: 'GENERAL_USER',
+      orgId: '',
     },
   };
 }

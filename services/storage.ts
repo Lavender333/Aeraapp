@@ -1,5 +1,5 @@
 
-import { HelpRequestData, HelpRequestRecord, UserProfile, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, RoleDefinition, GapRevenueSettings } from '../types';
+import { HelpRequestData, HelpRequestRecord, UserProfile, UserRole, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, ReplenishmentAggregate, RoleDefinition, GapRevenueSettings } from '../types';
 import { REQUEST_ITEM_MAP } from './validation';
 import { ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, fetchProfileForUser, fetchVitalsForUser, createHouseholdSafetyNotificationsForCurrentUser, listChildOrganizations, sendMemberPing, uploadProfileAvatarDataUrl, uploadGapDocumentForCurrentUser, getGapDocumentSignedUrl, updateHelpRequestData, getPendingPingForCurrentUser as getPendingPingForCurrentUserApi, createRequest, updateRequestStatus, stockReplenishmentRequest, saveReplenishmentSignature, updateOrganizationActiveByCode, setGlobalSystemAlert, getGlobalSystemAlert } from './api';
 import { getMemberStatus, setMemberStatus } from './api';
@@ -443,7 +443,7 @@ export const StorageService = {
         emergencyContactPhone: '',
         emergencyContactRelation: '',
         communityId: resp.user.orgId || '',
-        role: resp.user.role || 'GENERAL_USER',
+        role: (resp.user.role || 'GENERAL_USER') as UserRole,
         language: 'en',
         active: true,
         onboardComplete: false,
@@ -865,8 +865,6 @@ export const StorageService = {
                 emergencyContactName: profile.emergencyContactName,
                 emergencyContactPhone: profile.emergencyContactPhone,
                 emergencyContactRelation: profile.emergencyContactRelation,
-                communityId: profile.communityId,
-                role: profile.role,
                 avatarDataUrl: avatarValueForProfile,
               });
             } catch (err) {
@@ -910,8 +908,6 @@ export const StorageService = {
                 emergencyContactName: profile.emergencyContactName,
                 emergencyContactPhone: profile.emergencyContactPhone,
                 emergencyContactRelation: profile.emergencyContactRelation,
-                communityId: profile.communityId,
-                role: profile.role,
                 avatarDataUrl: '',
               });
             } catch (err) {
@@ -989,8 +985,6 @@ export const StorageService = {
             emergencyContactName: profile.emergencyContactName,
             emergencyContactPhone: profile.emergencyContactPhone,
             emergencyContactRelation: profile.emergencyContactRelation,
-            communityId: profile.communityId,
-            role: profile.role,
           });
           await updateVitalsForUser({
             household: profile.household || [],
@@ -1026,11 +1020,17 @@ export const StorageService = {
   },
 
   logoutUser() {
-    const db = this.getDB();
-    db.currentUser = null;
-    this.saveDB(db);
+    // AERA handles sensitive household and emergency data. Do not leave a
+    // signed-out user's cached profile, medical details, or queued operations
+    // available to the next person using the same device.
+    safeRemoveItem(DB_KEY);
     safeRemoveItem(AUTH_TOKEN_KEY);
     safeRemoveItem(AUTH_REFRESH_TOKEN_KEY);
+    safeRemoveItem(OFFLINE_QUEUE_KEY);
+    safeRemoveItem(SYNC_ID_MAP_KEY);
+    safeRemoveItem(PROFILE_IMAGE_MAP_KEY);
+    safeRemoveItem(ORG_OUTREACH_RADIUS_MAP_KEY);
+    this._dbCache = null;
   },
   
   // --- Admin User Management ---
@@ -1117,6 +1117,13 @@ export const StorageService = {
         parentOrgId: parentOrgId,
         isActive: true,
         registeredPopulation: 0,
+        adminContact: '',
+        adminPhone: '',
+        replenishmentProvider: '',
+        replenishmentEmail: '',
+        replenishmentPhone: '',
+        verified: true,
+        active: true,
       }));
       const db = this.getDB();
       // cache them locally under parent key
@@ -1610,7 +1617,7 @@ export const StorageService = {
           await createHouseholdSafetyNotificationsForCurrentUser({
             status: data.isSafe ? 'SAFE' : 'DANGER',
             requestId: serverId,
-            location: locationToUse,
+            location: data.location || '',
             emergencyType: data.emergencyType,
           });
         } catch (notifyErr) {
@@ -1765,15 +1772,16 @@ export const StorageService = {
     try {
       const remote = await getActiveHelpRequest(db.currentUser);
       if (remote) {
+        const remoteRecord = remote as any;
         const normalized: HelpRequestRecord = {
-          ...remote.data,
-          id: remote.id || remote._id,
-          userId: remote.userId,
-          timestamp: remote.timestamp || remote.createdAt,
-          status: remote.status || 'RECEIVED',
-          priority: remote.priority || 'LOW',
+          ...remoteRecord.data,
+          id: remoteRecord.id || remoteRecord._id,
+          userId: remoteRecord.userId,
+          timestamp: remoteRecord.timestamp || remoteRecord.createdAt,
+          status: remoteRecord.status || 'RECEIVED',
+          priority: remoteRecord.priority || 'LOW',
           synced: true,
-          location: remote.location || remote.data?.location || ''
+          location: remoteRecord.location || remoteRecord.data?.location || ''
         } as any;
         return normalized;
       }

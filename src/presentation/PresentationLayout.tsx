@@ -174,7 +174,7 @@ export const PresentationLayout: React.FC<{ setView: (v: ViewState) => void }> =
                 <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
                 {[
                   ['Mobile-first', 'Rapid field use'],
-                  ['Offline-ready', 'Resilient operations'],
+                  ['Offline queue support', 'Resilient operations'],
                   ['Role-based', 'Clear accountability'],
                 ].map(([title, caption]) => (
                     <div key={title} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 backdrop-blur-sm">

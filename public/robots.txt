@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /buyer-portal
+Disallow: /lead-admin
+Disallow: /lead-intake
+Disallow: /public/intake
+
+Sitemap: https://getaeraapp.com/sitemap.xml

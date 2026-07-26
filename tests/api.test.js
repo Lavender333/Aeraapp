@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
+import { User } from '../models/user.js';
 
 let app;
 let mongod;
@@ -32,6 +33,7 @@ describe('Auth + Org + Members API', () => {
 
     expect(registerRes.status).toBe(201);
     expect(registerRes.body.accessToken).toBeTypeOf('string');
+    await User.updateOne({ email: 'admin@example.com' }, { $set: { role: 'ADMIN' } });
 
     const loginRes = await request(app)
       .post('/api/auth/login')
