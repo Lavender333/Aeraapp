@@ -14,6 +14,7 @@ import {
   PendingCommunityInvite,
 } from '../services/communityInvite';
 import { AppNotificationRecord, cancelMyHouseholdJoinRequest, captureUserLocation, ConnectedHouseholdMember, ContactSupportTicketRecord, ContactSupportTicketStatus, createContactSupportTicket, createFaqSelfResolvedRecord, createHouseholdExpansionRequest, createHouseholdInvitationForMember, deleteProfileAvatarForCurrentUser, ensureHouseholdForCurrentUser, escalateContactSupportTicket, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listContactSupportTicketsForOrgAdmin, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyContactSupportTickets, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, redeemOrganizationCode, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, respondToContactSupportTicketAsOrgAdmin, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestExpiration, updateRequestStatus, updateVitalsForUser, uploadProfileAvatarDataUrl } from '../services/api';
+import { createOrganizationAccessCode, listOrganizationSeatManagement, OrganizationSeatManagement, setOrganizationSeatLimit } from '../services/api';
 import { getOrgByCode, getOrgIdByCode } from '../services/supabase';
 import { listOrganizations as listOrganizationsSupabase } from '../services/supabaseApi';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
@@ -500,6 +501,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [orgLocationBusy, setOrgLocationBusy] = useState(false);
   const [orgLocationError, setOrgLocationError] = useState<string | null>(null);
   const [orgLocationSavedMessage, setOrgLocationSavedMessage] = useState<string | null>(null);
+  const [orgSeatManagement, setOrgSeatManagement] = useState<Record<string, OrganizationSeatManagement>>({});
+  const [orgSeatManagementBusy, setOrgSeatManagementBusy] = useState(false);
+  const [orgSeatManagementError, setOrgSeatManagementError] = useState<string | null>(null);
+  const [seatLimitDraft, setSeatLimitDraft] = useState('');
+  const [codeExpirationDraft, setCodeExpirationDraft] = useState('');
+  const [codeMaxRedemptionsDraft, setCodeMaxRedemptionsDraft] = useState('');
+  const [generatedOrganizationCode, setGeneratedOrganizationCode] = useState('');
   const lastOrgLocationHydratedCodeRef = useRef('');
   const orgLocationConfigured = Boolean(
     String(orgAddressDraft || '').trim() &&
@@ -1670,6 +1678,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   useEffect(() => {
     if (!selectedOrgDetails) return;
+    const seatMetrics = orgSeatManagement[String(selectedOrgDetails.id || '').toUpperCase()];
+    setSeatLimitDraft(seatMetrics ? String(seatMetrics.purchasedSeats) : '');
+    setCodeExpirationDraft('');
+    setCodeMaxRedemptionsDraft('');
+    setGeneratedOrganizationCode('');
+    setOrgSeatManagementError(null);
     setOrgAddressDraft(String(selectedOrgDetails.address || ''));
     setOrgLatitudeDraft(
       typeof selectedOrgDetails.latitude === 'number' && Number.isFinite(selectedOrgDetails.latitude)
@@ -3043,6 +3057,86 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setCurrentSection('DB_VIEWER');
   };
 
+  const refreshOrganizationSeatManagement = async () => {
+    setOrgSeatManagementBusy(true);
+    setOrgSeatManagementError(null);
+    try {
+      const rows = await listOrganizationSeatManagement();
+      const next = rows.reduce((acc, row) => {
+        const codeKey = String(row.organizationCode || '').toUpperCase();
+        if (codeKey) acc[codeKey] = row;
+        return acc;
+      }, {} as Record<string, OrganizationSeatManagement>);
+      setOrgSeatManagement(next);
+      return next;
+    } catch (error: any) {
+      setOrgSeatManagementError(String(error?.message || 'Unable to load organization seat totals.'));
+      return {};
+    } finally {
+      setOrgSeatManagementBusy(false);
+    }
+  };
+
+  const handleSaveSeatLimit = async () => {
+    if (!isPlatformAdmin || !selectedOrgDetails) return;
+    const metrics = orgSeatManagement[String(selectedOrgDetails.id || '').toUpperCase()];
+    const nextLimit = Math.round(Number(seatLimitDraft));
+    if (!metrics?.organizationId) {
+      setOrgSeatManagementError('This registered organization could not be matched to its Supabase seat record.');
+      return;
+    }
+    if (!Number.isFinite(nextLimit) || nextLimit < 1) {
+      setOrgSeatManagementError('Enter a seat amount of at least 1.');
+      return;
+    }
+
+    setOrgSeatManagementBusy(true);
+    setOrgSeatManagementError(null);
+    try {
+      await setOrganizationSeatLimit(metrics.organizationId, nextLimit);
+      await refreshOrganizationSeatManagement();
+    } catch (error: any) {
+      setOrgSeatManagementError(String(error?.message || 'Unable to update the seat amount.'));
+    } finally {
+      setOrgSeatManagementBusy(false);
+    }
+  };
+
+  const handleCreateOrganizationCode = async () => {
+    if (!isPlatformAdmin || !selectedOrgDetails) return;
+    const metrics = orgSeatManagement[String(selectedOrgDetails.id || '').toUpperCase()];
+    if (!metrics?.organizationId) {
+      setOrgSeatManagementError('This registered organization could not be matched to its Supabase seat record.');
+      return;
+    }
+
+    const maxRedemptions = codeMaxRedemptionsDraft
+      ? Math.round(Number(codeMaxRedemptionsDraft))
+      : undefined;
+    if (maxRedemptions !== undefined && (!Number.isFinite(maxRedemptions) || maxRedemptions < 1)) {
+      setOrgSeatManagementError('Maximum redemptions must be at least 1.');
+      return;
+    }
+
+    setOrgSeatManagementBusy(true);
+    setOrgSeatManagementError(null);
+    setGeneratedOrganizationCode('');
+    try {
+      const code = await createOrganizationAccessCode(metrics.organizationId, {
+        expiresAt: codeExpirationDraft
+          ? new Date(`${codeExpirationDraft}T23:59:59`).toISOString()
+          : undefined,
+        maxRedemptions,
+      });
+      setGeneratedOrganizationCode(code.activationCode);
+      await refreshOrganizationSeatManagement();
+    } catch (error: any) {
+      setOrgSeatManagementError(String(error?.message || 'Unable to create the organization access code.'));
+    } finally {
+      setOrgSeatManagementBusy(false);
+    }
+  };
+
   const openOrgDirectory = () => {
     if (!isAdmin) return;
     const db = StorageService.getDB();
@@ -3053,6 +3147,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setOrgList(localScopedOrgs);
     setCurrentSection('ORG_DIRECTORY');
     setSelectedOrgDetails(null);
+    void refreshOrganizationSeatManagement();
 
     (async () => {
       try {
@@ -4307,6 +4402,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       o.id.toLowerCase().includes(orgSearch.toLowerCase()) ||
       o.type.toLowerCase().includes(orgSearch.toLowerCase())
     );
+    const selectedSeatMetrics = selectedOrgDetails
+      ? orgSeatManagement[String(selectedOrgDetails.id || '').toUpperCase()]
+      : undefined;
 
     return (
       <div className="p-6 pb-28 space-y-6 animate-fade-in bg-slate-50 min-h-screen">
@@ -4316,8 +4414,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               <ArrowLeft size={24} />
             </button>
             <div>
-              <h1 className="text-xl font-bold text-slate-900">Organization Directory</h1>
-              <p className="text-xs text-slate-500">Search and View Registered Hubs</p>
+              <h1 className="text-xl font-bold text-slate-900">
+                {isPlatformAdmin ? 'Registered Organizations & Seats' : 'Organization Profile & Seats'}
+              </h1>
+              <p className="text-xs text-slate-500">
+                {isPlatformAdmin
+                  ? 'Select an organization to assign seats and create its access codes'
+                  : 'View your purchased, used, and available seats'}
+              </p>
             </div>
           </div>
         </div>
@@ -4349,6 +4453,132 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                </div>
 
                <div className="p-6 space-y-6">
+                 <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 space-y-4">
+                   <div className="flex flex-wrap items-start justify-between gap-3">
+                     <div>
+                       <p className="text-[10px] font-bold uppercase tracking-wider text-sky-700">Seat & Access Management</p>
+                       <h3 className="text-lg font-bold text-sky-950">
+                         {isPlatformAdmin ? 'Head Admin controls' : 'Your organization seats'}
+                       </h3>
+                       <p className="text-xs text-sky-800">
+                         Codes created here are bound to {selectedOrgDetails.name} and cannot activate seats for another organization.
+                       </p>
+                     </div>
+                     <span className={`rounded-full px-3 py-1 text-xs font-bold ${
+                       selectedSeatMetrics?.contractStatus === 'active'
+                         ? 'bg-emerald-100 text-emerald-700'
+                         : 'bg-amber-100 text-amber-700'
+                     }`}>
+                       Contract: {selectedSeatMetrics?.contractStatus || 'not configured'}
+                     </span>
+                   </div>
+
+                   <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                     {[
+                       ['Purchased', selectedSeatMetrics?.purchasedSeats ?? 0],
+                       ['Funded Used', selectedSeatMetrics?.organizationFundedMembers ?? 0],
+                       ['Available', selectedSeatMetrics?.availableSeats ?? 0],
+                       ['Personal Paid', selectedSeatMetrics?.personallyPaidMembers ?? 0],
+                       ['All Connected', selectedSeatMetrics?.connectedMembers ?? 0],
+                     ].map(([label, value]) => (
+                       <div key={String(label)} className="rounded-xl border border-sky-200 bg-white p-3">
+                         <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
+                         <p className="text-xl font-black text-slate-900">{Number(value).toLocaleString()}</p>
+                       </div>
+                     ))}
+                   </div>
+
+                   <div className="rounded-xl border border-sky-200 bg-white p-3">
+                     <p className="text-xs font-semibold text-slate-700">
+                       Active access codes: {selectedSeatMetrics?.activeCodeCount ?? 0}
+                       {selectedSeatMetrics?.latestCodeHint ? ` • Latest ends in ${selectedSeatMetrics.latestCodeHint}` : ''}
+                     </p>
+                     <p className="mt-1 text-[11px] text-slate-500">
+                       Organization-funded users consume purchased seats. Members paying through Apple or Google remain connected but do not consume this organization’s seats.
+                     </p>
+                   </div>
+
+                   {isPlatformAdmin && (
+                     <div className="grid gap-4 border-t border-sky-200 pt-4 md:grid-cols-2">
+                       <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                         <div>
+                           <p className="text-sm font-bold text-slate-900">Assign purchased seats</p>
+                           <p className="text-xs text-slate-500">Cannot be lower than funded seats currently in use.</p>
+                         </div>
+                         <Input
+                           label="Seat amount"
+                           type="number"
+                           min={1}
+                           value={seatLimitDraft}
+                           onChange={(event) => setSeatLimitDraft(event.target.value)}
+                           placeholder="2000"
+                         />
+                         <Button
+                           size="sm"
+                           fullWidth
+                           onClick={() => void handleSaveSeatLimit()}
+                           disabled={orgSeatManagementBusy}
+                           className="bg-sky-700 hover:bg-sky-800 text-white"
+                         >
+                           {orgSeatManagementBusy ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Save size={16} className="mr-2" />}
+                           Save Seat Amount
+                         </Button>
+                       </div>
+
+                       <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                         <div>
+                           <p className="text-sm font-bold text-slate-900">Create community access code</p>
+                           <p className="text-xs text-slate-500">The full code is shown once. AERA stores only its secure hash.</p>
+                         </div>
+                         <div className="grid grid-cols-2 gap-3">
+                           <Input
+                             label="Expiration (optional)"
+                             type="date"
+                             value={codeExpirationDraft}
+                             onChange={(event) => setCodeExpirationDraft(event.target.value)}
+                           />
+                           <Input
+                             label="Max uses (optional)"
+                             type="number"
+                             min={1}
+                             value={codeMaxRedemptionsDraft}
+                             onChange={(event) => setCodeMaxRedemptionsDraft(event.target.value)}
+                             placeholder="Uses seat limit"
+                           />
+                         </div>
+                         <Button
+                           size="sm"
+                           fullWidth
+                           onClick={() => void handleCreateOrganizationCode()}
+                           disabled={orgSeatManagementBusy || (selectedSeatMetrics?.purchasedSeats ?? 0) < 1}
+                           className="bg-emerald-700 hover:bg-emerald-800 text-white"
+                         >
+                           {orgSeatManagementBusy ? <Loader2 size={16} className="mr-2 animate-spin" /> : <LinkIcon size={16} className="mr-2" />}
+                           Create Code for This Organization
+                         </Button>
+                       </div>
+                     </div>
+                   )}
+
+                   {generatedOrganizationCode && (
+                     <div className="rounded-xl border-2 border-emerald-400 bg-emerald-50 p-4">
+                       <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-700">Copy this code now — shown once</p>
+                       <p className="mt-1 break-all font-mono text-xl font-black tracking-wider text-emerald-950">{generatedOrganizationCode}</p>
+                       <Button
+                         size="sm"
+                         className="mt-3 bg-emerald-700 hover:bg-emerald-800 text-white"
+                         onClick={() => copyToClipboard(generatedOrganizationCode)}
+                       >
+                         <Copy size={16} className="mr-2" /> Copy Community Access Code
+                       </Button>
+                     </div>
+                   )}
+
+                   {orgSeatManagementError && (
+                     <p role="alert" className="text-xs font-semibold text-red-700">{orgSeatManagementError}</p>
+                   )}
+                 </div>
+
                  {/* Detail Grids */}
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-3">
@@ -4598,6 +4828,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                           <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{org.type}</span>
                           <span className="font-mono">{org.id}</span>
                         </div>
+                        {orgSeatManagement[String(org.id || '').toUpperCase()] && (
+                          <p className="mt-1 text-[11px] font-semibold text-sky-700">
+                            {orgSeatManagement[String(org.id || '').toUpperCase()].organizationFundedMembers.toLocaleString()}
+                            {' / '}
+                            {orgSeatManagement[String(org.id || '').toUpperCase()].purchasedSeats.toLocaleString()}
+                            {' funded seats used • '}
+                            {orgSeatManagement[String(org.id || '').toUpperCase()].availableSeats.toLocaleString()}
+                            {' available'}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <ArrowRight size={20} className="text-slate-300 group-hover:text-purple-500" />
@@ -5139,7 +5379,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 onClick={openOrgDirectory} 
                 className="bg-sky-600 hover:bg-sky-500 text-white border-0 w-full justify-between"
               >
-                <span>{isOrgScopedAdmin ? 'Organization Profile' : t('settings.organization_directory')}</span>
+                <span>{isOrgScopedAdmin ? 'Organization Profile & Seats' : 'Registered Organizations & Seats'}</span>
                 <Building2 size={18} />
               </Button>
               {canManageOrgSettings && (
