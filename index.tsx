@@ -8,6 +8,12 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import 'leaflet/dist/leaflet.css';
 
+declare global {
+  interface Window {
+    __AERA_BOOTED__?: boolean;
+  }
+}
+
 const BOOT_BANNER_ID = 'aera-boot-fallback-banner';
 
 const normalizeErrorMessage = (value: unknown): string => {
@@ -18,6 +24,22 @@ const normalizeErrorMessage = (value: unknown): string => {
   } catch {
     return String(value);
   }
+};
+
+const isExpectedCancellation = (value: unknown): boolean => {
+  const error = value as { name?: unknown; code?: unknown; message?: unknown } | null;
+  const name = String(error?.name || '').toLowerCase();
+  const code = String(error?.code || '').toLowerCase();
+  const message = normalizeErrorMessage(value).toLowerCase();
+
+  return (
+    name === 'aborterror' ||
+    code === 'abort_err' ||
+    code === '20' ||
+    message === 'the operation was aborted.' ||
+    message === 'the operation was aborted' ||
+    message.includes('signal is aborted')
+  );
 };
 
 const showBootFallbackBanner = (title: string, detail: string) => {
@@ -53,11 +75,17 @@ const installBootErrorHandlers = () => {
   if (typeof window === 'undefined') return;
 
   window.addEventListener('error', (event) => {
+    if (window.__AERA_BOOTED__ || isExpectedCancellation(event.error)) return;
     const message = event.error ? normalizeErrorMessage(event.error) : (event.message || 'Unknown runtime error');
     showBootFallbackBanner('AERA startup error', message);
   });
 
   window.addEventListener('unhandledrejection', (event) => {
+    if (isExpectedCancellation(event.reason)) {
+      event.preventDefault();
+      return;
+    }
+    if (window.__AERA_BOOTED__) return;
     const message = normalizeErrorMessage(event.reason || 'Unhandled promise rejection');
     showBootFallbackBanner('AERA startup rejection', message);
   });
@@ -78,7 +106,7 @@ try {
     </React.StrictMode>
   );
   if (typeof window !== 'undefined') {
-    (window as typeof window & { __AERA_BOOTED__?: boolean }).__AERA_BOOTED__ = true;
+    window.__AERA_BOOTED__ = true;
   }
 } catch (error) {
   showBootFallbackBanner('AERA failed to boot', normalizeErrorMessage(error));

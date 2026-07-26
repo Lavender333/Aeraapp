@@ -131,6 +131,18 @@
           }
         }
 
+        function isExpectedCancellation(value) {
+          var name = value && value.name ? String(value.name).toLowerCase() : '';
+          var code = value && value.code ? String(value.code).toLowerCase() : '';
+          var message = normalizeError(value).toLowerCase();
+          return name === 'aborterror' ||
+            code === 'abort_err' ||
+            code === '20' ||
+            message === 'the operation was aborted.' ||
+            message === 'the operation was aborted' ||
+            message.indexOf('signal is aborted') !== -1;
+        }
+
         function showBootstrapTimeout() {
           if (window.__AERA_BOOTED__) return;
           var detail = firstErrorText
@@ -158,6 +170,7 @@
 
         window.addEventListener('error', function (event) {
           if (window.__AERA_BOOTED__) return;
+          if (isExpectedCancellation(event && event.error)) return;
           var target = event && event.target;
           var loadError = target && target.tagName === 'SCRIPT' && target.src
             ? ('Script failed to load: ' + target.src)
@@ -171,6 +184,10 @@
         }, true);
 
         window.addEventListener('unhandledrejection', function (event) {
+          if (isExpectedCancellation(event && event.reason)) {
+            event.preventDefault();
+            return;
+          }
           if (window.__AERA_BOOTED__) return;
           firstErrorText = firstErrorText || normalizeError(event && event.reason);
           renderBanner('AERA startup rejection', firstErrorText || 'Unhandled promise rejection');

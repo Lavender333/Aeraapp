@@ -12,6 +12,18 @@ import {
 import { fetchProfileForUser, fetchVitalsForUser, getPeopleRegisteredCount as fetchPeopleRegisteredCount } from './services/api';
 import { hasSupabaseConfig, supabaseConfigMessage, supabase } from './services/supabase';
 
+let initialSessionPromise: ReturnType<typeof supabase.auth.getSession> | null = null;
+
+const getInitialSession = () => {
+  if (!initialSessionPromise) {
+    initialSessionPromise = supabase.auth.getSession().catch((error) => {
+      initialSessionPromise = null;
+      throw error;
+    });
+  }
+  return initialSessionPromise;
+};
+
 const lazyWithRetry = <T extends React.ComponentType<any>>(
   importer: () => Promise<{ default: T }>
 ) =>
@@ -243,7 +255,11 @@ export default function App() {
       const isPublicIntakeUrl = requestedStandaloneView === 'PUBLIC_INTAKE';
       const isEventRegistrationUrl = Boolean(eventIdFromUrl);
       try {
-        const { data } = await supabase.auth.getSession();
+        // React Strict Mode intentionally remounts effects in development. Reuse one
+        // startup session read so both mounts cannot compete for Supabase's auth lock.
+        const { data } = hasSupabaseConfig
+          ? await getInitialSession()
+          : { data: { session: null } };
         if (!active) return;
         if (isPublicIntakeUrl) {
           setPostSplashView('PUBLIC_INTAKE');
