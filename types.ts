@@ -429,6 +429,8 @@ export interface ReplenishmentRequest {
   status: 'PENDING' | 'APPROVED' | 'FULFILLED' | 'STOCKED';
   timestamp: string;
   provider: string;
+  perishable?: boolean;
+  expirationDate?: string;
   signature?: string; // Base64 data URL of the signature (Released By)
   signedAt?: string; // Timestamp of signature (Released By)
   receivedSignature?: string; // Base64 data URL (Received By)

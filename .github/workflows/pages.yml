@@ -55,6 +55,14 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
 
+      - name: Verify production entrypoint
+        run: |
+          if grep -q 'src="/index.tsx"' dist/index.html; then
+            echo "Production HTML still points to the TypeScript source entrypoint." >&2
+            exit 1
+          fi
+          grep -q '/assets/index-' dist/index.html
+
       - name: Add CNAME
         run: |
           echo "getaeraapp.com" > dist/CNAME

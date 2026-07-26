@@ -13,7 +13,7 @@ import {
   getPendingCommunityInvite,
   PendingCommunityInvite,
 } from '../services/communityInvite';
-import { AppNotificationRecord, cancelMyHouseholdJoinRequest, captureUserLocation, ConnectedHouseholdMember, ContactSupportTicketRecord, ContactSupportTicketStatus, createContactSupportTicket, createFaqSelfResolvedRecord, createHouseholdExpansionRequest, createHouseholdInvitationForMember, deleteProfileAvatarForCurrentUser, ensureHouseholdForCurrentUser, escalateContactSupportTicket, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listContactSupportTicketsForOrgAdmin, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyContactSupportTickets, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, redeemOrganizationCode, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, respondToContactSupportTicketAsOrgAdmin, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestStatus, updateVitalsForUser, uploadProfileAvatarDataUrl } from '../services/api';
+import { AppNotificationRecord, cancelMyHouseholdJoinRequest, captureUserLocation, ConnectedHouseholdMember, ContactSupportTicketRecord, ContactSupportTicketStatus, createContactSupportTicket, createFaqSelfResolvedRecord, createHouseholdExpansionRequest, createHouseholdInvitationForMember, deleteProfileAvatarForCurrentUser, ensureHouseholdForCurrentUser, escalateContactSupportTicket, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listContactSupportTicketsForOrgAdmin, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyContactSupportTickets, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, redeemOrganizationCode, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, respondToContactSupportTicketAsOrgAdmin, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestExpiration, updateRequestStatus, updateVitalsForUser, uploadProfileAvatarDataUrl } from '../services/api';
 import { getOrgByCode, getOrgIdByCode } from '../services/supabase';
 import { listOrganizations as listOrganizationsSupabase } from '../services/supabaseApi';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
@@ -523,6 +523,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [inventoryRequests, setInventoryRequests] = useState<ReplenishmentRequest[]>([]);
   const [printingRequest, setPrintingRequest] = useState<ReplenishmentRequest | null>(null);
   const [autoPrintOnOpen, setAutoPrintOnOpen] = useState(false);
+  const [expirationBusyId, setExpirationBusyId] = useState<string | null>(null);
+  const [expirationMessage, setExpirationMessage] = useState<string | null>(null);
+  const [communityQrShareMessage, setCommunityQrShareMessage] = useState<string | null>(null);
   const [memberActivity, setMemberActivity] = useState<OrgMembershipActivityRecord[]>([]);
   const [memberActivityBusy, setMemberActivityBusy] = useState(false);
   const [memberActivityError, setMemberActivityError] = useState<string | null>(null);
@@ -2246,6 +2249,37 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     alert('Copied to clipboard');
   };
 
+  const shareCommunityInvite = async () => {
+    if (!communityInviteUrl) {
+      setCommunityQrShareMessage('The member join link is not ready yet.');
+      return;
+    }
+
+    const title = `Join ${connectedOrgLabel || 'my community'} on AERA`;
+    const text = `Use this AERA member join link: ${communityInviteUrl}`;
+    setCommunityQrShareMessage(null);
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text, url: communityInviteUrl });
+        setCommunityQrShareMessage('Member join link shared.');
+        return;
+      } catch (err: any) {
+        if (err?.name === 'AbortError') {
+          setCommunityQrShareMessage('Sharing was cancelled.');
+          return;
+        }
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(communityInviteUrl);
+      setCommunityQrShareMessage('Sharing is unavailable on this device, so the join link was copied.');
+    } catch {
+      setCommunityQrShareMessage('Unable to share automatically. Press and hold the join link to copy it.');
+    }
+  };
+
   const shareInviteMessage = async (memberName: string, text: string) => {
     const title = `AERA household invite for ${memberName}`;
     const encodedText = encodeURIComponent(text);
@@ -3521,7 +3555,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const handleExportCSV = () => {
-    const headers = ['Request ID', 'Org Name', 'Org ID', 'Item', 'Quantity', 'Status', 'Date', 'Provider', 'Released', 'Received'];
+    const headers = ['Request ID', 'Org Name', 'Org ID', 'Item', 'Quantity', 'Status', 'Request Date', 'Perishable', 'Expiration Date', 'Provider', 'Released', 'Received'];
     const rows = inventoryRequests.map(req => [
       req.id,
       `"${req.orgName.replace(/"/g, '""')}"`,
@@ -3530,6 +3564,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       req.quantity,
       req.status,
       new Date(req.timestamp).toLocaleDateString(),
+      req.perishable ? 'Yes' : 'No',
+      req.expirationDate || '',
       `"${req.provider.replace(/"/g, '""')}"`,
       req.signature ? 'Yes' : 'No',
       req.receivedSignature ? 'Yes' : 'No'
@@ -3544,6 +3580,31 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleExpirationChange = async (request: ReplenishmentRequest, value: string) => {
+    setExpirationBusyId(request.id);
+    setExpirationMessage(null);
+    const perishable = Boolean(value);
+
+    StorageService.updateReplenishmentExpiration(request.id, perishable, value || undefined);
+    setInventoryRequests((current) => current.map((row) => (
+      row.id === request.id
+        ? { ...row, perishable, expirationDate: value || undefined }
+        : row
+    )));
+
+    try {
+      await updateRequestExpiration(request.id, {
+        perishable,
+        expirationDate: value || null,
+      });
+      setExpirationMessage(value ? 'Expiration date saved.' : 'Item marked non-perishable.');
+    } catch (err: any) {
+      setExpirationMessage(err?.message || 'Saved on this device; database sync will need to be retried.');
+    } finally {
+      setExpirationBusyId(null);
+    }
   };
 
   const handleExportTotalsCSV = () => {
@@ -3820,6 +3881,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                    <th className="p-3 font-bold text-slate-700">Item</th>
                    <th className="p-3 font-bold text-slate-700">Qty</th>
                    <th className="p-3 font-bold text-slate-700">Date</th>
+                   <th className="p-3 font-bold text-slate-700">Perishable Expiration</th>
                    <th className="p-3 font-bold text-slate-700">Status</th>
                    <th className="p-3 font-bold text-slate-700 print:hidden">Action</th>
                  </tr>
@@ -3831,6 +3893,35 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                      <td className="p-3 text-slate-700">{req.item}</td>
                      <td className="p-3 font-mono font-bold text-slate-900">{req.quantity}</td>
                      <td className="p-3 text-slate-500">{new Date(req.timestamp).toLocaleDateString()}</td>
+                     <td className="p-3 min-w-[180px]">
+                       <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1" htmlFor={`expiration-${req.id}`}>
+                         Expiration date
+                       </label>
+                       <input
+                         id={`expiration-${req.id}`}
+                         type="date"
+                         value={req.expirationDate || ''}
+                         onChange={(event) => void handleExpirationChange(req, event.target.value)}
+                         disabled={expirationBusyId === req.id}
+                         className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs text-slate-800 disabled:opacity-60"
+                         aria-label={`Expiration date for ${req.item}`}
+                       />
+                       <p className={`mt-1 text-[10px] font-semibold ${
+                         req.expirationDate && req.expirationDate < new Date().toISOString().slice(0, 10)
+                           ? 'text-red-700'
+                           : req.expirationDate
+                             ? 'text-amber-700'
+                             : 'text-slate-500'
+                       }`}>
+                         {expirationBusyId === req.id
+                           ? 'Saving…'
+                           : req.expirationDate && req.expirationDate < new Date().toISOString().slice(0, 10)
+                             ? 'Expired'
+                             : req.expirationDate
+                               ? 'Perishable'
+                               : 'Non-perishable / not set'}
+                       </p>
+                     </td>
                      <td className="p-3">
                        <span className={`px-2 py-1 rounded text-xs font-bold ${req.status === 'FULFILLED' ? 'bg-green-100 text-green-700 print:border print:border-black' : 'bg-yellow-100 text-yellow-700 print:border print:border-black'}`}>
                          {req.status}
@@ -3904,6 +3995,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                </tbody>
              </table>
            </div>
+           {expirationMessage && (
+             <p role="status" className="text-xs font-semibold text-slate-600 print:hidden">{expirationMessage}</p>
+           )}
         </div>
         
         {/* Print Footer */}
@@ -6543,6 +6637,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                   </div>
                 </div>
                 <div className="flex gap-2">
+                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => void shareCommunityInvite()}>
+                    <Send size={16} className="mr-2" /> Share QR
+                  </Button>
                   <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => toggleSection('community')}>
                     View QR
                   </Button>
@@ -6589,6 +6686,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                   <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => copyToClipboard(communityInviteUrl)}>
                     <Copy size={16} className="mr-2" /> Copy Link
                   </Button>
+                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => void shareCommunityInvite()}>
+                    <Send size={16} className="mr-2" /> Share QR
+                  </Button>
                   {communityInviteQrDataUrl && (
                     <a
                       href={communityInviteQrDataUrl}
@@ -6599,6 +6699,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                     </a>
                   )}
                 </div>
+                {communityQrShareMessage && (
+                  <p role="status" className="text-xs font-semibold text-emerald-800">{communityQrShareMessage}</p>
+                )}
               </div>
             </div>
           </div>

@@ -1403,6 +1403,17 @@ export const StorageService = {
     }
   },
 
+  updateReplenishmentExpiration(id: string, perishable: boolean, expirationDate?: string) {
+    const db = this.getDB();
+    const idx = db.replenishmentRequests.findIndex(r => r.id === id);
+    if (idx < 0) return false;
+    db.replenishmentRequests[idx].perishable = perishable;
+    db.replenishmentRequests[idx].expirationDate =
+      perishable && expirationDate ? expirationDate : undefined;
+    this.saveDB(db);
+    return true;
+  },
+
   signReplenishmentRequest(id: string, signatureData: string, type: 'RELEASE' | 'RECEIVE' = 'RELEASE') {
     const db = this.getDB();
     const idx = db.replenishmentRequests.findIndex(r => r.id === id);

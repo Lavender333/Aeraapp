@@ -111,7 +111,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [showFinanceModal, setShowFinanceModal] = useState(false);
   const [financeTierKey, setFinanceTierKey] = useState<'tier1' | 'tier2' | 'tier3'>('tier2');
   const [financeScenario, setFinanceScenario] = useState<'low' | 'medium' | 'high'>('high');
-  const [financePrice, setFinancePrice] = useState<number>(2);
+  const [financePrice, setFinancePrice] = useState<number>(1.99);
   const [financeUsersInput, setFinanceUsersInput] = useState<number>(3000);
   const [financeAppleFeePercent, setFinanceAppleFeePercent] = useState<number>(20);
   const [financeExporting, setFinanceExporting] = useState(false);
@@ -634,6 +634,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const breakEvenUsersPrice = netPricePerUser > 0
     ? Math.max(0, Math.ceil(financeBurn / netPricePerUser))
     : null;
+  const netSubscriptionAt199 = 1.99 * (1 - appleFeeRate);
+  const breakEvenUsersAt199 = netSubscriptionAt199 > 0
+    ? Math.max(0, Math.ceil(financeBurn / netSubscriptionAt199))
+    : null;
   const projected12MonthProfit = monthlyProfit * 12;
   const initials = userName ? userName.trim().charAt(0).toUpperCase() : 'A';
 
@@ -1087,8 +1091,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                     </p>
                   </div>
                   <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-                    <p className="text-[11px] uppercase font-bold text-slate-500">Break-even users</p>
-                    <p className="text-lg font-bold text-slate-900">{breakEvenUsersPrice?.toLocaleString() ?? 'N/A'}</p>
+                    <p className="text-[11px] uppercase font-bold text-slate-500">Minimum $1.99 subscribers to break even</p>
+                    <p className="text-lg font-bold text-slate-900">{breakEvenUsersAt199?.toLocaleString() ?? 'N/A'}</p>
+                    <p className="text-[10px] text-slate-500">After the {financeAppleFeePercent}% marketplace fee</p>
                   </div>
                   <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
                     <p className="text-[11px] uppercase font-bold text-slate-500">Conversion needed</p>
