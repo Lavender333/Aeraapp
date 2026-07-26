@@ -11,6 +11,7 @@ import {
 } from './services/communityInvite';
 import { fetchProfileForUser, fetchVitalsForUser, getPeopleRegisteredCount as fetchPeopleRegisteredCount } from './services/api';
 import { hasSupabaseConfig, supabaseConfigMessage, supabase } from './services/supabase';
+import { shouldCompleteNewAccountSetup } from './services/accountSetup';
 
 let initialSessionPromise: ReturnType<typeof supabase.auth.getSession> | null = null;
 
@@ -181,8 +182,7 @@ export default function App() {
 
   const resolveAuthenticatedLandingView = (profile: Partial<UserProfile> | null | undefined): ViewState => {
     const role = String(profile?.role || 'GENERAL_USER').toUpperCase();
-    const onboardComplete = Boolean(profile?.onboardComplete);
-    const profileComplete = StorageService.isProfileComplete(profile);
+    const onboardComplete = Boolean(profile?.onboardComplete || StorageService.isProfileComplete(profile));
     const canRoleAccessLeadIntake = ['ADMIN', 'ORG_ADMIN'].includes(role);
     const canRoleAccessLeadAdmin = role === 'ADMIN';
 
@@ -201,7 +201,7 @@ export default function App() {
       return 'LEAD_ADMIN';
     }
 
-    if (!onboardComplete && !profileComplete) return 'ACCOUNT_SETUP';
+    if (shouldCompleteNewAccountSetup(profile?.email, onboardComplete)) return 'ACCOUNT_SETUP';
     if (role === 'BUYER') return 'BUYER_PORTAL';
     if (role === 'INSTITUTION_ADMIN' || role === 'ORG_ADMIN') return 'ORG_DASHBOARD';
     return 'DASHBOARD';

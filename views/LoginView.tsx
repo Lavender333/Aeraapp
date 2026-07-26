@@ -11,6 +11,7 @@ import {
   resolveCommunityInvite,
 } from '../services/communityInvite';
 import { supabase } from '../services/supabase';
+import { shouldCompleteNewAccountSetup } from '../services/accountSetup';
 import { t } from '../services/translations';
 import { LogIn, AlertOctagon, Mail, KeyRound, HelpCircle, FileDown } from 'lucide-react';
 
@@ -58,9 +59,13 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
     ? StorageService.getOrganization(pendingCommunityId)?.name || DEMO_COMMUNITY_QR_SEEDS.find((seed) => seed.communityId === pendingCommunityId)?.name || pendingCommunityId
     : '';
 
-  const resolvePostLoginView = (role: string, onboardComplete: boolean): ViewState => {
+  const resolvePostLoginView = (
+    role: string,
+    onboardComplete: boolean,
+    accountEmail: string,
+  ): ViewState => {
     const requestedView = sessionStorage.getItem('postLoginView');
-    if (organizationCodeIntent && onboardComplete) {
+    if (organizationCodeIntent) {
       return 'SETTINGS';
     }
     if (requestedView === 'BUYER_PORTAL' && ['ADMIN', 'BUYER'].includes(role) && onboardComplete) {
@@ -76,7 +81,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
       return 'LEAD_ADMIN';
     }
     sessionStorage.removeItem('postLoginView');
-    if (!onboardComplete) return 'ACCOUNT_SETUP';
+    if (shouldCompleteNewAccountSetup(accountEmail, onboardComplete)) return 'ACCOUNT_SETUP';
     if (role === 'BUYER') return 'BUYER_PORTAL';
     if (role === 'INSTITUTION_ADMIN' || role === 'ORG_ADMIN') return 'ORG_DASHBOARD';
     return 'DASHBOARD';
@@ -127,7 +132,11 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
       if (inviteResolution === 'already-connected') clearPendingCommunityInvite();
       const nextView = inviteResolution === 'needs-confirmation' && onboardComplete
         ? 'SETTINGS'
-        : resolvePostLoginView(String(role || '').toUpperCase(), Boolean(onboardComplete));
+        : resolvePostLoginView(
+            String(role || '').toUpperCase(),
+            Boolean(onboardComplete),
+            profile.email || normalizedEmail,
+          );
       console.log('Redirecting to', nextView);
       if (nextView === 'DASHBOARD') {
         sessionStorage.setItem('showCommunityConnectPromptOnLogin', '1');
@@ -179,7 +188,11 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
     if (inviteResolution === 'already-connected') clearPendingCommunityInvite();
     const nextView = inviteResolution === 'needs-confirmation' && onboardComplete
       ? 'SETTINGS'
-      : resolvePostLoginView(String(role || '').toUpperCase(), Boolean(onboardComplete));
+      : resolvePostLoginView(
+          String(role || '').toUpperCase(),
+          Boolean(onboardComplete),
+          profile.email || '',
+        );
     console.log('Redirecting to', nextView);
     if (nextView === 'DASHBOARD') {
       sessionStorage.setItem('showCommunityConnectPromptOnLogin', '1');

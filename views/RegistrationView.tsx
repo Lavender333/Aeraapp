@@ -14,6 +14,7 @@ import { ensureHouseholdForCurrentUser, redeemOrganizationCode, syncHouseholdMem
 import { getOrgByCode } from '../services/supabase';
 import { validateHouseholdMembers } from '../services/validation';
 import { supabase } from '../services/supabase';
+import { clearNewAccountSetupPending, markNewAccountSetupPending } from '../services/accountSetup';
 import { t } from '../services/translations';
 import { User, HeartPulse } from 'lucide-react';
 
@@ -218,6 +219,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     try {
       setIsRegistering(true);
       const resp: any = await StorageService.registerWithCredentials(email, password, formData.fullName);
+      markNewAccountSetupPending(email);
       if (resp?.needsEmailConfirm) {
         setNeedsEmailConfirm(true);
         setAuthSuccess('Check your email to confirm your account before continuing.');
@@ -324,6 +326,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       clearPendingCommunityInvite();
       sessionStorage.removeItem('aera.organizationCodeIntent');
       sessionStorage.removeItem('aera.pendingOrganizationCode');
+      clearNewAccountSetupPending();
       setView('DASHBOARD');
     } catch (e: any) {
       const currentProfile = StorageService.getProfile();
@@ -332,6 +335,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       const profileId = authId || (payload.id && payload.id !== 'guest' ? payload.id : currentProfile.id);
       StorageService.saveProfile({ ...payload, id: profileId });
       sessionStorage.setItem('aera.playWelcomeVideoOnDashboard', '1');
+      clearNewAccountSetupPending();
       setAuthError('Profile saved locally. Sync will resume when available.');
       setView('DASHBOARD');
     } finally {
