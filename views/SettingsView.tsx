@@ -3110,6 +3110,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       setOrgSeatManagementError('This registered organization could not be matched to its Supabase seat record.');
       return;
     }
+    if (metrics.purchasedSeats < 1) {
+      setOrgSeatManagementError('Assign and save at least 1 purchased seat before creating a community access code.');
+      return;
+    }
 
     const maxRedemptions = codeMaxRedemptionsDraft
       ? Math.round(Number(codeMaxRedemptionsDraft))
@@ -4502,7 +4506,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                        <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
                          <div>
                            <p className="text-sm font-bold text-slate-900">Assign purchased seats</p>
-                           <p className="text-xs text-slate-500">Cannot be lower than funded seats currently in use.</p>
+                           <p className="text-xs text-slate-500">
+                             Saving purchased seats activates sponsored access for this organization. The amount cannot be lower than funded seats currently in use.
+                           </p>
                          </div>
                          <Input
                            label="Seat amount"
@@ -4549,7 +4555,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                            size="sm"
                            fullWidth
                            onClick={() => void handleCreateOrganizationCode()}
-                           disabled={orgSeatManagementBusy || (selectedSeatMetrics?.purchasedSeats ?? 0) < 1}
+                           disabled={orgSeatManagementBusy}
                            className="bg-emerald-700 hover:bg-emerald-800 text-white"
                          >
                            {orgSeatManagementBusy ? <Loader2 size={16} className="mr-2 animate-spin" /> : <LinkIcon size={16} className="mr-2" />}
