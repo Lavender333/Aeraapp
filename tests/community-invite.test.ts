@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildCommunityInviteUrl,
   DEFAULT_COMMUNITY_INVITE_BASE_URL,
+  generateCommunityInviteQrDataUrl,
   normalizeCommunityInviteCode,
   resolveCommunityInvite,
 } from '../services/communityInvite';
@@ -23,6 +24,12 @@ describe('member join invite links', () => {
     expect(buildCommunityInviteUrl('ng-1001', 'https://example.org/aera/?source=poster')).toBe(
       'https://example.org/aera/?source=poster&communityId=NG-1001&join=1',
     );
+  });
+
+  it('generates a browser-safe SVG data URL without requiring canvas', async () => {
+    const dataUrl = await generateCommunityInviteQrDataUrl('NG-1001');
+    expect(dataUrl).toMatch(/^data:image\/svg\+xml;charset=utf-8,/);
+    expect(decodeURIComponent(dataUrl.split(',')[1])).toContain('<svg');
   });
 
   it('requires confirmation before changing a signed-in member community', () => {

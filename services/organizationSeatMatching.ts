@@ -4,6 +4,8 @@ import type { OrganizationSeatManagement } from './api';
 const normalizeLookupKey = (value?: string | null) => String(value || '').trim().toUpperCase();
 const normalizeOrganizationName = (value?: string | null) =>
   String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export const indexOrganizationSeatManagement = (
   rows: OrganizationSeatManagement[],
@@ -42,4 +44,19 @@ export const findOrganizationSeatManagement = (
   );
 
   return nameMatches.length === 1 ? nameMatches[0] : undefined;
+};
+
+export const getOrganizationSeatTargetId = (
+  organization: Pick<OrganizationProfile, 'id' | 'supabaseId'> | null | undefined,
+  seatManagement?: OrganizationSeatManagement,
+): string | undefined => {
+  const candidates = [
+    seatManagement?.organizationId,
+    organization?.supabaseId,
+    organization?.id,
+  ];
+
+  return candidates
+    .map((value) => String(value || '').trim())
+    .find((value) => UUID_PATTERN.test(value));
 };

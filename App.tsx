@@ -463,6 +463,14 @@ export default function App() {
       if (event === 'PASSWORD_RECOVERY') {
         setPostSplashView('RESET_PASSWORD');
         setView('RESET_PASSWORD');
+        return;
+      }
+
+      if (event === 'SIGNED_OUT') {
+        initialSessionPromise = null;
+        StorageService.logoutUser();
+        setPostSplashView('LOGIN');
+        setView('LOGIN');
       }
     });
     return () => {

@@ -138,15 +138,8 @@ export async function generateCommunityInviteQrDataUrl(
   communityId: string,
   baseUrl?: string,
 ): Promise<string> {
-  const inviteUrl = buildCommunityInviteUrl(communityId, baseUrl);
-  return QRCode.toDataURL(inviteUrl, {
-    width: 240,
-    margin: 1,
-    color: {
-      dark: '#0f172a',
-      light: '#ffffff',
-    },
-  });
+  const svg = await generateCommunityInviteQrSvg(communityId, baseUrl);
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 export async function generateCommunityInviteQrSvg(

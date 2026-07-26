@@ -100,7 +100,7 @@ export const PrivacyPolicyView: React.FC<PrivacyPolicyViewProps> = ({ setView })
         <ul className="list-disc list-inside text-sm text-slate-700 space-y-1">
           <li>Active Accounts: Data is retained while your account remains active</li>
           <li>Location Data: Real-time location data is used to support active safety features and is not retained beyond operational or safety-related needs</li>
-          <li>Account Deletion: You may delete your account at any time through the app (Settings → Delete Account) or by contacting support. Personal data will be permanently removed within 30 days</li>
+          <li>Account Closure: You may close your account through Settings → Close My Account. Access is disabled, active memberships and subscriptions end, personal profile details are minimized, and limited operational and audit records are retained for security, legal, and seat-accounting purposes</li>
           <li>Inactive Accounts: Accounts inactive for two (2) years may be automatically deleted</li>
         </ul>
       </section>
@@ -165,7 +165,7 @@ export const PrivacyPolicyView: React.FC<PrivacyPolicyViewProps> = ({ setView })
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-slate-900">16. Contact Information</h2>
-        <p className="text-sm text-slate-700">For privacy questions, data requests, or account deletion:</p>
+        <p className="text-sm text-slate-700">For privacy questions, data requests, account closure, or permanent deletion requests:</p>
         <p className="text-sm text-slate-700">Email: aerapp369@gmail.com</p>
         <p className="text-sm text-slate-700">We aim to respond to privacy-related inquiries within 7 business days.</p>
       </section>

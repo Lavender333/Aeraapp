@@ -72,7 +72,7 @@ const safeLogActivity = async (entry: {
 const getProfileById = async (userId: string) => {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, org_id, full_name, role, email, phone, county_id, state_id')
+    .select('id, org_id, full_name, role, email, phone, county_id, state_id, is_active')
     .eq('id', userId)
     .single();
   if (error || !data) return null;
@@ -4318,6 +4318,80 @@ export type OrganizationSeatManagement = {
   latestCodeHint?: string;
 };
 
+export type OrganizationAccessCodeRecord = {
+  codeId: string;
+  organizationId: string;
+  codeHint: string;
+  status: string;
+  createdAt: string;
+  expiresAt?: string;
+  maxRedemptions?: number;
+  redemptionCount: number;
+  remainingRedemptions?: number;
+  linkedRegistrationCount: number;
+  createdByUserId?: string;
+  createdByName: string;
+};
+
+export type OrganizationCodeRegistration = {
+  membershipId: string;
+  codeId: string;
+  userId: string;
+  fullName: string;
+  email: string;
+  activatedAt: string;
+  membershipStatus: string;
+  fundingSource: string;
+  consumesOrganizationSeat: boolean;
+};
+
+export async function listOrganizationAccessCodes(
+  organizationId: string,
+): Promise<OrganizationAccessCodeRecord[]> {
+  const { data, error } = await supabase.rpc('get_organization_access_codes', {
+    p_organization_id: organizationId,
+  });
+  if (error) throw new Error(error.message || 'Unable to load organization access codes.');
+
+  return (Array.isArray(data) ? data : []).map((row: any) => ({
+    codeId: String(row.code_id || ''),
+    organizationId: String(row.organization_id || ''),
+    codeHint: String(row.code_hint || ''),
+    status: String(row.code_status || 'active'),
+    createdAt: String(row.created_at || ''),
+    expiresAt: row.expires_at || undefined,
+    maxRedemptions: row.max_redemptions == null ? undefined : Number(row.max_redemptions),
+    redemptionCount: Number(row.redemption_count || 0),
+    remainingRedemptions: row.remaining_redemptions == null
+      ? undefined
+      : Number(row.remaining_redemptions),
+    linkedRegistrationCount: Number(row.linked_registration_count || 0),
+    createdByUserId: row.created_by_user_id || undefined,
+    createdByName: String(row.created_by_name || 'AERA Administrator'),
+  }));
+}
+
+export async function listOrganizationCodeRegistrations(
+  codeId: string,
+): Promise<OrganizationCodeRegistration[]> {
+  const { data, error } = await supabase.rpc('get_organization_code_registrations', {
+    p_code_id: codeId,
+  });
+  if (error) throw new Error(error.message || 'Unable to load registrations for this code.');
+
+  return (Array.isArray(data) ? data : []).map((row: any) => ({
+    membershipId: String(row.membership_id || ''),
+    codeId: String(row.code_id || ''),
+    userId: String(row.user_id || ''),
+    fullName: String(row.full_name || 'Unnamed member'),
+    email: String(row.email || ''),
+    activatedAt: String(row.activated_at || ''),
+    membershipStatus: String(row.membership_status || 'active'),
+    fundingSource: String(row.funding_source || 'organization'),
+    consumesOrganizationSeat: row.consumes_organization_seat !== false,
+  }));
+}
+
 export async function listOrganizationSeatManagement(
   organizationId?: string,
 ): Promise<OrganizationSeatManagement[]> {
@@ -4434,11 +4508,11 @@ export async function leaveCurrentOrganization(): Promise<{ ok: true; releasedSe
   return { ok: true, releasedSeat: Boolean(result.releasedSeat) };
 }
 
-export async function deleteCurrentAccount(): Promise<void> {
+export async function closeCurrentAccount(): Promise<void> {
   const { error } = await supabase.functions.invoke('delete-account', {
-    body: { confirmation: 'DELETE' },
+    body: { confirmation: 'CLOSE' },
   });
-  if (error) throw new Error(error.message || 'Unable to delete the account');
+  if (error) throw new Error(error.message || 'Unable to close the account');
   await supabase.auth.signOut({ scope: 'local' });
 }
 
@@ -4542,6 +4616,10 @@ export async function loginAuth(payload: { email?: string; phone?: string; passw
   }
 
   const profile = userId ? await getProfileById(userId) : null;
+  if (profile?.is_active === false) {
+    await supabase.auth.signOut({ scope: 'local' });
+    throw new Error('This account is closed. Contact AERA support if you need it reopened.');
+  }
   const orgCode = profile?.org_id ? await getOrgCodeById(profile.org_id) : null;
 
   return {
