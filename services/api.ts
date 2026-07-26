@@ -4387,12 +4387,28 @@ export async function redeemOrganizationCode(code: string): Promise<Organization
   const { data: response, error } = await supabase.functions.invoke('redeem-organization-code', {
     body: { code: normalizedCode },
   });
-  if (error) throw new Error(error.message || 'Unable to activate organization access.');
 
-  if ((response as any)?.error) {
+  let rows = (response as any)?.data ?? response;
+  if (error) {
+    const functionStatus = Number((error as any)?.context?.status || 0);
+    if (functionStatus !== 404) {
+      throw new Error(error.message || 'Unable to activate organization access.');
+    }
+
+    // Preserve the existing transactional redemption path while a newly added
+    // Edge Function is awaiting its first deployment. Other function failures
+    // do not fall back, so rate limiting cannot be bypassed after deployment.
+    const { data: rpcRows, error: rpcError } = await supabase.rpc('redeem_organization_code', {
+      p_code: normalizedCode,
+    });
+    if (rpcError) {
+      throw new Error(rpcError.message || 'Unable to activate organization access.');
+    }
+    rows = rpcRows;
+  } else if ((response as any)?.error) {
     throw new Error(String((response as any).error));
   }
-  const rows = (response as any)?.data ?? response;
+
   const row = Array.isArray(rows) ? rows[0] : rows;
   if (!row?.membership_id || !row?.organization_id) {
     throw new Error('Organization access could not be activated.');
