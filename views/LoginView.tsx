@@ -52,12 +52,16 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
   const [isResetting, setIsResetting] = useState(false);
   const [isDownloadingAbout, setIsDownloadingAbout] = useState(false);
   const [pendingCommunityId, setPendingCommunityId] = useState('');
+  const organizationCodeIntent = sessionStorage.getItem('aera.organizationCodeIntent') === '1';
   const pendingCommunityName = pendingCommunityId
     ? StorageService.getOrganization(pendingCommunityId)?.name || DEMO_COMMUNITY_QR_SEEDS.find((seed) => seed.communityId === pendingCommunityId)?.name || pendingCommunityId
     : '';
 
   const resolvePostLoginView = (role: string, onboardComplete: boolean): ViewState => {
     const requestedView = sessionStorage.getItem('postLoginView');
+    if (organizationCodeIntent && onboardComplete) {
+      return 'SETTINGS';
+    }
     if (requestedView === 'BUYER_PORTAL' && ['ADMIN', 'BUYER'].includes(role) && onboardComplete) {
       sessionStorage.removeItem('postLoginView');
       return 'BUYER_PORTAL';
@@ -447,6 +451,12 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
 
 
       <div className="mt-8 text-center">
+        {organizationCodeIntent && (
+          <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-left">
+            <p className="text-sm font-bold text-emerald-900">Organization code ready</p>
+            <p className="mt-1 text-xs text-emerald-800">Sign in, or create a verified account, then AERA will take you to the organization-code activation form.</p>
+          </div>
+        )}
         <p className="text-slate-600">{t('login.no_account')}</p>
         <Button variant="ghost" onClick={() => setView('REGISTRATION')} className="text-brand-700 font-bold hover:bg-brand-50 mt-1">
           {t('login.create')}

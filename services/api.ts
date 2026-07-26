@@ -4325,6 +4325,45 @@ export async function getPeopleRegisteredCount() {
   return Math.floor(value);
 }
 
+export type OrganizationCodeRedemption = {
+  membershipId: string;
+  organizationId: string;
+  fundingSource: 'organization' | 'personal';
+  consumesOrganizationSeat: boolean;
+  seatLimit: number;
+  organizationFundedSeats: number;
+  personallyPaidMembers: number;
+  connectedMembers: number;
+  availableSeats: number;
+};
+
+export async function redeemOrganizationCode(code: string): Promise<OrganizationCodeRedemption> {
+  const normalizedCode = String(code || '').trim().toUpperCase();
+  if (!normalizedCode) throw new Error('Enter your organization code.');
+
+  const { data, error } = await supabase.rpc('redeem_organization_code', {
+    p_code: normalizedCode,
+  });
+  if (error) throw new Error(error.message || 'Unable to activate organization access.');
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row?.membership_id || !row?.organization_id) {
+    throw new Error('Organization access could not be activated.');
+  }
+
+  return {
+    membershipId: String(row.membership_id),
+    organizationId: String(row.organization_id),
+    fundingSource: row.funding_source === 'personal' ? 'personal' : 'organization',
+    consumesOrganizationSeat: row.consumes_organization_seat !== false,
+    seatLimit: Number(row.seat_limit || 0),
+    organizationFundedSeats: Number(row.organization_funded_seats ?? row.active_seats ?? 0),
+    personallyPaidMembers: Number(row.personally_paid_members || 0),
+    connectedMembers: Number(row.connected_members ?? row.active_seats ?? 0),
+    availableSeats: Number(row.available_seats || 0),
+  };
+}
+
 export async function incrementPeopleRegisteredCount() {
   const { data, error } = await supabase.rpc('increment_people_registered');
   if (error) throw new Error('Failed to increment people registered count');

@@ -10,7 +10,8 @@ import {
   DEMO_COMMUNITY_QR_SEEDS,
   getPendingCommunityInvite,
 } from '../services/communityInvite';
-import { ensureHouseholdForCurrentUser, syncHouseholdMembersForUser, updateProfileForUser, updateVitalsForUser } from '../services/api';
+import { ensureHouseholdForCurrentUser, redeemOrganizationCode, syncHouseholdMembersForUser, updateProfileForUser, updateVitalsForUser } from '../services/api';
+import { getOrgByCode } from '../services/supabase';
 import { validateHouseholdMembers } from '../services/validation';
 import { supabase } from '../services/supabase';
 import { t } from '../services/translations';
@@ -253,6 +254,17 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       const { data: authData } = await supabase.auth.getUser();
       const authId = authData?.user?.id || null;
       const profileId = authId || (payload.id && payload.id !== 'guest' ? payload.id : currentProfile.id);
+
+      if (String(payload.communityId || '').trim()) {
+        try {
+          const redemption = await redeemOrganizationCode(payload.communityId);
+          const organization = await getOrgByCode(redemption.organizationId);
+          payload.communityId = organization?.orgCode || payload.communityId;
+        } catch (error: any) {
+          setAuthError(String(error?.message || 'Unable to activate that organization code.'));
+          return;
+        }
+      }
       
       // Save complete profile (address, emergency contact, identity)
       await updateProfileForUser({
@@ -309,6 +321,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       });
       sessionStorage.setItem('aera.playWelcomeVideoOnDashboard', '1');
       clearPendingCommunityInvite();
+      sessionStorage.removeItem('aera.organizationCodeIntent');
       setView('DASHBOARD');
     } catch (e: any) {
       const currentProfile = StorageService.getProfile();
@@ -516,13 +529,13 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
 
               <div className="border-t border-slate-200 pt-4">
                 <Input
-                  label="Organization Code (Optional)"
-                  placeholder="e.g. CH-1001"
+                  label="Organization Access Code (Optional)"
+                  placeholder="Enter the code provided by your organization"
                   value={formData.communityId}
                   onChange={(e) => updateForm('communityId', e.target.value.toUpperCase())}
                   className="text-slate-900 placeholder:text-slate-400 font-medium"
                 />
-                <p className="text-xs text-slate-500 mt-1">Optional during signup. You can join or disconnect anytime in Settings.</p>
+                <p className="text-xs text-slate-500 mt-1">A verified code activates one funded seat. Household codes are entered separately after setup.</p>
               </div>
 
               <div className="border-t border-slate-200 pt-4 space-y-3">
