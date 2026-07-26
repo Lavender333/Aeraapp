@@ -4458,7 +4458,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                      <div>
                        <p className="text-[10px] font-bold uppercase tracking-wider text-sky-700">Seat & Access Management</p>
                        <h3 className="text-lg font-bold text-sky-950">
-                         {isPlatformAdmin ? 'Head Admin controls' : 'Your organization seats'}
+                         {isPlatformAdmin ? 'Admin controls' : 'Your organization seats'}
                        </h3>
                        <p className="text-xs text-sky-800">
                          Codes created here are bound to {selectedOrgDetails.name} and cannot activate seats for another organization.
