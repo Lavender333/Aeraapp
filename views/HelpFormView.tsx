@@ -695,7 +695,7 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
                   disabled={isSearchingMap || !String(data.location || '').trim()}
                   className="inline-flex items-center gap-2 text-xs font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-full"
                 >
-                  {isSearchingMap ? <RefreshCw size={12} className="animate-spin" /> : <Navigation size={12} />} {isSearchingMap ? 'Searching…' : 'Search Map'}
+                  {isSearchingMap ? <RefreshCw size={12} className="animate-spin" /> : <Navigation size={12} />} {isSearchingMap ? 'Searching…' : 'Search Last Known Location'}
                 </button>
                 <button
                   type="button"
@@ -706,7 +706,7 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
                   }}
                   className="inline-flex items-center gap-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-full"
                 >
-                  <MapPin size={12} /> {showMapPicker ? 'Hide Map' : 'Drop a Pin'}
+                  <MapPin size={12} /> {showMapPicker ? 'Hide Map' : 'Drop a Pin on Map'}
                 </button>
                 <button
                   type="button"
@@ -716,7 +716,7 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
                   }}
                   className="inline-flex items-center gap-2 text-xs font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-full"
                 >
-                  <LocateFixed size={12} /> Use GPS
+                  <LocateFixed size={12} /> Use GPS Location
                 </button>
               </div>
             </div>

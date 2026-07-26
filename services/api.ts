@@ -3925,7 +3925,7 @@ export async function listRequests(orgCode: string) {
 
   const { data, error } = await supabase
     .from('replenishment_requests')
-    .select('id, org_id, org_name, item, quantity, status, provider, created_at, delivered_quantity')
+    .select('id, org_id, org_name, item, quantity, status, provider, created_at, delivered_quantity, perishable, expiration_date')
     .eq('org_id', org.orgId)
     .order('created_at', { ascending: false });
 
@@ -3940,6 +3940,8 @@ export async function listRequests(orgCode: string) {
     timestamp: row.created_at,
     provider: row.provider || '',
     deliveredQuantity: row.delivered_quantity || 0,
+    perishable: Boolean(row.perishable),
+    expirationDate: row.expiration_date || undefined,
     synced: true,
   }));
 }
@@ -3947,7 +3949,7 @@ export async function listRequests(orgCode: string) {
 export async function listAllRequests() {
   const { data, error } = await supabase
     .from('replenishment_requests')
-    .select('id, org_id, org_name, item, quantity, status, provider, created_at, delivered_quantity')
+    .select('id, org_id, org_name, item, quantity, status, provider, created_at, delivered_quantity, perishable, expiration_date')
     .order('created_at', { ascending: false });
 
   if (error) throw new Error('Failed to load requests');
@@ -3980,6 +3982,8 @@ export async function listAllRequests() {
       timestamp: row.created_at,
       provider: row.provider || '',
       deliveredQuantity: row.delivered_quantity || 0,
+      perishable: Boolean(row.perishable),
+      expirationDate: row.expiration_date || undefined,
       synced: true,
     };
   });
@@ -4058,6 +4062,44 @@ export async function updateRequestStatus(id: string, payload: { status: string;
     provider: data.provider || '',
     deliveredQuantity: data.delivered_quantity || 0,
     synced: true,
+  };
+}
+
+export async function updateRequestExpiration(
+  id: string,
+  payload: { perishable: boolean; expirationDate?: string | null },
+) {
+  const expirationDate = payload.perishable && payload.expirationDate
+    ? payload.expirationDate
+    : null;
+  const { data: rows, error } = await supabase
+    .from('replenishment_requests')
+    .update({
+      perishable: payload.perishable,
+      expiration_date: expirationDate,
+    })
+    .eq('id', id)
+    .select('id, org_id, perishable, expiration_date');
+
+  if (error) throw new Error(error.message || 'Failed to save expiration details');
+  const data = rows?.[0] as any;
+  if (!data) throw new Error('Inventory record not found or you do not have permission to update it.');
+
+  const orgCode = data.org_id ? await getOrgCodeById(data.org_id) : null;
+  await safeLogActivity({
+    action: 'UPDATE',
+    entityType: 'replenishment_requests',
+    entityId: id,
+    orgCode: orgCode || null,
+    details: {
+      perishable: Boolean(data.perishable),
+      expirationDate: data.expiration_date || null,
+    },
+  });
+
+  return {
+    perishable: Boolean(data.perishable),
+    expirationDate: data.expiration_date || undefined,
   };
 }
 
