@@ -17,6 +17,10 @@ import { AppNotificationRecord, cancelMyHouseholdJoinRequest, captureUserLocatio
 import { createOrganizationAccessCode, listOrganizationSeatManagement, OrganizationSeatManagement, setOrganizationSeatLimit } from '../services/api';
 import { getOrgByCode, getOrgIdByCode } from '../services/supabase';
 import { listOrganizations as listOrganizationsSupabase } from '../services/supabaseApi';
+import {
+  findOrganizationSeatManagement,
+  indexOrganizationSeatManagement,
+} from '../services/organizationSeatMatching';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
 import { listEvents, DistributionEvent } from '../services/eventDistribution';
 import { isValidPhoneForInvite, validateHouseholdMembers } from '../services/validation';
@@ -218,6 +222,7 @@ const mapSupabaseOrgRow = (row: any): OrganizationProfile => {
   const sanitizedId = formatCommunityIdInput(String(row?.org_code || row?.id || ''));
   return {
     id: sanitizedId || String(row?.id || ''),
+    supabaseId: String(row?.id || '') || undefined,
     name: String(row?.name || 'Unnamed Organization'),
     type: normalizeOrgType(row?.type),
     address: String(row?.address || '').trim(),
@@ -1678,7 +1683,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   useEffect(() => {
     if (!selectedOrgDetails) return;
-    const seatMetrics = orgSeatManagement[String(selectedOrgDetails.id || '').toUpperCase()];
+    const seatMetrics = findOrganizationSeatManagement(selectedOrgDetails, orgSeatManagement);
     setSeatLimitDraft(seatMetrics ? String(seatMetrics.purchasedSeats) : '');
     setCodeExpirationDraft('');
     setCodeMaxRedemptionsDraft('');
@@ -3062,11 +3067,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setOrgSeatManagementError(null);
     try {
       const rows = await listOrganizationSeatManagement();
-      const next = rows.reduce((acc, row) => {
-        const codeKey = String(row.organizationCode || '').toUpperCase();
-        if (codeKey) acc[codeKey] = row;
-        return acc;
-      }, {} as Record<string, OrganizationSeatManagement>);
+      const next = indexOrganizationSeatManagement(rows);
       setOrgSeatManagement(next);
       return next;
     } catch (error: any) {
@@ -3079,7 +3080,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   const handleSaveSeatLimit = async () => {
     if (!isPlatformAdmin || !selectedOrgDetails) return;
-    const metrics = orgSeatManagement[String(selectedOrgDetails.id || '').toUpperCase()];
+    const metrics = findOrganizationSeatManagement(selectedOrgDetails, orgSeatManagement);
     const nextLimit = Math.round(Number(seatLimitDraft));
     if (!metrics?.organizationId) {
       setOrgSeatManagementError('This registered organization could not be matched to its Supabase seat record.');
@@ -3104,7 +3105,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   const handleCreateOrganizationCode = async () => {
     if (!isPlatformAdmin || !selectedOrgDetails) return;
-    const metrics = orgSeatManagement[String(selectedOrgDetails.id || '').toUpperCase()];
+    const metrics = findOrganizationSeatManagement(selectedOrgDetails, orgSeatManagement);
     if (!metrics?.organizationId) {
       setOrgSeatManagementError('This registered organization could not be matched to its Supabase seat record.');
       return;
@@ -4402,9 +4403,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       o.id.toLowerCase().includes(orgSearch.toLowerCase()) ||
       o.type.toLowerCase().includes(orgSearch.toLowerCase())
     );
-    const selectedSeatMetrics = selectedOrgDetails
-      ? orgSeatManagement[String(selectedOrgDetails.id || '').toUpperCase()]
-      : undefined;
+    const selectedSeatMetrics = findOrganizationSeatManagement(selectedOrgDetails, orgSeatManagement);
 
     return (
       <div className="p-6 pb-28 space-y-6 animate-fade-in bg-slate-50 min-h-screen">

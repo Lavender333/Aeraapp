@@ -402,6 +402,7 @@ export interface UserProfile {
 
 export interface OrganizationProfile {
   id: string; // The generated Community ID (e.g. CH-1234)
+  supabaseId?: string; // Canonical organizations.id UUID when loaded from Supabase
   name: string;
   type: 'CHURCH' | 'NGO' | 'COMMUNITY_CENTER' | 'LOCAL_GOV';
   address: string;
