@@ -503,11 +503,17 @@ export default function App() {
     window.dispatchEvent(new Event('finance-open'));
   };
 
+  const handleOrganizationCodeFromSplash = () => {
+    sessionStorage.setItem('aera.organizationCodeIntent', '1');
+    setView('LOGIN');
+  };
+
   const renderView = () => {
     if (isBootstrapping) {
       return (
         <SplashView
           onEnter={handleSplashComplete}
+          onOrganizationCode={handleOrganizationCodeFromSplash}
           onPrivacy={() => setView('PRIVACY_POLICY')}
           peopleRegisteredCount={peopleRegisteredCount}
         />
@@ -518,6 +524,7 @@ export default function App() {
         return (
           <SplashView
             onEnter={handleSplashComplete}
+            onOrganizationCode={handleOrganizationCodeFromSplash}
             onPrivacy={() => setView('PRIVACY_POLICY')}
             peopleRegisteredCount={peopleRegisteredCount}
           />

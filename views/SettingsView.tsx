@@ -13,7 +13,7 @@ import {
   getPendingCommunityInvite,
   PendingCommunityInvite,
 } from '../services/communityInvite';
-import { AppNotificationRecord, cancelMyHouseholdJoinRequest, captureUserLocation, ConnectedHouseholdMember, ContactSupportTicketRecord, ContactSupportTicketStatus, createContactSupportTicket, createFaqSelfResolvedRecord, createHouseholdExpansionRequest, createHouseholdInvitationForMember, deleteProfileAvatarForCurrentUser, ensureHouseholdForCurrentUser, escalateContactSupportTicket, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listContactSupportTicketsForOrgAdmin, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyContactSupportTickets, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, respondToContactSupportTicketAsOrgAdmin, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestStatus, updateVitalsForUser, uploadProfileAvatarDataUrl } from '../services/api';
+import { AppNotificationRecord, cancelMyHouseholdJoinRequest, captureUserLocation, ConnectedHouseholdMember, ContactSupportTicketRecord, ContactSupportTicketStatus, createContactSupportTicket, createFaqSelfResolvedRecord, createHouseholdExpansionRequest, createHouseholdInvitationForMember, deleteProfileAvatarForCurrentUser, ensureHouseholdForCurrentUser, escalateContactSupportTicket, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, listAllRequests, listConnectedHouseholdMembers, listContactSupportTicketsForOrgAdmin, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyContactSupportTickets, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, redeemOrganizationCode, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, respondToContactSupportTicketAsOrgAdmin, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestStatus, updateVitalsForUser, uploadProfileAvatarDataUrl } from '../services/api';
 import { getOrgByCode, getOrgIdByCode } from '../services/supabase';
 import { listOrganizations as listOrganizationsSupabase } from '../services/supabaseApi';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
@@ -290,7 +290,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     profile: false,
     household: false,
     contacts: false,
-    community: false,
+    community: sessionStorage.getItem('aera.organizationCodeIntent') === '1',
     security: false,
     contactUs: false,
   });
@@ -368,6 +368,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     .map((value) => String(value || '').trim())
     .filter(Boolean)
     .join(', ');
+  const contactSupportPersonalInfo = [
+    String(profile.fullName || '').trim(),
+    String(profile.email || '').trim(),
+    String(profile.phone || '').trim(),
+  ]
+    .filter(Boolean)
+    .join(' · ');
   const householdHealthSummary = useMemo(() => {
     const members = Array.isArray(profile.household) ? profile.household : [];
     const householdSize = Math.max(1, Number(profile.householdMembers) || members.length + 1);
@@ -417,6 +424,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [isSaved, setIsSaved] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [connectedOrg, setConnectedOrg] = useState<string | null>(null);
+  const [organizationCodeInput, setOrganizationCodeInput] = useState('');
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [pendingCommunityInvite, setPendingCommunityInvite] = useState<PendingCommunityInvite | null>(
     () => getPendingCommunityInvite(),
@@ -2031,7 +2039,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   };
 
   const verifyCommunityId = async (overrideCommunityId?: string): Promise<boolean> => {
-    const normalized = formatCommunityIdInput(overrideCommunityId ?? profile.communityId ?? '');
+    const normalized = formatCommunityIdInput(overrideCommunityId ?? organizationCodeInput);
 
     if (!normalized) return false;
 
@@ -2040,21 +2048,24 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setConnectedOrg(null);
 
     try {
+      const redemption = await redeemOrganizationCode(normalized);
       const localOrg = StorageService.getOrganization(normalized);
-      const remoteOrg = localOrg ? { orgCode: normalized, orgName: localOrg.name } : await getOrgByCode(normalized);
+      const remoteOrg = await getOrgByCode(redemption.organizationId);
 
       if (!remoteOrg) {
-        setVerifyError('Invalid Community ID');
+        setVerifyError('Organization access activated, but the organization profile could not be loaded.');
         return false;
       }
 
-      const orgName = remoteOrg.orgName || localOrg?.name || normalized;
+      const organizationCode = remoteOrg.orgCode || normalized;
+      const orgName = remoteOrg.orgName || localOrg?.name || organizationCode;
       const nextProfile: UserProfile = {
         ...profile,
-        communityId: normalized,
+        communityId: organizationCode,
       };
 
       setProfile(nextProfile);
+      setOrganizationCodeInput('');
       StorageService.saveProfile(nextProfile, { skipRemoteSync: true });
       setConnectedOrg(orgName);
 
@@ -2076,13 +2087,53 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           emergencyContactName: nextProfile.emergencyContactName,
           emergencyContactPhone: nextProfile.emergencyContactPhone,
           emergencyContactRelation: nextProfile.emergencyContactRelation,
-          communityId: normalized,
+          communityId: organizationCode,
           role: nextProfile.role,
       });
+      sessionStorage.removeItem('aera.organizationCodeIntent');
+      setContactSupportSuccess(
+        redemption.consumesOrganizationSeat
+          ? `Organization access activated. ${redemption.availableSeats.toLocaleString()} funded seats remain.`
+          : 'Connected using your personal subscription; no organization-funded seat was used.',
+      );
       return true;
-    } catch {
-      setVerifyError('Unable to verify Community ID right now. Please try again.');
+    } catch (error: any) {
+      setVerifyError(String(error?.message || 'Unable to activate that organization code.'));
       return false;
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const verifyInstitutionOrganizationId = async (): Promise<void> => {
+    const normalized = formatCommunityIdInput(profile.communityId || '');
+    if (!normalized) return;
+    setIsVerifying(true);
+    setVerifyError(null);
+    setConnectedOrg(null);
+    try {
+      const organization = await getOrgByCode(normalized);
+      if (!organization) {
+        setVerifyError('Invalid Organization ID');
+        return;
+      }
+      setConnectedOrg(organization.orgName || organization.orgCode || normalized);
+      await updateProfileForUser({
+        fullName: profile.fullName,
+        phone: profile.phone,
+        email: profile.email,
+        address: profile.address,
+        city: profile.city,
+        state: profile.state,
+        zip: profile.zipCode,
+        emergencyContactName: profile.emergencyContactName,
+        emergencyContactPhone: profile.emergencyContactPhone,
+        emergencyContactRelation: profile.emergencyContactRelation,
+        communityId: organization.orgCode || normalized,
+        role: profile.role,
+      });
+    } catch (error: any) {
+      setVerifyError(String(error?.message || 'Unable to verify Organization ID.'));
     } finally {
       setIsVerifying(false);
     }
@@ -6586,7 +6637,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 <div className="flex flex-col items-center">
                   <Button 
                     className={`mb-[1px] min-w-[50px] ${connectedOrg ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-sky-600 hover:bg-sky-700'}`}
-                    onClick={() => void verifyCommunityId()}
+                    onClick={() => void verifyInstitutionOrganizationId()}
                     disabled={isVerifying || !profile.communityId}
                   >
                     {isVerifying ? <Loader2 className="animate-spin" size={20} /> : connectedOrg ? <Check size={20} /> : <LinkIcon size={20} />}
@@ -6642,22 +6693,22 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <div className="flex gap-3 items-end relative z-10">
               <div className="flex-1">
                  <Input 
-                  label="Community ID" 
-                  value={profile.communityId}
+                  label="Organization Access Code"
+                  value={organizationCodeInput}
                   onChange={(e) => {
-                     updateProfile('communityId', formatCommunityIdInput(e.target.value));
+                     setOrganizationCodeInput(formatCommunityIdInput(e.target.value));
                      setConnectedOrg(null);
                      setVerifyError(null);
                   }}
                   className={connectedOrg ? "border-green-500 focus:ring-green-500 bg-green-50/30" : verifyError ? "border-red-500 focus:ring-red-500" : ""}
                 />
-                <p className="text-[11px] text-slate-500 mt-1">Examples: CH-9921, NG-1001, NGO-5500</p>
+                <p className="text-[11px] text-slate-500 mt-1">Enter the activation code supplied by your organization. This is separate from your household code.</p>
               </div>
               <div className="flex flex-col items-center">
                 <Button 
                   className={`mb-[1px] min-w-[50px] ${connectedOrg ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-sky-600 hover:bg-sky-700'}`}
                   onClick={() => void verifyCommunityId()}
-                  disabled={isVerifying || !profile.communityId}
+                  disabled={isVerifying || !organizationCodeInput}
                 >
                   {isVerifying ? <Loader2 className="animate-spin" size={20} /> : connectedOrg ? <Check size={20} /> : <LinkIcon size={20} />}
                 </Button>

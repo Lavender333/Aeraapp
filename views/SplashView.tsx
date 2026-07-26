@@ -5,11 +5,12 @@ import splashLogo from '../logo4.png';
 
 interface SplashViewProps {
   onEnter: () => void;
+  onOrganizationCode?: () => void;
   onPrivacy?: () => void;
   peopleRegisteredCount?: number;
 }
 
-export const SplashView: React.FC<SplashViewProps> = ({ onEnter, onPrivacy, peopleRegisteredCount = 0 }) => {
+export const SplashView: React.FC<SplashViewProps> = ({ onEnter, onOrganizationCode, onPrivacy, peopleRegisteredCount = 0 }) => {
   return (
     <div className="min-h-screen bg-[#F6F8F7] flex items-center justify-center px-6 py-10">
       <div className="w-full max-w-[420px] text-center flex flex-col items-center">
@@ -41,6 +42,15 @@ export const SplashView: React.FC<SplashViewProps> = ({ onEnter, onPrivacy, peop
             className="h-[56px] rounded-xl bg-[#2F7A64] hover:bg-[#296A57] text-white font-semibold text-[17px] leading-none tracking-[0.01em] shadow-[0_6px_16px_rgba(47,122,100,0.10)] focus:ring-[#2F7A64]"
           >
             Continue
+          </Button>
+          <Button
+            onClick={() => onOrganizationCode?.()}
+            variant="outline"
+            size="lg"
+            fullWidth
+            className="mt-3 h-[50px] rounded-xl border-[#2F7A64] text-[#2F7A64] font-semibold"
+          >
+            I have an organization code
           </Button>
 
           <p className="mt-4 text-[12px] leading-snug text-[#6B7280]">Not a substitute for 911</p>
