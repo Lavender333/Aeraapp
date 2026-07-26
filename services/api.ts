@@ -4379,6 +4379,84 @@ export type OrganizationCodeRedemption = {
   availableSeats: number;
 };
 
+export type OrganizationSeatManagement = {
+  organizationId: string;
+  organizationCode: string;
+  organizationName: string;
+  contractStatus: string;
+  contractStartsAt?: string;
+  contractEndsAt?: string;
+  purchasedSeats: number;
+  organizationFundedMembers: number;
+  personallyPaidMembers: number;
+  connectedMembers: number;
+  availableSeats: number;
+  activeCodeCount: number;
+  latestCodeHint?: string;
+};
+
+export async function listOrganizationSeatManagement(
+  organizationId?: string,
+): Promise<OrganizationSeatManagement[]> {
+  const { data, error } = await supabase.rpc('get_organization_seat_management', {
+    p_organization_id: organizationId || null,
+  });
+  if (error) throw new Error(error.message || 'Unable to load organization seat totals.');
+
+  return (Array.isArray(data) ? data : []).map((row: any) => ({
+    organizationId: String(row.organization_id || ''),
+    organizationCode: String(row.organization_code || ''),
+    organizationName: String(row.organization_name || ''),
+    contractStatus: String(row.contract_status || 'pending'),
+    contractStartsAt: row.contract_starts_at || undefined,
+    contractEndsAt: row.contract_ends_at || undefined,
+    purchasedSeats: Number(row.purchased_seats || 0),
+    organizationFundedMembers: Number(row.organization_funded_members || 0),
+    personallyPaidMembers: Number(row.personally_paid_members || 0),
+    connectedMembers: Number(row.connected_members || 0),
+    availableSeats: Number(row.available_seats || 0),
+    activeCodeCount: Number(row.active_code_count || 0),
+    latestCodeHint: row.latest_code_hint || undefined,
+  }));
+}
+
+export async function setOrganizationSeatLimit(
+  organizationId: string,
+  seatLimit: number,
+) {
+  const { data, error } = await supabase.rpc('head_admin_set_organization_seat_limit', {
+    p_organization_id: organizationId,
+    p_seat_limit: seatLimit,
+  });
+  if (error) throw new Error(error.message || 'Unable to update the organization seat amount.');
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    purchasedSeats: Number(row?.purchased_seats || seatLimit),
+    organizationFundedMembers: Number(row?.organization_funded_members || 0),
+    availableSeats: Number(row?.available_seats || 0),
+  };
+}
+
+export async function createOrganizationAccessCode(
+  organizationId: string,
+  options?: { expiresAt?: string; maxRedemptions?: number },
+) {
+  const { data, error } = await supabase.rpc('head_admin_create_organization_code', {
+    p_organization_id: organizationId,
+    p_expires_at: options?.expiresAt || null,
+    p_max_redemptions: options?.maxRedemptions || null,
+  });
+  if (error) throw new Error(error.message || 'Unable to create the organization access code.');
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row?.activation_code) throw new Error('The organization access code was not returned.');
+  return {
+    activationCode: String(row.activation_code),
+    codeHint: String(row.code_hint || ''),
+    expiresAt: row.expires_at || undefined,
+    maxRedemptions: row.max_redemptions == null ? undefined : Number(row.max_redemptions),
+  };
+}
+
 export async function redeemOrganizationCode(code: string): Promise<OrganizationCodeRedemption> {
   const normalizedCode = String(code || '').trim().toUpperCase();
   if (!normalizedCode) throw new Error('Enter your organization code.');

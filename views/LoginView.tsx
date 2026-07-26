@@ -11,6 +11,7 @@ import {
   resolveCommunityInvite,
 } from '../services/communityInvite';
 import { supabase } from '../services/supabase';
+import { shouldCompleteNewAccountSetup } from '../services/accountSetup';
 import { t } from '../services/translations';
 import { LogIn, AlertOctagon, Mail, KeyRound, HelpCircle, FileDown } from 'lucide-react';
 
@@ -53,13 +54,18 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
   const [isDownloadingAbout, setIsDownloadingAbout] = useState(false);
   const [pendingCommunityId, setPendingCommunityId] = useState('');
   const organizationCodeIntent = sessionStorage.getItem('aera.organizationCodeIntent') === '1';
+  const pendingOrganizationCode = sessionStorage.getItem('aera.pendingOrganizationCode') || '';
   const pendingCommunityName = pendingCommunityId
     ? StorageService.getOrganization(pendingCommunityId)?.name || DEMO_COMMUNITY_QR_SEEDS.find((seed) => seed.communityId === pendingCommunityId)?.name || pendingCommunityId
     : '';
 
-  const resolvePostLoginView = (role: string, onboardComplete: boolean): ViewState => {
+  const resolvePostLoginView = (
+    role: string,
+    onboardComplete: boolean,
+    accountEmail: string,
+  ): ViewState => {
     const requestedView = sessionStorage.getItem('postLoginView');
-    if (organizationCodeIntent && onboardComplete) {
+    if (organizationCodeIntent) {
       return 'SETTINGS';
     }
     if (requestedView === 'BUYER_PORTAL' && ['ADMIN', 'BUYER'].includes(role) && onboardComplete) {
@@ -75,7 +81,7 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
       return 'LEAD_ADMIN';
     }
     sessionStorage.removeItem('postLoginView');
-    if (!onboardComplete) return 'ACCOUNT_SETUP';
+    if (shouldCompleteNewAccountSetup(accountEmail, onboardComplete)) return 'ACCOUNT_SETUP';
     if (role === 'BUYER') return 'BUYER_PORTAL';
     if (role === 'INSTITUTION_ADMIN' || role === 'ORG_ADMIN') return 'ORG_DASHBOARD';
     return 'DASHBOARD';
@@ -126,7 +132,11 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
       if (inviteResolution === 'already-connected') clearPendingCommunityInvite();
       const nextView = inviteResolution === 'needs-confirmation' && onboardComplete
         ? 'SETTINGS'
-        : resolvePostLoginView(String(role || '').toUpperCase(), Boolean(onboardComplete));
+        : resolvePostLoginView(
+            String(role || '').toUpperCase(),
+            Boolean(onboardComplete),
+            profile.email || normalizedEmail,
+          );
       console.log('Redirecting to', nextView);
       if (nextView === 'DASHBOARD') {
         sessionStorage.setItem('showCommunityConnectPromptOnLogin', '1');
@@ -178,7 +188,11 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
     if (inviteResolution === 'already-connected') clearPendingCommunityInvite();
     const nextView = inviteResolution === 'needs-confirmation' && onboardComplete
       ? 'SETTINGS'
-      : resolvePostLoginView(String(role || '').toUpperCase(), Boolean(onboardComplete));
+      : resolvePostLoginView(
+          String(role || '').toUpperCase(),
+          Boolean(onboardComplete),
+          profile.email || '',
+        );
     console.log('Redirecting to', nextView);
     if (nextView === 'DASHBOARD') {
       sessionStorage.setItem('showCommunityConnectPromptOnLogin', '1');
@@ -453,8 +467,11 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
       <div className="mt-8 text-center">
         {organizationCodeIntent && (
           <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-left">
-            <p className="text-sm font-bold text-emerald-900">Organization code ready</p>
-            <p className="mt-1 text-xs text-emerald-800">Sign in, or create a verified account, then AERA will take you to the organization-code activation form.</p>
+            <p className="text-sm font-bold text-emerald-900">Community access code saved</p>
+            <p className="mt-1 text-xs text-emerald-800">
+              {pendingOrganizationCode ? `Code ${pendingOrganizationCode} is ready. ` : ''}
+              Sign in, or create a verified account, to activate the funded seat.
+            </p>
           </div>
         )}
         <p className="text-slate-600">{t('login.no_account')}</p>

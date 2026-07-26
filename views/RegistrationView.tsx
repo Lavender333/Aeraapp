@@ -14,6 +14,7 @@ import { ensureHouseholdForCurrentUser, redeemOrganizationCode, syncHouseholdMem
 import { getOrgByCode } from '../services/supabase';
 import { validateHouseholdMembers } from '../services/validation';
 import { supabase } from '../services/supabase';
+import { clearNewAccountSetupPending, markNewAccountSetupPending } from '../services/accountSetup';
 import { t } from '../services/translations';
 import { User, HeartPulse } from 'lucide-react';
 
@@ -91,6 +92,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
   useEffect(() => {
     const profile = StorageService.getProfile();
     const pendingInvite = getPendingCommunityInvite();
+    const pendingOrganizationCode = sessionStorage.getItem('aera.pendingOrganizationCode') || '';
     if (pendingInvite?.communityId) {
       setPendingCommunityId(pendingInvite.communityId);
     }
@@ -104,14 +106,14 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
          fullName: profile.fullName || prev.fullName,
          email: profile.email || prev.email,
          phone: profile.phone || prev.phone,
-         communityId: profile.communityId || pendingInvite?.communityId || prev.communityId,
+         communityId: profile.communityId || pendingOrganizationCode || pendingInvite?.communityId || prev.communityId,
          role: profile.role || prev.role,
          geofencedOutreachOptIn: Boolean(profile.geofencedOutreachOptIn),
          geofencedOutreachRadiusMiles: profile.geofencedOutreachRadiusMiles || 3,
          geofencedOutreachConsentAt: profile.geofencedOutreachConsentAt,
        }));
-    } else if (pendingInvite?.communityId) {
-      setFormData(prev => ({ ...prev, communityId: prev.communityId || pendingInvite.communityId }));
+    } else if (pendingOrganizationCode || pendingInvite?.communityId) {
+      setFormData(prev => ({ ...prev, communityId: prev.communityId || pendingOrganizationCode || pendingInvite?.communityId || '' }));
     }
   }, []);
 
@@ -217,6 +219,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     try {
       setIsRegistering(true);
       const resp: any = await StorageService.registerWithCredentials(email, password, formData.fullName);
+      markNewAccountSetupPending(email);
       if (resp?.needsEmailConfirm) {
         setNeedsEmailConfirm(true);
         setAuthSuccess('Check your email to confirm your account before continuing.');
@@ -322,6 +325,8 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       sessionStorage.setItem('aera.playWelcomeVideoOnDashboard', '1');
       clearPendingCommunityInvite();
       sessionStorage.removeItem('aera.organizationCodeIntent');
+      sessionStorage.removeItem('aera.pendingOrganizationCode');
+      clearNewAccountSetupPending();
       setView('DASHBOARD');
     } catch (e: any) {
       const currentProfile = StorageService.getProfile();
@@ -330,6 +335,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       const profileId = authId || (payload.id && payload.id !== 'guest' ? payload.id : currentProfile.id);
       StorageService.saveProfile({ ...payload, id: profileId });
       sessionStorage.setItem('aera.playWelcomeVideoOnDashboard', '1');
+      clearNewAccountSetupPending();
       setAuthError('Profile saved locally. Sync will resume when available.');
       setView('DASHBOARD');
     } finally {
