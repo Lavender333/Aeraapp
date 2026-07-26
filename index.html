@@ -16,7 +16,6 @@
     <link rel="icon" type="image/png" href="./logo4.png" />
     <link rel="apple-touch-icon" href="./logo4.png" />
     <meta name="theme-color" content="#2F7A64" />
-    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
       body {
@@ -32,49 +31,6 @@
         scrollbar-width: none;
       }
     </style>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              brand: {
-                50: '#ecfdf5',
-                100: '#d1fae5',
-                500: '#10b981', // emerald-500
-                600: '#059669', // emerald-600
-                700: '#047857', // emerald-700
-                800: '#065f46', // emerald-800
-                900: '#064e3b', // emerald-900
-              }
-            },
-            animation: {
-              'fade-in': 'fadeIn 0.5s ease-out',
-              'slide-up': 'slideUp 0.5s ease-out',
-              'float': 'float 3s ease-in-out infinite',
-              'gradient-x': 'gradientX 4s ease infinite',
-            },
-            keyframes: {
-              fadeIn: {
-                '0%': { opacity: '0' },
-                '100%': { opacity: '1' },
-              },
-              slideUp: {
-                '0%': { transform: 'translateY(20px)', opacity: '0' },
-                '100%': { transform: 'translateY(0)', opacity: '1' },
-              },
-              float: {
-                '0%, 100%': { transform: 'translateY(0px)' },
-                '50%': { transform: 'translateY(-8px)' },
-              },
-              gradientX: {
-                '0%, 100%': { backgroundPosition: '0% 50%' },
-                '50%': { backgroundPosition: '100% 50%' },
-              },
-            }
-          }
-        }
-      }
-    </script>
     <script>
       (function (l) {
         if (l.search && l.search.startsWith('?/')) {
