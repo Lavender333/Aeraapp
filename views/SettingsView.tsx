@@ -6,6 +6,7 @@ import { Button } from '../components/Button';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
 import { StorageService } from '../services/storage';
+import { signOutCurrentSession } from '../services/authSession';
 import {
   buildCommunityInviteUrl,
   clearPendingCommunityInvite,
@@ -13,15 +14,25 @@ import {
   getPendingCommunityInvite,
   PendingCommunityInvite,
 } from '../services/communityInvite';
-import { AppNotificationRecord, cancelMyHouseholdJoinRequest, captureUserLocation, ConnectedHouseholdMember, ContactSupportTicketRecord, ContactSupportTicketStatus, createContactSupportTicket, createFaqSelfResolvedRecord, createHouseholdExpansionRequest, createHouseholdInvitationForMember, deleteCurrentAccount, deleteProfileAvatarForCurrentUser, ensureHouseholdForCurrentUser, escalateContactSupportTicket, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, leaveCurrentOrganization, listAllRequests, listConnectedHouseholdMembers, listContactSupportTicketsForOrgAdmin, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyContactSupportTickets, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, redeemOrganizationCode, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, respondToContactSupportTicketAsOrgAdmin, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestExpiration, updateRequestStatus, updateVitalsForUser, uploadProfileAvatarDataUrl } from '../services/api';
-import { createOrganizationAccessCode, listOrganizationSeatManagement, OrganizationSeatManagement, setOrganizationSeatLimit } from '../services/api';
+import { AppNotificationRecord, cancelMyHouseholdJoinRequest, captureUserLocation, closeCurrentAccount, ConnectedHouseholdMember, ContactSupportTicketRecord, ContactSupportTicketStatus, createContactSupportTicket, createFaqSelfResolvedRecord, createHouseholdExpansionRequest, createHouseholdInvitationForMember, deleteProfileAvatarForCurrentUser, ensureHouseholdForCurrentUser, escalateContactSupportTicket, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, leaveCurrentOrganization, listAllRequests, listConnectedHouseholdMembers, listContactSupportTicketsForOrgAdmin, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyContactSupportTickets, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, redeemOrganizationCode, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, respondToContactSupportTicketAsOrgAdmin, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestExpiration, updateRequestStatus, updateVitalsForUser, uploadProfileAvatarDataUrl } from '../services/api';
+import {
+  createOrganizationAccessCode,
+  listOrganizationAccessCodes,
+  listOrganizationCodeRegistrations,
+  listOrganizationSeatManagement,
+  OrganizationAccessCodeRecord,
+  OrganizationCodeRegistration,
+  OrganizationSeatManagement,
+  setOrganizationSeatLimit,
+} from '../services/api';
 import { getOrgByCode, getOrgIdByCode } from '../services/supabase';
 import { listOrganizations as listOrganizationsSupabase } from '../services/supabaseApi';
 import {
   findOrganizationSeatManagement,
+  getOrganizationSeatTargetId,
   indexOrganizationSeatManagement,
 } from '../services/organizationSeatMatching';
-import { subscribeToNotifications } from '../services/supabaseRealtime';
+import { subscribeToNotifications, subscribeToOrganizationAccess } from '../services/supabaseRealtime';
 import { listEvents, DistributionEvent } from '../services/eventDistribution';
 import { isValidPhoneForInvite, validateHouseholdMembers } from '../services/validation';
 import { t } from '../services/translations';
@@ -170,7 +181,7 @@ const GENERAL_FAQS: Array<{ q: string; a: string }> = [
   { q: 'What is the supply inventory for?', a: 'The inventory helps you track essential supplies (food, water, medications, etc.) your household has on hand. AERA uses this data to identify gaps and prioritize community resource sharing during a disaster.' },
   { q: 'How does geofenced outreach work?', a: 'If you opt in under Privacy settings, nearby organizations can see that there is an unconnected household in their area and may reach out to invite you. No identifying details are shared until you accept.' },
   { q: 'Can I use AERA without a smartphone?', a: 'AERA is a web-based progressive web app accessible on any modern browser. While a smartphone is recommended for location features, you can use AERA on a tablet or desktop computer.' },
-  { q: 'How do I delete my account?', a: 'Submit a support ticket below with the subject "Account Deletion Request." The AERA admin team will process your request within 5 business days and confirm by email.' },
+  { q: 'How do I close my account?', a: 'Use "Close My Account" at the bottom of Settings. Access is disabled, active seats and subscriptions are released, personal profile details are minimized, and required audit history is retained. Contact support if you need the account reopened.' },
 ];
 
 const ORG_ADMIN_FAQS: Array<{ q: string; a: string }> = [
@@ -429,6 +440,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   // UI States
   const [currentSection, setCurrentSection] = useState<'MAIN' | 'ACCESS_CONTROL' | 'DB_VIEWER' | 'ORG_DIRECTORY' | 'BROADCAST_CONTROL' | 'MASTER_INVENTORY' | 'EVENT_MANAGEMENT' | 'MEMBER_ACTIVITY'>('MAIN');
   const [isSaved, setIsSaved] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [connectedOrg, setConnectedOrg] = useState<string | null>(null);
   const [organizationCodeInput, setOrganizationCodeInput] = useState(
@@ -457,6 +469,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [userSearch, setUserSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [communityInviteQrDataUrl, setCommunityInviteQrDataUrl] = useState('');
+  const [communityInviteQrError, setCommunityInviteQrError] = useState<string | null>(null);
+  const [communityQrRetryToken, setCommunityQrRetryToken] = useState(0);
   const [selectedOrgDetails, setSelectedOrgDetails] = useState<OrganizationProfile | null>(null);
   const visibleManageRoles = useMemo(
     () => roles.filter((role) => !(isOrgScopedAdmin && role.id === 'ADMIN')),
@@ -499,6 +513,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [orgList, setOrgList] = useState<OrganizationProfile[]>([]);
   const [orgSearch, setOrgSearch] = useState('');
   const [selectedOrgInviteQrDataUrl, setSelectedOrgInviteQrDataUrl] = useState('');
+  const [selectedOrgInviteQrError, setSelectedOrgInviteQrError] = useState<string | null>(null);
   const [orgMembers, setOrgMembers] = useState<OrgMember[]>([]);
   const [membersFallback, setMembersFallback] = useState(false);
   const [orgAddressDraft, setOrgAddressDraft] = useState('');
@@ -510,6 +525,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [orgSeatManagement, setOrgSeatManagement] = useState<Record<string, OrganizationSeatManagement>>({});
   const [orgSeatManagementBusy, setOrgSeatManagementBusy] = useState(false);
   const [orgSeatManagementError, setOrgSeatManagementError] = useState<string | null>(null);
+  const [orgSeatManagementMessage, setOrgSeatManagementMessage] = useState<string | null>(null);
+  const [organizationAccessCodes, setOrganizationAccessCodes] = useState<OrganizationAccessCodeRecord[]>([]);
+  const [organizationAccessCodesBusy, setOrganizationAccessCodesBusy] = useState(false);
+  const [organizationAccessCodesError, setOrganizationAccessCodesError] = useState<string | null>(null);
+  const [selectedAccessCodeId, setSelectedAccessCodeId] = useState('');
+  const [codeRegistrations, setCodeRegistrations] = useState<OrganizationCodeRegistration[]>([]);
+  const [codeRegistrationsBusy, setCodeRegistrationsBusy] = useState(false);
+  const [codeRegistrationsError, setCodeRegistrationsError] = useState<string | null>(null);
   const [seatLimitDraft, setSeatLimitDraft] = useState('');
   const [codeExpirationDraft, setCodeExpirationDraft] = useState('');
   const [codeMaxRedemptionsDraft, setCodeMaxRedemptionsDraft] = useState('');
@@ -1347,40 +1370,56 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
     if (!isOrgScopedAdmin || !profile.communityId) {
       setCommunityInviteQrDataUrl('');
+      setCommunityInviteQrError(null);
       return () => {
         active = false;
       };
     }
 
+    setCommunityInviteQrDataUrl('');
+    setCommunityInviteQrError(null);
     generateCommunityInviteQrDataUrl(profile.communityId)
       .then((dataUrl) => {
         if (active) setCommunityInviteQrDataUrl(dataUrl);
       })
-      .catch(() => {
-        if (active) setCommunityInviteQrDataUrl('');
+      .catch((error: any) => {
+        if (active) {
+          setCommunityInviteQrDataUrl('');
+          setCommunityInviteQrError(
+            String(error?.message || 'Unable to generate the member join QR code.'),
+          );
+        }
       });
 
     return () => {
       active = false;
     };
-  }, [isOrgScopedAdmin, profile.communityId]);
+  }, [isOrgScopedAdmin, profile.communityId, communityQrRetryToken]);
 
   useEffect(() => {
     let active = true;
 
     if (!selectedOrgDetails?.id) {
       setSelectedOrgInviteQrDataUrl('');
+      setSelectedOrgInviteQrError(null);
       return () => {
         active = false;
       };
     }
 
+    setSelectedOrgInviteQrDataUrl('');
+    setSelectedOrgInviteQrError(null);
     generateCommunityInviteQrDataUrl(selectedOrgDetails.id)
       .then((dataUrl) => {
         if (active) setSelectedOrgInviteQrDataUrl(dataUrl);
       })
-      .catch(() => {
-        if (active) setSelectedOrgInviteQrDataUrl('');
+      .catch((error: any) => {
+        if (active) {
+          setSelectedOrgInviteQrDataUrl('');
+          setSelectedOrgInviteQrError(
+            String(error?.message || 'Unable to generate this organization QR code.'),
+          );
+        }
       });
 
     return () => {
@@ -1686,6 +1725,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setCodeMaxRedemptionsDraft('');
     setGeneratedOrganizationCode('');
     setOrgSeatManagementError(null);
+    setOrgSeatManagementMessage(null);
+    setOrganizationAccessCodes([]);
+    setOrganizationAccessCodesError(null);
+    setSelectedAccessCodeId('');
+    setCodeRegistrations([]);
+    setCodeRegistrationsError(null);
     setOrgAddressDraft(String(selectedOrgDetails.address || ''));
     setOrgLatitudeDraft(
       typeof selectedOrgDetails.latitude === 'number' && Number.isFinite(selectedOrgDetails.latitude)
@@ -3028,27 +3073,35 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         void verifyCommunityId(normalized);
       };
 
-      const handleLogout = () => {
-    StorageService.logoutUser();
-    setView('LOGIN');
-  };
+      const handleLogout = async () => {
+        if (isLoggingOut) return;
+        setIsLoggingOut(true);
+        try {
+          await signOutCurrentSession();
+          StorageService.logoutUser();
+          setView('LOGIN');
+        } catch (error: any) {
+          window.alert(error?.message || 'Unable to log out. Please try again.');
+        } finally {
+          setIsLoggingOut(false);
+        }
+      };
 
-  const handleDeleteAccount = async () => {
+  const handleCloseAccount = async () => {
     const confirmed = window.confirm(
-      'Permanently delete your AERA account and personal data? This cannot be undone.',
+      'Close your AERA account? You will lose access, active memberships and subscriptions will end, and required audit history will be retained.',
     );
     if (!confirmed) return;
-    const confirmedAgain = window.confirm(
-      'Final confirmation: delete this account now?',
-    );
-    if (!confirmedAgain) return;
+    const confirmationText = window.prompt('Type CLOSE to confirm this account closure request.');
+    if (String(confirmationText || '').trim().toUpperCase() !== 'CLOSE') return;
 
     try {
-      await deleteCurrentAccount();
+      await closeCurrentAccount();
       StorageService.logoutUser();
+      window.alert('Your AERA account has been closed and you have been signed out.');
       setView('LOGIN');
     } catch (error: any) {
-      window.alert(error?.message || 'Unable to delete your account right now. Please contact support.');
+      window.alert(error?.message || 'Unable to close your account right now. Please contact support.');
     }
   };
 
@@ -3076,14 +3129,144 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     }
   };
 
-  const handleSaveSeatLimit = async () => {
-    if (!isPlatformAdmin || !selectedOrgDetails) return;
+  const resolveSelectedOrganizationSeatTarget = async () => {
+    if (!selectedOrgDetails) return null;
+
     const metrics = findOrganizationSeatManagement(selectedOrgDetails, orgSeatManagement);
-    const nextLimit = Math.round(Number(seatLimitDraft));
-    if (!metrics?.organizationId) {
-      setOrgSeatManagementError('This registered organization could not be matched to its Supabase seat record.');
+    const directId = getOrganizationSeatTargetId(selectedOrgDetails, metrics);
+    if (directId) return { organizationId: directId, metrics };
+
+    const organizationId = await getOrgIdByCode(selectedOrgDetails.id);
+    if (!organizationId) return null;
+
+    return { organizationId, metrics };
+  };
+
+  const refreshOrganizationAccessCodes = async (organizationId: string) => {
+    setOrganizationAccessCodesBusy(true);
+    setOrganizationAccessCodesError(null);
+    try {
+      const rows = await listOrganizationAccessCodes(organizationId);
+      setOrganizationAccessCodes(rows);
+      setSelectedAccessCodeId((current) =>
+        current && rows.some((row) => row.codeId === current) ? current : ''
+      );
+      return rows;
+    } catch (error: any) {
+      setOrganizationAccessCodesError(
+        String(error?.message || 'Unable to load community access codes.'),
+      );
+      return [];
+    } finally {
+      setOrganizationAccessCodesBusy(false);
+    }
+  };
+
+  const refreshCodeRegistrations = async (codeId: string) => {
+    if (!codeId) {
+      setCodeRegistrations([]);
+      setCodeRegistrationsError(null);
+      return [];
+    }
+
+    setCodeRegistrationsBusy(true);
+    setCodeRegistrationsError(null);
+    try {
+      const rows = await listOrganizationCodeRegistrations(codeId);
+      setCodeRegistrations(rows);
+      return rows;
+    } catch (error: any) {
+      setCodeRegistrationsError(
+        String(error?.message || 'Unable to load registrations for this code.'),
+      );
+      return [];
+    } finally {
+      setCodeRegistrationsBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedOrgDetails) return;
+
+    let active = true;
+    let unsubscribe: (() => void) | undefined;
+    let refreshTimer: number | undefined;
+
+    const refreshAllAccessData = async (organizationId: string) => {
+      if (!active) return;
+      await refreshOrganizationAccessCodes(organizationId);
+      if (selectedAccessCodeId) {
+        await refreshCodeRegistrations(selectedAccessCodeId);
+      }
+
+      try {
+        const seatRows = await listOrganizationSeatManagement(organizationId);
+        if (active) {
+          setOrgSeatManagement((current) => ({
+            ...current,
+            ...indexOrganizationSeatManagement(seatRows),
+          }));
+        }
+      } catch {
+        // The code table can still update if seat-summary refresh is unavailable.
+      }
+    };
+
+    const start = async () => {
+      const metrics = findOrganizationSeatManagement(selectedOrgDetails, orgSeatManagement);
+      const organizationId =
+        getOrganizationSeatTargetId(selectedOrgDetails, metrics) ||
+        await getOrgIdByCode(selectedOrgDetails.id);
+      if (!active || !organizationId) return;
+
+      await refreshAllAccessData(organizationId);
+      if (!active) return;
+
+      unsubscribe = await subscribeToOrganizationAccess(
+        organizationId,
+        () => void refreshAllAccessData(organizationId),
+      );
+      refreshTimer = window.setInterval(
+        () => void refreshAllAccessData(organizationId),
+        15000,
+      );
+    };
+
+    void start();
+
+    return () => {
+      active = false;
+      if (refreshTimer) window.clearInterval(refreshTimer);
+      unsubscribe?.();
+    };
+  }, [
+    selectedOrgDetails?.id,
+    selectedOrgDetails?.supabaseId,
+    selectedAccessCodeId,
+  ]);
+
+  const handleRefreshOrganizationAccessReport = async () => {
+    const target = await resolveSelectedOrganizationSeatTarget();
+    if (!target?.organizationId) {
+      setOrganizationAccessCodesError(
+        'This organization is not available in Supabase. Refresh the organization list and try again.',
+      );
       return;
     }
+    await refreshOrganizationAccessCodes(target.organizationId);
+    if (selectedAccessCodeId) {
+      await refreshCodeRegistrations(selectedAccessCodeId);
+    }
+  };
+
+  const handleViewCodeRegistrations = async (codeId: string) => {
+    setSelectedAccessCodeId(codeId);
+    await refreshCodeRegistrations(codeId);
+  };
+
+  const handleSaveSeatLimit = async () => {
+    if (!isPlatformAdmin || !selectedOrgDetails) return;
+    const nextLimit = Math.round(Number(seatLimitDraft));
     if (!Number.isFinite(nextLimit) || nextLimit < 1) {
       setOrgSeatManagementError('Enter a seat amount of at least 1.');
       return;
@@ -3091,9 +3274,28 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
     setOrgSeatManagementBusy(true);
     setOrgSeatManagementError(null);
+    setOrgSeatManagementMessage(null);
     try {
-      await setOrganizationSeatLimit(metrics.organizationId, nextLimit);
-      await refreshOrganizationSeatManagement();
+      const target = await resolveSelectedOrganizationSeatTarget();
+      if (!target?.organizationId) {
+        throw new Error('This organization is not available in Supabase. Refresh the organization list and try again.');
+      }
+      if (target.metrics && nextLimit < target.metrics.organizationFundedMembers) {
+        throw new Error(
+          `Seat amount cannot be lower than ${target.metrics.organizationFundedMembers} funded seats currently in use.`,
+        );
+      }
+
+      await setOrganizationSeatLimit(target.organizationId, nextLimit);
+      const refreshed = await refreshOrganizationSeatManagement();
+      const updatedMetrics = findOrganizationSeatManagement(
+        { ...selectedOrgDetails, supabaseId: target.organizationId },
+        refreshed,
+      );
+      setSeatLimitDraft(String(updatedMetrics?.purchasedSeats ?? nextLimit));
+      setOrgSeatManagementMessage(
+        `${nextLimit.toLocaleString()} purchased seats saved. Sponsored access is active for ${selectedOrgDetails.name}.`,
+      );
     } catch (error: any) {
       setOrgSeatManagementError(String(error?.message || 'Unable to update the seat amount.'));
     } finally {
@@ -3103,15 +3305,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   const handleCreateOrganizationCode = async () => {
     if (!isPlatformAdmin || !selectedOrgDetails) return;
-    const metrics = findOrganizationSeatManagement(selectedOrgDetails, orgSeatManagement);
-    if (!metrics?.organizationId) {
-      setOrgSeatManagementError('This registered organization could not be matched to its Supabase seat record.');
-      return;
-    }
-    if (metrics.purchasedSeats < 1) {
-      setOrgSeatManagementError('Assign and save at least 1 purchased seat before creating a community access code.');
-      return;
-    }
 
     const maxRedemptions = codeMaxRedemptionsDraft
       ? Math.round(Number(codeMaxRedemptionsDraft))
@@ -3123,9 +3316,18 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
     setOrgSeatManagementBusy(true);
     setOrgSeatManagementError(null);
+    setOrgSeatManagementMessage(null);
     setGeneratedOrganizationCode('');
     try {
-      const code = await createOrganizationAccessCode(metrics.organizationId, {
+      const target = await resolveSelectedOrganizationSeatTarget();
+      if (!target?.organizationId) {
+        throw new Error('This organization is not available in Supabase. Refresh the organization list and try again.');
+      }
+      if (target.metrics && target.metrics.purchasedSeats < 1) {
+        throw new Error('Assign and save at least 1 purchased seat before creating a community access code.');
+      }
+
+      const code = await createOrganizationAccessCode(target.organizationId, {
         expiresAt: codeExpirationDraft
           ? new Date(`${codeExpirationDraft}T23:59:59`).toISOString()
           : undefined,
@@ -3133,6 +3335,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       });
       setGeneratedOrganizationCode(code.activationCode);
       await refreshOrganizationSeatManagement();
+      await refreshOrganizationAccessCodes(target.organizationId);
+      setOrgSeatManagementMessage(
+        `Community access code created for ${selectedOrgDetails.name}. Copy it now; the full code will not be shown again.`,
+      );
     } catch (error: any) {
       setOrgSeatManagementError(String(error?.message || 'Unable to create the organization access code.'));
     } finally {
@@ -4505,16 +4711,27 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                    </div>
 
                    {isPlatformAdmin && (
-                     <div className="grid gap-4 border-t border-sky-200 pt-4 md:grid-cols-2">
+                     <div className="space-y-4 border-t border-sky-200 pt-4">
+                       <div className="rounded-xl border border-sky-200 bg-sky-100/70 p-3">
+                         <p className="text-sm font-bold text-sky-950">Complete these steps in order</p>
+                         <p className="mt-1 text-xs text-sky-800">
+                           First save the organization’s purchased-seat total. Then create a code for community members to claim those sponsored seats.
+                         </p>
+                       </div>
+
+                       <div className="grid gap-4 md:grid-cols-2">
                        <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-                         <div>
-                           <p className="text-sm font-bold text-slate-900">Assign purchased seats</p>
+                         <div className="flex items-start gap-3">
+                           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-700 text-sm font-black text-white">1</span>
+                           <div>
+                           <p className="text-sm font-bold text-slate-900">Set sponsored seat capacity</p>
                            <p className="text-xs text-slate-500">
-                             Saving purchased seats activates sponsored access for this organization. The amount cannot be lower than funded seats currently in use.
+                             Enter the total number of seats this organization purchased. Saving activates its sponsored-access contract.
                            </p>
+                           </div>
                          </div>
                          <Input
-                           label="Seat amount"
+                           label="Total purchased seats"
                            type="number"
                            min={1}
                            value={seatLimitDraft}
@@ -4529,24 +4746,32 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                            className="bg-sky-700 hover:bg-sky-800 text-white"
                          >
                            {orgSeatManagementBusy ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Save size={16} className="mr-2" />}
-                           Save Seat Amount
+                           Save Seats & Activate Access
                          </Button>
+                         <p className="text-[11px] text-slate-500">
+                           Minimum allowed: {selectedSeatMetrics?.organizationFundedMembers ?? 0}, based on sponsored seats currently in use.
+                         </p>
                        </div>
 
                        <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-                         <div>
-                           <p className="text-sm font-bold text-slate-900">Create community access code</p>
-                           <p className="text-xs text-slate-500">The full code is shown once. AERA stores only its secure hash.</p>
+                         <div className="flex items-start gap-3">
+                           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-700 text-sm font-black text-white">2</span>
+                           <div>
+                           <p className="text-sm font-bold text-slate-900">Generate a community access code</p>
+                           <p className="text-xs text-slate-500">
+                             Share this code with eligible community members. Each successful activation uses one available sponsored seat.
+                           </p>
+                           </div>
                          </div>
                          <div className="grid grid-cols-2 gap-3">
                            <Input
-                             label="Expiration (optional)"
+                             label="Code expiration date (optional)"
                              type="date"
                              value={codeExpirationDraft}
                              onChange={(event) => setCodeExpirationDraft(event.target.value)}
                            />
                            <Input
-                             label="Max uses (optional)"
+                             label="Maximum activations (optional)"
                              type="number"
                              min={1}
                              value={codeMaxRedemptionsDraft}
@@ -4562,8 +4787,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                            className="bg-emerald-700 hover:bg-emerald-800 text-white"
                          >
                            {orgSeatManagementBusy ? <Loader2 size={16} className="mr-2 animate-spin" /> : <LinkIcon size={16} className="mr-2" />}
-                           Create Code for This Organization
+                           Generate Community Access Code
                          </Button>
+                         <p className="text-[11px] text-slate-500">
+                           The full code is shown once. AERA stores only a secure hash.
+                         </p>
+                       </div>
                        </div>
                      </div>
                    )}
@@ -4582,8 +4811,212 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                      </div>
                    )}
 
+                   <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
+                     <div className="flex flex-wrap items-start justify-between gap-3">
+                       <div>
+                         <p className="text-sm font-bold text-slate-900">Community access codes</p>
+                         <p className="text-xs text-slate-500">
+                           Track every code and see which members registered with it. Full codes and secure hashes are never displayed here.
+                         </p>
+                       </div>
+                       <Button
+                         size="sm"
+                         variant="ghost"
+                         onClick={() => void handleRefreshOrganizationAccessReport()}
+                         disabled={organizationAccessCodesBusy}
+                         className="border border-slate-200 text-slate-700"
+                       >
+                         <RefreshCcw
+                           size={15}
+                           className={`mr-2 ${organizationAccessCodesBusy ? 'animate-spin' : ''}`}
+                         />
+                         Refresh
+                       </Button>
+                     </div>
+
+                     {organizationAccessCodesBusy && organizationAccessCodes.length === 0 ? (
+                       <div className="flex items-center justify-center rounded-lg bg-slate-50 p-6 text-sm text-slate-600">
+                         <Loader2 size={18} className="mr-2 animate-spin" />
+                         Loading access codes…
+                       </div>
+                     ) : organizationAccessCodes.length === 0 ? (
+                       <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-center">
+                         <p className="text-sm font-semibold text-slate-700">No community access codes yet</p>
+                         <p className="mt-1 text-xs text-slate-500">
+                           Complete Step 1, then generate the organization’s first code in Step 2.
+                         </p>
+                       </div>
+                     ) : (
+                       <div className="space-y-3">
+                         {organizationAccessCodes.map((code) => {
+                           const normalizedStatus = String(code.status || 'active').toLowerCase();
+                           const isSelected = selectedAccessCodeId === code.codeId;
+                           const statusClass = normalizedStatus === 'active'
+                             ? 'bg-emerald-100 text-emerald-700'
+                             : normalizedStatus === 'expired' || normalizedStatus === 'used'
+                               ? 'bg-amber-100 text-amber-700'
+                               : 'bg-slate-200 text-slate-700';
+
+                           return (
+                             <article
+                               key={code.codeId}
+                               className={`rounded-xl border p-4 ${
+                                 isSelected
+                                   ? 'border-sky-400 bg-sky-50'
+                                   : 'border-slate-200 bg-white'
+                               }`}
+                             >
+                               <div className="flex flex-wrap items-start justify-between gap-3">
+                                 <div>
+                                   <div className="flex flex-wrap items-center gap-2">
+                                     <p className="font-mono text-base font-black tracking-wider text-slate-900">
+                                       ••••-{code.codeHint || 'UNKNOWN'}
+                                     </p>
+                                     <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${statusClass}`}>
+                                       {normalizedStatus}
+                                     </span>
+                                   </div>
+                                   <p className="mt-1 text-xs text-slate-500">
+                                     Created {code.createdAt ? new Date(code.createdAt).toLocaleString() : 'date unavailable'}
+                                     {' '}by {code.createdByName}
+                                   </p>
+                                 </div>
+                                 <Button
+                                   size="sm"
+                                   onClick={() => void handleViewCodeRegistrations(code.codeId)}
+                                   className="bg-sky-700 text-white hover:bg-sky-800"
+                                 >
+                                   <Users size={15} className="mr-2" />
+                                   View {code.linkedRegistrationCount} Registration{code.linkedRegistrationCount === 1 ? '' : 's'}
+                                 </Button>
+                               </div>
+
+                               <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                 <div className="rounded-lg bg-slate-50 p-2">
+                                   <p className="text-[10px] font-bold uppercase text-slate-500">Used</p>
+                                   <p className="text-sm font-black text-slate-900">{code.redemptionCount.toLocaleString()}</p>
+                                 </div>
+                                 <div className="rounded-lg bg-slate-50 p-2">
+                                   <p className="text-[10px] font-bold uppercase text-slate-500">Maximum</p>
+                                   <p className="text-sm font-black text-slate-900">
+                                     {code.maxRedemptions == null ? 'Seat limit' : code.maxRedemptions.toLocaleString()}
+                                   </p>
+                                 </div>
+                                 <div className="rounded-lg bg-slate-50 p-2">
+                                   <p className="text-[10px] font-bold uppercase text-slate-500">Remaining uses</p>
+                                   <p className="text-sm font-black text-slate-900">
+                                     {code.remainingRedemptions == null ? 'Seat-based' : code.remainingRedemptions.toLocaleString()}
+                                   </p>
+                                 </div>
+                                 <div className="rounded-lg bg-slate-50 p-2">
+                                   <p className="text-[10px] font-bold uppercase text-slate-500">Expires</p>
+                                   <p className="text-sm font-black text-slate-900">
+                                     {code.expiresAt ? new Date(code.expiresAt).toLocaleDateString() : 'No expiration'}
+                                   </p>
+                                 </div>
+                               </div>
+                             </article>
+                           );
+                         })}
+                       </div>
+                     )}
+
+                     {organizationAccessCodesError && (
+                       <p role="alert" className="text-xs font-semibold text-red-700">
+                         {organizationAccessCodesError}
+                       </p>
+                     )}
+
+                     {selectedAccessCodeId && (
+                       <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 space-y-3">
+                         <div className="flex flex-wrap items-center justify-between gap-2">
+                           <div>
+                             <p className="text-sm font-bold text-sky-950">Registrations connected to this code</p>
+                             <p className="text-xs text-sky-800">
+                               This list updates automatically when another member activates the selected code.
+                             </p>
+                           </div>
+                           <button
+                             type="button"
+                             onClick={() => {
+                               setSelectedAccessCodeId('');
+                               setCodeRegistrations([]);
+                               setCodeRegistrationsError(null);
+                             }}
+                             className="rounded-lg p-2 text-sky-700 hover:bg-sky-100"
+                             aria-label="Close code registrations"
+                           >
+                             <X size={18} />
+                           </button>
+                         </div>
+
+                         {codeRegistrationsBusy ? (
+                           <div className="flex items-center py-4 text-sm text-sky-800">
+                             <Loader2 size={17} className="mr-2 animate-spin" />
+                             Loading registrations…
+                           </div>
+                         ) : codeRegistrations.length === 0 ? (
+                           <p className="rounded-lg bg-white p-4 text-sm text-slate-600">
+                             No one has registered with this code yet.
+                           </p>
+                         ) : (
+                           <div className="overflow-x-auto rounded-lg border border-sky-200 bg-white">
+                             <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
+                               <thead className="bg-slate-50">
+                                 <tr>
+                                   <th className="px-3 py-2 font-bold text-slate-600">Member</th>
+                                   <th className="px-3 py-2 font-bold text-slate-600">Activated</th>
+                                   <th className="px-3 py-2 font-bold text-slate-600">Access</th>
+                                   <th className="px-3 py-2 font-bold text-slate-600">Status</th>
+                                 </tr>
+                               </thead>
+                               <tbody className="divide-y divide-slate-100">
+                                 {codeRegistrations.map((registration) => (
+                                   <tr key={registration.membershipId}>
+                                     <td className="px-3 py-3">
+                                       <p className="font-bold text-slate-900">{registration.fullName}</p>
+                                       <p className="text-slate-500">{registration.email || 'Email unavailable'}</p>
+                                     </td>
+                                     <td className="whitespace-nowrap px-3 py-3 text-slate-700">
+                                       {registration.activatedAt
+                                         ? new Date(registration.activatedAt).toLocaleString()
+                                         : 'Date unavailable'}
+                                     </td>
+                                     <td className="px-3 py-3 text-slate-700">
+                                       {registration.consumesOrganizationSeat
+                                         ? 'Sponsored seat'
+                                         : 'Personal subscription'}
+                                     </td>
+                                     <td className="px-3 py-3">
+                                       <span className={`rounded-full px-2 py-1 font-bold uppercase ${
+                                         registration.membershipStatus === 'active'
+                                           ? 'bg-emerald-100 text-emerald-700'
+                                           : 'bg-slate-200 text-slate-700'
+                                       }`}>
+                                         {registration.membershipStatus}
+                                       </span>
+                                     </td>
+                                   </tr>
+                                 ))}
+                               </tbody>
+                             </table>
+                           </div>
+                         )}
+
+                         {codeRegistrationsError && (
+                           <p role="alert" className="text-xs font-semibold text-red-700">
+                             {codeRegistrationsError}
+                           </p>
+                         )}
+                       </div>
+                     )}
+                   </section>
+
                    {orgSeatManagementError && (
                      <p role="alert" className="text-xs font-semibold text-red-700">{orgSeatManagementError}</p>
+                   )}
+                   {orgSeatManagementMessage && (
+                     <p role="status" className="text-xs font-semibold text-emerald-700">{orgSeatManagementMessage}</p>
                    )}
                  </div>
 
@@ -4705,7 +5138,20 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                      <div className="flex flex-col gap-4 md:flex-row md:items-center">
                        <div className="w-40 h-40 rounded-2xl border border-emerald-200 bg-white flex items-center justify-center overflow-hidden">
                          {selectedOrgInviteQrDataUrl ? (
-                           <img src={selectedOrgInviteQrDataUrl} alt={`QR code for ${selectedOrgDetails.id}`} className="w-full h-full object-contain" />
+                           <img
+                             src={selectedOrgInviteQrDataUrl}
+                             alt={`QR code for ${selectedOrgDetails.id}`}
+                             className="w-full h-full object-contain"
+                             onError={() => {
+                               setSelectedOrgInviteQrDataUrl('');
+                               setSelectedOrgInviteQrError('The QR image could not be displayed.');
+                             }}
+                           />
+                         ) : selectedOrgInviteQrError ? (
+                           <div className="flex h-full w-full flex-col items-center justify-center p-3 text-center text-xs font-semibold text-red-700">
+                             <AlertTriangle size={22} className="mb-2" />
+                             QR unavailable
+                           </div>
                          ) : (
                            <Loader2 size={24} className="animate-spin text-emerald-700" />
                          )}
@@ -4719,7 +5165,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                            {selectedOrgInviteQrDataUrl && (
                              <a
                                href={selectedOrgInviteQrDataUrl}
-                               download={`${selectedOrgDetails.id}_join_qr.png`}
+                               download={`${selectedOrgDetails.id}_join_qr.svg`}
                                className="inline-flex items-center rounded-lg bg-white px-3 py-2 text-sm font-semibold text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
                              >
                                <Download size={16} className="mr-2" /> Download QR
@@ -7036,13 +7482,32 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 <div className="flex items-center gap-3">
                   <div className="w-20 h-20 rounded-xl border border-emerald-200 bg-white flex items-center justify-center overflow-hidden shrink-0">
                     {communityInviteQrDataUrl ? (
-                      <img src={communityInviteQrDataUrl} alt={`QR code for ${profile.communityId}`} className="w-full h-full object-contain" />
+                      <img
+                        src={communityInviteQrDataUrl}
+                        alt={`QR code for ${profile.communityId}`}
+                        className="w-full h-full object-contain"
+                        onError={() => {
+                          setCommunityInviteQrDataUrl('');
+                          setCommunityInviteQrError('The QR image could not be displayed.');
+                        }}
+                      />
+                    ) : communityInviteQrError ? (
+                      <button
+                        type="button"
+                        onClick={() => setCommunityQrRetryToken((value) => value + 1)}
+                        className="flex h-full w-full flex-col items-center justify-center p-2 text-[10px] font-bold text-red-700"
+                      >
+                        <RefreshCcw size={18} className="mb-1" />
+                        Retry QR
+                      </button>
                     ) : (
                       <Loader2 size={20} className="animate-spin text-emerald-700" />
                     )}
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Member join QR ready</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                      {communityInviteQrError ? 'Member join QR needs retry' : 'Member join QR ready'}
+                    </p>
                     <p className="text-sm font-semibold text-emerald-900">Share this QR code so people can join {connectedOrgLabel || profile.communityId}.</p>
                     <p className="text-xs text-slate-600 mt-1 break-all">{communityInviteUrl}</p>
                   </div>
@@ -7086,7 +7551,27 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <div className="flex flex-col gap-4 md:flex-row md:items-center">
               <div className="w-40 h-40 rounded-2xl border border-emerald-200 bg-white flex items-center justify-center overflow-hidden">
                 {communityInviteQrDataUrl ? (
-                  <img src={communityInviteQrDataUrl} alt={`QR code for ${profile.communityId}`} className="w-full h-full object-contain" />
+                  <img
+                    src={communityInviteQrDataUrl}
+                    alt={`QR code for ${profile.communityId}`}
+                    className="w-full h-full object-contain"
+                    onError={() => {
+                      setCommunityInviteQrDataUrl('');
+                      setCommunityInviteQrError('The QR image could not be displayed.');
+                    }}
+                  />
+                ) : communityInviteQrError ? (
+                  <div className="flex h-full w-full flex-col items-center justify-center p-3 text-center">
+                    <AlertTriangle size={24} className="mb-2 text-red-600" />
+                    <p className="text-xs font-semibold text-red-700">QR unavailable</p>
+                    <button
+                      type="button"
+                      onClick={() => setCommunityQrRetryToken((value) => value + 1)}
+                      className="mt-2 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white"
+                    >
+                      Try Again
+                    </button>
+                  </div>
                 ) : (
                   <Loader2 size={24} className="animate-spin text-emerald-700" />
                 )}
@@ -7103,7 +7588,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                   {communityInviteQrDataUrl && (
                     <a
                       href={communityInviteQrDataUrl}
-                      download={`${profile.communityId}_join_qr.png`}
+                      download={`${profile.communityId}_join_qr.svg`}
                       className="inline-flex items-center rounded-lg bg-white px-3 py-2 text-sm font-semibold text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
                     >
                       <Download size={16} className="mr-2" /> Download QR
@@ -7707,17 +8192,30 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       </section>
 
       <div className="space-y-4 pt-4 border-t border-slate-200 order-8">
-        <Button onClick={handleLogout} variant="ghost" fullWidth className="text-slate-700 font-semibold hover:text-slate-900">
-          <LogOut className="mr-2" size={18} />
-          Log Out
-        </Button>
-        <button
-          type="button"
-          onClick={() => void handleDeleteAccount()}
-          className="w-full min-h-[48px] rounded-lg border border-red-300 bg-white px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+        <Button
+          onClick={() => void handleLogout()}
+          disabled={isLoggingOut}
+          variant="ghost"
+          fullWidth
+          className="text-slate-700 font-semibold hover:text-slate-900"
         >
-          Delete Account Permanently
-        </button>
+          <LogOut className="mr-2" size={18} />
+          {isLoggingOut ? 'Logging out…' : 'Log Out'}
+        </Button>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm font-bold text-slate-900">Close your account</p>
+          <p className="mt-1 text-xs leading-relaxed text-slate-600">
+            You will no longer be able to sign in. Active seats and subscriptions will be released,
+            personal profile details will be minimized, and required audit history will remain in AERA.
+          </p>
+          <button
+            type="button"
+            onClick={() => void handleCloseAccount()}
+            className="mt-3 w-full min-h-[48px] rounded-lg border border-red-300 bg-white px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+          >
+            Close My Account
+          </button>
+        </div>
       </div>
 
       {leaveConfirmation.open && (

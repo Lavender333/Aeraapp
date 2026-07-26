@@ -35,8 +35,8 @@ Deno.serve(async (request) => {
     }
 
     const body = await request.json().catch(() => ({}));
-    if (body?.confirmation !== 'DELETE') {
-      return new Response(JSON.stringify({ error: 'Deletion confirmation is required' }), {
+    if (body?.confirmation !== 'CLOSE') {
+      return new Response(JSON.stringify({ error: 'Account closure confirmation is required' }), {
         status: 400,
         headers: { ...headers, 'Content-Type': 'application/json' },
       });
@@ -62,16 +62,36 @@ Deno.serve(async (request) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    const { error: deleteError } = await adminClient.auth.admin.deleteUser(userData.user.id);
-    if (deleteError) throw deleteError;
+    const { data: closureResult, error: closureError } = await adminClient.rpc(
+      'close_user_account',
+      { p_user_id: userData.user.id },
+    );
+    if (closureError) throw closureError;
 
-    return new Response(JSON.stringify({ ok: true }), {
+    const { error: disableError } = await adminClient.auth.admin.updateUserById(
+      userData.user.id,
+      {
+        ban_duration: '876000h',
+        user_metadata: {
+          ...userData.user.user_metadata,
+          account_status: 'closed',
+          account_closed_at: new Date().toISOString(),
+        },
+        app_metadata: {
+          ...userData.user.app_metadata,
+          account_status: 'closed',
+        },
+      },
+    );
+    if (disableError) throw disableError;
+
+    return new Response(JSON.stringify({ ok: true, status: 'closed', data: closureResult }), {
       status: 200,
       headers: { ...headers, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Account deletion failed', error);
-    return new Response(JSON.stringify({ error: 'Account deletion failed' }), {
+    console.error('Account closure failed', error);
+    return new Response(JSON.stringify({ error: 'Account closure failed' }), {
       status: 500,
       headers: { ...headers, 'Content-Type': 'application/json' },
     });

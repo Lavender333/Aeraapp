@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   findOrganizationSeatManagement,
+  getOrganizationSeatTargetId,
   indexOrganizationSeatManagement,
 } from '../services/organizationSeatMatching';
 import type { OrganizationSeatManagement } from '../services/api';
@@ -51,5 +52,18 @@ describe('organization seat matching', () => {
       id: 'FOOD-1001',
       name: 'Westside Food Bank',
     }, index)).toBeUndefined();
+  });
+
+  it('uses the selected Supabase organization UUID before a seat summary exists', () => {
+    expect(getOrganizationSeatTargetId({
+      id: 'FOOD-1001',
+      supabaseId: westside.organizationId,
+    })).toBe(westside.organizationId);
+  });
+
+  it('does not treat a community code as a Supabase organization UUID', () => {
+    expect(getOrganizationSeatTargetId({
+      id: 'FOOD-1001',
+    })).toBeUndefined();
   });
 });

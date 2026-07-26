@@ -44,3 +44,36 @@ export const subscribeToNotifications = async (onNotification: (payload: any) =>
     supabase.removeChannel(channel);
   };
 };
+
+export const subscribeToOrganizationAccess = async (
+  organizationId: string,
+  onChange: (payload: any) => void,
+) => {
+  const channel = supabase
+    .channel(`organization-access:${organizationId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'organization_codes',
+        filter: `organization_id=eq.${organizationId}`,
+      },
+      (payload) => onChange(payload),
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'memberships',
+        filter: `organization_id=eq.${organizationId}`,
+      },
+      (payload) => onChange(payload),
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+};
