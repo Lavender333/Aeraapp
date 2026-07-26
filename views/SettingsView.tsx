@@ -17,6 +17,10 @@ import { AppNotificationRecord, cancelMyHouseholdJoinRequest, captureUserLocatio
 import { createOrganizationAccessCode, listOrganizationSeatManagement, OrganizationSeatManagement, setOrganizationSeatLimit } from '../services/api';
 import { getOrgByCode, getOrgIdByCode } from '../services/supabase';
 import { listOrganizations as listOrganizationsSupabase } from '../services/supabaseApi';
+import {
+  findOrganizationSeatManagement,
+  indexOrganizationSeatManagement,
+} from '../services/organizationSeatMatching';
 import { subscribeToNotifications } from '../services/supabaseRealtime';
 import { listEvents, DistributionEvent } from '../services/eventDistribution';
 import { isValidPhoneForInvite, validateHouseholdMembers } from '../services/validation';
@@ -218,6 +222,7 @@ const mapSupabaseOrgRow = (row: any): OrganizationProfile => {
   const sanitizedId = formatCommunityIdInput(String(row?.org_code || row?.id || ''));
   return {
     id: sanitizedId || String(row?.id || ''),
+    supabaseId: String(row?.id || '') || undefined,
     name: String(row?.name || 'Unnamed Organization'),
     type: normalizeOrgType(row?.type),
     address: String(row?.address || '').trim(),
@@ -1678,7 +1683,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   useEffect(() => {
     if (!selectedOrgDetails) return;
-    const seatMetrics = orgSeatManagement[String(selectedOrgDetails.id || '').toUpperCase()];
+    const seatMetrics = findOrganizationSeatManagement(selectedOrgDetails, orgSeatManagement);
     setSeatLimitDraft(seatMetrics ? String(seatMetrics.purchasedSeats) : '');
     setCodeExpirationDraft('');
     setCodeMaxRedemptionsDraft('');
@@ -3062,11 +3067,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setOrgSeatManagementError(null);
     try {
       const rows = await listOrganizationSeatManagement();
-      const next = rows.reduce((acc, row) => {
-        const codeKey = String(row.organizationCode || '').toUpperCase();
-        if (codeKey) acc[codeKey] = row;
-        return acc;
-      }, {} as Record<string, OrganizationSeatManagement>);
+      const next = indexOrganizationSeatManagement(rows);
       setOrgSeatManagement(next);
       return next;
     } catch (error: any) {
@@ -3079,7 +3080,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   const handleSaveSeatLimit = async () => {
     if (!isPlatformAdmin || !selectedOrgDetails) return;
-    const metrics = orgSeatManagement[String(selectedOrgDetails.id || '').toUpperCase()];
+    const metrics = findOrganizationSeatManagement(selectedOrgDetails, orgSeatManagement);
     const nextLimit = Math.round(Number(seatLimitDraft));
     if (!metrics?.organizationId) {
       setOrgSeatManagementError('This registered organization could not be matched to its Supabase seat record.');
@@ -3104,9 +3105,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
   const handleCreateOrganizationCode = async () => {
     if (!isPlatformAdmin || !selectedOrgDetails) return;
-    const metrics = orgSeatManagement[String(selectedOrgDetails.id || '').toUpperCase()];
+    const metrics = findOrganizationSeatManagement(selectedOrgDetails, orgSeatManagement);
     if (!metrics?.organizationId) {
       setOrgSeatManagementError('This registered organization could not be matched to its Supabase seat record.');
+      return;
+    }
+    if (metrics.purchasedSeats < 1) {
+      setOrgSeatManagementError('Assign and save at least 1 purchased seat before creating a community access code.');
       return;
     }
 
@@ -4402,9 +4407,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       o.id.toLowerCase().includes(orgSearch.toLowerCase()) ||
       o.type.toLowerCase().includes(orgSearch.toLowerCase())
     );
-    const selectedSeatMetrics = selectedOrgDetails
-      ? orgSeatManagement[String(selectedOrgDetails.id || '').toUpperCase()]
-      : undefined;
+    const selectedSeatMetrics = findOrganizationSeatManagement(selectedOrgDetails, orgSeatManagement);
 
     return (
       <div className="p-6 pb-28 space-y-6 animate-fade-in bg-slate-50 min-h-screen">
@@ -4458,7 +4461,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                      <div>
                        <p className="text-[10px] font-bold uppercase tracking-wider text-sky-700">Seat & Access Management</p>
                        <h3 className="text-lg font-bold text-sky-950">
-                         {isPlatformAdmin ? 'Head Admin controls' : 'Your organization seats'}
+                         {isPlatformAdmin ? 'Admin controls' : 'Your organization seats'}
                        </h3>
                        <p className="text-xs text-sky-800">
                          Codes created here are bound to {selectedOrgDetails.name} and cannot activate seats for another organization.
@@ -4503,7 +4506,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                        <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
                          <div>
                            <p className="text-sm font-bold text-slate-900">Assign purchased seats</p>
-                           <p className="text-xs text-slate-500">Cannot be lower than funded seats currently in use.</p>
+                           <p className="text-xs text-slate-500">
+                             Saving purchased seats activates sponsored access for this organization. The amount cannot be lower than funded seats currently in use.
+                           </p>
                          </div>
                          <Input
                            label="Seat amount"
@@ -4550,7 +4555,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                            size="sm"
                            fullWidth
                            onClick={() => void handleCreateOrganizationCode()}
-                           disabled={orgSeatManagementBusy || (selectedSeatMetrics?.purchasedSeats ?? 0) < 1}
+                           disabled={orgSeatManagementBusy}
                            className="bg-emerald-700 hover:bg-emerald-800 text-white"
                          >
                            {orgSeatManagementBusy ? <Loader2 size={16} className="mr-2 animate-spin" /> : <LinkIcon size={16} className="mr-2" />}
