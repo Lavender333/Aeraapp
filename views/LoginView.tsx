@@ -236,44 +236,52 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
       y = 156;
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(15);
-      doc.text('What AERA Does', margin, y);
+      doc.text('What Is AERA?', margin, y);
       y += 24;
 
       y = drawParagraph(
-        'AERA is a mobile-first emergency coordination platform that helps households, trusted organizations, responders, and public leaders prepare, communicate, respond, and recover faster during disasters.',
+        'AERA is an emergency preparedness and response application that helps people, families, community organizations, and emergency teams work together.',
         y,
       );
       y += 10;
       y = drawParagraph(
-        'It connects people in need, community organizations, and decision-makers through role-based operations, structured intake, offline resilience, and real-time coordination in one platform.',
+        'You can use AERA to prepare before an emergency, ask for help when something happens, receive important updates, and find nearby services and events.',
         y,
       );
 
       const sections = [
         {
-          title: 'Core Capabilities',
+          title: 'What Can You Do with AERA?',
           bullets: [
-            'Household readiness, emergency contacts, and vulnerability tracking.',
-            'Organization dashboards for member status, inventory, and broadcasts.',
-            'Population tracking, alerts, and geographic risk overlays for operations teams.',
-            'Assessments, recovery workflows, and G.A.P. support intake for documented need.',
+            'Create an emergency plan for your household.',
+            'Save emergency contacts and important safety information.',
+            'Keep track of food, water, medicine, and other emergency supplies.',
+            'Report an emergency or request help.',
+            'Find shelters and public community events.',
+            'Connect with a trusted community organization using an access code.',
+            'Receive alerts and updates from your organization.',
+            "Request assistance through AERA's G.A.P. support program.",
+            'Manage your privacy, consent, profile, and account settings.',
           ],
         },
         {
           title: 'Why It Matters',
           bullets: [
-            'Reduces confusion with role-specific views for residents, org leaders, and responders.',
-            'Uses trusted community structures such as churches, nonprofits, and local institutions.',
-            'Improves coordination speed before, during, and after incidents.',
-            'Supports broader reach through scalable community-code and parent-child org networks.',
+            'Families can prepare before an emergency happens.',
+            'People can quickly explain what assistance they need.',
+            'Trusted organizations can support their communities.',
+            'Emergency teams can understand where help may be needed.',
+            'Communities can communicate and recover more effectively.',
           ],
         },
         {
           title: 'Who Uses It',
           bullets: [
-            'Households and residents preparing for emergencies.',
-            'Churches, NGOs, community hubs, and institution administrators.',
-            'Emergency managers, first responders, and public-sector operations teams.',
+            'Individuals, families, and community members.',
+            'Churches, food banks, nonprofits, and community organizations.',
+            'Emergency managers and first responders.',
+            'State, county, and local public agencies.',
+            'Organizations helping with supplies, deliveries, and recovery.',
           ],
         },
       ];
@@ -292,8 +300,13 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(11);
           const lines = doc.splitTextToSize(`• ${bullet}`, contentWidth - 12);
+          const bulletHeight = lines.length * 16 + 4;
+          if (y + bulletHeight > pageHeight - 54) {
+            doc.addPage();
+            y = 64;
+          }
           doc.text(lines, margin + 8, y);
-          y += lines.length * 16 + 4;
+          y += bulletHeight;
         }
         y += 10;
       }
@@ -306,9 +319,13 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
       doc.setDrawColor(203, 213, 225);
       doc.line(margin, y, pageWidth - margin, y);
       y += 22;
-      doc.setFont('helvetica', 'italic');
+      doc.setFont('helvetica', 'normal');
       doc.setFontSize(10);
-      doc.text('Prepared from the current AERA product overview.', margin, y);
+      const closingLines = doc.splitTextToSize(
+        'AERA gives each person the tools they need based on their responsibilities, while keeping essential features simple and easy to find.',
+        contentWidth,
+      );
+      doc.text(closingLines, margin, y);
 
       doc.save('About-AERA.pdf');
     } catch (downloadError) {
