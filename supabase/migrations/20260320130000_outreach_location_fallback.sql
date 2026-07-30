@@ -1,6 +1,10 @@
 -- Fix Nearby Outreach Panel failure when organization coordinates are missing.
 -- Fallback: use signed-in leader profile coordinates if org coordinates are null.
 
+-- The preceding event-distribution migration used NUMERIC coordinates. Drop
+-- that signature before recreating the function with FLOAT8 return columns.
+DROP FUNCTION IF EXISTS public.get_org_outreach_candidates(UUID, INTEGER);
+
 CREATE OR REPLACE FUNCTION public.get_org_outreach_candidates(
   p_org_id UUID DEFAULT NULL,
   p_radius_miles INTEGER DEFAULT 3
