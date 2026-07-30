@@ -17,6 +17,17 @@ const GAP_REVENUE_SETTINGS_KEY = 'aera_gap_revenue_settings_v1';
 const MAX_CACHED_REQUESTS = 200;
 const MAX_CACHED_REPLENISHMENTS = 200;
 const IS_PRODUCTION = import.meta.env.PROD;
+const SENSITIVE_SESSION_KEYS = new Set([
+  DB_KEY,
+  AUTH_TOKEN_KEY,
+  AUTH_REFRESH_TOKEN_KEY,
+  OFFLINE_QUEUE_KEY,
+  SYNC_ID_MAP_KEY,
+  PROFILE_IMAGE_MAP_KEY,
+  ORG_OUTREACH_RADIUS_MAP_KEY,
+  GAP_REVENUE_SETTINGS_KEY,
+]);
+const sensitiveMemoryCache = new Map<string, string>();
 
 type OfflineOperation = {
   id: string;
@@ -36,34 +47,87 @@ const isQuotaExceeded = (error: unknown) => {
   );
 };
 
+const getLocalStorage = (): Storage | null => {
+  try {
+    return typeof window !== 'undefined' ? window.localStorage : null;
+  } catch {
+    return null;
+  }
+};
+
+const getSessionStorage = (): Storage | null => {
+  try {
+    return typeof window !== 'undefined' ? window.sessionStorage : null;
+  } catch {
+    return null;
+  }
+};
+
 const safeGetItem = (key: string): string | null => {
   try {
-    return localStorage.getItem(key);
+    if (SENSITIVE_SESSION_KEYS.has(key)) {
+      const session = getSessionStorage();
+      const sessionValue = session?.getItem(key);
+      if (sessionValue != null) return sessionValue;
+
+      // Move legacy sensitive values out of persistent localStorage on first read.
+      const local = getLocalStorage();
+      const legacyValue = local?.getItem(key);
+      if (legacyValue != null) {
+        if (session) {
+          session.setItem(key, legacyValue);
+        } else {
+          sensitiveMemoryCache.set(key, legacyValue);
+        }
+        local?.removeItem(key);
+        return legacyValue;
+      }
+
+      return sensitiveMemoryCache.get(key) ?? null;
+    }
+
+    return getLocalStorage()?.getItem(key) ?? null;
   } catch (e) {
-    console.warn('localStorage getItem failed', { key, error: e });
+    console.warn('Browser storage getItem failed', { key, error: e });
     return null;
   }
 };
 
 const safeSetItem = (key: string, value: string): boolean => {
   try {
-    localStorage.setItem(key, value);
+    if (SENSITIVE_SESSION_KEYS.has(key)) {
+      // Never leave a persistent copy of sensitive AERA data behind.
+      getLocalStorage()?.removeItem(key);
+      const session = getSessionStorage();
+      if (session) {
+        session.setItem(key, value);
+      } else {
+        sensitiveMemoryCache.set(key, value);
+      }
+      return true;
+    }
+
+    const local = getLocalStorage();
+    if (!local) return false;
+    local.setItem(key, value);
     return true;
   } catch (e) {
     if (isQuotaExceeded(e)) {
-      console.warn('localStorage quota exceeded, will attempt cleanup', { key });
+      console.warn('Browser storage quota exceeded, will attempt cleanup', { key });
       return false;
     }
-    console.error('localStorage setItem failed', { key, error: e });
+    console.error('Browser storage setItem failed', { key, error: e });
     return false;
   }
 };
 
 const safeRemoveItem = (key: string) => {
   try {
-    localStorage.removeItem(key);
+    getLocalStorage()?.removeItem(key);
+    getSessionStorage()?.removeItem(key);
+    sensitiveMemoryCache.delete(key);
   } catch (e) {
-    console.warn('localStorage removeItem failed', { key, error: e });
+    console.warn('Browser storage removeItem failed', { key, error: e });
   }
 };
 
@@ -838,22 +902,16 @@ export const StorageService = {
               let avatarValueForProfile = nextValue;
 
               if (nextValue.startsWith('data:image/')) {
-                try {
-                  const avatarUrl = await uploadProfileAvatarDataUrl(nextValue);
-                  if (avatarUrl) {
-                    avatarValueForProfile = avatarUrl;
-                    const latestRaw = safeGetItem(PROFILE_IMAGE_MAP_KEY);
-                    const latest = latestRaw ? (JSON.parse(latestRaw) as Record<string, string>) : {};
-                    aliases.forEach((alias) => {
-                      latest[alias] = avatarUrl;
-                    });
-                    const localSaved = safeSetItem(PROFILE_IMAGE_MAP_KEY, JSON.stringify(latest));
-                    if (localSaved && typeof window !== 'undefined') {
-                      window.dispatchEvent(new Event('profile-image-updated'));
-                    }
-                  }
-                } catch (uploadErr) {
-                  console.warn('Profile image storage upload failed; falling back to profile avatar sync', uploadErr);
+                const uploadedAvatar = await uploadProfileAvatarDataUrl(nextValue);
+                avatarValueForProfile = uploadedAvatar.storageRef;
+                const latestRaw = safeGetItem(PROFILE_IMAGE_MAP_KEY);
+                const latest = latestRaw ? (JSON.parse(latestRaw) as Record<string, string>) : {};
+                aliases.forEach((alias) => {
+                  latest[alias] = uploadedAvatar.displayUrl;
+                });
+                const localSaved = safeSetItem(PROFILE_IMAGE_MAP_KEY, JSON.stringify(latest));
+                if (localSaved && typeof window !== 'undefined') {
+                  window.dispatchEvent(new Event('profile-image-updated'));
                 }
               }
 

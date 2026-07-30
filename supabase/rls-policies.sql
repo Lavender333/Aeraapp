@@ -691,8 +691,8 @@ CREATE POLICY "Activity log can insert"
 
 -- Create storage bucket for profile avatars
 INSERT INTO storage.buckets (id, name, public) 
-VALUES ('avatars', 'avatars', true)
-ON CONFLICT (id) DO NOTHING;
+VALUES ('avatars', 'avatars', false)
+ON CONFLICT (id) DO UPDATE SET public = false;
 
 -- Create storage bucket for damage assessment photos
 INSERT INTO storage.buckets (id, name, public)
@@ -715,10 +715,14 @@ CREATE POLICY "Users can update own avatar"
     (select auth.uid())::text = (storage.foldername(name))[1]
   );
 
--- Anyone can view avatars (public bucket)
-CREATE POLICY "Anyone can view avatars"
+-- Signed-in users can view avatars allowed by the hardened helper policy.
+CREATE POLICY "Authenticated users can read permitted avatars"
   ON storage.objects FOR SELECT
-  USING (bucket_id = 'avatars');
+  TO authenticated
+  USING (
+    bucket_id = 'avatars'
+    AND public.can_read_profile_avatar((storage.foldername(name))[1])
+  );
 
 -- Users can upload their own assessment photos
 CREATE POLICY "Users can upload own assessment photos"

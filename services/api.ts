@@ -1064,7 +1064,12 @@ export async function updateProfileForUser(payload: {
   };
 
   if (Object.prototype.hasOwnProperty.call(payload, 'avatarDataUrl')) {
-    profileUpdate.avatar_url = payload.avatarDataUrl || null;
+    const avatarReference = String(payload.avatarDataUrl || '').trim();
+    const expectedReference = `${AVATAR_STORAGE_REFERENCE_PREFIX}${avatarPathForUser(authData.user.id)}`;
+    if (avatarReference && avatarReference !== expectedReference) {
+      throw new Error('Invalid profile image reference.');
+    }
+    profileUpdate.avatar_url = avatarReference || null;
   }
 
   if (Object.prototype.hasOwnProperty.call(payload, 'addressLine1')) {
@@ -1138,7 +1143,71 @@ export async function updateProfileForUser(payload: {
   return { ok: true };
 }
 
-export async function uploadProfileAvatarDataUrl(dataUrl: string): Promise<string> {
+const AVATAR_STORAGE_REFERENCE_PREFIX = 'avatar:';
+const AVATAR_SIGNED_URL_TTL_SECONDS = 60 * 60;
+
+export type UploadedProfileAvatar = {
+  storageRef: string;
+  displayUrl: string;
+};
+
+const avatarPathForUser = (userId: string) => `${userId}/avatar`;
+
+const extractAvatarStoragePath = (storedValue: string, userId: string): string | null => {
+  const value = String(storedValue || '').trim();
+  if (!value || value.startsWith('data:image/')) return null;
+
+  if (value.startsWith(AVATAR_STORAGE_REFERENCE_PREFIX)) {
+    const path = value.slice(AVATAR_STORAGE_REFERENCE_PREFIX.length);
+    return path === avatarPathForUser(userId) ? path : null;
+  }
+
+  if (value === avatarPathForUser(userId)) return value;
+
+  try {
+    const url = new URL(value);
+    const markers = [
+      '/storage/v1/object/public/avatars/',
+      '/storage/v1/object/sign/avatars/',
+    ];
+    const marker = markers.find((candidate) => url.pathname.includes(candidate));
+    if (!marker) return null;
+    const path = decodeURIComponent(url.pathname.split(marker)[1] || '');
+    return path === avatarPathForUser(userId) ? path : null;
+  } catch {
+    return null;
+  }
+};
+
+const createProfileAvatarSignedUrl = async (path: string): Promise<string> => {
+  const { data, error } = await supabase
+    .storage
+    .from('avatars')
+    .createSignedUrl(path, AVATAR_SIGNED_URL_TTL_SECONDS);
+
+  if (error || !data?.signedUrl) {
+    throw new Error(`Avatar access failed: ${error?.message || 'signed URL unavailable'}`);
+  }
+
+  return data.signedUrl;
+};
+
+export async function resolveProfileAvatarForUser(
+  storedValue: string | null | undefined,
+  userId: string,
+): Promise<string> {
+  const path = extractAvatarStoragePath(String(storedValue || ''), userId);
+  if (!path) return '';
+
+  try {
+    return await createProfileAvatarSignedUrl(path);
+  } catch (error) {
+    console.warn('Profile avatar could not be signed', error);
+    return '';
+  }
+}
+
+export async function uploadProfileAvatarDataUrl(dataUrl: string): Promise<UploadedProfileAvatar> {
   const raw = String(dataUrl || '').trim();
   if (!raw.startsWith('data:image/')) {
     throw new Error('Invalid profile image data.');
@@ -1156,7 +1225,7 @@ export async function uploadProfileAvatarDataUrl(dataUrl: string): Promise<strin
   if (blob.size > 2 * 1024 * 1024) {
     throw new Error('Profile image must be smaller than 2MB.');
   }
-  const path = `${userId}/avatar`;
+  const path = avatarPathForUser(userId);
 
   const { error: uploadError } = await supabase
     .storage
@@ -1171,14 +1240,11 @@ export async function uploadProfileAvatarDataUrl(dataUrl: string): Promise<strin
     throw new Error(`Avatar upload failed: ${uploadError.message || 'unknown error'}`);
   }
 
-  const { data: publicData } = supabase
-    .storage
-    .from('avatars')
-    .getPublicUrl(path);
-
-  const publicUrl = String(publicData?.publicUrl || '').trim();
-  if (!publicUrl) throw new Error('Avatar upload succeeded but no public URL was returned.');
-  return `${publicUrl}?v=${Date.now()}`;
+  const displayUrl = await createProfileAvatarSignedUrl(path);
+  return {
+    storageRef: `${AVATAR_STORAGE_REFERENCE_PREFIX}${path}`,
+    displayUrl,
+  };
 }
 
 export async function deleteProfileAvatarForCurrentUser(): Promise<void> {
@@ -3733,6 +3799,7 @@ export async function fetchProfileForUser(): Promise<Partial<UserProfile> | null
     (data as any)?.organizations?.org_code ||
     (Array.isArray((data as any)?.organizations) ? (data as any).organizations[0]?.org_code : null) ||
     (data.org_id ? await getOrgCodeById(data.org_id) : null);
+  const avatarDisplayUrl = await resolveProfileAvatarForUser(data.avatar_url, authData.user.id);
 
   return {
     fullName: data.full_name || '',
@@ -3757,7 +3824,7 @@ export async function fetchProfileForUser(): Promise<Partial<UserProfile> | null
     emergencyContactName: data.emergency_contact?.name || '',
     emergencyContactPhone: data.emergency_contact?.phone || '',
     emergencyContactRelation: data.emergency_contact?.relation || '',
-    avatarDataUrl: data.avatar_url || '',
+    avatarDataUrl: avatarDisplayUrl,
     onboardComplete: Boolean((data as any).onboarding_completed),
   };
 }

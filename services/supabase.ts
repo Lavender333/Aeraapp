@@ -10,6 +10,30 @@ if (!hasSupabaseConfig) {
   console.warn(supabaseConfigMessage);
 }
 
+const getSecureBrowserAuthStorage = (): Storage | undefined => {
+  if (typeof window === 'undefined') return undefined;
+
+  try {
+    // Older builds persisted Supabase sessions in localStorage. Remove those
+    // legacy copies before switching to tab-scoped session storage.
+    for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+      const key = window.localStorage.key(index);
+      if (key && /^sb-.*-auth-token$/i.test(key)) {
+        window.localStorage.removeItem(key);
+      }
+    }
+
+    const probeKey = '__aera_session_storage_probe__';
+    window.sessionStorage.setItem(probeKey, '1');
+    window.sessionStorage.removeItem(probeKey);
+    return window.sessionStorage;
+  } catch {
+    // Supabase can operate without persistent browser storage in locked-down
+    // browser contexts. Never fall back to long-lived localStorage.
+    return undefined;
+  }
+};
+
 export const supabase: SupabaseClient = createClient(
   hasSupabaseConfig ? supabaseUrl! : 'https://example.supabase.co',
   hasSupabaseConfig ? supabaseAnonKey! : 'public-anon-key',
@@ -18,6 +42,8 @@ export const supabase: SupabaseClient = createClient(
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    flowType: 'pkce',
+    storage: getSecureBrowserAuthStorage(),
   },
   realtime: {
     params: {

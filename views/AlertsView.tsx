@@ -22,7 +22,9 @@ export const AlertsView: React.FC<{ setView: (v: ViewState) => void }> = ({ setV
     setSources([]);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // This compatibility client is intentionally keyless. Never embed
+      // privileged AI credentials in browser JavaScript.
+      const ai = new GoogleGenAI({ apiKey: '' });
       
       const result = await ai.models.generateContent({
         model: 'gemini-2.5-flash',

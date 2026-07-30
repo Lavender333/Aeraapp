@@ -64,11 +64,27 @@ const showBootFallbackBanner = (title: string, detail: string) => {
     document.body.appendChild(banner);
   }
 
-  banner.innerHTML = `
-    <div style="font-size:13px;font-weight:700;line-height:1.3;">${title}</div>
-    <div style="font-size:12px;line-height:1.45;margin-top:4px;white-space:pre-wrap;">${detail}</div>
-    <div style="font-size:11px;line-height:1.4;margin-top:8px;opacity:0.9;">Try hard refresh (Cmd+Shift+R). If this persists, open browser console and share the first error.</div>
-  `;
+  const titleNode = document.createElement('div');
+  titleNode.style.fontSize = '13px';
+  titleNode.style.fontWeight = '700';
+  titleNode.style.lineHeight = '1.3';
+  titleNode.textContent = title;
+
+  const detailNode = document.createElement('div');
+  detailNode.style.fontSize = '12px';
+  detailNode.style.lineHeight = '1.45';
+  detailNode.style.marginTop = '4px';
+  detailNode.style.whiteSpace = 'pre-wrap';
+  detailNode.textContent = detail;
+
+  const helpNode = document.createElement('div');
+  helpNode.style.fontSize = '11px';
+  helpNode.style.lineHeight = '1.4';
+  helpNode.style.marginTop = '8px';
+  helpNode.style.opacity = '0.9';
+  helpNode.textContent = 'Try hard refresh (Cmd+Shift+R). If this persists, open browser console and share the first error.';
+
+  banner.replaceChildren(titleNode, detailNode, helpNode);
 };
 
 const installBootErrorHandlers = () => {

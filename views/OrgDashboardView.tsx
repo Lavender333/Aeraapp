@@ -648,7 +648,9 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
     setIsModerating(true);
     setModerationError(null);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // This compatibility client is intentionally keyless. Never embed
+      // privileged AI credentials in browser JavaScript.
+      const ai = new GoogleGenAI({ apiKey: '' });
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: `Analyze this broadcast message for an emergency app: "${text}". 
