@@ -261,6 +261,11 @@ END $$;
 --   4) have the app profile + saved coordinates.
 -- ----------------------
 
+-- Production may already contain a newer version of this function from a
+-- dashboard-applied migration. PostgreSQL cannot change a function's table
+-- return type with CREATE OR REPLACE, so remove the existing signature first.
+DROP FUNCTION IF EXISTS public.get_org_outreach_candidates(UUID, INTEGER);
+
 CREATE OR REPLACE FUNCTION public.get_org_outreach_candidates(
   p_org_id UUID DEFAULT NULL,
   p_radius_miles INTEGER DEFAULT 3
