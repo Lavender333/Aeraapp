@@ -1,6 +1,7 @@
 
 import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { BottomNav } from './components/BottomNav';
+import { shouldShowEssentialNavigation } from './services/essentialAccess';
 import { ViewState, UserProfile } from './types';
 import { StorageService } from './services/storage';
 import {
@@ -631,28 +632,7 @@ export default function App() {
     }
   };
 
-  const showNav = currentView !== 'SPLASH' && 
-                  currentView !== 'PRESENTATION' &&
-                  currentView !== 'HELP_WIZARD' && 
-                  currentView !== 'REGISTRATION' && 
-                  currentView !== 'ACCOUNT_SETUP' &&
-                  currentView !== 'LOGIN' && 
-                  currentView !== 'RESET_PASSWORD' &&
-                  currentView !== 'BUILD_KIT' &&
-                  currentView !== 'NEW_SIGNUPS' &&
-                  currentView !== 'READINESS' &&
-                  currentView !== 'READINESS_GAP' &&
-                  currentView !== 'ORG_DASHBOARD' &&
-                  currentView !== 'PRIVACY_POLICY' &&
-                  currentView !== 'EVENT_SETUP' &&
-                  currentView !== 'EVENT_REGISTRATION' &&
-                  currentView !== 'VOLUNTEER_SCAN' &&
-                  currentView !== 'EVENT_DASHBOARD' &&
-                  currentView !== 'BUYER_PORTAL' &&
-                  currentView !== 'PUBLIC_INTAKE' &&
-                  currentView !== 'LEAD_INTAKE' &&
-                  currentView !== 'LEAD_ADMIN' &&
-                  currentView !== 'FINANCE_DASHBOARD';
+  const showNav = shouldShowEssentialNavigation(currentView, StorageService.hasProfile());
 
   const useWideLayout = [
     'DASHBOARD',

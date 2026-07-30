@@ -2,7 +2,7 @@
 import React from 'react';
 import { Home, AlertCircle, Settings, CalendarCheck } from 'lucide-react';
 import { ViewState } from '../types';
-import { StorageService } from '../services/storage';
+import { ESSENTIAL_NAV_ITEMS } from '../services/essentialAccess';
 
 interface BottomNavProps {
   currentView: ViewState;
@@ -10,22 +10,17 @@ interface BottomNavProps {
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({ currentView, setView }) => {
-  const profile = StorageService.getProfile();
-  const role = String(profile?.role || 'GENERAL_USER').toUpperCase();
-  const canAccessOrgEventDashboard = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN', 'FIRST_RESPONDER', 'LOCAL_AUTHORITY'].includes(role);
-  const eventsView = canAccessOrgEventDashboard ? ('EVENT_DASHBOARD' as ViewState) : ('EVENTS' as ViewState);
-
-  const navItems = [
-    { id: 'DASHBOARD' as ViewState, icon: <Home size={24} />, label: 'Home' },
-    { id: 'HELP_WIZARD' as ViewState, icon: <AlertCircle size={24} />, label: 'Report' },
-    { id: eventsView, icon: <CalendarCheck size={24} />, label: 'Events' },
-    { id: 'SETTINGS' as ViewState, icon: <Settings size={24} />, label: 'Settings' },
-  ];
+  const icons: Record<(typeof ESSENTIAL_NAV_ITEMS)[number]['id'], React.ReactNode> = {
+    DASHBOARD: <Home size={24} />,
+    HELP_WIZARD: <AlertCircle size={24} />,
+    EVENTS: <CalendarCheck size={24} />,
+    SETTINGS: <Settings size={24} />,
+  };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 pb-safe pt-2 px-6 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-50 print:hidden">
+    <nav aria-label="Essential account navigation" className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 pb-safe pt-2 px-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-50 print:hidden">
       <div className="flex justify-between items-center max-w-md mx-auto pb-4">
-        {navItems.map((item) => {
+        {ESSENTIAL_NAV_ITEMS.map((item) => {
           const isActive = currentView === item.id;
           return (
             <button
@@ -38,9 +33,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentView, setView }) =>
               }`}
             >
               <div className="p-1">
-                {item.icon}
+                {icons[item.id]}
               </div>
-              <span className="text-[10px] font-medium">{item.label}</span>
+              <span className="text-[10px] font-medium text-center">{item.label}</span>
             </button>
           );
         })}
