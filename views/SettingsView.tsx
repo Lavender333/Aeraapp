@@ -36,6 +36,7 @@ import { subscribeToNotifications, subscribeToOrganizationAccess } from '../serv
 import { listEvents, DistributionEvent } from '../services/eventDistribution';
 import { isValidPhoneForInvite, validateHouseholdMembers } from '../services/validation';
 import { t } from '../services/translations';
+import { canRoleAccessAdminFeature, canRoleAccessView } from '../services/rolePageAccess';
 import { User, Bell, Lock, LogOut, Check, Building2, ArrowLeft, ArrowRight, Link as LinkIcon, Loader2, HeartPulse, ShieldCheck, Users, ToggleLeft, ToggleRight, MoreVertical, Copy, CheckCircle, Database, X, XCircle, Globe, Search, Truck, Phone, Mail, MapPin, Power, Ban, Activity, Radio, AlertTriangle, HelpCircle, FileText, Printer, CheckSquare, Download, RefreshCcw, Clipboard, PenTool, ChevronDown, PlayCircle, Save, Calendar, MessageSquare, Send } from 'lucide-react';
 
 // Phone Formatter Utility
@@ -5609,28 +5610,28 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           description: isOrgScopedAdmin ? 'Find and manage your organization members' : 'Find and manage people across AERA',
           icon: Users,
           action: openAccessControl,
-          visible: true,
+          visible: canRoleAccessAdminFeature(normalizedRole, 'USER_DIRECTORY'),
         },
         {
           label: 'Roles & Access',
           description: isOrgScopedAdmin ? 'Review access available to organization members' : 'Review roles and permission settings',
           icon: Lock,
           action: openRoleDefinitions,
-          visible: true,
+          visible: canRoleAccessAdminFeature(normalizedRole, 'ROLES_ACCESS'),
         },
         {
           label: 'New Signups',
           description: 'Review recently registered people',
           icon: CheckCircle,
           action: () => setView('NEW_SIGNUPS'),
-          visible: isPlatformAdmin,
+          visible: canRoleAccessAdminFeature(normalizedRole, 'NEW_SIGNUPS'),
         },
         {
           label: 'Member Activity Log',
           description: 'See organization membership changes',
           icon: Activity,
           action: openMemberActivity,
-          visible: true,
+          visible: canRoleAccessAdminFeature(normalizedRole, 'MEMBER_ACTIVITY'),
         },
       ],
     },
@@ -5644,28 +5645,28 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           description: isOrgScopedAdmin ? 'Open your organization record' : 'Find and review registered organizations',
           icon: Building2,
           action: openOrgDirectory,
-          visible: true,
+          visible: canRoleAccessAdminFeature(normalizedRole, 'ORGANIZATION_DIRECTORY'),
         },
         {
           label: 'Seat & Access Management',
           description: isOrgScopedAdmin ? 'See seats purchased, used, and available' : 'Assign seats and monitor usage',
           icon: Users,
           action: openOrgDirectory,
-          visible: true,
+          visible: canRoleAccessAdminFeature(normalizedRole, 'SEAT_MANAGEMENT'),
         },
         {
           label: 'Community Access Codes',
           description: isOrgScopedAdmin ? 'Create and share codes for your organization' : 'Create organization-bound access codes',
           icon: LinkIcon,
           action: openOrgDirectory,
-          visible: true,
+          visible: canRoleAccessAdminFeature(normalizedRole, 'COMMUNITY_CODES'),
         },
         {
           label: 'Organization Address',
           description: 'Update the organization location',
           icon: MapPin,
           action: openOrganizationAddressSettings,
-          visible: canManageOrgSettings,
+          visible: canRoleAccessAdminFeature(normalizedRole, 'ORGANIZATION_ADDRESS'),
         },
       ],
     },
@@ -5679,21 +5680,21 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           description: 'Open referral forms, links, and QR sharing',
           icon: Clipboard,
           action: () => setView('LEAD_INTAKE'),
-          visible: true,
+          visible: canRoleAccessAdminFeature(normalizedRole, 'REFERRAL_INTAKE'),
         },
         {
           label: 'Lead Pipeline',
           description: 'Review and manage incoming opportunities',
           icon: CheckSquare,
           action: () => setView('LEAD_ADMIN'),
-          visible: isPlatformAdmin,
+          visible: canRoleAccessAdminFeature(normalizedRole, 'LEAD_PIPELINE'),
         },
         {
           label: 'Buyer Portal',
           description: 'Open buyer access and lead delivery',
           icon: Users,
           action: () => setView('BUYER_PORTAL'),
-          visible: isPlatformAdmin,
+          visible: canRoleAccessAdminFeature(normalizedRole, 'BUYER_PORTAL'),
         },
       ],
     },
@@ -5707,21 +5708,25 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           description: 'Review supplies, expiration dates, and replenishment',
           icon: FileText,
           action: openMasterInventory,
-          visible: true,
+          visible: canRoleAccessAdminFeature(normalizedRole, 'INVENTORY'),
         },
         {
-          label: 'Event Management',
-          description: 'Create and manage distribution events',
+          label: canRoleAccessView(normalizedRole, 'EVENT_SETUP') ? 'Event Management' : 'Event Oversight',
+          description: canRoleAccessView(normalizedRole, 'EVENT_SETUP')
+            ? 'Create and manage distribution events'
+            : 'Review distribution events and activity',
           icon: Calendar,
-          action: openEventManagement,
-          visible: true,
+          action: canRoleAccessView(normalizedRole, 'EVENT_SETUP')
+            ? openEventManagement
+            : () => setView('EVENT_DASHBOARD'),
+          visible: canRoleAccessAdminFeature(normalizedRole, 'EVENTS'),
         },
         {
           label: 'Manage Broadcasts',
           description: 'Send important messages and alerts',
           icon: Radio,
           action: openBroadcastControl,
-          visible: true,
+          visible: canRoleAccessAdminFeature(normalizedRole, 'BROADCASTS'),
         },
       ],
     },
@@ -5735,7 +5740,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           description: 'See revenue, costs, and subscribers needed at $1.99',
           icon: Activity,
           action: openFinancialDashboard,
-          visible: isPlatformAdmin,
+          visible: canRoleAccessAdminFeature(normalizedRole, 'FINANCE'),
         },
       ],
     },
@@ -5988,7 +5993,15 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               </p>
             </div>
             <span className="self-start rounded-full bg-slate-100 border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700">
-              {isPlatformAdmin ? 'Head Administrator' : 'Organization Administrator'}
+              {normalizedRole === 'ADMIN'
+                ? 'Administrator'
+                : normalizedRole === 'STATE_ADMIN'
+                  ? 'State Administrator'
+                  : normalizedRole === 'COUNTY_ADMIN'
+                    ? 'County Administrator'
+                    : normalizedRole === 'INSTITUTION_ADMIN'
+                      ? 'Institution Administrator'
+                      : 'Organization Administrator'}
             </span>
           </div>
 
@@ -6075,7 +6088,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             )}
           </div>
 
-          {!isOrgScopedAdmin && !normalizedAdminMenuSearch && (
+          {isPlatformAdmin && !normalizedAdminMenuSearch && (
             <div className="border-t border-slate-200 pt-4">
               <button
                 type="button"

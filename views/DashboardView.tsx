@@ -57,6 +57,7 @@ import {
 } from 'recharts';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
+import { canRoleAccessView } from '../services/rolePageAccess';
 
 interface DashboardViewProps {
   setView: (view: ViewState) => void;
@@ -450,15 +451,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   // Role Helper Checks
   const isResponder = userRole === 'FIRST_RESPONDER' || userRole === 'LOCAL_AUTHORITY' || userRole === 'ADMIN' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN' || userRole === 'ORG_ADMIN' || userRole === 'INSTITUTION_ADMIN';
   const isOrgAdmin = userRole === 'INSTITUTION_ADMIN' || userRole === 'ORG_ADMIN';
-  const canOpenOrgDashboard = isOrgAdmin || userRole === 'ADMIN' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN';
+  const canOpenOrgDashboard = canRoleAccessView(userRole, 'ORG_DASHBOARD');
   const isContractor = userRole === 'CONTRACTOR';
-  const canAccessLeadIntake = ['ADMIN', 'ORG_ADMIN'].includes(userRole);
-  const canAccessBuyerPortal = ['ADMIN', 'BUYER'].includes(userRole);
-  const canAccessLeadAdmin = userRole === 'ADMIN';
+  const canAccessLeadIntake = canRoleAccessView(userRole, 'LEAD_INTAKE');
+  const canAccessBuyerPortal = canRoleAccessView(userRole, 'BUYER_PORTAL');
+  const canAccessLeadAdmin = canRoleAccessView(userRole, 'LEAD_ADMIN');
   const showCommunityBlocks = !isGeneralUser;
   const showCommunityAnnouncements = hasCommunity;
-  const showLogisticsHome = userRole === 'FIRST_RESPONDER' || userRole === 'LOCAL_AUTHORITY' || userRole === 'STATE_ADMIN' || userRole === 'COUNTY_ADMIN' || isContractor;
-  const showEventDistribution = ['ADMIN','STATE_ADMIN','COUNTY_ADMIN','ORG_ADMIN','INSTITUTION_ADMIN','FIRST_RESPONDER','LOCAL_AUTHORITY'].includes(userRole);
+  const showLogisticsHome = canRoleAccessView(userRole, 'LOGISTICS');
+  const showEventDistribution = canRoleAccessView(userRole, 'EVENT_DASHBOARD');
   const depotCoverageBase = orgMemberCount || orgPopulation;
   const depotStatus = orgInventory
     ? getInventoryStatuses(orgInventory, depotCoverageBase)
@@ -1826,7 +1827,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         )}
 
         {/* --- PRO FEATURES (Responders / Admins) --- */}
-        {isResponder && (
+        {canRoleAccessView(userRole, 'POPULATION') && (
           <>
             {/* Population Tracker */}
             <Card 
