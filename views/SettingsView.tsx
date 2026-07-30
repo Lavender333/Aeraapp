@@ -59,11 +59,6 @@ const formatCommunityIdInput = (value: string) => {
   return cleaned;
 };
 
-// Keep account closure unavailable until the matching Supabase migration and
-// Edge Function deployment have completed. This prevents the older hard-delete
-// function from being called with the newer soft-closure interface.
-const SECURE_ACCOUNT_CLOSURE_ENABLED = false;
-
 const maskPhoneNumber = (value: string) => {
   const digits = String(value || '').replace(/\D/g, '');
   if (digits.length < 4) return value;
@@ -186,7 +181,7 @@ const GENERAL_FAQS: Array<{ q: string; a: string }> = [
   { q: 'What is the supply inventory for?', a: 'The inventory helps you track essential supplies (food, water, medications, etc.) your household has on hand. AERA uses this data to identify gaps and prioritize community resource sharing during a disaster.' },
   { q: 'How does geofenced outreach work?', a: 'If you opt in under Privacy settings, nearby organizations can see that there is an unconnected household in their area and may reach out to invite you. No identifying details are shared until you accept.' },
   { q: 'Can I use AERA without a smartphone?', a: 'AERA is a web-based progressive web app accessible on any modern browser. While a smartphone is recommended for location features, you can use AERA on a tablet or desktop computer.' },
-  { q: 'How do I close my account?', a: 'Secure self-service account closure is temporarily unavailable while AERA completes its protected backend deployment. Contact support for assistance in the meantime.' },
+  { q: 'How do I close my account?', a: 'Go to Settings → Account Essentials → Close Account. AERA disables access, releases organization seats, minimizes personal profile information, and retains only required operational and audit history.' },
 ];
 
 const ORG_ADMIN_FAQS: Array<{ q: string; a: string }> = [
@@ -367,19 +362,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const isAdmin = ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(normalizedRole);
   const isPlatformAdmin = normalizedRole === 'ADMIN';
   const isOrgScopedAdmin = normalizedRole === 'ORG_ADMIN' || normalizedRole === 'INSTITUTION_ADMIN';
-  const canSubmitContactSupport = [
-    'GENERAL_USER',
-    'MEMBER',
-    'ORG_ADMIN',
-    'INSTITUTION_ADMIN',
-    'ADMIN',
-    'STATE_ADMIN',
-    'COUNTY_ADMIN',
-    'BUYER',
-    'CONTRACTOR',
-    'LOCAL_AUTHORITY',
-    'FIRST_RESPONDER'
-  ].includes(normalizedRole);
+  const canSubmitContactSupport = Boolean(profile.id && profile.id !== 'guest');
   const canManageOrgSettings = isOrgScopedAdmin || isPlatformAdmin;
   const orgScopeId = String(profile.communityId || '').trim();
   function getStoredProfileImage(userId?: string) {
@@ -446,6 +429,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [currentSection, setCurrentSection] = useState<'MAIN' | 'ACCESS_CONTROL' | 'DB_VIEWER' | 'ORG_DIRECTORY' | 'BROADCAST_CONTROL' | 'MASTER_INVENTORY' | 'EVENT_MANAGEMENT' | 'MEMBER_ACTIVITY'>('MAIN');
   const [isSaved, setIsSaved] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isClosingAccount, setIsClosingAccount] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [connectedOrg, setConnectedOrg] = useState<string | null>(null);
   const [organizationCodeInput, setOrganizationCodeInput] = useState(
@@ -3093,13 +3077,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       };
 
   const handleCloseAccount = async () => {
-    if (!SECURE_ACCOUNT_CLOSURE_ENABLED) {
-      window.alert(
-        'Secure account closure is temporarily unavailable while the protected backend update is being completed.',
-      );
-      return;
-    }
-
+    if (isClosingAccount) return;
     const confirmed = window.confirm(
       'Close your AERA account? You will lose access, active memberships and subscriptions will end, and required audit history will be retained.',
     );
@@ -3107,6 +3085,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     const confirmationText = window.prompt('Type CLOSE to confirm this account closure request.');
     if (String(confirmationText || '').trim().toUpperCase() !== 'CLOSE') return;
 
+    setIsClosingAccount(true);
     try {
       await closeCurrentAccount();
       StorageService.logoutUser();
@@ -3114,7 +3093,20 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       setView('LOGIN');
     } catch (error: any) {
       window.alert(error?.message || 'Unable to close your account right now. Please contact support.');
+    } finally {
+      setIsClosingAccount(false);
     }
+  };
+
+  const scrollToEssentialAccountSection = (
+    targetId: 'settings-contact-support' | 'settings-privacy-consent' | 'settings-account-actions',
+  ) => {
+    if (targetId === 'settings-contact-support') {
+      setExpandedSections((current) => ({ ...current, contactUs: true }));
+    }
+    window.requestAnimationFrame(() => {
+      document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   };
 
   const openDbViewer = () => {
@@ -5870,6 +5862,44 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         </div>
       </section>
 
+      <section className="bg-white/95 border border-teal-200 rounded-2xl p-4 shadow-sm">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-teal-700">Account Essentials</p>
+          <p className="text-sm text-slate-600 mt-1">Available to every AERA user.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 mt-4">
+          <button
+            type="button"
+            onClick={() => scrollToEssentialAccountSection('settings-contact-support')}
+            className="min-h-[48px] rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800"
+          >
+            Account Support
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollToEssentialAccountSection('settings-privacy-consent')}
+            className="min-h-[48px] rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800"
+          >
+            Privacy &amp; Consent
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleLogout()}
+            disabled={isLoggingOut}
+            className="min-h-[48px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800 disabled:opacity-60"
+          >
+            {isLoggingOut ? 'Logging out…' : 'Log Out'}
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollToEssentialAccountSection('settings-account-actions')}
+            className="min-h-[48px] rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800"
+          >
+            Close Account
+          </button>
+        </div>
+      </section>
+
       <section className="bg-white/95 border border-slate-200 rounded-2xl p-5 shadow-sm">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-start gap-3">
@@ -7891,7 +7921,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
       {/* Contact Us */}
       {canSubmitContactSupport && (
-        <section ref={contactUsSectionRef} className="bg-white/95 p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 border-l-4 border-l-amber-400 order-6">
+        <section id="settings-contact-support" ref={contactUsSectionRef} className="bg-white/95 p-6 rounded-2xl shadow-sm space-y-4 border border-slate-200 border-l-4 border-l-amber-400 order-6 scroll-mt-4">
           <button
             id={accordionButtonIds.contactUs}
             type="button"
@@ -8129,7 +8159,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         </section>
       )}
 
-      <section className="bg-white/95 p-6 rounded-2xl shadow-sm space-y-4 order-7 border border-slate-200">
+      <section id="settings-privacy-consent" className="bg-white/95 p-6 rounded-2xl shadow-sm space-y-4 order-7 border border-slate-200 scroll-mt-4">
         <div className="flex items-center gap-4">
           <div className="p-3 bg-sky-100 border border-sky-200 rounded-full text-sky-700">
             <ShieldCheck size={24} />
@@ -8203,7 +8233,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         </div>
       </section>
 
-      <div className="space-y-4 pt-4 border-t border-slate-200 order-8">
+      <div id="settings-account-actions" className="space-y-4 pt-4 border-t border-slate-200 order-8 scroll-mt-4">
         <Button
           onClick={() => void handleLogout()}
           disabled={isLoggingOut}
@@ -8217,16 +8247,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
           <p className="text-sm font-bold text-slate-900">Close your account</p>
           <p className="mt-1 text-xs leading-relaxed text-slate-600">
-            Secure account closure is temporarily unavailable while AERA completes the protected
-            backend deployment. Your account and data will not be changed by this disabled control.
+            Closing your account disables access, ends active memberships and subscriptions, releases
+            sponsored seats, minimizes personal profile information, and retains required audit history.
           </p>
           <button
             type="button"
             onClick={() => void handleCloseAccount()}
-            disabled={!SECURE_ACCOUNT_CLOSURE_ENABLED}
-            className="mt-3 w-full min-h-[48px] rounded-lg border border-slate-300 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-500 disabled:cursor-not-allowed"
+            disabled={isClosingAccount}
+            className="mt-3 w-full min-h-[48px] rounded-lg border border-red-300 bg-white px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
           >
-            Secure Account Closure Temporarily Unavailable
+            {isClosingAccount ? 'Closing Account…' : 'Close My Account'}
           </button>
         </div>
       </div>
