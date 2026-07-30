@@ -49,7 +49,9 @@ export const MapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
     setPlaces([]);
     
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // This compatibility client is intentionally keyless. Never embed
+      // privileged AI credentials in browser JavaScript.
+      const ai = new GoogleGenAI({ apiKey: '' });
       
       const config: any = {
         tools: [{ googleMaps: {} }],

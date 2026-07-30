@@ -1191,7 +1191,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       }
       try {
         setProfileSaveError(null);
-        const avatarUrl = await uploadProfileAvatarDataUrl(dataUrl);
+        const uploadedAvatar = await uploadProfileAvatarDataUrl(dataUrl);
         await updateProfileForUser({
           fullName: profile.fullName,
           phone: profile.phone,
@@ -1200,14 +1200,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           emergencyContactName: profile.emergencyContactName,
           emergencyContactPhone: profile.emergencyContactPhone,
           emergencyContactRelation: profile.emergencyContactRelation,
-          avatarDataUrl: avatarUrl,
+          avatarDataUrl: uploadedAvatar.storageRef,
         });
-        const saved = StorageService.saveProfileImageDataUrl(avatarUrl, profile.id, { skipRemoteSync: true });
+        const saved = StorageService.saveProfileImageDataUrl(uploadedAvatar.displayUrl, profile.id, { skipRemoteSync: true });
         if (!saved) {
           setProfileSaveError('Photo was uploaded, but it could not be cached on this device.');
           return;
         }
-        setProfileImageDataUrl(avatarUrl);
+        setProfileImageDataUrl(uploadedAvatar.displayUrl);
         showSavedIndicator('profile');
       } catch (error: any) {
         setProfileSaveError(error?.message || 'Could not upload profile image. Please try again.');
