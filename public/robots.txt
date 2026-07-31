@@ -5,4 +5,4 @@ Disallow: /lead-admin
 Disallow: /lead-intake
 Disallow: /public/intake
 
-Sitemap: https://aerafounders.com/sitemap.xml
+Sitemap: https://getaeraapp.com/sitemap.xml
