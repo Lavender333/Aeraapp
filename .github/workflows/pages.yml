@@ -65,7 +65,7 @@ jobs:
 
       - name: Add CNAME
         run: |
-          echo "getaeraapp.com" > dist/CNAME
+          echo "aerafounders.com" > dist/CNAME
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
