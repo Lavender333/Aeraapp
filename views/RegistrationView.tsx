@@ -10,7 +10,7 @@ import {
   DEMO_COMMUNITY_QR_SEEDS,
   getPendingCommunityInvite,
 } from '../services/communityInvite';
-import { ensureHouseholdForCurrentUser, redeemOrganizationCode, syncHouseholdMembersForUser, updateProfileForUser, updateVitalsForUser } from '../services/api';
+import { ensureHouseholdForCurrentUser, redeemOrganizationCode, resendSignupConfirmation, syncHouseholdMembersForUser, updateProfileForUser, updateVitalsForUser } from '../services/api';
 import { getOrgByCode } from '../services/supabase';
 import { validateHouseholdMembers } from '../services/validation';
 import { supabase } from '../services/supabase';
@@ -81,6 +81,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
   const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
+  const [isResendingConfirmation, setIsResendingConfirmation] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [pendingCommunityId, setPendingCommunityId] = useState('');
   const [outreachLocationStatus, setOutreachLocationStatus] = useState<string | null>(null);
@@ -231,6 +232,20 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       setAuthError(e?.message || 'Registration failed.');
     } finally {
       setIsRegistering(false);
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    setAuthError(null);
+    setAuthSuccess(null);
+    try {
+      setIsResendingConfirmation(true);
+      await resendSignupConfirmation(email);
+      setAuthSuccess('Confirmation email sent again. Check your inbox and spam folder.');
+    } catch (e: any) {
+      setAuthError(e?.message || 'Unable to resend the confirmation email.');
+    } finally {
+      setIsResendingConfirmation(false);
     }
   };
 
@@ -385,9 +400,19 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
           {authError && <p className="text-sm text-red-600">{authError}</p>}
           {authSuccess && <p className="text-sm text-emerald-600">{authSuccess}</p>}
           {needsEmailConfirm && (
-            <Button variant="ghost" onClick={() => setView('LOGIN')} className="font-semibold text-brand-600">
-              Go to Log In
-            </Button>
+            <div className="space-y-2">
+              <Button
+                variant="ghost"
+                onClick={handleResendConfirmation}
+                disabled={isResendingConfirmation}
+                className="font-semibold text-brand-600"
+              >
+                {isResendingConfirmation ? 'Sending…' : 'Resend confirmation email'}
+              </Button>
+              <Button variant="ghost" onClick={() => setView('LOGIN')} className="font-semibold text-brand-600">
+                Go to Log In
+              </Button>
+            </div>
           )}
           <p className="text-xs text-slate-500">Next: complete Identity, Home, and Safety setup.</p>
         </div>

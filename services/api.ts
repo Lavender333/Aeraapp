@@ -4595,11 +4595,15 @@ export async function incrementPeopleRegisteredCount() {
 export async function registerAuth(payload: { email?: string; phone?: string; password: string; fullName?: string }) {
   const normalizedEmail = payload.email ? String(payload.email).trim().toLowerCase() : undefined;
   const { phone, password, fullName } = payload;
+  const emailRedirectTo = typeof window !== 'undefined'
+    ? `${window.location.origin}${window.location.pathname}`
+    : undefined;
   const { data, error } = await supabase.auth.signUp({
     email: normalizedEmail || undefined,
     phone: phone || undefined,
     password,
     options: {
+      emailRedirectTo,
       data: {
         full_name: fullName || '',
       },
@@ -4655,6 +4659,21 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
       orgId: '',
     },
   };
+}
+
+export async function resendSignupConfirmation(email: string): Promise<void> {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  if (!normalizedEmail) throw new Error('Enter the email address used to create the account.');
+
+  const emailRedirectTo = typeof window !== 'undefined'
+    ? `${window.location.origin}${window.location.pathname}`
+    : undefined;
+  const { error } = await supabase.auth.resend({
+    type: 'signup',
+    email: normalizedEmail,
+    options: { emailRedirectTo },
+  });
+  if (error) throw error;
 }
 
 export async function loginAuth(payload: { email?: string; phone?: string; password: string }) {
