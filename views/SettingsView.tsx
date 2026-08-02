@@ -24,6 +24,7 @@ import {
   OrganizationCodeRegistration,
   OrganizationSeatManagement,
   setOrganizationSeatLimit,
+  reviewOrganizationCodeRegistration,
 } from '../services/api';
 import { getOrgByCode, getOrgIdByCode } from '../services/supabase';
 import { listOrganizations as listOrganizationsSupabase } from '../services/supabaseApi';
@@ -37,6 +38,7 @@ import { listEvents, DistributionEvent } from '../services/eventDistribution';
 import { isValidPhoneForInvite, validateHouseholdMembers } from '../services/validation';
 import { t } from '../services/translations';
 import { canRoleAccessAdminFeature, canRoleAccessView } from '../services/rolePageAccess';
+import { clearPendingOrganizationCode, getPendingOrganizationCode, hasPendingOrganizationCode } from '../services/organizationCodeIntent';
 import { User, Bell, Lock, LogOut, Check, Building2, ArrowLeft, ArrowRight, Link as LinkIcon, Loader2, HeartPulse, ShieldCheck, Users, ToggleLeft, ToggleRight, MoreVertical, Copy, CheckCircle, Database, X, XCircle, Globe, Search, Truck, Phone, Mail, MapPin, Power, Ban, Activity, Radio, AlertTriangle, HelpCircle, FileText, Printer, CheckSquare, Download, RefreshCcw, Clipboard, PenTool, ChevronDown, PlayCircle, Save, Calendar, MessageSquare, Send } from 'lucide-react';
 
 // Phone Formatter Utility
@@ -308,7 +310,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     profile: false,
     household: false,
     contacts: false,
-    community: sessionStorage.getItem('aera.organizationCodeIntent') === '1',
+    community: hasPendingOrganizationCode(),
     security: false,
     contactUs: false,
   });
@@ -434,7 +436,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [isVerifying, setIsVerifying] = useState(false);
   const [connectedOrg, setConnectedOrg] = useState<string | null>(null);
   const [organizationCodeInput, setOrganizationCodeInput] = useState(
-    () => sessionStorage.getItem('aera.pendingOrganizationCode') || '',
+    () => getPendingOrganizationCode(),
   );
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [pendingCommunityInvite, setPendingCommunityInvite] = useState<PendingCommunityInvite | null>(
@@ -523,6 +525,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [codeRegistrations, setCodeRegistrations] = useState<OrganizationCodeRegistration[]>([]);
   const [codeRegistrationsBusy, setCodeRegistrationsBusy] = useState(false);
   const [codeRegistrationsError, setCodeRegistrationsError] = useState<string | null>(null);
+  const [reviewingCodeRegistrationId, setReviewingCodeRegistrationId] = useState('');
   const [seatLimitDraft, setSeatLimitDraft] = useState('');
   const [codeExpirationDraft, setCodeExpirationDraft] = useState('');
   const [codeMaxRedemptionsDraft, setCodeMaxRedemptionsDraft] = useState('');
@@ -722,7 +725,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${contactUsTab === 'org_inbox' ? 'border-fuchsia-500 text-fuchsia-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
             >
               <Users size={13} />
-              Member Inbox
+              Organization Mailbox
               {orgInboxTickets.filter((t) => t.status !== 'RESOLVED').length > 0 && (
                 <span className="rounded-full bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 text-[9px] font-bold">
                   {orgInboxTickets.filter((t) => t.status !== 'RESOLVED').length}
@@ -962,7 +965,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           <div className="p-4 space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Member Support Inbox</p>
+                <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Organization Support Mailbox</p>
                 <p className="text-xs text-slate-500 mt-0.5">Tickets submitted by members of your organization. Resolve them or escalate to AERA if needed.</p>
               </div>
               <Button
@@ -2111,42 +2114,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
       const organizationCode = remoteOrg.orgCode || normalized;
       const orgName = remoteOrg.orgName || localOrg?.name || organizationCode;
-      const nextProfile: UserProfile = {
-        ...profile,
-        communityId: organizationCode,
-      };
-
-      setProfile(nextProfile);
       setOrganizationCodeInput('');
-      StorageService.saveProfile(nextProfile, { skipRemoteSync: true });
-      setConnectedOrg(orgName);
-
-      await updateProfileForUser({
-          fullName: nextProfile.fullName,
-          phone: nextProfile.phone,
-          email: nextProfile.email,
-          address: nextProfile.address,
-          addressLine1: nextProfile.addressLine1,
-          addressLine2: nextProfile.addressLine2,
-          city: nextProfile.city,
-          state: nextProfile.state,
-          zip: nextProfile.zipCode,
-          latitude: nextProfile.latitude,
-          longitude: nextProfile.longitude,
-          googlePlaceId: nextProfile.googlePlaceId,
-          addressVerified: Boolean(nextProfile.addressVerified),
-          addressVerifiedAt: nextProfile.addressVerifiedAt,
-          emergencyContactName: nextProfile.emergencyContactName,
-          emergencyContactPhone: nextProfile.emergencyContactPhone,
-          emergencyContactRelation: nextProfile.emergencyContactRelation,
-      });
-      sessionStorage.removeItem('aera.organizationCodeIntent');
-      sessionStorage.removeItem('aera.pendingOrganizationCode');
-      setContactSupportSuccess(
-        redemption.consumesOrganizationSeat
-          ? `Organization access activated. ${redemption.availableSeats.toLocaleString()} funded seats remain.`
-          : 'Connected using your personal subscription; no organization-funded seat was used.',
-      );
+      clearPendingOrganizationCode();
+      setContactSupportSuccess(`Your request to join ${orgName} was sent to an administrator for approval.`);
       return true;
     } catch (error: any) {
       setVerifyError(String(error?.message || 'Unable to activate that organization code.'));
@@ -3267,6 +3237,28 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const handleViewCodeRegistrations = async (codeId: string) => {
     setSelectedAccessCodeId(codeId);
     await refreshCodeRegistrations(codeId);
+  };
+
+  const handleReviewCodeRegistration = async (
+    registration: OrganizationCodeRegistration,
+    decision: 'accept' | 'reject',
+  ) => {
+    setReviewingCodeRegistrationId(registration.membershipId);
+    setCodeRegistrationsError(null);
+    try {
+      await reviewOrganizationCodeRegistration(registration.membershipId, decision);
+      await refreshCodeRegistrations(selectedAccessCodeId);
+      await handleRefreshOrganizationAccessReport();
+      setOrgSeatManagementMessage(
+        decision === 'accept'
+          ? `${registration.fullName} was accepted into the community.`
+          : `${registration.fullName}'s request was rejected.`,
+      );
+    } catch (error: any) {
+      setCodeRegistrationsError(String(error?.message || `Unable to ${decision} this registration.`));
+    } finally {
+      setReviewingCodeRegistrationId('');
+    }
   };
 
   const handleSaveSeatLimit = async () => {
@@ -4973,6 +4965,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                                    <th className="px-3 py-2 font-bold text-slate-600">Activated</th>
                                    <th className="px-3 py-2 font-bold text-slate-600">Access</th>
                                    <th className="px-3 py-2 font-bold text-slate-600">Status</th>
+                                   <th className="px-3 py-2 font-bold text-slate-600">Admin decision</th>
                                  </tr>
                                </thead>
                                <tbody className="divide-y divide-slate-100">
@@ -4994,12 +4987,43 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                                      </td>
                                      <td className="px-3 py-3">
                                        <span className={`rounded-full px-2 py-1 font-bold uppercase ${
-                                         registration.membershipStatus === 'active'
+                                         registration.membershipStatus === 'accepted'
                                            ? 'bg-emerald-100 text-emerald-700'
+                                           : registration.membershipStatus === 'pending'
+                                             ? 'bg-amber-100 text-amber-800'
+                                             : registration.membershipStatus === 'rejected'
+                                               ? 'bg-red-100 text-red-700'
                                            : 'bg-slate-200 text-slate-700'
                                        }`}>
                                          {registration.membershipStatus}
                                        </span>
+                                     </td>
+                                     <td className="px-3 py-3">
+                                       {registration.membershipStatus === 'pending' ? (
+                                         <div className="flex flex-wrap gap-2">
+                                           <Button
+                                             size="sm"
+                                             onClick={() => void handleReviewCodeRegistration(registration, 'accept')}
+                                             disabled={Boolean(reviewingCodeRegistrationId)}
+                                             className="bg-emerald-700 text-white hover:bg-emerald-800"
+                                           >
+                                             {reviewingCodeRegistrationId === registration.membershipId
+                                               ? <Loader2 size={14} className="animate-spin" />
+                                               : <><Check size={14} className="mr-1" /> Accept</>}
+                                           </Button>
+                                           <Button
+                                             size="sm"
+                                             variant="ghost"
+                                             onClick={() => void handleReviewCodeRegistration(registration, 'reject')}
+                                             disabled={Boolean(reviewingCodeRegistrationId)}
+                                             className="border border-red-200 text-red-700 hover:bg-red-50"
+                                           >
+                                             <X size={14} className="mr-1" /> Reject
+                                           </Button>
+                                         </div>
+                                       ) : (
+                                         <span className="text-slate-500">Reviewed</span>
+                                       )}
                                      </td>
                                    </tr>
                                  ))}
@@ -6987,7 +7011,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                     {isOrgScopedAdmin && (
                       <button type="button" onClick={() => setContactUsTab('org_inbox')} className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${contactUsTab === 'org_inbox' ? 'border-fuchsia-500 text-fuchsia-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
                         <Users size={13} />
-                        Member Inbox
+                        Organization Mailbox
                         {orgInboxTickets.filter((t) => t.status !== 'RESOLVED').length > 0 && (
                           <span className="rounded-full bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 text-[9px] font-bold">{orgInboxTickets.filter((t) => t.status !== 'RESOLVED').length}</span>
                         )}
@@ -7158,12 +7182,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                     </div>
                   )}
 
-                  {/* Org Admin Member Inbox Tab */}
+                  {/* Organization Mailbox Tab */}
                   {contactUsTab === 'org_inbox' && isOrgScopedAdmin && (
                     <div className="p-4 space-y-4">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Member Support Inbox</p>
+                          <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Organization Support Mailbox</p>
                           <p className="text-xs text-slate-500 mt-0.5">Tickets submitted by members of your organization. Resolve them or escalate to AERA if needed.</p>
                         </div>
                         <Button size="sm" variant="ghost" onClick={() => { setOrgInboxLoading(true); void listContactSupportTicketsForOrgAdmin(50).then(setOrgInboxTickets).catch(() => {}).finally(() => setOrgInboxLoading(false)); }}>
@@ -7986,7 +8010,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                       {isOrgScopedAdmin && (
                         <button type="button" onClick={() => setContactUsTab('org_inbox')} className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${contactUsTab === 'org_inbox' ? 'border-fuchsia-500 text-fuchsia-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
                           <Users size={13} />
-                          Member Inbox
+                          Organization Mailbox
                           {orgInboxTickets.filter((t) => t.status !== 'RESOLVED').length > 0 && (
                             <span className="rounded-full bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 text-[9px] font-bold">{orgInboxTickets.filter((t) => t.status !== 'RESOLVED').length}</span>
                           )}
@@ -8138,10 +8162,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                       </div>
                     )}
 
-                    {/* Member Inbox Tab */}
+                    {/* Organization Mailbox Tab */}
                     {contactUsTab === 'org_inbox' && isOrgScopedAdmin && (
                       <div className="space-y-3 border border-slate-200 rounded-lg p-4 bg-slate-50">
-                        <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">Support Tickets from Your Members</p>
+                        <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">Organization Support Mailbox</p>
                         {orgInboxTickets.length === 0 ? (
                           <p className="text-xs text-slate-600">No tickets from your members.</p>
                         ) : (
@@ -8257,9 +8281,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           <LogOut className="mr-2" size={18} />
           {isLoggingOut ? 'Logging out…' : 'Log Out'}
         </Button>
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <p className="text-sm font-bold text-slate-900">Close your account</p>
-          <p className="mt-1 text-xs leading-relaxed text-slate-600">
+        <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-4">
+          <p className="text-sm font-semibold text-slate-500">Close your account</p>
+          <p className="mt-1 text-xs leading-relaxed text-slate-400">
             Closing your account disables access, ends active memberships and subscriptions, releases
             sponsored seats, minimizes personal profile information, and retains required audit history.
           </p>
@@ -8267,7 +8291,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             type="button"
             onClick={() => void handleCloseAccount()}
             disabled={isClosingAccount}
-            className="mt-3 w-full min-h-[48px] rounded-lg border border-red-300 bg-white px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
+            className="mt-3 w-full min-h-[44px] rounded-lg border border-slate-200 bg-slate-100/70 px-4 py-2.5 text-sm font-medium text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-200/70 hover:text-slate-600 disabled:cursor-wait disabled:opacity-60"
           >
             {isClosingAccount ? 'Closing Account…' : 'Close My Account'}
           </button>

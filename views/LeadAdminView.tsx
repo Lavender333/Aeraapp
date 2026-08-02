@@ -227,7 +227,7 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
   const tabs: Array<{ id: AdminTab; label: string; icon: React.ReactNode }> = [
     { id: 'LEADS',      label: 'Leads',      icon: <ClipboardList size={15} /> },
     { id: 'BUYERS',     label: 'Buyers',     icon: <Building2 size={15} /> },
-    { id: 'SUPPORT',    label: 'Support',    icon: <MessageSquare size={15} /> },
+    { id: 'SUPPORT',    label: 'AERA Mailbox', icon: <MessageSquare size={15} /> },
     { id: 'REPORTING',  label: 'Reporting',  icon: <BarChart2 size={15} /> },
     { id: 'COMPLIANCE', label: 'Compliance', icon: <Shield size={15} /> },
     { id: 'PRICING',    label: 'Pricing',    icon: <CircleDollarSign size={15} /> },
@@ -459,8 +459,8 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
             <Card className="border-slate-200 bg-white/95">
               <div className="flex items-center justify-between gap-3 mb-4">
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900">AERA Support Queue</h2>
-                  <p className="text-xs text-slate-500 mt-1">Org admins and general users can submit tickets from Settings. Replies here notify the requester and persist the admin handling the issue.</p>
+                  <h2 className="text-lg font-bold text-slate-900">AERA Administrator Mailbox</h2>
+                  <p className="text-xs text-slate-500 mt-1">Shows tickets escalated by an organization admin and direct tickets from users who do not have an organization mailbox.</p>
                 </div>
                 <Button size="sm" variant="outline" onClick={() => void loadSupportQueue()}>
                   <RefreshCcw size={14} className="mr-1" /> Refresh
