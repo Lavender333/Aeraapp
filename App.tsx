@@ -13,6 +13,7 @@ import {
 import { fetchProfileForUser, fetchVitalsForUser, getPeopleRegisteredCount as fetchPeopleRegisteredCount } from './services/api';
 import { hasSupabaseConfig, supabaseConfigMessage, supabase } from './services/supabase';
 import { shouldCompleteNewAccountSetup } from './services/accountSetup';
+import { savePendingOrganizationCode } from './services/organizationCodeIntent';
 import { canRoleAccessView } from './services/rolePageAccess';
 
 let initialSessionPromise: ReturnType<typeof supabase.auth.getSession> | null = null;
@@ -479,8 +480,7 @@ export default function App() {
   };
 
   const handleOrganizationCodeFromSplash = (code: string) => {
-    sessionStorage.setItem('aera.organizationCodeIntent', '1');
-    sessionStorage.setItem('aera.pendingOrganizationCode', code);
+    savePendingOrganizationCode(code);
     setView('LOGIN');
   };
 

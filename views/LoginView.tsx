@@ -12,6 +12,7 @@ import {
 } from '../services/communityInvite';
 import { supabase } from '../services/supabase';
 import { shouldCompleteNewAccountSetup } from '../services/accountSetup';
+import { getPendingOrganizationCode, hasPendingOrganizationCode } from '../services/organizationCodeIntent';
 import { t } from '../services/translations';
 import { LogIn, AlertOctagon, Mail, KeyRound, HelpCircle, FileDown } from 'lucide-react';
 
@@ -53,8 +54,8 @@ export const LoginView: React.FC<{ setView: (v: ViewState) => void }> = ({ setVi
   const [isResetting, setIsResetting] = useState(false);
   const [isDownloadingAbout, setIsDownloadingAbout] = useState(false);
   const [pendingCommunityId, setPendingCommunityId] = useState('');
-  const organizationCodeIntent = sessionStorage.getItem('aera.organizationCodeIntent') === '1';
-  const pendingOrganizationCode = sessionStorage.getItem('aera.pendingOrganizationCode') || '';
+  const pendingOrganizationCode = getPendingOrganizationCode();
+  const organizationCodeIntent = hasPendingOrganizationCode();
   const pendingCommunityName = pendingCommunityId
     ? StorageService.getOrganization(pendingCommunityId)?.name || DEMO_COMMUNITY_QR_SEEDS.find((seed) => seed.communityId === pendingCommunityId)?.name || pendingCommunityId
     : '';

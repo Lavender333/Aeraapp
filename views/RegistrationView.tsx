@@ -15,6 +15,7 @@ import { getOrgByCode } from '../services/supabase';
 import { validateHouseholdMembers } from '../services/validation';
 import { supabase } from '../services/supabase';
 import { clearNewAccountSetupPending, markNewAccountSetupPending } from '../services/accountSetup';
+import { clearPendingOrganizationCode, getPendingOrganizationCode } from '../services/organizationCodeIntent';
 import { t } from '../services/translations';
 import { User, HeartPulse } from 'lucide-react';
 
@@ -93,7 +94,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
   useEffect(() => {
     const profile = StorageService.getProfile();
     const pendingInvite = getPendingCommunityInvite();
-    const pendingOrganizationCode = sessionStorage.getItem('aera.pendingOrganizationCode') || '';
+    const pendingOrganizationCode = getPendingOrganizationCode();
     if (pendingInvite?.communityId) {
       setPendingCommunityId(pendingInvite.communityId);
     }
@@ -277,7 +278,11 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
         try {
           const redemption = await redeemOrganizationCode(payload.communityId);
           const organization = await getOrgByCode(redemption.organizationId);
-          payload.communityId = organization?.orgCode || payload.communityId;
+          sessionStorage.setItem(
+            'aera.organizationApplicationPending',
+            organization?.orgName || organization?.orgCode || 'your community organization',
+          );
+          payload.communityId = '';
         } catch (error: any) {
           setAuthError(String(error?.message || 'Unable to activate that organization code.'));
           return;
@@ -337,8 +342,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       });
       sessionStorage.setItem('aera.playWelcomeVideoOnDashboard', '1');
       clearPendingCommunityInvite();
-      sessionStorage.removeItem('aera.organizationCodeIntent');
-      sessionStorage.removeItem('aera.pendingOrganizationCode');
+      clearPendingOrganizationCode();
       clearNewAccountSetupPending();
       setView('DASHBOARD');
     } catch (e: any) {

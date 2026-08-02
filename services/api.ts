@@ -4367,6 +4367,7 @@ export type OrganizationCodeRedemption = {
   personallyPaidMembers: number;
   connectedMembers: number;
   availableSeats: number;
+  approvalStatus: 'pending';
 };
 
 export type OrganizationSeatManagement = {
@@ -4457,6 +4458,22 @@ export async function listOrganizationCodeRegistrations(
     fundingSource: String(row.funding_source || 'organization'),
     consumesOrganizationSeat: row.consumes_organization_seat !== false,
   }));
+}
+
+export async function reviewOrganizationCodeRegistration(
+  membershipId: string,
+  decision: 'accept' | 'reject',
+): Promise<{ membershipId: string; membershipStatus: 'accepted' | 'rejected' }> {
+  const { data, error } = await supabase.rpc('review_organization_code_registration', {
+    p_membership_id: membershipId,
+    p_decision: decision,
+  });
+  if (error) throw new Error(error.message || `Unable to ${decision} this registration.`);
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    membershipId: String(row?.membership_id || membershipId),
+    membershipStatus: row?.membership_status === 'accepted' ? 'accepted' : 'rejected',
+  };
 }
 
 export async function listOrganizationSeatManagement(
@@ -4565,6 +4582,7 @@ export async function redeemOrganizationCode(code: string): Promise<Organization
     personallyPaidMembers: Number(row.personally_paid_members || 0),
     connectedMembers: Number(row.connected_members ?? row.active_seats ?? 0),
     availableSeats: Number(row.available_seats || 0),
+    approvalStatus: 'pending',
   };
 }
 
@@ -5195,7 +5213,7 @@ export async function createContactSupportTicket(payload: {
   const orgMeta = requesterProfile?.org_id ? await getOrgMetaById(String(requesterProfile.org_id)) : null;
   const now = new Date().toISOString();
   const priority = payload.priority === 'HIGH' || payload.priority === 'LOW' ? payload.priority : 'MEDIUM';
-    const routedTo: 'ORG_ADMIN' | 'AERA_ADMIN' = requesterProfile?.org_id ? 'ORG_ADMIN' : 'AERA_ADMIN';
+  let routedTo: 'ORG_ADMIN' | 'AERA_ADMIN' = requesterProfile?.org_id ? 'ORG_ADMIN' : 'AERA_ADMIN';
   const dataPayload = {
     requestType: 'CONTACT_SUPPORT',
     category: String(payload.category || 'GENERAL').trim().toUpperCase(),
@@ -5250,7 +5268,19 @@ export async function createContactSupportTicket(payload: {
       .filter((id: string) => Boolean(id) && id !== authData.user.id);
   }
   if (recipientIds.length === 0) {
-    // Fallback: always notify AERA admin (also covers 'AERA_ADMIN' routing)
+    // No organization admin is available, so move the ticket into the AERA
+    // mailbox instead of leaving it stranded in an unmonitored org queue.
+    if (routedTo === 'ORG_ADMIN') {
+      routedTo = 'AERA_ADMIN';
+      dataPayload.routedTo = 'AERA_ADMIN';
+      await supabase
+        .from('help_requests')
+        .update({ data: dataPayload })
+        .eq('id', data.id);
+      (data as any).data = dataPayload;
+    }
+
+    // Fallback: notify AERA admins (also covers users without an organization).
     const { data: aeraAdminRows, error: adminError } = await supabase
       .from('profiles')
       .select('id')
@@ -5324,7 +5354,13 @@ export async function listContactSupportTicketsForAdmin(limit = 100): Promise<Co
     .limit(limit);
 
   if (error) throw new Error(error.message || 'Failed to load support queue.');
-  return (data || []).map(mapContactSupportTicketRecord);
+  return (data || [])
+    .map(mapContactSupportTicketRecord)
+    .filter((ticket) =>
+      ticket.routedTo === 'AERA_ADMIN' ||
+      ticket.escalatedToAdmin ||
+      !ticket.orgId
+    );
 }
 
 export async function respondToContactSupportTicket(
@@ -5353,6 +5389,9 @@ export async function respondToContactSupportTicket(
   if (existingError) throw new Error(existingError.message || 'Failed to load support ticket.');
   if (!existing?.id || String(existing?.data?.requestType || '') !== 'CONTACT_SUPPORT') {
     throw new Error('Support ticket not found.');
+  }
+  if (existing.data?.routedTo === 'ORG_ADMIN' && !existing.data?.escalatedToAdmin) {
+    throw new Error('This ticket is still assigned to the organization mailbox.');
   }
 
   const now = new Date().toISOString();
