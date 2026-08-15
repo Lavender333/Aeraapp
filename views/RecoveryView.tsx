@@ -1,10 +1,17 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { ViewState } from '../types';
 import { Button } from '../components/Button';
 import { ArrowLeft, HardHat, CheckCircle, Clock, Truck } from 'lucide-react';
 
 export const RecoveryView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
+  const [showRecoveryLogs, setShowRecoveryLogs] = useState(false);
+  const recoveryTeams = [
+    { name: 'Metro Restoration', role: 'Debris Removal', status: 'On-site', verified: true, update: 'Arrived and began debris clearance.' },
+    { name: 'City Power & Light', role: 'Utility Repair', status: 'Dispatched', verified: true, update: 'Crew dispatched; estimated arrival in 2 hours.' },
+    { name: 'Local Aid Group', role: 'Supply Drop', status: 'Completed', verified: true, update: 'Supply delivery completed.' },
+  ];
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col pb-safe animate-fade-in">
       <div className="bg-white border-b border-slate-200 p-4 sticky top-0 z-20">
@@ -35,11 +42,7 @@ export const RecoveryView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
         <h3 className="font-bold text-slate-900 mt-4">Assigned Contractors</h3>
         <div className="space-y-4">
-          {[
-            { name: 'Metro Restoration', role: 'Debris Removal', status: 'On-site', verified: true },
-            { name: 'City Power & Light', role: 'Utility Repair', status: 'Dispatched', verified: true },
-            { name: 'Local Aid Group', role: 'Supply Drop', status: 'Completed', verified: true },
-          ].map((team, idx) => (
+          {recoveryTeams.map((team, idx) => (
             <div key={idx} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                <div className="flex justify-between items-start">
                  <div className="flex items-start gap-3">
@@ -66,7 +69,21 @@ export const RecoveryView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           ))}
         </div>
 
-        <Button variant="outline" fullWidth>View Recovery Logs</Button>
+        {showRecoveryLogs && (
+          <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3" aria-live="polite">
+            <h3 className="font-bold text-slate-900">Recovery Activity Log</h3>
+            {recoveryTeams.map((team) => (
+              <div key={team.name} className="border-l-2 border-brand-400 pl-3">
+                <p className="text-sm font-semibold text-slate-800">{team.name} · {team.status}</p>
+                <p className="text-xs text-slate-600">{team.update}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <Button variant="outline" fullWidth onClick={() => setShowRecoveryLogs((current) => !current)}>
+          {showRecoveryLogs ? 'Hide Recovery Logs' : 'View Recovery Logs'}
+        </Button>
       </div>
     </div>
   );

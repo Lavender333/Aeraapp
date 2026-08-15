@@ -1,23 +1,31 @@
 # App Store Submission Guide (iOS)
 
-This repository is a **web app (React + Vite)** and **Node API**. To ship on the Apple App Store you must first wrap the web app in an iOS container, then complete Apple’s compliance items and TestFlight distribution.
+This repository contains a **React + Vite web app**, a **Node API**, and an existing **Capacitor iOS app**. The native project is at `ios/App/App.xcodeproj` and uses bundle identifier `com.aera.emergencyresponse`.
+
+## Current Release Status
+
+- [x] Capacitor iOS wrapper created
+- [x] Production web build succeeds
+- [x] Automated test suite passes
+- [x] 1024×1024 App Store icon present with no transparency
+- [x] iOS permissions include purpose strings for location, camera, microphone, and photos
+- [x] Version set to 1.0 with build number 1
+- [x] Non-exempt encryption declaration set to false
+- [x] Apple Developer team selected in Xcode
+- [x] Bundle identifier configured for the selected Apple Developer team
+- [ ] Production environment values verified on a physical device
+- [ ] App Store Connect metadata, privacy answers, and screenshots supplied
+- [ ] Archive uploaded to TestFlight and smoke-tested
 
 ---
 
-## 1) Choose an iOS Wrapper
+## 1) iOS Wrapper
 
-### Recommended: Capacitor (best fit for Vite)
+### Implemented: Capacitor
 - Native iOS shell that loads your Vite build
 - Lets you access device APIs (camera, location, push, etc.)
 
-**High-level steps:**
-1. Install Capacitor packages
-2. Initialize Capacitor
-3. Build web assets
-4. Add iOS platform
-5. Open Xcode and configure
-
-> If you prefer React Native, you’ll need a full React Native project and a web-to-native migration. That is a larger effort than wrapping the existing Vite build.
+Use `npm run ios:build` to build and sync web assets, then `npm run ios:open` to open the native project in Xcode.
 
 ---
 
@@ -95,10 +103,8 @@ Before submitting to App Review:
 
 ## 7) Recommended Next Actions
 
-1. Add Capacitor to the repo
-2. Generate iOS project
-3. Wire production environment variables
-4. Provide privacy policy URL and app metadata
-5. Produce TestFlight build
-
-If you want, I can implement the Capacitor wrapper and add the iOS project files next.
+1. Select the Apple Developer team in Xcode under **Signing & Capabilities**.
+2. Confirm that `com.aera.emergencyresponse` is available and registered to that team.
+3. Verify production environment values and complete a physical-device smoke test.
+4. Supply the privacy policy URL, support URL, and final App Store metadata.
+5. Archive in Xcode, upload to App Store Connect, and test through TestFlight.

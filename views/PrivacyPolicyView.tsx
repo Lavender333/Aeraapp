@@ -7,7 +7,8 @@ interface PrivacyPolicyViewProps {
 }
 
 export const PrivacyPolicyView: React.FC<PrivacyPolicyViewProps> = ({ setView }) => {
-  const returnView = (sessionStorage.getItem('privacyReturnView') as ViewState) || 'SETTINGS';
+  const isPublicPrivacyPage = typeof window !== 'undefined' && window.location.pathname === '/privacy';
+  const returnView = (sessionStorage.getItem('privacyReturnView') as ViewState) || (isPublicPrivacyPage ? 'SPLASH' : 'SETTINGS');
 
   return (
     <div className="p-6 pb-28 space-y-6 animate-fade-in bg-white min-h-screen">

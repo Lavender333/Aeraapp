@@ -21,6 +21,7 @@ const VIEWS_WITHOUT_AUTHENTICATED_NAV = new Set<ViewState>([
   'RESET_PASSWORD',
   'EVENT_REGISTRATION',
   'PUBLIC_INTAKE',
+  'PRIVACY_POLICY',
 ]);
 
 export function shouldShowEssentialNavigation(

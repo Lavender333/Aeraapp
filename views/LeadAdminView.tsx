@@ -460,7 +460,7 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
               <div className="flex items-center justify-between gap-3 mb-4">
                 <div>
                   <h2 className="text-lg font-bold text-slate-900">AERA Administrator Mailbox</h2>
-                  <p className="text-xs text-slate-500 mt-1">Shows tickets escalated by an organization admin and direct tickets from users who do not have an organization mailbox.</p>
+                  <p className="text-xs text-slate-500 mt-1">System-wide view of every support ticket and conversation. Organization tickets remain with their organization admin until escalated.</p>
                 </div>
                 <Button size="sm" variant="outline" onClick={() => void loadSupportQueue()}>
                   <RefreshCcw size={14} className="mr-1" /> Refresh
@@ -524,7 +524,7 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
                         ))}
                       </div>
 
-                      {ticket.status !== 'RESOLVED' && (
+                      {ticket.status !== 'RESOLVED' && (ticket.routedTo !== 'ORG_ADMIN' || ticket.escalatedToAdmin) && (
                         <div className="space-y-2 border-t border-slate-200 pt-3">
                           <label className="block text-xs font-semibold text-slate-700">Admin response</label>
                           <textarea
@@ -553,6 +553,12 @@ export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
                             </Button>
                           </div>
                         </div>
+                      )}
+
+                      {ticket.status !== 'RESOLVED' && ticket.routedTo === 'ORG_ADMIN' && !ticket.escalatedToAdmin && (
+                        <p className="border-t border-slate-200 pt-3 text-xs font-semibold text-fuchsia-700">
+                          Organization admin is handling this ticket. AERA can review the full conversation and will take over if it is escalated.
+                        </p>
                       )}
 
                       {editingTicketId === ticket.id && (

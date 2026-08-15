@@ -33,7 +33,6 @@ describe('universal authenticated access', () => {
       'BUYER_PORTAL',
       'LEAD_ADMIN',
       'FINANCE_DASHBOARD',
-      'PRIVACY_POLICY',
     ];
 
     for (const view of specializedViews) {
@@ -50,6 +49,7 @@ describe('universal authenticated access', () => {
       'RESET_PASSWORD',
       'EVENT_REGISTRATION',
       'PUBLIC_INTAKE',
+      'PRIVACY_POLICY',
     ];
 
     for (const view of publicViews) {

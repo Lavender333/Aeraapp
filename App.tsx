@@ -151,6 +151,7 @@ export default function App() {
     if (window.location.pathname === '/lead-admin') return 'LEAD_ADMIN';
     if (window.location.pathname === '/public/intake') return 'PUBLIC_INTAKE';
     if (window.location.pathname === '/finance-dashboard') return 'FINANCE_DASHBOARD';
+    if (window.location.pathname === '/privacy') return 'PRIVACY_POLICY';
     return null;
   };
 
@@ -238,6 +239,7 @@ export default function App() {
       const isPresentationUrl = window.location.pathname === '/presentation';
       const requestedStandaloneView = getStandaloneRequestedView();
       const isPublicIntakeUrl = requestedStandaloneView === 'PUBLIC_INTAKE';
+      const isPrivacyUrl = requestedStandaloneView === 'PRIVACY_POLICY';
       const isEventRegistrationUrl = Boolean(eventIdFromUrl);
       try {
         // React Strict Mode intentionally remounts effects in development. Reuse one
@@ -249,6 +251,9 @@ export default function App() {
         if (isPublicIntakeUrl) {
           setPostSplashView('PUBLIC_INTAKE');
           setView('PUBLIC_INTAKE');
+        } else if (isPrivacyUrl) {
+          setPostSplashView('PRIVACY_POLICY');
+          setView('PRIVACY_POLICY');
         } else if (isPresentationUrl) {
           setPostSplashView('PRESENTATION');
           setView('PRESENTATION');
@@ -384,6 +389,10 @@ export default function App() {
             setView('SPLASH');
           }
         } else {
+          // A local profile is only a cache of an authenticated account. When
+          // Supabase confirms there is no session, clear it before rendering
+          // any public route so a shared device cannot expose the prior user.
+          StorageService.logoutUser();
           if (requestedStandaloneView) {
             sessionStorage.setItem('postLoginView', requestedStandaloneView);
             setPostSplashView('LOGIN');
@@ -401,6 +410,9 @@ export default function App() {
         if (isPublicIntakeUrl) {
           setPostSplashView('PUBLIC_INTAKE');
           setView('PUBLIC_INTAKE');
+        } else if (isPrivacyUrl) {
+          setPostSplashView('PRIVACY_POLICY');
+          setView('PRIVACY_POLICY');
         } else if (isPresentationUrl) {
           setPostSplashView('PRESENTATION');
           setView('PRESENTATION');
@@ -484,13 +496,20 @@ export default function App() {
     setView('LOGIN');
   };
 
+  const handlePrivacyFromSplash = () => {
+    // The privacy page is public. Preserve its public return destination so a
+    // signed-out visitor cannot fall through to a cached user's Settings view.
+    sessionStorage.setItem('privacyReturnView', 'SPLASH');
+    setView('PRIVACY_POLICY');
+  };
+
   const renderView = () => {
     if (isBootstrapping) {
       return (
         <SplashView
           onEnter={handleSplashComplete}
           onOrganizationCode={handleOrganizationCodeFromSplash}
-          onPrivacy={() => setView('PRIVACY_POLICY')}
+          onPrivacy={handlePrivacyFromSplash}
           peopleRegisteredCount={peopleRegisteredCount}
         />
       );
@@ -501,7 +520,7 @@ export default function App() {
           <SplashView
             onEnter={handleSplashComplete}
             onOrganizationCode={handleOrganizationCodeFromSplash}
-            onPrivacy={() => setView('PRIVACY_POLICY')}
+            onPrivacy={handlePrivacyFromSplash}
             peopleRegisteredCount={peopleRegisteredCount}
           />
         );

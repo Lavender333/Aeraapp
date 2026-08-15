@@ -530,6 +530,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [codeExpirationDraft, setCodeExpirationDraft] = useState('');
   const [codeMaxRedemptionsDraft, setCodeMaxRedemptionsDraft] = useState('');
   const [generatedOrganizationCode, setGeneratedOrganizationCode] = useState('');
+  const seatDraftHydratedOrgRef = useRef('');
   const lastOrgLocationHydratedCodeRef = useRef('');
   const orgLocationConfigured = Boolean(
     String(orgAddressDraft || '').trim() &&
@@ -942,7 +943,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                       )}
                       {ticket.messages.length > 1 && (
                         <div className="space-y-2 border-t border-slate-200 pt-2">
-                          {ticket.messages.slice(-2).map((entry, index) => (
+                          {ticket.messages.map((entry, index) => (
                             <div key={`${ticket.id}-${entry.createdAt}-${index}`} className="rounded-lg bg-white border border-slate-200 p-2">
                               <div className="flex items-center justify-between gap-2">
                                 <p className="text-[11px] font-semibold text-slate-700">{entry.authorName}</p>
@@ -1361,7 +1362,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   useEffect(() => {
     let active = true;
 
-    if (!isOrgScopedAdmin || !profile.communityId) {
+    if (!canManageOrgSettings || !profile.communityId) {
       setCommunityInviteQrDataUrl('');
       setCommunityInviteQrError(null);
       return () => {
@@ -1387,7 +1388,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     return () => {
       active = false;
     };
-  }, [isOrgScopedAdmin, profile.communityId, communityQrRetryToken]);
+  }, [canManageOrgSettings, profile.communityId, communityQrRetryToken]);
 
   useEffect(() => {
     let active = true;
@@ -1714,6 +1715,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     if (!selectedOrgDetails) return;
     const seatMetrics = findOrganizationSeatManagement(selectedOrgDetails, orgSeatManagement);
     setSeatLimitDraft(seatMetrics ? String(seatMetrics.purchasedSeats) : '');
+    seatDraftHydratedOrgRef.current = seatMetrics
+      ? String(selectedOrgDetails.supabaseId || selectedOrgDetails.id || '')
+      : '';
     setCodeExpirationDraft('');
     setCodeMaxRedemptionsDraft('');
     setGeneratedOrganizationCode('');
@@ -1738,6 +1742,19 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setOrgLocationError(null);
     setOrgLocationSavedMessage(null);
   }, [selectedOrgDetails]);
+
+  // The directory and seat summary load independently. If a user selects an
+  // organization before its seat summary arrives, hydrate the form once the
+  // matching database record is available without overwriting later typing.
+  useEffect(() => {
+    if (!selectedOrgDetails) return;
+    const selectedKey = String(selectedOrgDetails.supabaseId || selectedOrgDetails.id || '');
+    if (!selectedKey || seatDraftHydratedOrgRef.current === selectedKey) return;
+    const seatMetrics = findOrganizationSeatManagement(selectedOrgDetails, orgSeatManagement);
+    if (!seatMetrics) return;
+    setSeatLimitDraft(String(seatMetrics.purchasedSeats));
+    seatDraftHydratedOrgRef.current = selectedKey;
+  }, [selectedOrgDetails, orgSeatManagement]);
 
   useEffect(() => {
     let active = true;
@@ -3283,16 +3300,40 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         );
       }
 
-      await setOrganizationSeatLimit(target.organizationId, nextLimit);
+      const savedMetrics = await setOrganizationSeatLimit(target.organizationId, nextLimit);
+      const previousMetrics = target.metrics;
+      const confirmedMetrics: OrganizationSeatManagement = {
+        organizationId: target.organizationId,
+        organizationCode: previousMetrics?.organizationCode || selectedOrgDetails.id,
+        organizationName: previousMetrics?.organizationName || selectedOrgDetails.name,
+        contractStatus: 'active',
+        contractStartsAt: previousMetrics?.contractStartsAt || new Date().toISOString(),
+        contractEndsAt: previousMetrics?.contractEndsAt,
+        purchasedSeats: savedMetrics.purchasedSeats,
+        organizationFundedMembers: savedMetrics.organizationFundedMembers,
+        personallyPaidMembers: previousMetrics?.personallyPaidMembers || 0,
+        connectedMembers: previousMetrics?.connectedMembers || savedMetrics.organizationFundedMembers,
+        availableSeats: savedMetrics.availableSeats,
+        activeCodeCount: previousMetrics?.activeCodeCount || 0,
+        latestCodeHint: previousMetrics?.latestCodeHint,
+      };
+      setOrgSeatManagement((current) => ({
+        ...current,
+        ...indexOrganizationSeatManagement([confirmedMetrics]),
+      }));
+      setSeatLimitDraft(String(savedMetrics.purchasedSeats));
+      seatDraftHydratedOrgRef.current = String(selectedOrgDetails.supabaseId || selectedOrgDetails.id || '');
+      setOrgSeatManagementMessage(
+        `${savedMetrics.purchasedSeats.toLocaleString()} purchased seats saved. Sponsored access is active for ${selectedOrgDetails.name}.`,
+      );
       const refreshed = await refreshOrganizationSeatManagement();
       const updatedMetrics = findOrganizationSeatManagement(
         { ...selectedOrgDetails, supabaseId: target.organizationId },
         refreshed,
       );
-      setSeatLimitDraft(String(updatedMetrics?.purchasedSeats ?? nextLimit));
-      setOrgSeatManagementMessage(
-        `${nextLimit.toLocaleString()} purchased seats saved. Sponsored access is active for ${selectedOrgDetails.name}.`,
-      );
+      if (updatedMetrics) {
+        setSeatLimitDraft(String(updatedMetrics.purchasedSeats));
+      }
     } catch (error: any) {
       setOrgSeatManagementError(String(error?.message || 'Unable to update the seat amount.'));
     } finally {
@@ -3320,8 +3361,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       if (!target?.organizationId) {
         throw new Error('This organization is not available in Supabase. Refresh the organization list and try again.');
       }
-      if (target.metrics && target.metrics.purchasedSeats < 1) {
-        throw new Error('Assign and save at least 1 purchased seat before creating a community access code.');
+      if (!target.metrics || target.metrics.purchasedSeats < 1 || target.metrics.contractStatus !== 'active') {
+        throw new Error('Save at least 1 purchased seat and activate the organization before creating a community access code.');
       }
 
       const code = await createOrganizationAccessCode(target.organizationId, {
@@ -4614,6 +4655,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       o.type.toLowerCase().includes(orgSearch.toLowerCase())
     );
     const selectedSeatMetrics = findOrganizationSeatManagement(selectedOrgDetails, orgSeatManagement);
+    const selectedOrgAccessReady = Boolean(
+      selectedSeatMetrics &&
+      selectedSeatMetrics.contractStatus === 'active' &&
+      selectedSeatMetrics.purchasedSeats > 0
+    );
 
     return (
       <div className="p-6 pb-28 space-y-6 animate-fade-in bg-slate-50 min-h-screen">
@@ -4739,7 +4785,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                            size="sm"
                            fullWidth
                            onClick={() => void handleSaveSeatLimit()}
-                           disabled={orgSeatManagementBusy}
+                           disabled={orgSeatManagementBusy || !selectedOrgAccessReady}
                            className="bg-sky-700 hover:bg-sky-800 text-white"
                          >
                            {orgSeatManagementBusy ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Save size={16} className="mr-2" />}
@@ -4748,6 +4794,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                          <p className="text-[11px] text-slate-500">
                            Minimum allowed: {selectedSeatMetrics?.organizationFundedMembers ?? 0}, based on sponsored seats currently in use.
                          </p>
+                         {orgSeatManagementError && (
+                           <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-800">
+                             {orgSeatManagementError}
+                           </div>
+                         )}
+                         {orgSeatManagementMessage && (
+                           <div role="status" aria-live="polite" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">
+                             {orgSeatManagementMessage}
+                           </div>
+                         )}
                        </div>
 
                        <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
@@ -4787,7 +4843,9 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                            Generate Community Access Code
                          </Button>
                          <p className="text-[11px] text-slate-500">
-                           The full code is shown once. AERA stores only a secure hash.
+                           {!selectedOrgAccessReady
+                             ? 'Save at least 1 purchased seat in Step 1 to activate access and unlock code creation.'
+                             : 'Seat capacity is active. The full code is shown once; AERA stores only a secure hash.'}
                          </p>
                        </div>
                        </div>
@@ -5041,12 +5099,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                      )}
                    </section>
 
-                   {orgSeatManagementError && (
-                     <p role="alert" className="text-xs font-semibold text-red-700">{orgSeatManagementError}</p>
-                   )}
-                   {orgSeatManagementMessage && (
-                     <p role="status" className="text-xs font-semibold text-emerald-700">{orgSeatManagementMessage}</p>
-                   )}
                  </div>
 
                  {/* Detail Grids */}
@@ -6957,8 +7009,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                                       ? `New support ticket from ${String((item.metadata as any)?.requesterName || 'a user')}.`
                                       : item.type === 'support_ticket_response'
                                         ? `AERA support replied to your ticket: ${String((item.metadata as any)?.subject || 'Support request')}`
-                                        : item.type === 'support_ticket_resolved'
+                                      : item.type === 'support_ticket_resolved'
                                           ? `Your support ticket was marked resolved by ${String((item.metadata as any)?.adminName || 'AERA support')}.`
+                                        : item.type === 'support_ticket_escalated'
+                                          ? `Support ticket escalated to AERA: ${String((item.metadata as any)?.subject || 'Support request')}`
                                           : item.type === 'household_member_reported_danger'
                                             ? `${String((item.metadata as any)?.reporterName || 'A household member')} reported DANGER.`
                                             : item.type === 'household_member_reported_safe'

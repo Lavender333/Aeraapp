@@ -4509,7 +4509,16 @@ export async function setOrganizationSeatLimit(
     p_organization_id: organizationId,
     p_seat_limit: seatLimit,
   });
-  if (error) throw new Error(error.message || 'Unable to update the organization seat amount.');
+  if (error) {
+    const message = String(error.message || 'Unable to update the organization seat amount.');
+    if (/function .*head_admin_set_organization_seat_limit.*does not exist|schema cache/i.test(message)) {
+      throw new Error('Seat activation is not deployed to the database yet. Apply the latest Supabase migrations and try again.');
+    }
+    if (/only an? AERA (Head )?Admin/i.test(message)) {
+      throw new Error('Your signed-in account does not have the AERA Admin role required to activate sponsored seats.');
+    }
+    throw new Error(message);
+  }
   const row = Array.isArray(data) ? data[0] : data;
   return {
     purchasedSeats: Number(row?.purchased_seats || seatLimit),
@@ -5354,13 +5363,10 @@ export async function listContactSupportTicketsForAdmin(limit = 100): Promise<Co
     .limit(limit);
 
   if (error) throw new Error(error.message || 'Failed to load support queue.');
-  return (data || [])
-    .map(mapContactSupportTicketRecord)
-    .filter((ticket) =>
-      ticket.routedTo === 'AERA_ADMIN' ||
-      ticket.escalatedToAdmin ||
-      !ticket.orgId
-    );
+  // AERA administrators provide system-wide oversight. Organization-routed
+  // tickets remain owned by the organization until escalated, but they must
+  // still be visible here so the top administrator can audit every exchange.
+  return (data || []).map(mapContactSupportTicketRecord);
 }
 
 export async function respondToContactSupportTicket(
