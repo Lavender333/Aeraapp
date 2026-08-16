@@ -336,6 +336,16 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     security: false,
     contactUs: false,
   });
+
+  useEffect(() => {
+    if (sessionStorage.getItem('aera.openOrganizationSupportMailbox') !== '1') return;
+    sessionStorage.removeItem('aera.openOrganizationSupportMailbox');
+    setExpandedSections((current) => ({ ...current, contactUs: true }));
+    setContactUsTab('org_inbox');
+    window.setTimeout(() => {
+      document.getElementById('settings-contact-support')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  }, []);
   const [householdAddToken, setHouseholdAddToken] = useState(0);
   const [localOrgSearchQuery, setLocalOrgSearchQuery] = useState('');
   const [localOrgResults, setLocalOrgResults] = useState<NearbyOrgResult[]>([]);

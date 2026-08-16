@@ -74,7 +74,11 @@ interface LeadAdminViewProps {
 }
 
 export const LeadAdminView: React.FC<LeadAdminViewProps> = ({ setView }) => {
-  const [activeTab, setActiveTab] = useState<AdminTab>('LEADS');
+  const [activeTab, setActiveTab] = useState<AdminTab>(() => {
+    const openMailbox = sessionStorage.getItem('aera.openAdminSupportMailbox') === '1';
+    sessionStorage.removeItem('aera.openAdminSupportMailbox');
+    return openMailbox ? 'SUPPORT' : 'LEADS';
+  });
   const [leads, setLeads] = useState<VerifiedLead[]>(SAMPLE_LEADS);
   const [buyers, setBuyers] = useState<BuyerAccount[]>(SAMPLE_BUYERS);
   const [supportTickets, setSupportTickets] = useState<ContactSupportTicketRecord[]>([]);
