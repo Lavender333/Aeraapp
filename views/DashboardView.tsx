@@ -3,7 +3,7 @@ import { Card } from '../components/Card';
 import { ViewState, HelpRequestRecord, UserProfile, UserRole, OrgInventory, OrgMember, OrganizationProfile } from '../types';
 import { StorageService } from '../services/storage';
 import { getInventoryStatuses } from '../services/inventoryStatus';
-import { fetchReadyKit, getBroadcast } from '../services/api';
+import { fetchReadyKit, getBroadcast, listNotificationsForCurrentUser } from '../services/api';
 import { getOrgByCode } from '../services/supabase';
 import { t } from '../services/translations';
 import { 
@@ -100,6 +100,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [syncCount, setSyncCount] = useState(0);
   const [userRole, setUserRole] = useState<UserRole>('GENERAL_USER');
   const [userName, setUserName] = useState('');
+  const [unreadSupportTicketCount, setUnreadSupportTicketCount] = useState(0);
   const [profileImageDataUrl, setProfileImageDataUrl] = useState('');
   const [checklistCompletionPct, setChecklistCompletionPct] = useState(0);
   const [connectedOrg, setConnectedOrg] = useState<string | null>(null);
@@ -237,6 +238,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     setCommunityIdInput(profile.communityId || '');
     setShowOnboardingWelcomeCard(!isSnoozed(ONBOARDING_WELCOME_KEY));
     setShowOnboardingReminderBanner(!isSnoozed(ONBOARDING_BANNER_KEY));
+
+    const normalizedProfileRole = normalizeRole(profile.role);
+    if (['ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(normalizedProfileRole)) {
+      listNotificationsForCurrentUser(50)
+        .then((items) => {
+          setUnreadSupportTicketCount(items.filter((item) =>
+            !item.read && ['support_ticket_created', 'support_ticket_escalated'].includes(item.type)
+          ).length);
+        })
+        .catch(() => setUnreadSupportTicketCount(0));
+    }
 
     const shouldPlayWelcomeVideo = sessionStorage.getItem('aera.playWelcomeVideoOnDashboard') === '1';
     const welcomeVideoSeenKey = `aera.welcomeVideo.seen.${profile.id || 'guest'}`;
@@ -1178,6 +1190,42 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
           </div>
         </div>
       </div>
+
+      {unreadSupportTicketCount > 0 && ['ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'].includes(userRole) && (
+        <button
+          type="button"
+          onClick={() => {
+            if (userRole === 'ADMIN') {
+              sessionStorage.setItem('aera.openAdminSupportMailbox', '1');
+              setView('LEAD_ADMIN');
+              return;
+            }
+            sessionStorage.setItem('aera.openOrganizationSupportMailbox', '1');
+            setView('SETTINGS');
+          }}
+          className="w-full rounded-xl border border-fuchsia-200 bg-fuchsia-50 px-4 py-3 text-left shadow-sm hover:bg-fuchsia-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-300"
+        >
+          <span className="flex items-center justify-between gap-3">
+            <span className="flex items-center gap-3">
+              <span className="relative rounded-full bg-fuchsia-600 p-2 text-white">
+                <BellRing size={18} />
+                <span className="absolute -right-2 -top-2 min-w-5 rounded-full bg-rose-600 px-1.5 py-0.5 text-center text-[10px] font-black text-white">
+                  {unreadSupportTicketCount > 99 ? '99+' : unreadSupportTicketCount}
+                </span>
+              </span>
+              <span>
+                <span className="block text-sm font-bold text-fuchsia-950">
+                  {unreadSupportTicketCount} new support ticket{unreadSupportTicketCount === 1 ? '' : 's'}
+                </span>
+                <span className="block text-xs text-fuchsia-800">
+                  Open {userRole === 'ADMIN' ? 'AERA Mailbox' : 'Organization Mailbox'}
+                </span>
+              </span>
+            </span>
+            <ChevronRight size={18} className="text-fuchsia-700" />
+          </span>
+        </button>
+      )}
 
       {isGeneralUser && hasOnboardingStepsIncomplete && showOnboardingReminderBanner && (
         <div className="bg-sky-50 border border-sky-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
