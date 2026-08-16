@@ -15,7 +15,9 @@ jobs:
 
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      # Use the same production project URL as the deployed application. Keep
+      # SUPABASE_URL as a backwards-compatible fallback for older environments.
+      SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       AERA_MODEL_VERSION: ${{ vars.AERA_MODEL_VERSION || 'level3-2026.02' }}
 

@@ -7,7 +7,9 @@ interface PrivacyPolicyViewProps {
 }
 
 export const PrivacyPolicyView: React.FC<PrivacyPolicyViewProps> = ({ setView }) => {
-  const returnView = (sessionStorage.getItem('privacyReturnView') as ViewState) || 'SETTINGS';
+  const isPublicPrivacyPage = typeof window !== 'undefined'
+    && window.location.pathname.replace(/\/+$/, '') === '/privacy';
+  const returnView = (sessionStorage.getItem('privacyReturnView') as ViewState) || (isPublicPrivacyPage ? 'SPLASH' : 'SETTINGS');
 
   return (
     <div className="p-6 pb-28 space-y-6 animate-fade-in bg-white min-h-screen">
@@ -76,6 +78,7 @@ export const PrivacyPolicyView: React.FC<PrivacyPolicyViewProps> = ({ setView })
           <li>Emergency Contact: Your safety status and relevant information may be shared with the emergency contact you designate.</li>
           <li>AERA may send notifications or messages via text or in-app to your emergency contact to inform them of your status or requests for help.</li>
           <li>Organization Visibility: Information you choose to share (such as household or status updates) may be visible to members of your connected organization, based on your actions and settings.</li>
+          <li>Community Outreach Visibility: If you explicitly enable this optional setting, verified organization leaders within your selected outreach radius may see your name, phone number, email address, approximate distance from their organization, and your availability for outreach. Your street address and exact coordinates are not displayed in the outreach alert.</li>
           <li>Analytics Provider: Limited web usage data may be processed by Google through our Google tag / Google Analytics configuration to provide aggregate traffic and engagement reporting.</li>
           <li>AERA does not sell personal data, does not share data with advertisers, and does not share data with external third parties except where required by law.</li>
         </ul>
@@ -90,6 +93,7 @@ export const PrivacyPolicyView: React.FC<PrivacyPolicyViewProps> = ({ setView })
           <li>You may disable location sharing at any time</li>
           <li>Permissions can be managed through your device settings</li>
           <li>You choose which organization to connect to and which emergency contact to designate</li>
+          <li>Community Outreach Visibility is off by default, can be disabled at any time, and never enrolls you in another organization without your approval</li>
           <li>You consent to messages or notifications sent to your emergency contact or organization administrator as described above</li>
           <li>You can limit some analytics collection through browser privacy controls, content blockers, cookie controls, or Google’s available opt-out tools, though doing so may affect some reporting accuracy</li>
         </ul>

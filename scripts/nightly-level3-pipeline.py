@@ -49,12 +49,24 @@ class SupabaseClient:
             "Prefer": "return=representation",
         }
 
+    @staticmethod
+    def ensure_success(resp: requests.Response) -> None:
+        if resp.ok:
+            return
+        detail = resp.text.strip()
+        if len(detail) > 1200:
+            detail = f"{detail[:1200]}…"
+        raise requests.HTTPError(
+            f"{resp.status_code} {resp.reason}: {detail}",
+            response=resp,
+        )
+
     def select(self, table: str, select: str, filters: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
         params: Dict[str, Any] = {"select": select}
         if filters:
             params.update(filters)
         resp = requests.get(f"{self.url}/rest/v1/{table}", headers=self.headers, params=params, timeout=60)
-        resp.raise_for_status()
+        self.ensure_success(resp)
         return resp.json()
 
     def upsert(self, table: str, rows: List[Dict[str, Any]], on_conflict: str) -> List[Dict[str, Any]]:
@@ -68,7 +80,18 @@ class SupabaseClient:
             data=json.dumps(rows),
             timeout=120,
         )
-        resp.raise_for_status()
+        self.ensure_success(resp)
+        return resp.json()
+
+    def update(self, table: str, values: Dict[str, Any], filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+        resp = requests.patch(
+            f"{self.url}/rest/v1/{table}",
+            headers=self.headers,
+            params=filters,
+            data=json.dumps(values),
+            timeout=120,
+        )
+        self.ensure_success(resp)
         return resp.json()
 
     def insert(self, table: str, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -80,7 +103,7 @@ class SupabaseClient:
             data=json.dumps(rows),
             timeout=120,
         )
-        resp.raise_for_status()
+        self.ensure_success(resp)
         return resp.json()
 
     def delete(self, table: str, filters: Dict[str, Any]) -> None:
@@ -92,7 +115,7 @@ class SupabaseClient:
             params=filters,
             timeout=120,
         )
-        resp.raise_for_status()
+        self.ensure_success(resp)
 
 
 def calculate_risk(df: pd.DataFrame) -> pd.Series:
@@ -129,6 +152,13 @@ def classify_drift(v: float) -> str:
     if v > 0.15:
         return "ESCALATING"
     return "STABLE"
+
+
+def optional_text(value: Any) -> str | None:
+    if value is None or pd.isna(value):
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -206,15 +236,23 @@ def run() -> int:
 
         # 1) Recalculate risk score
         df["risk_score"] = calculate_risk(df)
-        risk_updates = [{"id": row["id"], "risk_score": float(row["risk_score"])} for _, row in df.iterrows()]
-        client.upsert("vulnerability_profiles", risk_updates, on_conflict="id")
+        # These rows were selected from the database, so update them in place.
+        # Avoid treating a risk refresh as an insert: manually provisioned
+        # legacy tables may not expose `id` as an ON CONFLICT target, and an
+        # insert would also omit required consent/profile fields.
+        for _, row in df.iterrows():
+            client.update(
+                "vulnerability_profiles",
+                {"risk_score": float(row["risk_score"])},
+                {"id": f"eq.{row['id']}"},
+            )
         log_stage("risk_score", "SUCCESS", processed=len(df), metrics={"mean_risk": float(df["risk_score"].mean())})
 
         # 2-4) Clustering & anomaly detection
         features = prepare_features(df)
         scaled = StandardScaler().fit_transform(features)
 
-        k = max(2, min(6, int(np.sqrt(len(df))) or 2))
+        k = min(len(df), max(2, min(6, int(np.sqrt(len(df))) or 2)))
         kmeans = KMeans(n_clusters=k, random_state=42, n_init="auto")
         df["kmeans_cluster"] = kmeans.fit_predict(scaled)
         log_stage("kmeans", "SUCCESS", processed=len(df), metrics={"clusters": int(k)})
@@ -267,8 +305,9 @@ def run() -> int:
 
         snapshot_rows: List[Dict[str, Any]] = []
         for _, row in grouped.iterrows():
-            county_id = row["county_id"] or "UNKNOWN"
-            state_id = row["state_id"] or "UNKNOWN"
+            county_id = optional_text(row["county_id"]) or "UNKNOWN"
+            state_id = optional_text(row["state_id"]) or "UNKNOWN"
+            organization_id = optional_text(row["organization_id"])
             avg_risk = float(row["avg_risk_score"])
             prev_avg = float(prev_lookup.get((county_id, state_id), 0.0))
             drift = 0.0 if prev_avg == 0 else round((avg_risk - prev_avg) / prev_avg, 4)
@@ -279,7 +318,7 @@ def run() -> int:
                 {
                     "snapshot_date": today.isoformat(),
                     "snapshot_window_days": 30,
-                    "organization_id": row["organization_id"],
+                    "organization_id": organization_id,
                     "county_id": county_id,
                     "state_id": state_id,
                     "profile_count": int(row["profile_count"]),

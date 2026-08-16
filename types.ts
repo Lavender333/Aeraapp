@@ -352,6 +352,8 @@ export interface UserProfile {
   geofencedOutreachOptIn?: boolean;
   geofencedOutreachRadiusMiles?: number;
   geofencedOutreachConsentAt?: string;
+  geocodeConfidence?: number;
+  geocodedAt?: string;
   householdMembers: number; // Legacy count (kept for backward compat, derived from household array)
   household: HouseholdMember[]; // Detailed list
   petDetails: string; // E.g. "2 Dogs"
@@ -415,6 +417,8 @@ export interface OrganizationProfile {
   lastBroadcastTime?: string;
   registeredPopulation?: number; // People registered
   parentOrgId?: string; // reference to a supervising organization
+  about?: string;
+  websiteUrl?: string;
 }
 
 export interface ReplenishmentRequest {

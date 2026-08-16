@@ -458,7 +458,9 @@ export const BuyerPortalView: React.FC<BuyerPortalViewProps> = ({ setView }) => 
                     Low balance — lead delivery may pause.
                   </div>
                 )}
-                <Button className="w-full" variant="outline">Add Funds</Button>
+                <Button className="w-full" variant="outline" disabled title="Wallet top-ups are not available in this release.">
+                  Wallet Top-Ups Unavailable
+                </Button>
               </Card>
             </div>
 
