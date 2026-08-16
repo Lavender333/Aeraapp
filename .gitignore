@@ -27,3 +27,6 @@ supabase/.temp/
 
 # Local docs/media
 01-whats-going-right-merged copy.pdf
+
+# Local Netlify folder
+.netlify
