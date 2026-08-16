@@ -180,7 +180,9 @@ export default function App() {
   const resolveAuthenticatedLandingView = (profile: Partial<UserProfile> | null | undefined): ViewState => {
     const role = String(profile?.role || 'GENERAL_USER').toUpperCase();
     const onboardComplete = Boolean(profile?.onboardComplete || StorageService.isProfileComplete(profile));
-    const requestedStandaloneView = getStandaloneRequestedView() || (sessionStorage.getItem('postLoginView') as ViewState | null);
+    const recoveredView = sessionStorage.getItem('aera.viewAfterChunkReload') as ViewState | null;
+    sessionStorage.removeItem('aera.viewAfterChunkReload');
+    const requestedStandaloneView = getStandaloneRequestedView() || recoveredView || (sessionStorage.getItem('postLoginView') as ViewState | null);
 
     if (requestedStandaloneView && canRoleAccessView(role, requestedStandaloneView)) {
       sessionStorage.removeItem('postLoginView');
@@ -201,6 +203,12 @@ export default function App() {
         setCurrentView(resolveAuthenticatedLandingView(profile));
         return;
       }
+    }
+    if (!isBootstrapping && !['SPLASH', 'LOGIN', 'REGISTRATION', 'RESET_PASSWORD'].includes(nextView)) {
+      // If a newly deployed lazy chunk is missing from an older open browser tab,
+      // lazyWithRetry reloads the page. Preserve the requested authenticated view
+      // so that recovery resumes there instead of returning to Splash.
+      sessionStorage.setItem('aera.viewAfterChunkReload', nextView);
     }
     setCurrentView(nextView);
   };
