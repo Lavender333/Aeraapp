@@ -154,6 +154,13 @@ def classify_drift(v: float) -> str:
     return "STABLE"
 
 
+def optional_text(value: Any) -> str | None:
+    if value is None or pd.isna(value):
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(
         {
@@ -298,8 +305,9 @@ def run() -> int:
 
         snapshot_rows: List[Dict[str, Any]] = []
         for _, row in grouped.iterrows():
-            county_id = row["county_id"] or "UNKNOWN"
-            state_id = row["state_id"] or "UNKNOWN"
+            county_id = optional_text(row["county_id"]) or "UNKNOWN"
+            state_id = optional_text(row["state_id"]) or "UNKNOWN"
+            organization_id = optional_text(row["organization_id"])
             avg_risk = float(row["avg_risk_score"])
             prev_avg = float(prev_lookup.get((county_id, state_id), 0.0))
             drift = 0.0 if prev_avg == 0 else round((avg_risk - prev_avg) / prev_avg, 4)
@@ -310,7 +318,7 @@ def run() -> int:
                 {
                     "snapshot_date": today.isoformat(),
                     "snapshot_window_days": 30,
-                    "organization_id": row["organization_id"],
+                    "organization_id": organization_id,
                     "county_id": county_id,
                     "state_id": state_id,
                     "profile_count": int(row["profile_count"]),
