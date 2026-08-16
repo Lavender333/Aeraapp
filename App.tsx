@@ -146,12 +146,13 @@ export default function App() {
 
   const getStandaloneRequestedView = (): ViewState | null => {
     if (typeof window === 'undefined') return null;
-    if (window.location.pathname === '/buyer-portal') return 'BUYER_PORTAL';
-    if (window.location.pathname === '/lead-intake') return 'LEAD_INTAKE';
-    if (window.location.pathname === '/lead-admin') return 'LEAD_ADMIN';
-    if (window.location.pathname === '/public/intake') return 'PUBLIC_INTAKE';
-    if (window.location.pathname === '/finance-dashboard') return 'FINANCE_DASHBOARD';
-    if (window.location.pathname === '/privacy') return 'PRIVACY_POLICY';
+    const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
+    if (pathname === '/buyer-portal') return 'BUYER_PORTAL';
+    if (pathname === '/lead-intake') return 'LEAD_INTAKE';
+    if (pathname === '/lead-admin') return 'LEAD_ADMIN';
+    if (pathname === '/public/intake') return 'PUBLIC_INTAKE';
+    if (pathname === '/finance-dashboard') return 'FINANCE_DASHBOARD';
+    if (pathname === '/privacy') return 'PRIVACY_POLICY';
     return null;
   };
 
