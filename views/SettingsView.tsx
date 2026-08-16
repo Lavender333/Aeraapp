@@ -6241,13 +6241,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           >
             {isLoggingOut ? 'Logging out…' : 'Log Out'}
           </button>
-          <button
-            type="button"
-            onClick={() => scrollToEssentialAccountSection('settings-account-actions')}
-            className="min-h-[48px] rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800"
-          >
-            Close Account
-          </button>
         </div>
       </section>
 
@@ -8689,19 +8682,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           <LogOut className="mr-2" size={18} />
           {isLoggingOut ? 'Logging out…' : 'Log Out'}
         </Button>
-        <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-4">
-          <p className="text-sm font-semibold text-slate-500">Close your account</p>
-          <p className="mt-1 text-xs leading-relaxed text-slate-400">
-            Closing your account disables access, ends active memberships and subscriptions, releases
-            sponsored seats, minimizes personal profile information, and retains required audit history.
-          </p>
+        <div className="pt-8 text-center">
           <button
             type="button"
             onClick={() => void handleCloseAccount()}
             disabled={isClosingAccount}
-            className="mt-3 w-full min-h-[44px] rounded-lg border border-slate-200 bg-slate-100/70 px-4 py-2.5 text-sm font-medium text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-200/70 hover:text-slate-600 disabled:cursor-wait disabled:opacity-60"
+            className="text-[10px] font-medium text-slate-300 transition-colors hover:text-slate-500 hover:underline disabled:cursor-wait disabled:opacity-60"
           >
-            {isClosingAccount ? 'Closing Account…' : 'Close My Account'}
+            {isClosingAccount ? 'Closing account…' : 'Close my account'}
           </button>
         </div>
       </div>
