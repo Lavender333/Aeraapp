@@ -1672,10 +1672,10 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                 <div>
                   <h3 className="text-sm font-bold text-emerald-900">Local Outreach Panel</h3>
                   <p className="text-xs text-emerald-800 mt-1">
-                    Opted-in app users within range (same-org members plus unconnected users outside trusted networks).
+                    People within range (your members plus nearby app users who explicitly enabled Community Outreach Visibility).
                   </p>
                   <p className="text-[11px] text-emerald-700 mt-1 font-semibold">
-                    Unconnected users are shown only when geocoding confidence is strong and recently refreshed.
+                    Nearby users are shown only when their address match is strong and recently refreshed; joining still requires their approval.
                   </p>
                 </div>
                 <div className="text-right">
@@ -1747,7 +1747,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                     })}
                   </div>
                   <p className="text-[11px] text-slate-500">
-                    Darker clusters indicate more nearby opted-in users who are not yet connected.
+                    Darker clusters indicate more nearby people who explicitly enabled outreach visibility.
                   </p>
                 </div>
               )}
@@ -1829,7 +1829,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                 </div>
               ) : (
                 <div className="bg-white border border-emerald-100 rounded-lg p-4 text-sm text-slate-600">
-                  No opted-in, unconnected app users are currently within {outreachRadiusMiles} miles.
+                  No opted-in nearby people are currently within {outreachRadiusMiles} miles.
                 </div>
               )}
 

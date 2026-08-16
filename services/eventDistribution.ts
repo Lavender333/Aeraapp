@@ -1611,24 +1611,6 @@ export async function getOrgLeaderOutreachCandidates(
 
     if (candidateError) throw new Error(candidateError.message);
 
-    const candidateIds = (profileRows || [])
-      .map((row: any) => String(row?.id || '').trim())
-      .filter(Boolean);
-
-    const trustedIds = new Set<string>();
-    if (candidateIds.length > 0) {
-      const { data: trustedRows, error: trustedError } = await supabase
-        .from('trusted_community_connections')
-        .select('profile_id')
-        .in('profile_id', candidateIds);
-
-      if (trustedError) throw new Error(trustedError.message);
-      for (const row of trustedRows || []) {
-        const profileId = String((row as any)?.profile_id || '').trim();
-        if (profileId) trustedIds.add(profileId);
-      }
-    }
-
     const rows: OrgOutreachCandidate[] = [];
 
     for (const row of profileRows || []) {
@@ -1637,17 +1619,18 @@ export async function getOrgLeaderOutreachCandidates(
 
       const rowOrgId = String((row as any)?.org_id || '').trim() || null;
       const optedIn = Boolean((row as any)?.geofenced_outreach_opt_in);
-      const geocodeConfidence = Number((row as any)?.geocode_confidence);
+      const rawGeocodeConfidence = (row as any)?.geocode_confidence;
+      const geocodeConfidence = rawGeocodeConfidence == null ? Number.NaN : Number(rawGeocodeConfidence);
       const geocodedAt = String((row as any)?.geocoded_at || '');
 
-      // Same-org members are eligible even when opt-in is unset.
+      // Same-org members are eligible even when opt-in is unset. A person who
+      // explicitly opts in may also be shown to a different nearby verified
+      // organization; matching never changes their membership.
       if (rowOrgId === targetOrgId) {
         // allow
       } else {
-        // Non-org users must be explicitly opted-in and outside trusted networks.
+        // Everyone outside this organization must be explicitly opted in.
         if (!optedIn) continue;
-        if (rowOrgId) continue;
-        if (trustedIds.has(profileId)) continue;
         if (!shouldIncludeUnconnectedCandidate(
           Number.isFinite(geocodeConfidence) ? geocodeConfidence : null,
           geocodedAt || null,
@@ -1674,8 +1657,8 @@ export async function getOrgLeaderOutreachCandidates(
         full_name: String((row as any)?.full_name || ''),
         phone: String((row as any)?.mobile_phone || (row as any)?.phone || ''),
         email: String((row as any)?.email || ''),
-        latitude: lat,
-        longitude: lng,
+        latitude: Number(lat.toFixed(3)),
+        longitude: Number(lng.toFixed(3)),
         distance_miles: Number(dist.toFixed(2)),
         location_source: 'PROFILE_GEOCODE',
         location_confidence: classifyLocationConfidence(
@@ -1727,7 +1710,7 @@ export async function getOrgLeaderOutreachCandidates(
     const id = String(row?.profile_id || '').trim();
     const meta = rpcMetaMap.get(id);
     const rowOrgId = String(meta?.org_id || '').trim() || null;
-    const geocodeConfidence = Number(meta?.geocode_confidence);
+    const geocodeConfidence = meta?.geocode_confidence == null ? Number.NaN : Number(meta.geocode_confidence);
     const geocodedAt = String(meta?.geocoded_at || '');
 
     if (rowOrgId !== organizationId) {
@@ -1740,7 +1723,7 @@ export async function getOrgLeaderOutreachCandidates(
   }).map((row) => {
     const id = String(row?.profile_id || '').trim();
     const meta = rpcMetaMap.get(id);
-    const geocodeConfidence = Number(meta?.geocode_confidence);
+    const geocodeConfidence = meta?.geocode_confidence == null ? Number.NaN : Number(meta.geocode_confidence);
     const geocodedAt = String(meta?.geocoded_at || '');
     return {
       ...row,

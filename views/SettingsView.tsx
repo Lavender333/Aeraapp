@@ -14,7 +14,7 @@ import {
   getPendingCommunityInvite,
   PendingCommunityInvite,
 } from '../services/communityInvite';
-import { AppNotificationRecord, cancelMyHouseholdJoinRequest, captureUserLocation, closeCurrentAccount, ConnectedHouseholdMember, ContactSupportTicketRecord, ContactSupportTicketStatus, createContactSupportTicket, createFaqSelfResolvedRecord, createHouseholdExpansionRequest, createHouseholdInvitationForMember, deleteProfileAvatarForCurrentUser, ensureHouseholdForCurrentUser, escalateContactSupportTicket, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, leaveCurrentOrganization, listAllRequests, listConnectedHouseholdMembers, listContactSupportTicketsForOrgAdmin, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyContactSupportTickets, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, redeemOrganizationCode, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, respondToContactSupportTicketAsOrgAdmin, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestExpiration, updateRequestStatus, updateVitalsForUser, uploadProfileAvatarDataUrl } from '../services/api';
+import { AppNotificationRecord, cancelMyHouseholdJoinRequest, captureUserLocation, closeCurrentAccount, ConnectedHouseholdMember, ContactSupportTicketRecord, ContactSupportTicketStatus, createContactSupportTicket, createFaqSelfResolvedRecord, createHouseholdExpansionRequest, createHouseholdInvitationForMember, deleteProfileAvatarForCurrentUser, ensureHouseholdForCurrentUser, escalateContactSupportTicket, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, leaveCurrentOrganization, listAllRequests, listConnectedHouseholdMembers, listContactSupportTicketsForOrgAdmin, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyContactSupportTickets, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, redeemOrganizationCode, refreshCommunityOutreachMatchesForCurrentUser, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, respondToContactSupportTicketAsOrgAdmin, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestExpiration, updateRequestStatus, updateVitalsForUser, uploadProfileAvatarDataUrl } from '../services/api';
 import {
   createOrganizationAccessCode,
   listOrganizationAccessCodes,
@@ -182,14 +182,14 @@ const GENERAL_FAQS: Array<{ q: string; a: string }> = [
   { q: "I forgot my password / can't log in. What should I do?", a: 'Use the "Forgot Password" link on the login screen to receive a reset link by email. If you still can\'t access your account, submit a support ticket here and select the "Account Access" category.' },
   { q: 'How do I update my household members or emergency contacts?', a: 'In Settings, open the Household section and tap "Show more." From there you can add, edit, or remove household members and their medical notes. Emergency contacts can be managed in the Contacts section.' },
   { q: 'What is the supply inventory for?', a: 'The inventory helps you track essential supplies (food, water, medications, etc.) your household has on hand. AERA uses this data to identify gaps and prioritize community resource sharing during a disaster.' },
-  { q: 'How does geofenced outreach work?', a: 'If you opt in under Privacy settings, nearby organizations can see that there is an unconnected household in their area and may reach out to invite you. No identifying details are shared until you accept.' },
+  { q: 'How does geofenced outreach work?', a: 'If you explicitly opt in under Legal & Privacy, verified nearby organization leaders can see your name, phone, email, and approximate distance so they can invite you or coordinate emergency support. Your street address and exact coordinates are not shown, and you are never enrolled without approving a join request or code.' },
   { q: 'Can I use AERA without a smartphone?', a: 'AERA is a web-based progressive web app accessible on any modern browser. While a smartphone is recommended for location features, you can use AERA on a tablet or desktop computer.' },
   { q: 'How do I close my account?', a: 'Go to Settings → Account Essentials → Close Account. AERA disables access, releases organization seats, minimizes personal profile information, and retains only required operational and audit history.' },
 ];
 
 const ORG_ADMIN_FAQS: Array<{ q: string; a: string }> = [
   { q: 'How do I add or remove members from my organization?', a: 'In the Community section of Settings, open your organization panel. Use "Invite Member" to send a QR code or link. To remove a member, find them in the member list and tap "Remove." Removed members keep their personal profiles but lose access to org resources.' },
-  { q: 'How does Community Outreach Visibility work?', a: 'The Outreach panel shows unconnected households near your organization that have opted in to geofenced outreach. All members must have location coordinates set and the opt-in enabled for them to appear. Use "Invite to Org" to send them a personalized link.' },
+  { q: 'How does Community Outreach Visibility work?', a: 'The Local Outreach Panel shows your own members plus people near your organization who explicitly opted in. A newly matched person generates an admin notification. Use the logged outreach actions to contact them; joining the organization still requires the person’s approval.' },
   { q: 'What are the different member roles and what can each do?', a: 'MEMBER — can view shared resources, submit help requests, and update personal inventory. ORG_ADMIN — can manage members, post broadcasts, view outreach candidates, and run distribution events. INSTITUTION_ADMIN — same as Org Admin plus multi-org reporting. ADMIN — full platform access.' },
   { q: 'How do I post a broadcast to my members?', a: 'Navigate to the Community section and open your organization. Tap "New Broadcast," add a title and message, and select the urgency level. All active members receive an in-app notification immediately.' },
   { q: 'Can I export a member roster or inventory report?', a: 'Yes. In the Reports section of your org panel, choose "Export Roster" (CSV) or "Export Inventory Summary" (PDF). Reports include anonymized household data unless you have explicit consent on file.' },
@@ -232,6 +232,18 @@ const normalizeOrgType = (raw?: string | null): OrganizationProfile['type'] => {
   return ORG_TYPE_WHITELIST.includes(candidate) ? candidate : 'NGO';
 };
 
+const safeExternalWebsiteUrl = (value: string): string => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return '';
+  try {
+    const candidate = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    const parsed = new URL(candidate);
+    return ['http:', 'https:'].includes(parsed.protocol) && parsed.hostname ? parsed.toString() : '';
+  } catch {
+    return '';
+  }
+};
+
 const mapSupabaseOrgRow = (row: any): OrganizationProfile => {
   const sanitizedId = formatCommunityIdInput(String(row?.org_code || row?.id || ''));
   return {
@@ -253,6 +265,8 @@ const mapSupabaseOrgRow = (row: any): OrganizationProfile => {
     lastBroadcastTime: row?.last_broadcast_time ?? undefined,
     registeredPopulation: typeof row?.registered_population === 'number' ? row.registered_population : undefined,
     parentOrgId: row?.parent_org_id ?? undefined,
+    about: String(row?.about || '').trim() || undefined,
+    websiteUrl: safeExternalWebsiteUrl(String(row?.website_url || '')) || undefined,
   };
 };
 
@@ -435,6 +449,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [isClosingAccount, setIsClosingAccount] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [connectedOrg, setConnectedOrg] = useState<string | null>(null);
+  const [connectedOrgDetails, setConnectedOrgDetails] = useState<OrganizationProfile | null>(null);
   const [organizationCodeInput, setOrganizationCodeInput] = useState(
     () => getPendingOrganizationCode(),
   );
@@ -493,6 +508,39 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   }, [profile.communityId]);
 
   useEffect(() => {
+    let active = true;
+    const orgCode = formatCommunityIdInput(String(profile.communityId || ''));
+    if (!orgCode) {
+      setConnectedOrgDetails(null);
+      return () => { active = false; };
+    }
+
+    listOrganizationsSupabase({ activeOnly: false })
+      .then((rows) => {
+        if (!active) return;
+        const match = (rows || []).find((row: any) => formatCommunityIdInput(String(row?.org_code || '')) === orgCode);
+        setConnectedOrgDetails(match ? mapSupabaseOrgRow(match) : null);
+      })
+      .catch(() => {
+        if (active) setConnectedOrgDetails(StorageService.getOrganization(orgCode) || null);
+      });
+
+    return () => { active = false; };
+  }, [profile.communityId]);
+
+  useEffect(() => {
+    let active = true;
+    if (!profile.geofencedOutreachOptIn || !profile.id || profile.id === 'guest') {
+      setOutreachMatches([]);
+      return () => { active = false; };
+    }
+    refreshCommunityOutreachMatchesForCurrentUser()
+      .then((matches) => { if (active) setOutreachMatches(matches); })
+      .catch(() => { /* deployment/status errors are shown when the user changes the setting */ });
+    return () => { active = false; };
+  }, [profile.id, profile.geofencedOutreachOptIn, profile.latitude, profile.longitude]);
+
+  useEffect(() => {
     // Ensure localStorage always contains a current role set (older caches may be missing roles).
     StorageService.saveRoles(roles);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -514,6 +562,15 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [orgLocationBusy, setOrgLocationBusy] = useState(false);
   const [orgLocationError, setOrgLocationError] = useState<string | null>(null);
   const [orgLocationSavedMessage, setOrgLocationSavedMessage] = useState<string | null>(null);
+  const [orgAboutDraft, setOrgAboutDraft] = useState('');
+  const [orgWebsiteDraft, setOrgWebsiteDraft] = useState('');
+  const [orgAboutBusy, setOrgAboutBusy] = useState(false);
+  const [orgAboutError, setOrgAboutError] = useState<string | null>(null);
+  const [orgAboutSavedMessage, setOrgAboutSavedMessage] = useState<string | null>(null);
+  const [outreachVisibilityBusy, setOutreachVisibilityBusy] = useState(false);
+  const [outreachVisibilityMessage, setOutreachVisibilityMessage] = useState<string | null>(null);
+  const [outreachVisibilityError, setOutreachVisibilityError] = useState<string | null>(null);
+  const [outreachMatches, setOutreachMatches] = useState<Array<{ organizationId: string; organizationCode?: string; organizationName: string; distanceMiles: number }>>([]);
   const [orgSeatManagement, setOrgSeatManagement] = useState<Record<string, OrganizationSeatManagement>>({});
   const [orgSeatManagementBusy, setOrgSeatManagementBusy] = useState(false);
   const [orgSeatManagementError, setOrgSeatManagementError] = useState<string | null>(null);
@@ -1741,6 +1798,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     );
     setOrgLocationError(null);
     setOrgLocationSavedMessage(null);
+    setOrgAboutDraft(String(selectedOrgDetails.about || ''));
+    setOrgWebsiteDraft(String(selectedOrgDetails.websiteUrl || ''));
+    setOrgAboutError(null);
+    setOrgAboutSavedMessage(null);
   }, [selectedOrgDetails]);
 
   // The directory and seat summary load independently. If a user selects an
@@ -1801,6 +1862,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         );
         setOrgLocationError(null);
         setOrgLocationSavedMessage(null);
+        setOrgAboutDraft(String(localOrg.about || ''));
+        setOrgWebsiteDraft(String(localOrg.websiteUrl || ''));
+        setOrgAboutError(null);
+        setOrgAboutSavedMessage(null);
         lastOrgLocationHydratedCodeRef.current = normalizedOrgCode;
         return;
       }
@@ -1809,7 +1874,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         const remoteOrgs = await listOrganizationsSupabase({ activeOnly: false });
         if (!active) return;
 
-        const match = (remoteOrgs || []).find(
+        const match: any = (remoteOrgs || []).find(
           (org: any) => String(org.org_code || '').toUpperCase() === normalizedOrgCode
         );
 
@@ -1826,6 +1891,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         );
         setOrgLocationError(null);
         setOrgLocationSavedMessage(null);
+        setOrgAboutDraft(String(match?.about || ''));
+        setOrgWebsiteDraft(String(match?.website_url || ''));
+        setOrgAboutError(null);
+        setOrgAboutSavedMessage(null);
       } catch {
         if (!active) return;
       } finally {
@@ -1884,26 +1953,58 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setIsSavingProfile(true);
     setProfileSaveError(null);
     try {
+      let profileToSave = profile;
+      if (section !== 'contacts') {
+        const fullAddress = [profile.address, profile.city, profile.state, profile.zipCode]
+          .map((part) => String(part || '').trim())
+          .filter(Boolean)
+          .join(', ');
+        try {
+          const geocoded = await geocodeAddress(fullAddress);
+          const verifiedAt = new Date().toISOString();
+          profileToSave = {
+            ...profile,
+            latitude: geocoded.lat,
+            longitude: geocoded.lng,
+            addressVerified: true,
+            addressVerifiedAt: verifiedAt,
+            geocodeConfidence: 0.9,
+            geocodedAt: verifiedAt,
+          };
+        } catch (geocodeError: any) {
+          if (profile.geofencedOutreachOptIn) {
+            throw new Error(`Your address could not be matched for Community Outreach. ${String(geocodeError?.message || 'Check the address and try again.')}`);
+          }
+        }
+      }
+
       await updateProfileForUser({
-        fullName: profile.fullName,
-        phone: profile.phone,
-        email: profile.email,
-        address: profile.address,
-        addressLine1: profile.addressLine1,
-        addressLine2: profile.addressLine2,
-        city: profile.city,
-        state: profile.state,
-        zip: profile.zipCode,
-        latitude: profile.latitude,
-        longitude: profile.longitude,
-        googlePlaceId: profile.googlePlaceId,
-        addressVerified: Boolean(profile.addressVerified),
-        addressVerifiedAt: profile.addressVerifiedAt,
-        emergencyContactName: profile.emergencyContactName,
-        emergencyContactPhone: profile.emergencyContactPhone,
-        emergencyContactRelation: profile.emergencyContactRelation,
+        fullName: profileToSave.fullName,
+        phone: profileToSave.phone,
+        email: profileToSave.email,
+        address: profileToSave.address,
+        addressLine1: profileToSave.addressLine1,
+        addressLine2: profileToSave.addressLine2,
+        city: profileToSave.city,
+        state: profileToSave.state,
+        zip: profileToSave.zipCode,
+        latitude: profileToSave.latitude,
+        longitude: profileToSave.longitude,
+        googlePlaceId: profileToSave.googlePlaceId,
+        addressVerified: Boolean(profileToSave.addressVerified),
+        addressVerifiedAt: profileToSave.addressVerifiedAt,
+        geocodeConfidence: profileToSave.geocodeConfidence,
+        geocodedAt: profileToSave.geocodedAt,
+        emergencyContactName: profileToSave.emergencyContactName,
+        emergencyContactPhone: profileToSave.emergencyContactPhone,
+        emergencyContactRelation: profileToSave.emergencyContactRelation,
       });
-      StorageService.saveProfile(profile);
+      setProfile(profileToSave);
+      StorageService.saveProfile(profileToSave, { skipRemoteSync: true });
+      if (profileToSave.geofencedOutreachOptIn) {
+        const matches = await refreshCommunityOutreachMatchesForCurrentUser();
+        setOutreachMatches(matches);
+      }
       if (section) {
         showSavedIndicator(section);
       } else {
@@ -2009,6 +2110,15 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       const next = { ...prev, [key]: value };
       if (key === 'address') {
         next.addressLine1 = String(value || '').trim() || undefined;
+      }
+      if (key === 'address' || key === 'addressLine1' || key === 'addressLine2' || key === 'city' || key === 'state' || key === 'zipCode') {
+        // Never continue matching against coordinates from an old address.
+        next.latitude = undefined;
+        next.longitude = undefined;
+        next.addressVerified = false;
+        next.addressVerifiedAt = undefined;
+        next.geocodeConfidence = undefined;
+        next.geocodedAt = undefined;
       }
 
       StorageService.saveProfile(next);
@@ -3659,10 +3769,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setOrgList(prev => prev.map(o => o.id === orgId ? { ...o, currentBroadcast: undefined } : o));
   };
 
-  const geocodeOrgAddress = async (addressInput: string): Promise<{ lat: number; lng: number }> => {
+  const geocodeAddress = async (addressInput: string): Promise<{ lat: number; lng: number }> => {
     const query = String(addressInput || '').trim();
     if (!query) {
-      throw new Error('Enter an organization address first.');
+      throw new Error('Enter a complete address first.');
     }
 
     const response = await fetch(
@@ -3696,7 +3806,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setOrgLocationError(null);
     setOrgLocationSavedMessage(null);
     try {
-      const { lat, lng } = await geocodeOrgAddress(query);
+      const { lat, lng } = await geocodeAddress(query);
 
       setOrgLatitudeDraft(String(lat));
       setOrgLongitudeDraft(String(lng));
@@ -3743,7 +3853,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
       // Address is the only required input. If coordinates are missing, derive them.
       if (lat == null || lng == null) {
-        const geocoded = await geocodeOrgAddress(address);
+        const geocoded = await geocodeAddress(address);
         lat = geocoded.lat;
         lng = geocoded.lng;
         setOrgLatitudeDraft(String(geocoded.lat));
@@ -3787,6 +3897,121 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       setOrgLocationError(err?.message || 'Unable to save organization location.');
     } finally {
       setOrgLocationBusy(false);
+    }
+  };
+
+  const handleSaveOrganizationAbout = async () => {
+    const targetOrgCode = formatCommunityIdInput(String(selectedOrgDetails?.id || profile.communityId || ''));
+    if (!targetOrgCode) {
+      setOrgAboutError('Set the Organization ID before saving About information.');
+      return;
+    }
+
+    setOrgAboutBusy(true);
+    setOrgAboutError(null);
+    setOrgAboutSavedMessage(null);
+    try {
+      const about = String(orgAboutDraft || '').trim();
+      if (about.length > 2000) throw new Error('The About section must be 2,000 characters or fewer.');
+      const websiteUrl = safeExternalWebsiteUrl(orgWebsiteDraft);
+      if (String(orgWebsiteDraft || '').trim() && !websiteUrl) {
+        throw new Error('Enter a valid website, such as https://example.org.');
+      }
+      const saved = await updateOrganizationByCode({ orgCode: targetOrgCode, about, websiteUrl });
+      const changes = { about: String(saved.about || ''), websiteUrl: String(saved.website_url || '') };
+
+      setOrgAboutDraft(changes.about);
+      setOrgWebsiteDraft(changes.websiteUrl);
+      setOrgList((prev) => prev.map((org) => org.id === targetOrgCode ? { ...org, ...changes } : org));
+      setSelectedOrgDetails((prev) => prev?.id === targetOrgCode ? { ...prev, ...changes } : prev);
+      setConnectedOrgDetails((prev) => prev?.id === targetOrgCode ? { ...prev, ...changes } : prev);
+
+      const localOrg = StorageService.getOrganization(targetOrgCode);
+      if (localOrg) StorageService.saveOrganization({ ...localOrg, ...changes });
+      setOrgAboutSavedMessage('Organization About information saved for members and nearby search results.');
+    } catch (error: any) {
+      setOrgAboutError(String(error?.message || 'Unable to save organization About information.'));
+    } finally {
+      setOrgAboutBusy(false);
+    }
+  };
+
+  const handleOutreachVisibilityToggle = async () => {
+    if (outreachVisibilityBusy) return;
+    const next = !profile.geofencedOutreachOptIn;
+    setOutreachVisibilityBusy(true);
+    setOutreachVisibilityError(null);
+    setOutreachVisibilityMessage(null);
+
+    try {
+      let latitude = profile.latitude;
+      let longitude = profile.longitude;
+      let addressVerified = Boolean(profile.addressVerified);
+      let addressVerifiedAt = profile.addressVerifiedAt;
+      let geocodeConfidence = profile.geocodeConfidence;
+      let geocodedAt = profile.geocodedAt;
+
+      if (next && (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !addressVerified)) {
+        const fullAddress = [profile.address, profile.city, profile.state, profile.zipCode]
+          .map((part) => String(part || '').trim())
+          .filter(Boolean)
+          .join(', ');
+        if (!profile.address || !profile.city || !profile.state || !profile.zipCode) {
+          throw new Error('Add and save your complete street address, city, state, and ZIP before enabling outreach visibility.');
+        }
+        const geocoded = await geocodeAddress(fullAddress);
+        latitude = geocoded.lat;
+        longitude = geocoded.lng;
+        addressVerified = true;
+        addressVerifiedAt = new Date().toISOString();
+        geocodeConfidence = 0.9;
+        geocodedAt = addressVerifiedAt;
+      }
+
+      const consentAt = next ? new Date().toISOString() : profile.geofencedOutreachConsentAt;
+      await updateProfileForUser({
+        fullName: profile.fullName,
+        phone: profile.phone,
+        geofencedOutreachOptIn: next,
+        geofencedOutreachConsentAt: consentAt,
+        latitude,
+        longitude,
+        addressVerified,
+        addressVerifiedAt,
+        geocodeConfidence,
+        geocodedAt,
+      });
+
+      const updated: UserProfile = {
+        ...profile,
+        geofencedOutreachOptIn: next,
+        geofencedOutreachConsentAt: consentAt,
+        latitude,
+        longitude,
+        addressVerified,
+        addressVerifiedAt,
+        geocodeConfidence,
+        geocodedAt,
+      };
+      setProfile(updated);
+      StorageService.saveProfile(updated, { skipRemoteSync: true });
+
+      if (next) {
+        const matches = await refreshCommunityOutreachMatchesForCurrentUser();
+        setOutreachMatches(matches);
+        setOutreachVisibilityMessage(
+          matches.length > 0
+            ? `Visible to ${matches.length} verified nearby organization${matches.length === 1 ? '' : 's'}. Their administrators were alerted.`
+            : 'Visibility is on. No verified organizations are currently within your outreach radius.'
+        );
+      } else {
+        setOutreachMatches([]);
+        setOutreachVisibilityMessage('Community outreach visibility is off. Nearby organization matches were removed.');
+      }
+    } catch (error: any) {
+      setOutreachVisibilityError(String(error?.message || 'Unable to update community outreach visibility.'));
+    } finally {
+      setOutreachVisibilityBusy(false);
     }
   };
 
@@ -5155,6 +5380,41 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                         </div>
                       </div>
                     </div>
+                 </div>
+
+                 <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 space-y-3">
+                   <div>
+                     <h3 className="font-bold text-sky-950">Organization About</h3>
+                     <p className="text-xs text-sky-800">Shown to members and in nearby organization search results.</p>
+                   </div>
+                   <Textarea
+                     label="About the organization"
+                     value={orgAboutDraft}
+                     maxLength={2000}
+                     onChange={(event) => {
+                       setOrgAboutDraft(event.target.value);
+                       setOrgAboutError(null);
+                       setOrgAboutSavedMessage(null);
+                     }}
+                     placeholder="Mission, services, service area, hours, and who this organization supports."
+                   />
+                   <Input
+                     label="Organization website"
+                     type="url"
+                     value={orgWebsiteDraft}
+                     onChange={(event) => {
+                       setOrgWebsiteDraft(event.target.value);
+                       setOrgAboutError(null);
+                       setOrgAboutSavedMessage(null);
+                     }}
+                     placeholder="https://yourorganization.org"
+                   />
+                   {orgAboutError && <p role="alert" className="text-xs font-semibold text-red-700">{orgAboutError}</p>}
+                   {orgAboutSavedMessage && <p role="status" className="text-xs font-semibold text-emerald-700">{orgAboutSavedMessage}</p>}
+                   <Button size="sm" onClick={() => void handleSaveOrganizationAbout()} disabled={orgAboutBusy}>
+                     {orgAboutBusy ? <Loader2 size={15} className="mr-2 animate-spin" /> : <Save size={15} className="mr-2" />}
+                     Save About Section
+                   </Button>
                  </div>
 
                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
@@ -7013,6 +7273,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                                           ? `Your support ticket was marked resolved by ${String((item.metadata as any)?.adminName || 'AERA support')}.`
                                         : item.type === 'support_ticket_escalated'
                                           ? `Support ticket escalated to AERA: ${String((item.metadata as any)?.subject || 'Support request')}`
+                                          : item.type === 'community_outreach_new_candidate'
+                                            ? `${String((item.metadata as any)?.candidateName || 'A nearby resident')} enabled Community Outreach Visibility${Number.isFinite(Number((item.metadata as any)?.distanceMiles)) ? ` (${Number((item.metadata as any).distanceMiles).toFixed(1)} mi away)` : ''}. Review the Local Outreach Panel.`
                                           : item.type === 'household_member_reported_danger'
                                             ? `${String((item.metadata as any)?.reporterName || 'A household member')} reported DANGER.`
                                             : item.type === 'household_member_reported_safe'
@@ -7850,6 +8112,31 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             {connectedOrgLabel && (
               <p className="text-xs font-semibold text-emerald-700 relative z-10">Connected to {connectedOrgLabel}.</p>
             )}
+            {connectedOrgDetails && (
+              <div className="relative z-10 rounded-xl border border-sky-200 bg-sky-50 p-4 space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-sky-700">About Your Organization</p>
+                    <h3 className="text-base font-bold text-sky-950">{connectedOrgDetails.name}</h3>
+                  </div>
+                  {connectedOrgDetails.verified && <span className="text-[10px] font-bold text-sky-700">Verified</span>}
+                </div>
+                <p className="text-sm text-slate-700 whitespace-pre-wrap">
+                  {connectedOrgDetails.about || 'This organization has not added its About information yet.'}
+                </p>
+                {connectedOrgDetails.address && <p className="text-xs text-slate-600">{connectedOrgDetails.address}</p>}
+                {connectedOrgDetails.websiteUrl && (
+                  <a
+                    href={connectedOrgDetails.websiteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-bold text-sky-700 hover:underline"
+                  >
+                    <Globe size={13} /> Visit organization website
+                  </a>
+                )}
+              </div>
+            )}
             {verifyError && (
                <div className="flex items-center gap-2 text-amber-700 text-sm font-bold bg-amber-50 p-2 rounded-lg animate-fade-in border border-amber-100 relative z-10">
                   <XCircle size={16} /> {verifyError}
@@ -7948,6 +8235,18 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                           )}
                           {org.verified && <span className="text-sky-700 font-semibold">Verified</span>}
                         </div>
+                        {org.about && <p className="text-xs text-slate-600 mt-2 line-clamp-3">{org.about}</p>}
+                        {org.websiteUrl && (
+                          <a
+                            href={org.websiteUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(event) => event.stopPropagation()}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-sky-700 hover:underline mt-2"
+                          >
+                            <Globe size={12} /> Website
+                          </a>
+                        )}
                       </div>
                       <Button size="sm" onClick={() => handleConnectToOrg(org.id)} disabled={isVerifying}>
                         {isVerifying ? 'Connecting...' : 'Join'}
@@ -7996,6 +8295,49 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 Save Organization Address
               </Button>
             </div>
+          </div>
+        )}
+
+        {canManageOrgSettings && (
+          <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 space-y-3 relative z-10">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-sky-700">Organization About</p>
+              <p className="text-sm text-sky-900">Help members and nearby residents understand your mission, services, and how to reach you.</p>
+            </div>
+            <Textarea
+              label="About the organization"
+              value={orgAboutDraft}
+              maxLength={2000}
+              onChange={(event) => {
+                setOrgAboutDraft(event.target.value);
+                setOrgAboutError(null);
+                setOrgAboutSavedMessage(null);
+              }}
+              placeholder="Describe your mission, emergency services, service area, hours, and who you support."
+            />
+            <p className="text-[11px] text-slate-500 text-right">{orgAboutDraft.length}/2,000</p>
+            <Input
+              label="Organization website"
+              type="url"
+              value={orgWebsiteDraft}
+              onChange={(event) => {
+                setOrgWebsiteDraft(event.target.value);
+                setOrgAboutError(null);
+                setOrgAboutSavedMessage(null);
+              }}
+              placeholder="https://yourorganization.org"
+            />
+            {orgAboutError && <p role="alert" className="text-xs font-semibold text-red-700">{orgAboutError}</p>}
+            {orgAboutSavedMessage && <p role="status" className="text-xs font-semibold text-emerald-700">{orgAboutSavedMessage}</p>}
+            <Button
+              size="sm"
+              onClick={() => void handleSaveOrganizationAbout()}
+              disabled={orgAboutBusy || !String(selectedOrgDetails?.id || profile.communityId || '').trim()}
+              className="bg-sky-600 hover:bg-sky-700 text-white"
+            >
+              {orgAboutBusy ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Save size={16} className="mr-2" />}
+              Save About Section
+            </Button>
           </div>
         )}
 
@@ -8270,33 +8612,35 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <button
               type="button"
               aria-label={profile.geofencedOutreachOptIn ? 'Disable community outreach visibility' : 'Enable community outreach visibility'}
-              onClick={async () => {
-                const next = !profile.geofencedOutreachOptIn;
-                const updated = {
-                  ...profile,
-                  geofencedOutreachOptIn: next,
-                  geofencedOutreachConsentAt: next ? new Date().toISOString() : profile.geofencedOutreachConsentAt,
-                };
-                setProfile(updated);
-                StorageService.saveProfile(updated);
-                try {
-                  await updateProfileForUser({
-                    fullName: profile.fullName,
-                    phone: profile.phone,
-                    geofencedOutreachOptIn: next,
-                    geofencedOutreachConsentAt: updated.geofencedOutreachConsentAt,
-                  });
-                } catch { /* best-effort */ }
-              }}
-              className="shrink-0"
+              onClick={() => void handleOutreachVisibilityToggle()}
+              disabled={outreachVisibilityBusy}
+              className="shrink-0 disabled:opacity-50"
             >
-              {profile.geofencedOutreachOptIn
+              {outreachVisibilityBusy
+                ? <Loader2 size={28} className="animate-spin text-emerald-600" />
+                : profile.geofencedOutreachOptIn
                 ? <ToggleRight size={32} className="text-emerald-600" />
                 : <ToggleLeft size={32} className="text-slate-400" />}
             </button>
           </div>
           {profile.geofencedOutreachOptIn && (
             <p className="text-[11px] text-emerald-700 font-semibold">Visible to nearby org leaders</p>
+          )}
+          {outreachVisibilityMessage && (
+            <p role="status" className="text-[11px] text-emerald-700 font-semibold">{outreachVisibilityMessage}</p>
+          )}
+          {outreachVisibilityError && (
+            <p role="alert" className="text-[11px] text-red-700 font-semibold">{outreachVisibilityError}</p>
+          )}
+          {profile.geofencedOutreachOptIn && outreachMatches.length > 0 && (
+            <div className="space-y-1 pt-1">
+              {outreachMatches.map((match) => (
+                <div key={match.organizationId} className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs">
+                  <span className="font-semibold text-slate-800">Matched with {match.organizationName}</span>
+                  <span className="shrink-0 text-emerald-700">{match.distanceMiles.toFixed(1)} mi</span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 

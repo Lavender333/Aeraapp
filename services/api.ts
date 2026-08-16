@@ -829,7 +829,7 @@ export async function setOrganizationParentByCode(payload: {
     .select('id, org_code, parent_org_id');
 
   if (error) throw new Error(error.message || 'Unable to update parent organization');
-  const data = rows?.[0];
+  const data: any = rows?.[0];
   if (!data) throw new Error('Organization not found or you do not have permission to update it.');
 
   await safeLogActivity({
@@ -854,13 +854,17 @@ export async function updateOrganizationByCode(payload: {
   address?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  about?: string | null;
+  websiteUrl?: string | null;
 }) {
   const org = await getOrgByCode(payload.orgCode);
   if (!org?.orgId) throw new Error('Organization not found');
 
-  const updates: Record<string, any> = {
-    address: payload.address == null ? null : String(payload.address).trim() || null,
-  };
+  const updates: Record<string, any> = {};
+
+  if (Object.prototype.hasOwnProperty.call(payload, 'address')) {
+    updates.address = payload.address == null ? null : String(payload.address).trim() || null;
+  }
 
   if (Object.prototype.hasOwnProperty.call(payload, 'latitude')) {
     const lat = payload.latitude;
@@ -872,16 +876,35 @@ export async function updateOrganizationByCode(payload: {
     updates.longitude = typeof lng === 'number' && Number.isFinite(lng) ? lng : null;
   }
 
-  const { data: rows, error } = await supabase
+  if (Object.prototype.hasOwnProperty.call(payload, 'about')) {
+    updates.about = payload.about == null ? null : String(payload.about).trim().slice(0, 2000) || null;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(payload, 'websiteUrl')) {
+    updates.website_url = payload.websiteUrl == null ? null : String(payload.websiteUrl).trim().slice(0, 500) || null;
+  }
+
+  if (Object.keys(updates).length === 0) throw new Error('No organization changes were provided.');
+
+  const runUpdate = (columns: string) => supabase
     .from('organizations')
     .update(updates)
     .eq('id', org.orgId)
-    .select('id, org_code, address, latitude, longitude');
+    .select(columns);
+
+  let { data: rows, error } = await runUpdate('id, org_code, address, latitude, longitude, about, website_url');
+  const missingAboutColumns = Boolean(error && /about|website_url|column .* does not exist|schema cache/i.test(String(error.message || '')));
+  if (missingAboutColumns && !Object.prototype.hasOwnProperty.call(updates, 'about') && !Object.prototype.hasOwnProperty.call(updates, 'website_url')) {
+    ({ data: rows, error } = await runUpdate('id, org_code, address, latitude, longitude'));
+  }
 
   if (error) {
+    if (missingAboutColumns) {
+      throw new Error('Organization About is not deployed yet. Apply the latest Supabase migration and try again.');
+    }
     throw new Error(error.message || 'Unable to update organization');
   }
-  const data = rows?.[0];
+  const data: any = rows?.[0];
   if (!data) {
     throw new Error('Organization not found or you do not have permission to update it.');
   }
@@ -895,6 +918,8 @@ export async function updateOrganizationByCode(payload: {
       address: data.address,
       latitude: data.latitude,
       longitude: data.longitude,
+      about: data.about,
+      website_url: data.website_url,
     },
   });
 
@@ -1032,8 +1057,8 @@ export async function updateProfileForUser(payload: {
   city?: string;
   state?: string;
   zip?: string;
-  latitude?: number;
-  longitude?: number;
+  latitude?: number | null;
+  longitude?: number | null;
   googlePlaceId?: string;
   addressVerified?: boolean;
   addressVerifiedAt?: string;
@@ -1043,25 +1068,36 @@ export async function updateProfileForUser(payload: {
   geofencedOutreachOptIn?: boolean;
   geofencedOutreachRadiusMiles?: number;
   geofencedOutreachConsentAt?: string;
+  geocodeConfidence?: number;
+  geocodedAt?: string;
   onboardComplete?: boolean;
 }) {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData?.user) throw new Error('Not authenticated');
 
-  const emergencyContact = {
-    name: payload.emergencyContactName || null,
-    phone: payload.emergencyContactPhone || null,
-    relation: payload.emergencyContactRelation || null,
-  };
-
   const profileUpdate: Record<string, any> = {
     full_name: payload.fullName || null,
     phone: payload.phone || null,
     mobile_phone: payload.phone || null,
-    email: payload.email || null,
-    home_address: payload.address || null,
-    emergency_contact: emergencyContact,
   };
+
+  if (Object.prototype.hasOwnProperty.call(payload, 'email')) {
+    profileUpdate.email = payload.email || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'address')) {
+    profileUpdate.home_address = payload.address || null;
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(payload, 'emergencyContactName') ||
+    Object.prototype.hasOwnProperty.call(payload, 'emergencyContactPhone') ||
+    Object.prototype.hasOwnProperty.call(payload, 'emergencyContactRelation')
+  ) {
+    profileUpdate.emergency_contact = {
+      name: payload.emergencyContactName || null,
+      phone: payload.emergencyContactPhone || null,
+      relation: payload.emergencyContactRelation || null,
+    };
+  }
 
   if (Object.prototype.hasOwnProperty.call(payload, 'avatarDataUrl')) {
     const avatarReference = String(payload.avatarDataUrl || '').trim();
@@ -1112,6 +1148,13 @@ export async function updateProfileForUser(payload: {
   if (Object.prototype.hasOwnProperty.call(payload, 'geofencedOutreachConsentAt')) {
     profileUpdate.geofenced_outreach_consent_at = payload.geofencedOutreachConsentAt || null;
   }
+  if (Object.prototype.hasOwnProperty.call(payload, 'geocodeConfidence')) {
+    const confidence = Number(payload.geocodeConfidence);
+    profileUpdate.geocode_confidence = Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : null;
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'geocodedAt')) {
+    profileUpdate.geocoded_at = payload.geocodedAt || null;
+  }
   if (Object.prototype.hasOwnProperty.call(payload, 'onboardComplete')) {
     profileUpdate.onboarding_completed = Boolean(payload.onboardComplete);
   }
@@ -1141,6 +1184,31 @@ export async function updateProfileForUser(payload: {
   });
 
   return { ok: true };
+}
+
+export type CommunityOutreachMatch = {
+  organizationId: string;
+  organizationCode?: string;
+  organizationName: string;
+  distanceMiles: number;
+};
+
+export async function refreshCommunityOutreachMatchesForCurrentUser(): Promise<CommunityOutreachMatch[]> {
+  const { data, error } = await supabase.rpc('refresh_my_community_outreach_matches');
+  if (error) {
+    const message = String(error.message || 'Unable to update nearby organization matches.');
+    if (/refresh_my_community_outreach_matches|schema cache|does not exist/i.test(message)) {
+      throw new Error('Nearby organization matching is not deployed yet. Apply the latest Supabase migration and try again.');
+    }
+    throw new Error(message);
+  }
+
+  return (data || []).map((row: any) => ({
+    organizationId: String(row.organization_id || ''),
+    organizationCode: String(row.organization_code || '') || undefined,
+    organizationName: String(row.organization_name || 'Nearby organization'),
+    distanceMiles: Number(row.distance_miles || 0),
+  }));
 }
 
 const AVATAR_STORAGE_REFERENCE_PREFIX = 'avatar:';
@@ -3789,7 +3857,7 @@ export async function fetchProfileForUser(): Promise<Partial<UserProfile> | null
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('full_name, phone, mobile_phone, email, role, org_id, home_address, address_line_1, address_line_2, city, state, zip, latitude, longitude, google_place_id, address_verified, address_verified_at, emergency_contact, avatar_url, geofenced_outreach_opt_in, geofenced_outreach_radius_miles, geofenced_outreach_consent_at, onboarding_completed, organizations(org_code)')
+    .select('full_name, phone, mobile_phone, email, role, org_id, home_address, address_line_1, address_line_2, city, state, zip, latitude, longitude, google_place_id, address_verified, address_verified_at, emergency_contact, avatar_url, geofenced_outreach_opt_in, geofenced_outreach_radius_miles, geofenced_outreach_consent_at, geocode_confidence, geocoded_at, onboarding_completed, organizations(org_code)')
     .eq('id', authData.user.id)
     .single();
 
@@ -3821,6 +3889,10 @@ export async function fetchProfileForUser(): Promise<Partial<UserProfile> | null
     geofencedOutreachOptIn: Boolean((data as any).geofenced_outreach_opt_in),
     geofencedOutreachRadiusMiles: Number((data as any).geofenced_outreach_radius_miles || 3),
     geofencedOutreachConsentAt: (data as any).geofenced_outreach_consent_at || undefined,
+    geocodeConfidence: (data as any).geocode_confidence == null
+      ? undefined
+      : (Number.isFinite(Number((data as any).geocode_confidence)) ? Number((data as any).geocode_confidence) : undefined),
+    geocodedAt: (data as any).geocoded_at || undefined,
     emergencyContactName: data.emergency_contact?.name || '',
     emergencyContactPhone: data.emergency_contact?.phone || '',
     emergencyContactRelation: data.emergency_contact?.relation || '',

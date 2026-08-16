@@ -113,6 +113,8 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
          geofencedOutreachOptIn: Boolean(profile.geofencedOutreachOptIn),
          geofencedOutreachRadiusMiles: profile.geofencedOutreachRadiusMiles || 3,
          geofencedOutreachConsentAt: profile.geofencedOutreachConsentAt,
+         geocodeConfidence: profile.geocodeConfidence,
+         geocodedAt: profile.geocodedAt,
        }));
     } else if (pendingOrganizationCode || pendingInvite?.communityId) {
       setFormData(prev => ({ ...prev, communityId: prev.communityId || pendingOrganizationCode || pendingInvite?.communityId || '' }));
@@ -145,10 +147,13 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
     setOutreachLocationStatus('Getting your location for nearby community outreach…');
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        const locatedAt = new Date().toISOString();
         setFormData((prev) => ({
           ...prev,
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
+          geocodeConfidence: 1,
+          geocodedAt: locatedAt,
         }));
         setOutreachLocationStatus('Location saved. Nearby org leaders can only see you within 3 miles if you opt in.');
       },
@@ -311,6 +316,8 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
         geofencedOutreachOptIn: Boolean(payload.geofencedOutreachOptIn),
         geofencedOutreachRadiusMiles: payload.geofencedOutreachRadiusMiles || 3,
         geofencedOutreachConsentAt: payload.geofencedOutreachOptIn ? (payload.geofencedOutreachConsentAt || new Date().toISOString()) : undefined,
+        geocodeConfidence: payload.geocodeConfidence,
+        geocodedAt: payload.geocodedAt,
         onboardComplete: true,
       });
       
@@ -581,11 +588,11 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
                     onChange={(e) => handleOutreachConsentChange(e.target.checked)}
                   />
                   <span className="text-sm text-emerald-900 font-semibold">
-                    I consent to outreach from nearby organization leaders if I am within 3 miles, have the app, and I am not already connected to a trusted network.
+                    I consent to verified nearby organization leaders seeing my name, phone, email, and approximate distance so they can contact me about emergency coordination or joining their organization.
                   </span>
                 </label>
                 <p className="text-xs text-slate-500">
-                  This is optional. You can change it later in Settings. Local outreach only uses your saved location and consent.
+                  This is optional and does not enroll you in an organization. Your street address and exact coordinates are not displayed, and you can turn visibility off in Settings.
                 </p>
                 {outreachLocationStatus && (
                   <p className="text-xs text-slate-600 font-medium">{outreachLocationStatus}</p>

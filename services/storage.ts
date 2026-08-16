@@ -1040,6 +1040,8 @@ export const StorageService = {
             googlePlaceId: profile.googlePlaceId,
             addressVerified: profile.addressVerified,
             addressVerifiedAt: profile.addressVerifiedAt,
+            geocodeConfidence: profile.geocodeConfidence,
+            geocodedAt: profile.geocodedAt,
             emergencyContactName: profile.emergencyContactName,
             emergencyContactPhone: profile.emergencyContactPhone,
             emergencyContactRelation: profile.emergencyContactRelation,
