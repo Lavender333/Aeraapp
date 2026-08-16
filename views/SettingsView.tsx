@@ -5010,7 +5010,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                            size="sm"
                            fullWidth
                            onClick={() => void handleSaveSeatLimit()}
-                           disabled={orgSeatManagementBusy || !selectedOrgAccessReady}
+                           disabled={orgSeatManagementBusy}
                            className="bg-sky-700 hover:bg-sky-800 text-white"
                          >
                            {orgSeatManagementBusy ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Save size={16} className="mr-2" />}
@@ -5061,7 +5061,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                            size="sm"
                            fullWidth
                            onClick={() => void handleCreateOrganizationCode()}
-                           disabled={orgSeatManagementBusy}
+                           disabled={orgSeatManagementBusy || !selectedOrgAccessReady}
                            className="bg-emerald-700 hover:bg-emerald-800 text-white"
                          >
                            {orgSeatManagementBusy ? <Loader2 size={16} className="mr-2 animate-spin" /> : <LinkIcon size={16} className="mr-2" />}
