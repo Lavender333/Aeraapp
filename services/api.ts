@@ -5852,25 +5852,35 @@ export async function listMembers(orgCode: string) {
   const orgId = await getOrgIdByCode(orgCode);
   if (!orgId) throw new Error('Organization not found');
 
-  const { data, error } = await supabase
-    .from('members')
-    .select('id, name, status, location, last_update, needs, phone, address, emergency_contact_name, emergency_contact_phone, emergency_contact_relation')
-    .eq('org_id', orgId)
-    .order('created_at', { ascending: false });
+  const pageSize = 1000;
+  const memberRows: any[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from('members')
+      .select('id, name, status, location, last_update, needs, phone, address, emergency_contact_name, emergency_contact_phone, emergency_contact_relation')
+      .eq('org_id', orgId)
+      .order('created_at', { ascending: false })
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error('Failed to load members');
+    const page = data || [];
+    memberRows.push(...page);
+    if (page.length < pageSize) break;
+  }
 
-  if (error) throw new Error('Failed to load members');
-
-  const memberRows = data || [];
   const existingIds = new Set(memberRows.map((row: any) => row.id));
 
-  const { data: profileRows, error: profileError } = await supabase
-    .from('profiles')
-    .select('id, full_name, email, phone, mobile_phone, home_address, emergency_contact, last_login_at, created_at, role')
-    .eq('org_id', orgId)
-    .order('created_at', { ascending: false });
-
-  if (profileError) {
-    return memberRows;
+  const profileRows: any[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, full_name, email, phone, mobile_phone, home_address, emergency_contact, last_login_at, created_at, role')
+      .eq('org_id', orgId)
+      .order('created_at', { ascending: false })
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error('Failed to load organization accounts');
+    const page = data || [];
+    profileRows.push(...page);
+    if (page.length < pageSize) break;
   }
 
   // Find the org creator (earliest profile joined, or org's created_by field)
@@ -5903,6 +5913,7 @@ export async function listMembers(orgCode: string) {
     const profile = profileById.get(String(member?.id || ''));
     return {
       ...member,
+      email: profile?.email || '',
       last_login_at: profile?.last_login_at || null,
       role: profile?.role || null,
       is_org_creator: orgCreatorId ? String(member?.id || '') === orgCreatorId : false,
@@ -5914,6 +5925,7 @@ export async function listMembers(orgCode: string) {
     .map((profile: any) => ({
       id: profile.id,
       name: profile.full_name || profile.email || 'Member',
+      email: profile.email || '',
       status: 'UNKNOWN',
       location: null,
       last_update: null,
