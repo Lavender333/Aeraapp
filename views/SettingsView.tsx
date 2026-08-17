@@ -8684,17 +8684,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         </section>
       )}
 
-      <section id="settings-privacy-consent" className="bg-white/95 p-6 rounded-2xl shadow-sm space-y-4 order-7 border border-slate-200 scroll-mt-4">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-sky-100 border border-sky-200 rounded-full text-sky-700">
-            <ShieldCheck size={24} />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-800">Legal &amp; Privacy</h2>
-          </div>
-        </div>
-
-        {/* Community Outreach Visibility toggle */}
+      <section className="bg-white/95 p-6 rounded-2xl shadow-sm space-y-4 order-7 border border-slate-200">
+        {/* Community Outreach Visibility is an account setting, separate from the legal footer. */}
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -8736,28 +8727,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           )}
         </div>
 
-        <div className="space-y-1">
-          <button
-            type="button"
-            onClick={() => {
-              sessionStorage.setItem('privacyReturnView', 'SETTINGS');
-              setView('PRIVACY_POLICY');
-            }}
-            className="block w-full text-left text-xs text-slate-500 hover:text-slate-700 hover:underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 rounded"
-          >
-            Privacy Notice &amp; Analytics Disclosure
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              sessionStorage.setItem('privacyReturnView', 'SETTINGS');
-              setView('PRIVACY_POLICY');
-            }}
-            className="block w-full text-left text-xs text-slate-500 hover:text-slate-700 hover:underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 rounded"
-          >
-            Household Planning Consent
-          </button>
-        </div>
       </section>
 
       <div id="settings-account-actions" className="space-y-4 pt-4 border-t border-slate-200 order-8 scroll-mt-4">
@@ -8782,6 +8751,37 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           </button>
         </div>
       </div>
+
+      <section
+        id="settings-privacy-consent"
+        aria-label="Privacy and consent"
+        className="order-9 scroll-mt-4 border-t border-slate-100 pt-4 pb-2 text-center"
+      >
+        <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Privacy &amp; Consent</p>
+        <div className="mt-1 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[10px] text-slate-400">
+          <button
+            type="button"
+            onClick={() => {
+              sessionStorage.setItem('privacyReturnView', 'SETTINGS');
+              setView('PRIVACY_POLICY');
+            }}
+            className="hover:text-slate-600 hover:underline underline-offset-2 focus:outline-none focus:ring-1 focus:ring-slate-400 rounded"
+          >
+            Privacy Notice &amp; Analytics Disclosure
+          </button>
+          <span aria-hidden="true">•</span>
+          <button
+            type="button"
+            onClick={() => {
+              sessionStorage.setItem('privacyReturnView', 'SETTINGS');
+              setView('PRIVACY_POLICY');
+            }}
+            className="hover:text-slate-600 hover:underline underline-offset-2 focus:outline-none focus:ring-1 focus:ring-slate-400 rounded"
+          >
+            Household Planning Consent
+          </button>
+        </div>
+      </section>
 
       {leaveConfirmation.open && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/50 px-4">
