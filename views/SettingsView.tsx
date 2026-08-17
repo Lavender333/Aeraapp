@@ -3575,12 +3575,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       }
     }
 
-    if (isOrgScopedAdmin && scopedUsers.length === 0 && orgScopeId) {
+    if (isOrgScopedAdmin && orgScopeId) {
       try {
-        const { members } = await StorageService.fetchOrgMembersRemote(orgScopeId);
+        const { members, fromCache } = await StorageService.fetchOrgMembersRemote(orgScopeId);
+        if (fromCache) throw new Error('Supabase organization directory is unavailable.');
         scopedUsers = members.map((member) => ({
           id: String(member.id || ''),
           fullName: String(member.name || 'Unknown User'),
+          email: String(member.email || ''),
           phone: String(member.phone || ''),
           address: String(member.address || ''),
           householdMembers: 1,
@@ -3591,13 +3593,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           emergencyContactPhone: String(member.emergencyContactPhone || ''),
           emergencyContactRelation: String(member.emergencyContactRelation || ''),
           communityId: orgScopeId,
-          role: 'MEMBER' as UserRole,
+          role: (String(member.role || 'MEMBER').toUpperCase() as UserRole),
           language: 'en' as LanguageCode,
           active: true,
           notifications: { push: true, sms: true, email: true },
         }));
       } catch (err) {
-        console.warn('[AccessControl] org-scoped member fallback failed', err);
+        console.warn('[AccessControl] Supabase org directory failed; using scoped local fallback', err);
       }
     }
 

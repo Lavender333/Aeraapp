@@ -1561,6 +1561,7 @@ export const StorageService = {
       const mapped: OrgMember[] = res.map((m: any) => ({
         id: m.id || m._id,
         name: m.name,
+        email: m.email || '',
         status: m.status || 'UNKNOWN',
         lastUpdate: m.lastUpdate || m.last_update || '',
         lastLoginAt: m.lastLoginAt || m.last_login_at || '',
