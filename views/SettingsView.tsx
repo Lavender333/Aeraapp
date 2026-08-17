@@ -14,7 +14,7 @@ import {
   getPendingCommunityInvite,
   PendingCommunityInvite,
 } from '../services/communityInvite';
-import { AppNotificationRecord, cancelMyHouseholdJoinRequest, captureUserLocation, closeCurrentAccount, ConnectedHouseholdMember, ContactSupportTicketRecord, ContactSupportTicketStatus, createContactSupportTicket, createFaqSelfResolvedRecord, createHouseholdExpansionRequest, createHouseholdInvitationForMember, deleteProfileAvatarForCurrentUser, ensureHouseholdForCurrentUser, escalateContactSupportTicket, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, leaveCurrentOrganization, listAllRequests, listConnectedHouseholdMembers, listContactSupportTicketsForOrgAdmin, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyContactSupportTickets, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, redeemOrganizationCode, refreshCommunityOutreachMatchesForCurrentUser, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, respondToContactSupportTicketAsOrgAdmin, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestExpiration, updateRequestStatus, updateVitalsForUser, uploadProfileAvatarDataUrl } from '../services/api';
+import { AppNotificationRecord, cancelMyHouseholdJoinRequest, captureUserLocation, closeCurrentAccount, ConnectedHouseholdMember, ContactSupportTicketRecord, ContactSupportTicketStatus, createContactSupportTicket, createFaqSelfResolvedRecord, createHouseholdExpansionRequest, createHouseholdInvitationForMember, deleteProfileAvatarForCurrentUser, ensureHouseholdForCurrentUser, escalateContactSupportTicket, fetchHouseholdForCurrentUser, fetchProfileForUser, fetchVitalsForUser, getAllowedAdditionalHouseholdMembers, getGlobalSystemAlert, HouseholdExpansionRequestRecord, HouseholdInvitationRecord, HouseholdJoinRequestRecord, HouseholdOption, HouseholdTransferCandidate, leaveCurrentHousehold, leaveCurrentOrganization, listAllRequests, listAllUsersForAdmin, listConnectedHouseholdMembers, listContactSupportTicketsForOrgAdmin, listHouseholdExpansionRequestsForAdmin, listHouseholdInvitationsForCurrentUser, listHouseholdJoinRequestsForOwner, listHouseholdTransferCandidates, listHouseholdsForCurrentUser, listMyContactSupportTickets, listMyHouseholdExpansionRequests, listMyHouseholdJoinRequests, listNotificationsForCurrentUser, listOrganizationMembershipActivity, markNotificationRead, OrgMembershipActivityRecord, redeemOrganizationCode, refreshCommunityOutreachMatchesForCurrentUser, requestHouseholdJoinByCode, resolveHouseholdExpansionRequest, resolveHouseholdJoinRequest, respondToContactSupportTicketAsOrgAdmin, revokeHouseholdInvitationForCurrentUser, setOrganizationParentByCode, switchActiveHousehold, transferHouseholdOwnership, updateOrganizationByCode, updateProfileForUser, updateRequestExpiration, updateRequestStatus, updateVitalsForUser, uploadProfileAvatarDataUrl } from '../services/api';
 import {
   createOrganizationAccessCode,
   listOrganizationAccessCodes,
@@ -3546,6 +3546,35 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       ? (isOrgScopedAdmin ? db.users.filter((u) => String(u.communityId || '') === orgScopeId) : db.users)
       : [];
 
+    if (isPlatformAdmin) {
+      try {
+        const remoteUsers = await listAllUsersForAdmin();
+        scopedUsers = remoteUsers.map((user) => ({
+          ...user,
+          householdMembers: 1,
+          household: [],
+          petDetails: '',
+          medicalNeeds: '',
+          fireMeetLocation: '',
+          severeWeatherMeetLocation: '',
+          medicationDependency: false,
+          insulinDependency: false,
+          oxygenPoweredDevice: false,
+          mobilityLimitation: false,
+          transportationAccess: true,
+          financialStrain: false,
+          consentPreparednessPlanning: false,
+          emergencyContactName: '',
+          emergencyContactPhone: '',
+          emergencyContactRelation: '',
+          language: 'en' as LanguageCode,
+          notifications: { push: true, sms: true, email: true },
+        })) as UserProfile[];
+      } catch (err) {
+        console.warn('[AccessControl] complete admin directory fetch failed; using local cache', err);
+      }
+    }
+
     if (isOrgScopedAdmin && scopedUsers.length === 0 && orgScopeId) {
       try {
         const { members } = await StorageService.fetchOrgMembersRemote(orgScopeId);
@@ -3803,6 +3832,48 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     }
 
     return { lat, lng };
+  };
+
+  const reverseGeocodeCoordinates = async (lat: number, lng: number): Promise<string> => {
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+      throw new Error('Latitude must be between -90 and 90.');
+    }
+    if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
+      throw new Error('Longitude must be between -180 and 180.');
+    }
+
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`,
+      { headers: { Accept: 'application/json' } }
+    );
+    if (!response.ok) throw new Error('Address lookup failed.');
+
+    const data = await response.json();
+    const address = String(data?.display_name || '').trim();
+    if (!address) throw new Error('No address was found for these coordinates.');
+    return address;
+  };
+
+  const handleReverseGeocodeOrgCoordinates = async () => {
+    const lat = Number(String(orgLatitudeDraft || '').trim());
+    const lng = Number(String(orgLongitudeDraft || '').trim());
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      setOrgLocationError('Enter valid latitude and longitude first.');
+      return;
+    }
+
+    setOrgLocationBusy(true);
+    setOrgLocationError(null);
+    setOrgLocationSavedMessage(null);
+    try {
+      const address = await reverseGeocodeCoordinates(lat, lng);
+      setOrgAddressDraft(address);
+      setOrgLocationSavedMessage('Address found. Review it, then save the organization location.');
+    } catch (err: any) {
+      setOrgLocationError(err?.message || 'Unable to find an address for these coordinates.');
+    } finally {
+      setOrgLocationBusy(false);
+    }
   };
 
   const handleGeocodeOrgAddress = async () => {
@@ -5463,6 +5534,15 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                    )}
 
                    <div className="flex flex-wrap gap-2">
+                     <Button
+                       size="sm"
+                       variant="outline"
+                       onClick={handleReverseGeocodeOrgCoordinates}
+                       disabled={orgLocationBusy || !orgLatitudeDraft.trim() || !orgLongitudeDraft.trim()}
+                     >
+                       <MapPin size={16} className="mr-2" />
+                       Find Address from Coordinates
+                     </Button>
                      <Button
                        size="sm"
                        className="bg-emerald-600 hover:bg-emerald-700 text-white"

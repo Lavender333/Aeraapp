@@ -220,15 +220,28 @@ const resolveOrgId = async (orgCode: string) => {
 export async function listOrganizations(options?: { activeOnly?: boolean }) {
   const activeOnly = options?.activeOnly ?? true;
   const baseColumns = 'id, org_code, name, type, address, latitude, longitude, is_active, contact_person, contact_phone, email, phone, replenishment_provider, replenishment_email, replenishment_phone, verified, registered_population, parent_org_id';
-  const runQuery = (columns: string) => {
-    let query = supabase.from('organizations').select(columns).order('name');
-    if (activeOnly) query = query.eq('is_active', true);
-    return query;
+  const fetchAllPages = async (columns: string) => {
+    const pageSize = 1000;
+    const rows: any[] = [];
+    for (let from = 0; ; from += pageSize) {
+      let query = supabase
+        .from('organizations')
+        .select(columns)
+        .order('name')
+        .range(from, from + pageSize - 1);
+      if (activeOnly) query = query.eq('is_active', true);
+      const { data, error } = await query;
+      if (error) return { data: null, error };
+      const page = Array.isArray(data) ? data : [];
+      rows.push(...page);
+      if (page.length < pageSize) break;
+    }
+    return { data: rows, error: null };
   };
 
-  let { data, error } = await runQuery(`${baseColumns}, about, website_url`);
+  let { data, error } = await fetchAllPages(`${baseColumns}, about, website_url`);
   if (error && /about|website_url|column .* does not exist|schema cache/i.test(String(error.message || ''))) {
-    ({ data, error } = await runQuery(baseColumns));
+    ({ data, error } = await fetchAllPages(baseColumns));
   }
   if (error) throw error;
   return data || [];

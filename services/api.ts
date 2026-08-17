@@ -125,6 +125,44 @@ export type OrgMembershipActivityRecord = {
   nextOrgName: string | null;
 };
 
+export type AdminUserDirectoryRecord = {
+  id: string;
+  email: string;
+  phone: string;
+  fullName: string;
+  role: string;
+  communityId: string;
+  active: boolean;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  latitude?: number;
+  longitude?: number;
+  createdAt: string;
+};
+
+export async function listAllUsersForAdmin(): Promise<AdminUserDirectoryRecord[]> {
+  const { data, error } = await supabase.rpc('admin_list_all_users');
+  if (error) throw new Error(error.message || 'Unable to load the complete user directory.');
+  return (Array.isArray(data) ? data : []).map((row: any) => ({
+    id: String(row.user_id || ''),
+    email: String(row.email || ''),
+    phone: String(row.phone || ''),
+    fullName: String(row.full_name || 'Unnamed User'),
+    role: String(row.user_role || 'GENERAL_USER'),
+    communityId: String(row.organization_code || ''),
+    active: row.is_active !== false,
+    address: String(row.home_address || ''),
+    city: String(row.city || ''),
+    state: String(row.state || ''),
+    zipCode: String(row.zip_code || ''),
+    latitude: Number.isFinite(Number(row.latitude)) ? Number(row.latitude) : undefined,
+    longitude: Number.isFinite(Number(row.longitude)) ? Number(row.longitude) : undefined,
+    createdAt: String(row.created_at || ''),
+  }));
+}
+
 export async function listOrganizationMembershipActivity(orgCode?: string, limit: number = 100): Promise<OrgMembershipActivityRecord[]> {
   let query = supabase
     .from('activity_log')
