@@ -5750,10 +5750,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     const safeUsers = Array.isArray(users) ? users : [];
     const filteredUsers = safeUsers.filter(u => {
       const name = (u.fullName || '').toLowerCase();
+      const email = (u.email || '').toLowerCase();
       const phone = (u.phone || '').toLowerCase();
       const role = (u.role || '').toLowerCase();
-      const query = userSearch.toLowerCase();
-      return name.includes(query) || phone.includes(query) || role.includes(query);
+      const query = userSearch.trim().toLowerCase();
+      return name.includes(query) || email.includes(query) || phone.includes(query) || role.includes(query);
     });
 
     // If a user is selected, show their detail view
@@ -5779,7 +5780,11 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                    )}
                  </div>
                  <div>
-                   <h2 className="text-2xl font-bold">{selectedUser.fullName || 'Unnamed User'}</h2>
+                   <h2 className="text-2xl font-bold">
+                     {selectedUser.fullName && selectedUser.fullName !== 'Unnamed User'
+                       ? selectedUser.fullName
+                       : selectedUser.email || 'Unnamed User'}
+                   </h2>
                    <div className="flex gap-2 mt-1">
                      <span className="px-2 py-0.5 bg-white/20 rounded text-xs font-bold uppercase">{(selectedUser.role || 'UNKNOWN').replace('_', ' ')}</span>
                      <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${selectedUser.active !== false ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
@@ -5801,6 +5806,10 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                       <div>
                         <p className="text-xs text-slate-500 font-bold uppercase">Mobile Phone</p>
                         <a href={`tel:${selectedUser.phone}`} className="text-blue-600 font-bold hover:underline">{selectedUser.phone}</a>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-bold uppercase">Email</p>
+                        <a href={`mailto:${selectedUser.email}`} className="text-blue-600 font-bold hover:underline break-all">{selectedUser.email || 'Not Provided'}</a>
                       </div>
                       <div>
                         <p className="text-xs text-slate-500 font-bold uppercase">Home Address</p>
@@ -5963,7 +5972,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 <Search className="absolute left-3 top-3.5 text-slate-400" size={18} />
                 <Input 
                   className="pl-10 h-10" 
-                  placeholder="Search users by name, phone, or role..." 
+                  placeholder="Search users by name, email, phone, or role..."
                   value={userSearch}
                   onChange={(e) => setUserSearch(e.target.value)}
                 />
@@ -5989,7 +5998,12 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                          )}
                       </div>
                       <div>
-                        <h3 className={`font-bold group-hover:text-brand-700 transition-colors ${user.active !== false ? 'text-slate-900' : 'text-slate-500 line-through'}`}>{user.fullName || 'Unnamed User'}</h3>
+                        <h3 className={`font-bold group-hover:text-brand-700 transition-colors ${user.active !== false ? 'text-slate-900' : 'text-slate-500 line-through'}`}>
+                          {user.fullName && user.fullName !== 'Unnamed User' ? user.fullName : user.email || 'Unnamed User'}
+                        </h3>
+                        {user.email && user.fullName && user.fullName !== 'Unnamed User' && (
+                          <p className="text-xs text-slate-500 break-all">{user.email}</p>
+                        )}
                         <p className="text-xs text-slate-500">{user.phone || 'No phone'} {user.role === 'ADMIN' && <span className="text-brand-600 font-bold ml-1">(Admin)</span>}</p>
                         <p className="text-[11px] text-slate-400">Created: {createdLabel}</p>
                       </div>
