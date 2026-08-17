@@ -3816,24 +3816,31 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       throw new Error('Enter a complete address first.');
     }
 
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`,
-      { headers: { Accept: 'application/json' } }
+    // Nominatim is sensitive to a comma before directional street suffixes.
+    // For example, "17th Street, NW" returns no match while "17th Street NW"
+    // resolves correctly. Preserve the user's address and retry a normalized form.
+    const normalizedDirectional = query.replace(
+      /\b(Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Court|Ct|Place|Pl),\s*(N|S|E|W|NE|NW|SE|SW)\b/gi,
+      '$1 $2'
     );
-    if (!response.ok) throw new Error('Geocoding lookup failed');
+    const attempts = Array.from(new Set([query, normalizedDirectional]));
 
-    const data = await response.json();
-    if (!Array.isArray(data) || data.length === 0) {
-      throw new Error('No coordinates found for this address. Try adding city/state.');
+    for (const candidate of attempts) {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&countrycodes=us&limit=1&q=${encodeURIComponent(candidate)}`,
+        { headers: { Accept: 'application/json' } }
+      );
+      if (!response.ok) continue;
+
+      const data = await response.json();
+      const lat = Number(Array.isArray(data) ? data[0]?.lat : NaN);
+      const lng = Number(Array.isArray(data) ? data[0]?.lon : NaN);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        return { lat, lng };
+      }
     }
 
-    const lat = Number(data[0]?.lat);
-    const lng = Number(data[0]?.lon);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      throw new Error('Geocoding returned invalid coordinates.');
-    }
-
-    return { lat, lng };
+    throw new Error('No coordinates found. Check the street, city, state, and ZIP, then try again.');
   };
 
   const reverseGeocodeCoordinates = async (lat: number, lng: number): Promise<string> => {
