@@ -476,6 +476,7 @@ export interface MockUser {
 export interface OrgMember {
   id: string;
   name: string;
+  email?: string;
   status: 'SAFE' | 'DANGER' | 'UNKNOWN';
   lastUpdate: string;
   lastLoginAt?: string;
