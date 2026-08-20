@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ViewState, UserRole } from '../types';
 import { Button } from '../components/Button';
 import { Textarea } from '../components/Input';
-import { ArrowLeft, Camera, Home, Zap, Droplets, CheckCircle, AlertTriangle, Loader2, Sparkles, X, MapPin, RefreshCw, Aperture, Keyboard, Download } from 'lucide-react';
+import { ArrowLeft, Camera, Home, Zap, Droplets, CheckCircle, AlertTriangle, Loader2, Sparkles, MapPin, RefreshCw, Upload, Download } from 'lucide-react';
 import { t } from '../services/translations';
 import { submitDamageAssessment, getAssessmentPhotoSignedUrl, listDamageAssessmentsForCurrentUser, DamageAssessmentResult, analyzeDamagePhotoOnServer } from '../services/api';
 import { StorageService } from '../services/storage';
@@ -27,11 +27,8 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
   const [assessmentPhotoUrls, setAssessmentPhotoUrls] = useState<Record<string, string>>({});
   
   // Camera & Image State
-  const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [flash, setFlash] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Analysis State
@@ -41,7 +38,6 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submittedPhotoUrl, setSubmittedPhotoUrl] = useState<string | null>(null);
   const [requiresCommunityConnection, setRequiresCommunityConnection] = useState(false);
-  const [isMobile, setIsMobile] = useState<boolean>(false);
   const [roofAnswers, setRoofAnswers] = useState({
     houseFloors: 'none',
     damagedShingles: 'none',
@@ -91,24 +87,9 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     roofAnswers.houseFloors !== 'none' &&
     roofAnswers.damagedShingles !== 'none';
 
-  // Cleanup camera on unmount
-  useEffect(() => {
-    return () => {
-      stopCameraStream();
-    };
-  }, []);
-
   useEffect(() => {
     const profile = StorageService.getProfile();
     setUserRole(normalizeRole(profile.role));
-  }, []);
-
-  useEffect(() => {
-    const media = window.matchMedia('(max-width: 768px)');
-    const update = () => setIsMobile(media.matches);
-    update();
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
   }, []);
 
   useEffect(() => {
@@ -158,32 +139,6 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     loadAssessmentResults();
   }, [canViewReportedResults]);
 
-  // Keyboard listener for Spacebar/Enter to snap photo
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (isCameraOpen && (e.code === 'Space' || e.code === 'Enter')) {
-        e.preventDefault();
-        capturePhoto();
-      }
-    };
-
-    if (isCameraOpen) {
-      window.addEventListener('keydown', handleKeyDown);
-    }
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isCameraOpen]);
-
-  const stopCameraStream = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-      videoRef.current.srcObject = null;
-    }
-  };
-
   const compressImageDataUrl = async (dataUrl: string, maxDimension = 1600, quality = 0.78): Promise<string> => {
     const image = new Image();
     image.src = dataUrl;
@@ -205,64 +160,6 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     if (!ctx) return dataUrl;
     ctx.drawImage(image, 0, 0, width, height);
     return canvas.toDataURL('image/jpeg', quality);
-  };
-
-  const startCamera = async () => {
-    setCapturedImage(null);
-    setAiAnalysis(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: "environment" } 
-      });
-      setIsCameraOpen(true);
-      // Small delay to ensure video element is rendered
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(() => {
-            // Handle play() rejection (e.g., user gesture required)
-          });
-        }
-      }, 100);
-    } catch (err) {
-      console.error("Camera denied", err);
-      alert("Could not access camera. Please allow permissions.");
-    }
-  };
-
-  const capturePhoto = async () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      
-      // Ensure video is ready
-      if (video.readyState < 2) return;
-
-      // Visual Flash Effect
-      setFlash(true);
-      setTimeout(() => setFlash(false), 150);
-      
-      // Set canvas size to match video stream
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        // Convert to image
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.84);
-        const compressed = await compressImageDataUrl(dataUrl);
-        
-        // Small delay to let flash animation finish before showing static image
-        setTimeout(() => {
-          setCapturedImage(compressed);
-          stopCameraStream();
-          setIsCameraOpen(false);
-          analyzeImage(compressed);
-        }, 150);
-      }
-    }
   };
 
   const handleUploadPhoto: React.ChangeEventHandler<HTMLInputElement> = async (event) => {
@@ -342,10 +239,9 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     document.body.removeChild(link);
   };
 
-  const retakePhoto = () => {
+  const clearPhoto = () => {
     setCapturedImage(null);
     setAiAnalysis(null);
-    startCamera();
   };
 
   const handleSubmitAssessment = async () => {
@@ -557,60 +453,10 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
             <div className="space-y-3">
                <label className="block text-sm font-bold text-slate-900 uppercase tracking-wider">1. Visual Evidence</label>
                
-               <div className="border-2 border-slate-300 rounded-xl bg-black min-h-[240px] relative overflow-hidden shadow-sm">
-                 {/* Hidden Canvas for Capture */}
-                 <canvas ref={canvasRef} className="hidden" />
-                 
-                 {/* Flash Overlay */}
-                 {flash && <div className="absolute inset-0 bg-white z-50 transition-opacity duration-150 ease-out" />}
-
-                 {isCameraOpen ? (
-                   <div className="relative w-full h-full flex flex-col items-center justify-center bg-black group">
-                     <video 
-                       ref={videoRef} 
-                       autoPlay 
-                       playsInline 
-                       muted
-                       onClick={capturePhoto}
-                       className="w-full h-full object-cover absolute inset-0 cursor-pointer"
-                     />
-                     
-                     <div className="absolute bottom-4 left-0 right-0 flex justify-center z-10 pointer-events-none">
-                       <button 
-                         onClick={(e) => {
-                           e.stopPropagation(); // Prevent double triggering from video onClick
-                           capturePhoto();
-                         }}
-                         className="w-16 h-16 bg-white rounded-full border-4 border-slate-300 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-lg pointer-events-auto"
-                         title="Take Photo (Spacebar)"
-                       >
-                         <div className="w-12 h-12 bg-red-600 rounded-full"></div>
-                       </button>
-                     </div>
-                     
-                     <div className="absolute top-4 right-4 z-10 pointer-events-none">
-                       <button 
-                         onClick={(e) => {
-                           e.stopPropagation();
-                           stopCameraStream(); 
-                           setIsCameraOpen(false); 
-                         }} 
-                         className="bg-black/50 text-white p-2 rounded-full backdrop-blur pointer-events-auto hover:bg-black/70"
-                       >
-                         <X size={20} />
-                       </button>
-                     </div>
-                     
-                     <div className="absolute top-4 left-4 z-10 pointer-events-none">
-                       <span className="bg-black/50 text-white text-[10px] px-2 py-1 rounded backdrop-blur font-bold uppercase flex items-center gap-1">
-                         {!isMobile ? <Keyboard size={10} className="hidden md:block" /> : null}
-                         {isMobile ? 'Tap shutter to capture' : 'Click or press space'}
-                       </span>
-                     </div>
-                   </div>
-                 ) : capturedImage ? (
+               <div className="border-2 border-slate-300 rounded-xl bg-slate-100 min-h-[240px] relative overflow-hidden shadow-sm">
+                 {capturedImage ? (
                    <div className="relative w-full h-full">
-                     <img src={capturedImage} alt="Damage Evidence" className="w-full h-full object-cover" />
+                     <img src={capturedImage} alt="Damage Evidence" className="w-full h-60 object-cover" />
                      {isAnalyzing && (
                         <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-white backdrop-blur-sm">
                           <Loader2 size={48} className="animate-spin mb-3 text-brand-400" />
@@ -622,8 +468,8 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                           <Button size="sm" variant="outline" onClick={saveCapturedPhoto} className="bg-white text-slate-900 hover:bg-slate-100 font-bold shadow-lg">
                             <Download size={16} className="mr-1" /> Save
                           </Button>
-                          <Button size="sm" onClick={retakePhoto} className="bg-white text-slate-900 hover:bg-slate-100 font-bold shadow-lg">
-                            <RefreshCw size={16} className="mr-2" /> Retake
+                          <Button size="sm" onClick={clearPhoto} className="bg-white text-slate-900 hover:bg-slate-100 font-bold shadow-lg">
+                            Remove
                           </Button>
                         </div>
                      )}
@@ -632,15 +478,23 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                    <div className="flex flex-col items-center justify-center h-60 bg-slate-100 text-slate-400">
                      <Camera size={48} className="mb-3 opacity-50" />
                      <p className="font-bold text-slate-600">No Evidence Added</p>
-                     <p className="text-xs mb-4">Photos help prioritize your claim</p>
+                     <p className="text-xs mb-4 text-center px-4">Use your phone camera or choose an existing photo.</p>
                      <div className="flex flex-wrap gap-2 justify-center">
-                       <Button onClick={startCamera} className="font-bold bg-slate-800 text-white hover:bg-slate-700">
-                         <Aperture size={18} className="mr-2" /> Open Camera
+                       <Button onClick={() => cameraInputRef.current?.click()} className="font-bold bg-slate-800 text-white hover:bg-slate-700">
+                         <Camera size={18} className="mr-2" /> Open Camera
                        </Button>
                        <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="font-bold">
-                         Upload Photo
+                         <Upload size={18} className="mr-2" /> Upload Photo
                        </Button>
                      </div>
+                     <input
+                       ref={cameraInputRef}
+                       type="file"
+                       accept="image/*"
+                       capture="environment"
+                       className="hidden"
+                       onChange={handleUploadPhoto}
+                     />
                      <input
                        ref={fileInputRef}
                        type="file"
