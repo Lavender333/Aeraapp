@@ -105,16 +105,39 @@ const profileImageDataUrlSize = (dataUrl: string) => {
 
 const prepareProfileImage = async (file: File): Promise<string> => {
   const extensionLooksLikeImage = /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name || '');
+  const isHeicImage = /image\/hei[cf]/i.test(file.type || '') || /\.(heic|heif)$/i.test(file.name || '');
   if (!String(file.type || '').startsWith('image/') && !extensionLooksLikeImage) {
     throw new Error('Please select an image from your photo library or camera.');
   }
 
-  if (DIRECT_PROFILE_IMAGE_TYPES.has(file.type) && file.size <= PROFILE_IMAGE_MAX_BYTES) {
-    const original = await readFileAsDataUrl(file);
+  let browserReadableFile = file;
+  if (isHeicImage) {
+    try {
+      const { default: convertHeic } = await import('heic2any');
+      const converted = await convertHeic({
+        blob: file,
+        toType: 'image/jpeg',
+        quality: 0.9,
+      });
+      const convertedBlob = Array.isArray(converted) ? converted[0] : converted;
+      if (!convertedBlob) throw new Error('No converted image was returned.');
+      browserReadableFile = new File(
+        [convertedBlob],
+        `${String(file.name || 'profile').replace(/\.(heic|heif)$/i, '') || 'profile'}.jpg`,
+        { type: 'image/jpeg', lastModified: file.lastModified },
+      );
+    } catch (error) {
+      console.warn('HEIC profile photo conversion failed', error);
+      throw new Error('This iPhone photo could not be converted. Try taking a new photo or choose a JPEG or PNG.');
+    }
+  }
+
+  if (DIRECT_PROFILE_IMAGE_TYPES.has(browserReadableFile.type) && browserReadableFile.size <= PROFILE_IMAGE_MAX_BYTES) {
+    const original = await readFileAsDataUrl(browserReadableFile);
     if (original.startsWith('data:image/')) return original;
   }
 
-  const image = await loadImageFile(file);
+  const image = await loadImageFile(browserReadableFile);
   const sourceWidth = Math.max(1, image.naturalWidth || image.width);
   const sourceHeight = Math.max(1, image.naturalHeight || image.height);
   const scale = Math.min(1, PROFILE_IMAGE_MAX_DIMENSION / Math.max(sourceWidth, sourceHeight));

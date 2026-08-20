@@ -386,9 +386,28 @@ export async function listConnectedMembersByOrgIds(orgIds: string[]): Promise<Co
   return result;
 }
 
-const dataUrlToBlob = async (dataUrl: string): Promise<Blob> => {
-  const response = await fetch(dataUrl);
-  return response.blob();
+export const dataUrlToBlob = async (dataUrl: string): Promise<Blob> => {
+  const match = /^data:([^;,]+)?(;base64)?,([\s\S]*)$/i.exec(String(dataUrl || '').trim());
+  if (!match) throw new Error('Invalid image data.');
+
+  const mimeType = match[1] || 'application/octet-stream';
+  const encoded = match[3] || '';
+  if (!match[2]) {
+    return new Blob([decodeURIComponent(encoded)], { type: mimeType });
+  }
+
+  let binary = '';
+  try {
+    binary = atob(encoded.replace(/\s/g, ''));
+  } catch {
+    throw new Error('The selected image could not be decoded.');
+  }
+
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new Blob([bytes], { type: mimeType });
 };
 
 type KitRuleRow = {
