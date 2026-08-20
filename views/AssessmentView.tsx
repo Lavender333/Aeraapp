@@ -17,6 +17,21 @@ const assessmentPhotoDataUrlSize = (dataUrl: string) => {
   return Math.ceil((base64.length * 3) / 4);
 };
 
+const withAssessmentImageTimeout = <T,>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> =>
+  new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+
 const loadAssessmentPhoto = (file: File): Promise<HTMLImageElement> => new Promise((resolve, reject) => {
   const objectUrl = URL.createObjectURL(file);
   const image = new Image();
@@ -33,11 +48,47 @@ const loadAssessmentPhoto = (file: File): Promise<HTMLImageElement> => new Promi
 
 const prepareAssessmentPhoto = async (file: File): Promise<string> => {
   const extensionLooksLikeImage = /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name || '');
+  const isHeicImage = /image\/hei[cf]/i.test(file.type || '') || /\.(heic|heif)$/i.test(file.name || '');
   if (!String(file.type || '').startsWith('image/') && !extensionLooksLikeImage) {
     throw new Error('Please select an image from your photo library or camera.');
   }
 
-  const image = await loadAssessmentPhoto(file);
+  let browserReadableFile = file;
+  let decodedImage: HTMLImageElement | null = null;
+  if (isHeicImage) {
+    try {
+      decodedImage = await withAssessmentImageTimeout(
+        loadAssessmentPhoto(file),
+        6_000,
+        'Native HEIC decoding timed out.',
+      );
+    } catch (nativeError) {
+      try {
+        const { default: convertHeic } = await import('heic2any');
+        const converted = await withAssessmentImageTimeout(
+          convertHeic({
+            blob: file,
+            toType: 'image/jpeg',
+            quality: 0.9,
+          }),
+          20_000,
+          'HEIC conversion timed out.',
+        );
+        const convertedBlob = Array.isArray(converted) ? converted[0] : converted;
+        if (!convertedBlob) throw new Error('No converted image was returned.');
+        browserReadableFile = new File(
+          [convertedBlob],
+          `${String(file.name || 'assessment').replace(/\.(heic|heif)$/i, '') || 'assessment'}.jpg`,
+          { type: 'image/jpeg', lastModified: file.lastModified },
+        );
+      } catch (conversionError) {
+        console.warn('HEIC assessment photo conversion failed', { nativeError, conversionError });
+        throw new Error('This iPhone photo could not be converted. Try taking a new photo or choose a JPEG or PNG.');
+      }
+    }
+  }
+
+  const image = decodedImage || await loadAssessmentPhoto(browserReadableFile);
   const sourceWidth = Math.max(1, image.naturalWidth || image.width);
   const sourceHeight = Math.max(1, image.naturalHeight || image.height);
   const scale = Math.min(1, ASSESSMENT_PHOTO_MAX_DIMENSION / Math.max(sourceWidth, sourceHeight));

@@ -103,6 +103,21 @@ const profileImageDataUrlSize = (dataUrl: string) => {
   return Math.ceil((base64.length * 3) / 4);
 };
 
+const withProfileImageTimeout = <T,>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> =>
+  new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+
 const prepareProfileImage = async (file: File): Promise<string> => {
   const extensionLooksLikeImage = /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name || '');
   const isHeicImage = /image\/hei[cf]/i.test(file.type || '') || /\.(heic|heif)$/i.test(file.name || '');
@@ -111,24 +126,37 @@ const prepareProfileImage = async (file: File): Promise<string> => {
   }
 
   let browserReadableFile = file;
+  let decodedImage: HTMLImageElement | null = null;
   if (isHeicImage) {
     try {
-      const { default: convertHeic } = await import('heic2any');
-      const converted = await convertHeic({
-        blob: file,
-        toType: 'image/jpeg',
-        quality: 0.9,
-      });
-      const convertedBlob = Array.isArray(converted) ? converted[0] : converted;
-      if (!convertedBlob) throw new Error('No converted image was returned.');
-      browserReadableFile = new File(
-        [convertedBlob],
-        `${String(file.name || 'profile').replace(/\.(heic|heif)$/i, '') || 'profile'}.jpg`,
-        { type: 'image/jpeg', lastModified: file.lastModified },
+      decodedImage = await withProfileImageTimeout(
+        loadImageFile(file),
+        6_000,
+        'Native HEIC decoding timed out.',
       );
-    } catch (error) {
-      console.warn('HEIC profile photo conversion failed', error);
-      throw new Error('This iPhone photo could not be converted. Try taking a new photo or choose a JPEG or PNG.');
+    } catch (nativeError) {
+      try {
+        const { default: convertHeic } = await import('heic2any');
+        const converted = await withProfileImageTimeout(
+          convertHeic({
+            blob: file,
+            toType: 'image/jpeg',
+            quality: 0.9,
+          }),
+          20_000,
+          'HEIC conversion timed out.',
+        );
+        const convertedBlob = Array.isArray(converted) ? converted[0] : converted;
+        if (!convertedBlob) throw new Error('No converted image was returned.');
+        browserReadableFile = new File(
+          [convertedBlob],
+          `${String(file.name || 'profile').replace(/\.(heic|heif)$/i, '') || 'profile'}.jpg`,
+          { type: 'image/jpeg', lastModified: file.lastModified },
+        );
+      } catch (conversionError) {
+        console.warn('HEIC profile photo conversion failed', { nativeError, conversionError });
+        throw new Error('This iPhone photo could not be converted. Try taking a new photo or choose a JPEG or PNG.');
+      }
     }
   }
 
@@ -137,7 +165,7 @@ const prepareProfileImage = async (file: File): Promise<string> => {
     if (original.startsWith('data:image/')) return original;
   }
 
-  const image = await loadImageFile(browserReadableFile);
+  const image = decodedImage || await loadImageFile(browserReadableFile);
   const sourceWidth = Math.max(1, image.naturalWidth || image.width);
   const sourceHeight = Math.max(1, image.naturalHeight || image.height);
   const scale = Math.min(1, PROFILE_IMAGE_MAX_DIMENSION / Math.max(sourceWidth, sourceHeight));
@@ -8880,14 +8908,14 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
           aria-label="Privacy and consent"
           className="scroll-mt-4 text-center"
         >
-          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[10px] text-slate-400">
+          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[10px] text-slate-500">
             <button
               type="button"
               onClick={() => {
                 sessionStorage.setItem('privacyReturnView', 'SETTINGS');
                 setView('PRIVACY_POLICY');
               }}
-              className="hover:text-slate-600 hover:underline underline-offset-2 focus:outline-none focus:ring-1 focus:ring-slate-400 rounded"
+              className="appearance-none rounded bg-transparent p-0 font-normal text-slate-500 no-underline hover:text-slate-700 hover:underline underline-offset-2 focus:outline-none focus:ring-1 focus:ring-slate-400"
             >
               Privacy Notice &amp; Analytics Disclosure
             </button>
@@ -8898,7 +8926,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                 sessionStorage.setItem('privacyReturnView', 'SETTINGS');
                 setView('PRIVACY_POLICY');
               }}
-              className="hover:text-slate-600 hover:underline underline-offset-2 focus:outline-none focus:ring-1 focus:ring-slate-400 rounded"
+              className="appearance-none rounded bg-transparent p-0 font-normal text-slate-500 no-underline hover:text-slate-700 hover:underline underline-offset-2 focus:outline-none focus:ring-1 focus:ring-slate-400"
             >
               Household Planning Consent
             </button>
