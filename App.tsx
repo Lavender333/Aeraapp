@@ -16,6 +16,7 @@ import { shouldCompleteNewAccountSetup } from './services/accountSetup';
 import { clearPendingOrganizationCode, savePendingOrganizationCode } from './services/organizationCodeIntent';
 import { canRoleAccessView } from './services/rolePageAccess';
 import { requiresIndividualAppleSubscription } from './services/subscription';
+import { initializePushNotifications } from './services/pushNotifications';
 
 let initialSessionPromise: ReturnType<typeof supabase.auth.getSession> | null = null;
 
@@ -219,6 +220,17 @@ export default function App() {
   useEffect(() => {
     StorageService.startOfflineSyncListener();
   }, []);
+
+  useEffect(() => {
+    const unauthenticatedViews: ViewState[] = [
+      'SPLASH', 'LOGIN', 'REGISTRATION', 'RESET_PASSWORD', 'PUBLIC_INTAKE', 'PRESENTATION',
+    ];
+    if (isBootstrapping || unauthenticatedViews.includes(currentView)) return;
+
+    void initializePushNotifications((requestedView) => {
+      setView(canRoleAccessView(currentRole, requestedView) ? requestedView : 'DASHBOARD');
+    }).catch((error) => console.warn('Push notifications are unavailable', error));
+  }, [currentRole, currentView, isBootstrapping]);
 
   useEffect(() => {
     let active = true;

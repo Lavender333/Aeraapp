@@ -43,7 +43,11 @@ jobs:
           set -e
           for fn in $(find supabase/functions -mindepth 1 -maxdepth 1 -type d -exec basename {} \;); do
             echo "Deploying function: $fn"
-            supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_ID"
+            if [ "$fn" = "dispatch-push-notifications" ]; then
+              supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_ID" --no-verify-jwt
+            else
+              supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_ID"
+            fi
           done
 
       - name: Validate database deployment secret
