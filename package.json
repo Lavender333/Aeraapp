@@ -20,7 +20,8 @@
     "android:open": "npx cap open android",
     "android:bundle": "npm run android:build && cd android && ./gradlew bundleRelease",
     "android:assets": "npx --yes @capacitor/assets generate --android --iconBackgroundColor '#FFFFFF' --iconBackgroundColorDark '#FFFFFF' --splashBackgroundColor '#FFFFFF' --splashBackgroundColorDark '#FFFFFF'",
-    "ios:build": "npm run build && npx cap sync ios",
+    "verify:production-env": "node scripts/verify-production-env.mjs",
+    "ios:build": "npm run verify:production-env && npm run build && npx cap sync ios",
     "ios:open": "npx cap open ios",
     "seed:orgs": "node scripts/seed-orgs.js"
   },

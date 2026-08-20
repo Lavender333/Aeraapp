@@ -3218,6 +3218,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         setIsLoggingOut(true);
         try {
           await signOutCurrentSession();
+          clearPendingOrganizationCode();
+          clearPendingCommunityInvite();
           StorageService.logoutUser();
           setView('LOGIN');
         } catch (error: any) {
@@ -3239,6 +3241,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     setIsClosingAccount(true);
     try {
       await closeCurrentAccount();
+      clearPendingOrganizationCode();
+      clearPendingCommunityInvite();
       StorageService.logoutUser();
       window.alert('Your AERA account has been closed and you have been signed out.');
       setView('LOGIN');

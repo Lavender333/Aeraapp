@@ -13,7 +13,7 @@ import {
 import { fetchProfileForUser, fetchVitalsForUser, getPeopleRegisteredCount as fetchPeopleRegisteredCount } from './services/api';
 import { hasSupabaseConfig, supabaseConfigMessage, supabase } from './services/supabase';
 import { shouldCompleteNewAccountSetup } from './services/accountSetup';
-import { savePendingOrganizationCode } from './services/organizationCodeIntent';
+import { clearPendingOrganizationCode, savePendingOrganizationCode } from './services/organizationCodeIntent';
 import { canRoleAccessView } from './services/rolePageAccess';
 import { requiresIndividualAppleSubscription } from './services/subscription';
 
@@ -503,6 +503,10 @@ export default function App() {
   }, [currentView]);
 
   const handleSplashComplete = () => {
+    // A normal Continue action is not an organization-code login. Clear any
+    // abandoned code from an earlier attempt so a regular sign-in returns to
+    // the user's dashboard instead of Settings.
+    clearPendingOrganizationCode();
     sessionStorage.setItem('splashSeen', '1');
     setView(postSplashView);
   };
