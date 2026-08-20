@@ -105,6 +105,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [checklistCompletionPct, setChecklistCompletionPct] = useState(0);
   const [connectedOrg, setConnectedOrg] = useState<string | null>(null);
   const [orgProfile, setOrgProfile] = useState<OrganizationProfile | null>(null);
+  const [showGapCenterToMembers, setShowGapCenterToMembers] = useState(false);
   const [orgPopulation, setOrgPopulation] = useState<number>(0);
   const [orgInventory, setOrgInventory] = useState<OrgInventory | null>(null);
   const [orgMemberCount, setOrgMemberCount] = useState<number>(0);
@@ -263,7 +264,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
        const org = StorageService.getOrganization(profile.communityId);
        setConnectedOrg(org?.name || profile.communityId);
        setOrgProfile(org || null);
+       setShowGapCenterToMembers(Boolean(org?.showGapCenterToMembers));
        setOrgPopulation(org?.registeredPopulation || 0);
+       getOrgByCode(profile.communityId)
+         .then((remoteOrg) => {
+           if (!remoteOrg) return;
+           setConnectedOrg(remoteOrg.orgName || profile.communityId || null);
+           setShowGapCenterToMembers(remoteOrg.showGapCenterToMembers);
+         })
+         .catch(() => setShowGapCenterToMembers(Boolean(org?.showGapCenterToMembers)));
        StorageService.fetchOrgMembersRemote(profile.communityId).then(({ members }) => {
          setOrgMemberCount(members.length);
          setOrgMembers(members);
@@ -310,7 +319,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
          const org = StorageService.getOrganization(updatedProfile.communityId);
          setConnectedOrg(org?.name || updatedProfile.communityId);
          setOrgProfile(org || null);
+         setShowGapCenterToMembers(Boolean(org?.showGapCenterToMembers));
          setOrgPopulation(org?.registeredPopulation || 0);
+         getOrgByCode(updatedProfile.communityId)
+           .then((remoteOrg) => {
+             if (!remoteOrg) return;
+             setConnectedOrg(remoteOrg.orgName || updatedProfile.communityId || null);
+             setShowGapCenterToMembers(remoteOrg.showGapCenterToMembers);
+           })
+           .catch(() => setShowGapCenterToMembers(Boolean(org?.showGapCenterToMembers)));
          StorageService.fetchOrgMembersRemote(updatedProfile.communityId).then(({ members }) => {
            setOrgMemberCount(members.length);
            setOrgMembers(members);
@@ -322,6 +339,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
        } else {
          setConnectedOrg(null);
          setOrgProfile(null);
+         setShowGapCenterToMembers(false);
          setOrgPopulation(0);
          setOrgInventory(null);
          setOrgMemberCount(0);
@@ -410,7 +428,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
 
     try {
       const localOrg = StorageService.getOrganization(normalized);
-      const remoteOrg = localOrg ? { orgCode: normalized, orgName: localOrg.name } : await getOrgByCode(normalized);
+      const lookedUpOrg = await getOrgByCode(normalized);
+      const remoteOrg = lookedUpOrg || (localOrg
+        ? {
+            orgCode: normalized,
+            orgName: localOrg.name,
+            showGapCenterToMembers: Boolean(localOrg.showGapCenterToMembers),
+          }
+        : null);
 
       if (!remoteOrg) {
         setCommunityConnectError('Community not found. Check the ID and try again.');
@@ -422,6 +447,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
 
       setConnectedOrg(remoteOrg.orgName || normalized);
       setOrgProfile(localOrg || null);
+      setShowGapCenterToMembers(remoteOrg.showGapCenterToMembers ?? Boolean(localOrg?.showGapCenterToMembers));
       setOrgPopulation(localOrg?.registeredPopulation || 0);
 
       const [{ members }, { inventory, fromCache }] = await Promise.all([
@@ -445,6 +471,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
     StorageService.saveProfile({ ...profile, communityId: '' });
     setConnectedOrg(null);
     setOrgProfile(null);
+    setShowGapCenterToMembers(false);
     setOrgPopulation(0);
     setOrgInventory(null);
     setOrgMemberCount(0);
@@ -1713,7 +1740,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
         {/* Org Dashboard entry is provided in the Hub Inventory card via Manage button to avoid duplicate navigation */}
         
         {/* G.A.P. Financial Aid - For Users in need of aid */}
-        {(isGeneralUser || isOrgAdmin) && (
+        {(isOrgAdmin || (isGeneralUser && hasCommunity && showGapCenterToMembers)) && (
           <Card 
             className="col-span-1 hover:border-sky-300 bg-white/95 border-slate-200"
             onClick={() => setView('GAP')}

@@ -58,6 +58,7 @@ export type OrgLookup = {
   orgName?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  showGapCenterToMembers: boolean;
 };
 
 export async function getOrgByCode(orgCode: string): Promise<OrgLookup | null> {
@@ -73,18 +74,38 @@ export async function getOrgByCode(orgCode: string): Promise<OrgLookup | null> {
   let data: any = null;
   let error: any = null;
 
+  const extendedColumns = 'id, org_code, name, latitude, longitude, show_gap_center_to_members';
+  const legacyColumns = 'id, org_code, name, latitude, longitude';
+
   if (isUuid) {
     ({ data, error } = await supabase
       .from('organizations')
-      .select('id, org_code, name, latitude, longitude')
+      .select(extendedColumns)
       .eq('id', normalized)
       .maybeSingle());
   } else {
     ({ data, error } = await supabase
       .from('organizations')
-      .select('id, org_code, name, latitude, longitude')
+      .select(extendedColumns)
       .eq('org_code', normalized)
       .maybeSingle());
+  }
+
+  // Keep older environments usable until the visibility migration is applied.
+  if (error && /show_gap_center_to_members|column .* does not exist|schema cache/i.test(String(error.message || ''))) {
+    if (isUuid) {
+      ({ data, error } = await supabase
+        .from('organizations')
+        .select(legacyColumns)
+        .eq('id', normalized)
+        .maybeSingle());
+    } else {
+      ({ data, error } = await supabase
+        .from('organizations')
+        .select(legacyColumns)
+        .eq('org_code', normalized)
+        .maybeSingle());
+    }
   }
 
   // Backward-compat fallback for records that were saved with the opposite identifier shape.
@@ -92,13 +113,13 @@ export async function getOrgByCode(orgCode: string): Promise<OrgLookup | null> {
     if (isUuid) {
       ({ data, error } = await supabase
         .from('organizations')
-        .select('id, org_code, name, latitude, longitude')
+        .select(extendedColumns)
         .eq('org_code', normalized)
         .maybeSingle());
     } else {
       ({ data, error } = await supabase
         .from('organizations')
-        .select('id, org_code, name, latitude, longitude')
+        .select(extendedColumns)
         .eq('id', normalized)
         .maybeSingle());
     }
@@ -111,6 +132,7 @@ export async function getOrgByCode(orgCode: string): Promise<OrgLookup | null> {
     orgName: data.name,
     latitude: data.latitude == null ? null : Number(data.latitude),
     longitude: data.longitude == null ? null : Number(data.longitude),
+    showGapCenterToMembers: Boolean(data.show_gap_center_to_members),
   };
 }
 
