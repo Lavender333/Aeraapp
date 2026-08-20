@@ -1219,10 +1219,22 @@ export async function updateProfileForUser(payload: {
     profileUpdate.onboarding_completed = Boolean(payload.onboardComplete);
   }
 
-  const { error } = await supabase
+  let { error } = await supabase
     .from('profiles')
     .update(profileUpdate)
     .eq('id', authData.user.id);
+
+  // Some production projects predate the optional geocoding metadata fields.
+  // Preserve the core address save instead of rejecting the entire profile
+  // update when those columns have not been migrated yet.
+  if (error && /geocode_confidence|geocoded_at|column .* does not exist|schema cache/i.test(String(error.message || ''))) {
+    delete profileUpdate.geocode_confidence;
+    delete profileUpdate.geocoded_at;
+    ({ error } = await supabase
+      .from('profiles')
+      .update(profileUpdate)
+      .eq('id', authData.user.id));
+  }
 
   if (error) throw error;
 
@@ -3915,11 +3927,20 @@ export async function fetchProfileForUser(): Promise<Partial<UserProfile> | null
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData?.user) throw new Error('Not authenticated');
 
-  const { data, error } = await supabase
+  const coreColumns = 'full_name, phone, mobile_phone, email, role, org_id, home_address, address_line_1, address_line_2, city, state, zip, latitude, longitude, google_place_id, address_verified, address_verified_at, emergency_contact, avatar_url, geofenced_outreach_opt_in, geofenced_outreach_radius_miles, geofenced_outreach_consent_at, onboarding_completed, organizations(org_code)';
+  let { data, error } = await supabase
     .from('profiles')
-    .select('full_name, phone, mobile_phone, email, role, org_id, home_address, address_line_1, address_line_2, city, state, zip, latitude, longitude, google_place_id, address_verified, address_verified_at, emergency_contact, avatar_url, geofenced_outreach_opt_in, geofenced_outreach_radius_miles, geofenced_outreach_consent_at, geocode_confidence, geocoded_at, onboarding_completed, organizations(org_code)')
+    .select(`${coreColumns}, geocode_confidence, geocoded_at`)
     .eq('id', authData.user.id)
     .single();
+
+  if (error && /geocode_confidence|geocoded_at|column .* does not exist|schema cache/i.test(String(error.message || ''))) {
+    ({ data, error } = await supabase
+      .from('profiles')
+      .select(coreColumns)
+      .eq('id', authData.user.id)
+      .single());
+  }
 
   if (error || !data) return null;
 
