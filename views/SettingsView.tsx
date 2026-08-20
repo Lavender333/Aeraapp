@@ -247,7 +247,7 @@ const GENERAL_FAQS: Array<{ q: string; a: string }> = [
   { q: 'What is the supply inventory for?', a: 'The inventory helps you track essential supplies (food, water, medications, etc.) your household has on hand. AERA uses this data to identify gaps and prioritize community resource sharing during a disaster.' },
   { q: 'How does geofenced outreach work?', a: 'If you explicitly opt in under Legal & Privacy, verified nearby organization leaders can see your name, phone, email, and approximate distance so they can invite you or coordinate emergency support. Your street address and exact coordinates are not shown, and you are never enrolled without approving a join request or code.' },
   { q: 'Can I use AERA without a smartphone?', a: 'AERA is a web-based progressive web app accessible on any modern browser. While a smartphone is recommended for location features, you can use AERA on a tablet or desktop computer.' },
-  { q: 'How do I close my account?', a: 'Go to Settings → Account Essentials → Close Account. AERA disables access, releases organization seats, minimizes personal profile information, and retains only required operational and audit history.' },
+  { q: 'How do I close my account?', a: 'Go to Settings → Close my account. AERA disables access, releases organization seats, minimizes personal profile information, and retains only required operational and audit history.' },
 ];
 
 const ORG_ADMIN_FAQS: Array<{ q: string; a: string }> = [
@@ -3215,6 +3215,8 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
       const handleLogout = async () => {
         if (isLoggingOut) return;
+        const confirmed = window.confirm('Log out of AERA on this device?');
+        if (!confirmed) return;
         setIsLoggingOut(true);
         try {
           await signOutCurrentSession();
@@ -3251,17 +3253,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     } finally {
       setIsClosingAccount(false);
     }
-  };
-
-  const scrollToEssentialAccountSection = (
-    targetId: 'settings-contact-support' | 'settings-privacy-consent' | 'settings-account-actions',
-  ) => {
-    if (targetId === 'settings-contact-support') {
-      setExpandedSections((current) => ({ ...current, contactUs: true }));
-    }
-    window.requestAnimationFrame(() => {
-      document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
   };
 
   const openDbViewer = () => {
@@ -8860,36 +8851,13 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
       <SubscriptionAccountCard profile={profile} onChoosePlan={() => setView('DASHBOARD')} />
 
-      <section id="settings-account-actions" className="bg-white/95 border border-teal-200 rounded-2xl p-5 shadow-sm space-y-4 order-9 scroll-mt-4">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-teal-700">Account Essentials</p>
-          <p className="text-sm text-slate-600 mt-1">Support, privacy, consent, and account controls.</p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => scrollToEssentialAccountSection('settings-contact-support')}
-            className="min-h-[48px] rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800"
-          >
-            Account Support
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollToEssentialAccountSection('settings-privacy-consent')}
-            className="min-h-[48px] rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800"
-          >
-            Privacy &amp; Consent
-          </button>
-        </div>
-
+      <section id="settings-account-actions" className="bg-white/95 border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4 order-9 scroll-mt-4">
         <div
           id="settings-privacy-consent"
           aria-label="Privacy and consent"
-          className="scroll-mt-4 border-t border-slate-100 pt-4 text-center"
+          className="scroll-mt-4 text-center"
         >
-          <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Privacy &amp; Consent</p>
-          <div className="mt-1 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[10px] text-slate-400">
+          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[10px] text-slate-400">
             <button
               type="button"
               onClick={() => {
