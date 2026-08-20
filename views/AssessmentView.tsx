@@ -246,10 +246,6 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
 
   const handleSubmitAssessment = async () => {
     if (!damageType) return;
-    if (damageType === 'STRUCTURAL' && !isRoofingTriageComplete) {
-      setSubmitError('Complete the Roofing Triage fields before submitting this structural report.');
-      return;
-    }
     setIsSubmitting(true);
     setSubmitError(null);
     try {
@@ -261,7 +257,7 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
       }
 
       const finalDescription = (() => {
-        if (damageType !== 'STRUCTURAL') return description;
+        if (damageType !== 'STRUCTURAL' || !isRoofingTriageComplete) return description;
         const rating = roofRatingMap[roofScore];
         const roofSummary = [
           `House Floors: ${roofAnswers.houseFloors === '3+' ? '3 or more' : roofAnswers.houseFloors}`,
@@ -451,7 +447,8 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
             {/* Camera / Photo Section */}
             {damageType !== 'ELECTRICAL' ? (
             <div className="space-y-3">
-               <label className="block text-sm font-bold text-slate-900 uppercase tracking-wider">1. Visual Evidence</label>
+               <label className="block text-sm font-bold text-slate-900 uppercase tracking-wider">1. Visual Evidence (Optional)</label>
+               <p className="text-xs text-slate-500">You can skip this section and continue with Severity and Details.</p>
                
                <div className="border-2 border-slate-300 rounded-xl bg-slate-100 min-h-[240px] relative overflow-hidden shadow-sm">
                  {capturedImage ? (
@@ -519,7 +516,7 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
             </div>
             ) : (
               <div className="space-y-3">
-                <label className="block text-sm font-bold text-slate-900 uppercase tracking-wider">1. Visual Evidence</label>
+                <label className="block text-sm font-bold text-slate-900 uppercase tracking-wider">1. Visual Evidence (Optional)</label>
                 <div className="border border-amber-200 bg-amber-50 rounded-xl p-4">
                   <p className="text-sm font-semibold text-amber-900">Photo capture is disabled for Power/Gas assessments.</p>
                   <p className="text-xs text-amber-800 mt-1">Submit details through severity and notes so teams can respond quickly.</p>
@@ -553,8 +550,8 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
 
             {damageType === 'STRUCTURAL' && (
               <div className="space-y-3 bg-white border border-slate-200 rounded-xl p-4">
-                <label className="block text-sm font-bold text-slate-900 uppercase tracking-wider">Roofing Triage (1–5)</label>
-                <p className="text-xs text-slate-500">Required: House floors and Damaged shingles.</p>
+                <label className="block text-sm font-bold text-slate-900 uppercase tracking-wider">Roofing Triage (Optional)</label>
+                <p className="text-xs text-slate-500">Complete these questions if you know the answers, or skip them and submit Severity and Details.</p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                   <label className="space-y-1">
@@ -605,9 +602,6 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                   <p className="text-xs text-indigo-900 mt-1">{roofRatingMap[roofScore].meaning}</p>
                   <p className="text-xs text-indigo-700 mt-1">Action: {roofRatingMap[roofScore].action}</p>
                 </div>
-                {!isRoofingTriageComplete && (
-                  <p className="text-xs font-semibold text-amber-700">Please complete all required roofing triage fields to submit.</p>
-                )}
               </div>
             )}
 
@@ -628,7 +622,7 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                 size="lg"
                 className="shadow-lg bg-brand-600 hover:bg-brand-700 font-bold"
                 onClick={handleSubmitAssessment}
-                disabled={isSubmitting || (damageType === 'STRUCTURAL' && !isRoofingTriageComplete)}
+                disabled={isSubmitting}
               >
                 {isSubmitting ? 'Submitting...' : 'Submit Assessment'}
               </Button>
@@ -679,7 +673,7 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                    <span className="text-xs font-bold text-slate-500 uppercase">Type</span>
                    <span className="text-sm font-bold text-slate-900">{damageType}</span>
                  </div>
-                 {damageType === 'STRUCTURAL' && (
+                 {damageType === 'STRUCTURAL' && isRoofingTriageComplete && (
                    <div className="flex justify-between mb-3 border-b border-slate-100 pb-2">
                      <span className="text-xs font-bold text-slate-500 uppercase">Roof Score</span>
                      <span className="text-sm font-bold text-slate-900">{roofScore} / 5 • {roofRatingMap[roofScore].label}</span>
