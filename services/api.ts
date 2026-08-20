@@ -458,7 +458,7 @@ export async function fetchKitGuidanceForCurrentUser() {
 
   const profileId = authData.user.id;
 
-  const [{ data: vpData }, { data: readyData }, { data: ruleData }, { data: profileScope }] = await Promise.all([
+  const [{ data: vpData }, { data: readyData }, { data: ruleData }, { data: profileScope }, { count: petCount }] = await Promise.all([
     supabase
       .from('vulnerability_profiles')
       .select('organization_id, county_id, state_id, risk_score, medication_dependency, insulin_dependency, oxygen_powered_device, mobility_limitation, transportation_access, financial_strain')
@@ -475,9 +475,13 @@ export async function fetchKitGuidanceForCurrentUser() {
       .eq('is_active', true),
     supabase
       .from('profiles')
-      .select('org_id, county_id, state_id, pet_details')
+      .select('org_id, county_id, state_id')
       .eq('id', profileId)
       .maybeSingle(),
+    supabase
+      .from('pets')
+      .select('id', { count: 'exact', head: true })
+      .eq('profile_id', profileId),
   ]);
 
   const scopeStateId = vpData?.state_id || profileScope?.state_id || null;
@@ -503,7 +507,7 @@ export async function fetchKitGuidanceForCurrentUser() {
     activeAlertTypes = [];
   }
 
-  const hasPets = Boolean(String(profileScope?.pet_details || '').trim());
+  const hasPets = Number(petCount || 0) > 0;
 
   const context: Record<string, any> = {
     risk_score: Number(vpData?.risk_score || 0),
@@ -5021,7 +5025,7 @@ export async function submitDamageAssessment(payload: {
 
   const { data: profileLocation } = await supabase
     .from('profiles')
-    .select('home_address, city, state, zip_code')
+    .select('home_address, city, state, zip')
     .eq('id', authData.user.id)
     .maybeSingle();
 
@@ -5029,7 +5033,7 @@ export async function submitDamageAssessment(payload: {
     String((profileLocation as any)?.home_address || '').trim(),
     String((profileLocation as any)?.city || '').trim(),
     String((profileLocation as any)?.state || '').trim(),
-    String((profileLocation as any)?.zip_code || '').trim(),
+    String((profileLocation as any)?.zip || '').trim(),
   ].filter(Boolean);
 
   const locationText = locationParts.join(', ');

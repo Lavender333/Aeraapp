@@ -1072,13 +1072,34 @@ export async function updateCheckIn(
       .eq('id', registrationId)
       .single();
     if (reg) {
-      await supabase.from('help_requests').insert({
-        source: 'EVENT_CHECK_IN',
-        situation_description: `Event check-in: ${reg.full_name} reported needing help.`,
-        status: 'PENDING',
+      const [{ data: authData }, { data: event }] = await Promise.all([
+        supabase.auth.getUser(),
+        supabase
+          .from('distribution_events')
+          .select('organization_id, name')
+          .eq('id', reg.event_id)
+          .maybeSingle(),
+      ]);
+      if (!authData?.user?.id) throw new Error('Not authenticated');
+
+      const situationDescription = `Event check-in: ${reg.full_name} reported needing help.`;
+      const { error: helpRequestError } = await supabase.from('help_requests').insert({
+        user_id: authData.user.id,
+        org_id: event?.organization_id ?? null,
+        status: 'RECEIVED',
         priority: 'HIGH',
-        is_safe: false,
+        data: {
+          requestType: 'EVENT_CHECK_IN',
+          source: 'EVENT_CHECK_IN',
+          situationDescription,
+          attendeeName: reg.full_name,
+          attendeePhone: reg.phone || null,
+          eventId: reg.event_id,
+          eventName: event?.name || null,
+          isSafe: false,
+        },
       });
+      if (helpRequestError) throw new Error(helpRequestError.message);
     }
   }
 }
