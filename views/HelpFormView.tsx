@@ -984,12 +984,14 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
               <label className="text-lg font-bold text-slate-900">{t('help.pets_q')}</label>
               <div className="flex gap-3">
                 <Button 
+                   aria-pressed={data.petsPresent === true}
                    variant={data.petsPresent === true ? 'primary' : 'outline'} 
                    onClick={() => updateData({ petsPresent: true })}
                    className="flex-1 font-bold"
                 >Yes</Button>
                 <Button 
-                   variant={data.petsPresent === false ? 'secondary' : 'outline'} 
+                   aria-pressed={data.petsPresent === false}
+                   variant={data.petsPresent === false ? 'primary' : 'outline'} 
                    onClick={() => updateData({ petsPresent: false })}
                    className="flex-1 font-bold"
                 >No</Button>
@@ -1045,13 +1047,15 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
               <div className="flex gap-3">
                 <Button
                   type="button"
+                  aria-pressed={data.needsTransport === true}
                   variant={data.needsTransport === true ? 'primary' : 'outline'}
                   onClick={() => updateData({ needsTransport: true })}
                   className="flex-1 font-bold"
                 >Yes</Button>
                 <Button
                   type="button"
-                  variant={data.needsTransport === false ? 'secondary' : 'outline'}
+                  aria-pressed={data.needsTransport === false}
+                  variant={data.needsTransport === false ? 'primary' : 'outline'}
                   onClick={() => updateData({ needsTransport: false })}
                   className="flex-1 font-bold"
                 >No</Button>
