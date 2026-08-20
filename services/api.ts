@@ -1000,6 +1000,28 @@ export async function updateOrganizationActiveByCode(payload: {
   };
 }
 
+export async function setOrganizationGapCenterVisibility(payload: {
+  orgCode: string;
+  visible: boolean;
+}) {
+  const org = await getOrgByCode(payload.orgCode);
+  if (!org?.orgId) throw new Error('Organization not found');
+
+  const { data, error } = await supabase.rpc('set_organization_gap_center_visibility', {
+    p_organization_id: org.orgId,
+    p_visible: Boolean(payload.visible),
+  });
+
+  if (error) {
+    if (/set_organization_gap_center_visibility|schema cache|function .* does not exist/i.test(String(error.message || ''))) {
+      throw new Error('G.A.P. visibility controls are not deployed yet. Apply the latest Supabase migration and try again.');
+    }
+    throw new Error(error.message || 'Unable to update G.A.P. Center visibility.');
+  }
+
+  return Boolean(data);
+}
+
 export async function getGlobalSystemAlert(): Promise<string> {
   const { data, error } = await supabase
     .from('app_settings')

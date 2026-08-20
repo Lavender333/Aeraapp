@@ -3,13 +3,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ViewState, OrgMember, OrgInventory, ReplenishmentRequest } from '../types';
 import { Button } from '../components/Button';
 import { StorageService } from '../services/storage';
-import { listRequests, createRequest, updateRequestStatus, stockReplenishmentRequest as stockReplenishmentRequestRemote, fetchOrgOutreachFlags, fetchOrgMemberPreparednessNeeds, listChildOrganizations, aggregateOrgStats, broadcastToOrgs, getOrganizationOutreachRadiusByCode, saveOrganizationOutreachRadiusByCode, updateMemberRole } from '../services/api';
+import { listRequests, createRequest, updateRequestStatus, stockReplenishmentRequest as stockReplenishmentRequestRemote, fetchOrgOutreachFlags, fetchOrgMemberPreparednessNeeds, listChildOrganizations, aggregateOrgStats, broadcastToOrgs, getOrganizationOutreachRadiusByCode, saveOrganizationOutreachRadiusByCode, setOrganizationGapCenterVisibility, updateMemberRole } from '../services/api';
 import { REQUEST_ITEM_MAP } from '../services/validation';
 import { getInventoryStatuses, getRecommendedResupply } from '../services/inventoryStatus';
 import { getOrgByCode, supabase } from '../services/supabase';
 import { getOrgLeaderOutreachCandidates, listOrgOutreachAuditLogs, logOrgOutreachContact, OrgOutreachCandidate, OrgOutreachAuditLog, OutreachContactMethod } from '../services/eventDistribution';
 import { t } from '../services/translations';
-import { Building2, CheckCircle, AlertTriangle, HelpCircle, Package, ArrowLeft, Send, Truck, Copy, Save, Phone, MapPin, User, HeartPulse, BellRing, X, AlertOctagon, Loader2, Wand2, ShieldCheck, WifiOff, FileText, Printer, Mail, LocateFixed } from 'lucide-react';
+import { Building2, CheckCircle, AlertTriangle, HelpCircle, Package, ArrowLeft, Send, Truck, Copy, Save, Phone, MapPin, User, HeartPulse, BellRing, X, AlertOctagon, Loader2, Wand2, ShieldCheck, WifiOff, FileText, Printer, Mail, LocateFixed, DollarSign } from 'lucide-react';
 import { Textarea } from '../components/Input';
 import { GoogleGenAI } from "../services/mockGenAI";
 
@@ -207,6 +207,11 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
   const [roleChangeBusy, setRoleChangeBusy] = useState(false);
   const [roleChangeError, setRoleChangeError] = useState<string | null>(null);
   const [roleChangeSuccess, setRoleChangeSuccess] = useState<string | null>(null);
+  const [gapCenterVisibleToMembers, setGapCenterVisibleToMembers] = useState(false);
+  const [gapVisibilityLoading, setGapVisibilityLoading] = useState(false);
+  const [gapVisibilitySaving, setGapVisibilitySaving] = useState(false);
+  const [gapVisibilityMessage, setGapVisibilityMessage] = useState<string | null>(null);
+  const [gapVisibilityError, setGapVisibilityError] = useState<string | null>(null);
 
   useEffect(() => {
     setActiveTab(initialTab);
@@ -317,6 +322,55 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
   const activeOrgCode = viewOrgId === 'ALL'
     ? normalizeOrgCode(communityId)
     : normalizeOrgCode(String(viewOrgId));
+
+  useEffect(() => {
+    if (!activeOrgCode) return;
+
+    let active = true;
+    setGapVisibilityLoading(true);
+    setGapVisibilityMessage(null);
+    setGapVisibilityError(null);
+    getOrgByCode(activeOrgCode)
+      .then((org) => {
+        if (!active) return;
+        setGapCenterVisibleToMembers(Boolean(org?.showGapCenterToMembers));
+      })
+      .catch(() => {
+        if (active) setGapCenterVisibleToMembers(false);
+      })
+      .finally(() => {
+        if (active) setGapVisibilityLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [activeOrgCode]);
+
+  const handleGapVisibilityToggle = async () => {
+    if (!activeOrgCode || gapVisibilitySaving || gapVisibilityLoading) return;
+
+    const nextVisible = !gapCenterVisibleToMembers;
+    setGapVisibilitySaving(true);
+    setGapVisibilityMessage(null);
+    setGapVisibilityError(null);
+    try {
+      const savedVisible = await setOrganizationGapCenterVisibility({
+        orgCode: activeOrgCode,
+        visible: nextVisible,
+      });
+      setGapCenterVisibleToMembers(savedVisible);
+      setGapVisibilityMessage(
+        savedVisible
+          ? 'G.A.P. Center is now visible to this organization’s members.'
+          : 'G.A.P. Center is now hidden from this organization’s members.'
+      );
+    } catch (error: any) {
+      setGapVisibilityError(String(error?.message || 'Unable to update G.A.P. Center visibility.'));
+    } finally {
+      setGapVisibilitySaving(false);
+    }
+  };
 
   useEffect(() => {
     if (!activeOrgCode) return;
@@ -1362,6 +1416,48 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
              <Copy size={16} className="mr-2" /> {t('org.copy')}
            </Button>
         </div>
+
+        <section className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-3">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <span className="rounded-lg border border-sky-200 bg-white p-2 text-sky-700">
+                <DollarSign size={18} />
+              </span>
+              <div>
+                <p className="text-sm font-bold text-slate-900">Member G.A.P. Center</p>
+                <p className="mt-1 text-xs text-slate-600">
+                  Choose whether members connected to {orgName} can see financial-aid tools on Home.
+                </p>
+                <p className="mt-1 text-[11px] font-semibold text-slate-500">Hidden by default for every organization.</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={gapCenterVisibleToMembers}
+              aria-label="Show G.A.P. Center to organization members"
+              disabled={gapVisibilityLoading || gapVisibilitySaving}
+              onClick={() => void handleGapVisibilityToggle()}
+              className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:cursor-wait disabled:opacity-60 ${
+                gapCenterVisibleToMembers ? 'bg-emerald-600' : 'bg-slate-300'
+              }`}
+            >
+              <span
+                className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                  gapCenterVisibleToMembers ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-2 pl-11">
+            <span className={`text-xs font-bold ${gapCenterVisibleToMembers ? 'text-emerald-700' : 'text-slate-600'}`}>
+              {gapVisibilityLoading ? 'Checking setting…' : gapCenterVisibleToMembers ? 'Visible to members' : 'Hidden from members'}
+            </span>
+            {gapVisibilitySaving && <span className="text-xs font-semibold text-sky-700">Saving…</span>}
+          </div>
+          {gapVisibilityMessage && <p className="mt-2 pl-11 text-xs font-semibold text-emerald-700">{gapVisibilityMessage}</p>}
+          {gapVisibilityError && <p role="alert" className="mt-2 pl-11 text-xs font-semibold text-red-700">{gapVisibilityError}</p>}
+        </section>
 
         {/* child organization selector */}
         {networkOrgs.length > 1 && (

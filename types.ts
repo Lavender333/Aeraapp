@@ -419,6 +419,7 @@ export interface OrganizationProfile {
   parentOrgId?: string; // reference to a supervising organization
   about?: string;
   websiteUrl?: string;
+  showGapCenterToMembers?: boolean;
 }
 
 export interface ReplenishmentRequest {
