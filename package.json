@@ -30,6 +30,7 @@
     "@capacitor/cli": "^8.5.0",
     "@capacitor/core": "^8.5.0",
     "@capacitor/ios": "^8.5.0",
+    "@capacitor/push-notifications": "^8.1.2",
     "@capgo/native-purchases": "^8.6.5",
     "@google/genai": "^1.31.0",
     "@supabase/supabase-js": "^2.95.3",
