@@ -2407,17 +2407,6 @@ export async function requestHouseholdJoinByCode(code: string): Promise<{
       } catch {}
     }
 
-    if (!ownerId) {
-      try {
-        const { data: ownerById } = await supabase
-          .from('households')
-          .select('owner_id')
-          .eq('id', householdId)
-          .maybeSingle();
-        ownerId = String((ownerById as any)?.owner_id || '');
-      } catch {}
-    }
-
     if (!ownerId || (requesterId && ownerId === requesterId)) return;
 
     try {
@@ -2485,19 +2474,6 @@ export async function requestHouseholdJoinByCode(code: string): Promise<{
           .maybeSingle();
         if (!ownerProfileError) {
           ownerId = String((householdOwnerByProfile as any)?.owner_profile_id || '');
-        }
-      } catch {}
-    }
-
-    if (!ownerId) {
-      try {
-        const { data: householdOwnerById, error: ownerIdError } = await supabase
-          .from('households')
-          .select('owner_id')
-          .eq('id', household.id)
-          .maybeSingle();
-        if (!ownerIdError) {
-          ownerId = String((householdOwnerById as any)?.owner_id || '');
         }
       } catch {}
     }
