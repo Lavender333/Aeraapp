@@ -105,7 +105,9 @@ const DICTIONARY: Record<LanguageCode, Record<string, string>> = {
     "org.submit_req": "Submit Request",
 
     // Help Form
-    "help.title": "Report",
+    "help.title": "Report an Incident",
+    "help.intro": "Request help and share the details responders need.",
+    "help.immediate_danger": "For immediate danger, call 911 first.",
     "help.safe_q": "Are you safe right now?",
     "help.yes_safe": "Yes, I'm safe",
     "help.no_danger": "No, I'm in danger",
@@ -274,7 +276,9 @@ const DICTIONARY: Record<LanguageCode, Record<string, string>> = {
     "org.submit_req": "Enviar Solicitud",
 
     // Help Form
-    "help.title": "Reporte de Emergencia",
+    "help.title": "Reportar un Incidente",
+    "help.intro": "Solicite ayuda y comparta la información que necesitan los respondedores.",
+    "help.immediate_danger": "Si está en peligro inmediato, llame primero al 911.",
     "help.safe_q": "¿Estás a salvo ahora?",
     "help.yes_safe": "Sí, estoy a salvo",
     "help.no_danger": "No, estoy en peligro",
@@ -443,7 +447,9 @@ const DICTIONARY: Record<LanguageCode, Record<string, string>> = {
     "org.submit_req": "Envoyer Demande",
 
     // Help Form
-    "help.title": "Rapport d'Urgence",
+    "help.title": "Signaler un incident",
+    "help.intro": "Demandez de l'aide et partagez les renseignements nécessaires aux intervenants.",
+    "help.immediate_danger": "En cas de danger immédiat, appelez d'abord le 911.",
     "help.safe_q": "Êtes-vous en sécurité ?",
     "help.yes_safe": "Oui, en sécurité",
     "help.no_danger": "Non, en danger",

@@ -639,6 +639,19 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
         {/* Step 1: Immediate Safety */}
         {step === 1 && (
           <div className="space-y-6">
+            <section className="rounded-2xl border border-red-200 bg-white p-5 shadow-sm">
+              <div className="flex items-start gap-4">
+                <span className="rounded-xl bg-red-100 p-3 text-red-700">
+                  <AlertCircle size={26} />
+                </span>
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900">{t('help.title')}</h2>
+                  <p className="mt-1 text-sm text-slate-600">{t('help.intro')}</p>
+                  <p className="mt-2 text-sm font-bold text-red-700">{t('help.immediate_danger')}</p>
+                </div>
+              </div>
+            </section>
+
             <div className="space-y-3">
               <label className="text-xl font-bold text-slate-900">{t('help.safe_q')}</label>
               <div className="grid grid-cols-2 gap-4">
