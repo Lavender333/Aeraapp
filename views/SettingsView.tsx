@@ -6318,37 +6318,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
         </div>
       </section>
 
-      <section className="bg-white/95 border border-teal-200 rounded-2xl p-4 shadow-sm">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-teal-700">Account Essentials</p>
-          <p className="text-sm text-slate-600 mt-1">Available to every AERA user.</p>
-        </div>
-        <div className="grid grid-cols-2 gap-2 mt-4">
-          <button
-            type="button"
-            onClick={() => scrollToEssentialAccountSection('settings-contact-support')}
-            className="min-h-[48px] rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800"
-          >
-            Account Support
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollToEssentialAccountSection('settings-privacy-consent')}
-            className="min-h-[48px] rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800"
-          >
-            Privacy &amp; Consent
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleLogout()}
-            disabled={isLoggingOut}
-            className="min-h-[48px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800 disabled:opacity-60"
-          >
-            {isLoggingOut ? 'Logging out…' : 'Log Out'}
-          </button>
-        </div>
-      </section>
-
       <section className="bg-white/95 border border-slate-200 rounded-2xl p-5 shadow-sm">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-start gap-3">
