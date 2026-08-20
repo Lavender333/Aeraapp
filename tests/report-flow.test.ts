@@ -27,32 +27,32 @@ const completeReport = (): HelpRequestData => ({
 });
 
 describe('report questionnaire validation', () => {
-  it('blocks an unanswered first step', () => {
+  it('allows an unanswered first step so reporting is never blocked', () => {
     const report = completeReport();
     report.isSafe = null;
     report.location = '';
     report.isInjured = null;
-    expect(canAdvanceReport(1, report)).toBe(false);
-    expect(getReportStepErrors(1, report)).toHaveLength(3);
+    expect(canAdvanceReport(1, report)).toBe(true);
+    expect(getReportStepErrors(1, report)).toHaveLength(0);
   });
 
-  it('requires injury and hazard details when applicable', () => {
+  it('allows injury and hazard details to be completed later', () => {
     const report = completeReport();
     report.isInjured = true;
     report.injuryDetails = '';
-    expect(getReportStepErrors(1, report)).toContain('Describe the injuries so responders know what to expect.');
+    expect(canAdvanceReport(1, report)).toBe(true);
     report.hazardDetails = '';
-    expect(getReportStepErrors(2, report)).toContain('Describe the hazards that are present.');
+    expect(canAdvanceReport(2, report)).toBe(true);
   });
 
-  it('requires every resource answer, transport, damage, and consent', () => {
+  it('keeps resource, transport, and damage questions optional but requires final consent', () => {
     const report = completeReport();
     report.hasMeds = null;
     report.needsTransport = null;
     report.damageType = '';
     report.consentToShare = false;
-    expect(canAdvanceReport(3, report)).toBe(false);
-    expect(getReportStepErrors(4, report)).toHaveLength(2);
+    expect(canAdvanceReport(3, report)).toBe(true);
+    expect(canAdvanceReport(4, report)).toBe(true);
     expect(canAdvanceReport(5, report)).toBe(false);
   });
 
