@@ -11,6 +11,7 @@ import { Input, Textarea } from '../components/Input';
 import { ProgressBar } from '../components/ProgressBar';
 import { StorageService } from '../services/storage';
 import { notifyEmergencyContact } from '../services/api';
+import { getReportStepErrors } from '../services/reportFlow';
 import { t } from '../services/translations';
 import { ArrowLeft, CheckCircle, Ambulance, Flame, Droplets, Zap, Shield, Camera, StopCircle, RefreshCw, MessageSquare, Navigation, MapPin, X, Wifi, Settings, HelpCircle, Globe, AlertTriangle, AlertOctagon, WifiOff, Clock, LocateFixed } from 'lucide-react';
 
@@ -60,7 +61,7 @@ const INITIAL_DATA: HelpRequestData = {
   vulnerableGroups: [],
   medicalConditions: '',
   damageType: '',
-  consentToShare: true,
+  consentToShare: false,
 };
 
 export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
@@ -71,6 +72,7 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
   const [smsStatus, setSmsStatus] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState<string>('');
   const [submittedId, setSubmittedId] = useState<string | null>(null);
+  const [stepErrors, setStepErrors] = useState<string[]>([]);
   
   // Location State
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -99,6 +101,7 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
     setIsSuccess(false);
     setSmsStatus('idle');
     setSubmittedId(null);
+    setStepErrors([]);
     setLocationError(null);
     setPermissionDenied(false);
     setIsTracking(true);
@@ -114,6 +117,13 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
   useEffect(() => {
     const profile = StorageService.getProfile();
     setEmergencyContactPhone(profile.emergencyContactPhone || '');
+    setData(prev => ({
+      ...prev,
+      fullName: profile.fullName || prev.fullName,
+      emergencyContactName: profile.emergencyContactName || prev.emergencyContactName,
+      emergencyContactPhone: profile.emergencyContactPhone || prev.emergencyContactPhone,
+      location: prev.location || profile.address || '',
+    }));
     
     // Check if permission was already granted previously
     navigator.permissions?.query({ name: 'geolocation' }).then(result => {
@@ -425,12 +435,30 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
 
   const updateData = (updates: Partial<HelpRequestData>) => {
     setData(prev => ({ ...prev, ...updates }));
+    setStepErrors([]);
   };
 
-  const nextStep = () => setStep(prev => Math.min(prev + 1, 5) as StepId);
-  const prevStep = () => setStep(prev => Math.max(prev - 1, 1) as StepId);
+  const nextStep = () => {
+    const errors = getReportStepErrors(step, data);
+    if (errors.length > 0) {
+      setStepErrors(errors);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    setStepErrors([]);
+    setStep(prev => Math.min(prev + 1, 5) as StepId);
+  };
+  const prevStep = () => {
+    setStepErrors([]);
+    setStep(prev => Math.max(prev - 1, 1) as StepId);
+  };
 
   const handleSubmit = async () => {
+    const errors = getReportStepErrors(5, data);
+    if (errors.length > 0) {
+      setStepErrors(errors);
+      return;
+    }
     setIsSubmitting(true);
     
     const lastKnown = StorageService.getLastKnownLocation();
@@ -640,9 +668,9 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
                   CALL 911 NOW
                 </Button>
                 <p className="text-center text-sm font-bold opacity-80">
-                  Do not continue this form.
+                  Call 911 first. Continue only when it is safe to do so.
                   <br />
-                  After contacting 911, you may notify your emergency contact.
+                  This report supplements emergency services; it does not replace them.
                 </p>
               </div>
             )}
@@ -842,6 +870,16 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
                 })}
               </div>
             </div>
+
+            {data.isInjured === true && (
+              <Textarea
+                label="Describe the injuries"
+                placeholder="What injuries are present and who is injured?"
+                value={data.injuryDetails}
+                onChange={(e) => updateData({ injuryDetails: e.target.value })}
+                className="border-slate-300 text-slate-900"
+              />
+            )}
           </div>
         )}
 
@@ -871,6 +909,35 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
                 >No</Button>
               </div>
             </div>
+
+            <div className="space-y-3">
+              <label className="text-lg font-bold text-slate-900">Are there hazards nearby?</label>
+              <p className="text-sm text-slate-600">Examples: fire, flood water, gas smell, debris, or downed power lines.</p>
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant={data.hazardsPresent === true ? 'danger' : 'outline'}
+                  onClick={() => updateData({ hazardsPresent: true })}
+                  className="flex-1 font-bold"
+                >Yes</Button>
+                <Button
+                  type="button"
+                  variant={data.hazardsPresent === false ? 'primary' : 'outline'}
+                  onClick={() => updateData({ hazardsPresent: false, hazardDetails: '' })}
+                  className="flex-1 font-bold"
+                >No</Button>
+              </div>
+            </div>
+
+            {data.hazardsPresent === true && (
+              <Textarea
+                label="Describe the hazards"
+                placeholder="Tell responders what hazards to avoid."
+                value={data.hazardDetails}
+                onChange={(e) => updateData({ hazardDetails: e.target.value })}
+                className="border-slate-300 text-slate-900"
+              />
+            )}
 
             <Input 
               type="number" 
@@ -941,6 +1008,44 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
         {/* Step 4: Vulnerabilities & Media */}
         {step === 4 && (
           <div className="space-y-6">
+             <div className="space-y-3">
+              <label className="text-lg font-bold text-slate-900">Do you need transportation?</label>
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant={data.needsTransport === true ? 'primary' : 'outline'}
+                  onClick={() => updateData({ needsTransport: true })}
+                  className="flex-1 font-bold"
+                >Yes</Button>
+                <Button
+                  type="button"
+                  variant={data.needsTransport === false ? 'secondary' : 'outline'}
+                  onClick={() => updateData({ needsTransport: false })}
+                  className="flex-1 font-bold"
+                >No</Button>
+              </div>
+             </div>
+
+             <div className="space-y-3">
+              <label className="text-lg font-bold text-slate-900">What type of damage is present?</label>
+              <div className="grid grid-cols-2 gap-3">
+                {['No visible damage', 'Home/building', 'Road/access blocked', 'Utilities', 'Vehicle', 'Other'].map(type => (
+                  <button
+                    type="button"
+                    key={type}
+                    onClick={() => updateData({ damageType: type })}
+                    className={`p-3 rounded-lg border text-sm font-bold transition-all ${
+                      data.damageType === type
+                        ? 'bg-brand-50 border-brand-500 text-brand-800'
+                        : 'bg-white border-slate-300 text-slate-700'
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+             </div>
+
              <div className="space-y-3">
               <label className="text-lg font-bold text-slate-900">{t('help.vuln_title')}</label>
               <div className="grid grid-cols-2 gap-3">
@@ -1024,13 +1129,35 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
                </div>
             </div>
 
+            <label className={`flex items-start gap-3 rounded-xl border p-4 cursor-pointer ${data.consentToShare ? 'border-brand-500 bg-brand-50' : 'border-slate-300 bg-white'}`}>
+              <input
+                type="checkbox"
+                checked={data.consentToShare}
+                onChange={(e) => updateData({ consentToShare: e.target.checked })}
+                className="mt-1 h-5 w-5 accent-brand-600"
+              />
+              <span>
+                <span className="block font-bold text-slate-900">Share this report with responders</span>
+                <span className="block text-sm text-slate-600 mt-1">I consent to share the information and location in this report with AERA and authorized response organizations so they can coordinate assistance.</span>
+              </span>
+            </label>
+
           </div>
         )}
       </div>
 
       {/* Footer Actions */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-200 z-30">
-        <div className="max-w-md mx-auto flex gap-4">
+        <div className="max-w-md mx-auto space-y-3">
+          {stepErrors.length > 0 && (
+            <div role="alert" aria-live="assertive" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+              <p className="font-bold mb-1">Please complete this step:</p>
+              <ul className="list-disc pl-5 space-y-0.5">
+                {stepErrors.map(error => <li key={error}>{error}</li>)}
+              </ul>
+            </div>
+          )}
+          <div className="flex gap-4">
           {step < 5 ? (
              <Button fullWidth onClick={nextStep} size="lg" className="font-bold text-lg">{t('btn.next')}</Button>
           ) : (
@@ -1044,6 +1171,7 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
                {isSubmitting ? (isOfflineMode ? 'Saving...' : 'Sending...') : (isOfflineMode ? 'Save for Sync' : t('help.submit_btn'))}
              </Button>
           )}
+          </div>
         </div>
       </div>
     </div>

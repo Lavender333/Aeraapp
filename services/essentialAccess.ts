@@ -19,6 +19,10 @@ const VIEWS_WITHOUT_AUTHENTICATED_NAV = new Set<ViewState>([
   'ACCOUNT_SETUP',
   'LOGIN',
   'RESET_PASSWORD',
+  // The report wizard has its own fixed Back/Next controls. Keeping the
+  // global bottom navigation visible here places it above those controls on
+  // iPhone and intercepts taps intended for the Next button.
+  'HELP_WIZARD',
   'EVENT_REGISTRATION',
   'PUBLIC_INTAKE',
   'PRIVACY_POLICY',

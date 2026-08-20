@@ -15,6 +15,7 @@ import { hasSupabaseConfig, supabaseConfigMessage, supabase } from './services/s
 import { shouldCompleteNewAccountSetup } from './services/accountSetup';
 import { savePendingOrganizationCode } from './services/organizationCodeIntent';
 import { canRoleAccessView } from './services/rolePageAccess';
+import { requiresIndividualAppleSubscription } from './services/subscription';
 
 let initialSessionPromise: ReturnType<typeof supabase.auth.getSession> | null = null;
 
@@ -91,6 +92,7 @@ const LeadIntakeView = lazyWithRetry(() => import('./views/LeadIntakeView').then
 const LeadAdminView = lazyWithRetry(() => import('./views/LeadAdminView').then((m) => ({ default: m.LeadAdminView })));
 const PublicIntakeView = lazyWithRetry(() => import('./views/PublicIntakeView').then((m) => ({ default: m.PublicIntakeView })));
 const FinanceDashboardView = lazyWithRetry(() => import('./views/FinanceDashboardView').then((m) => ({ default: m.FinanceDashboardView })));
+const SubscriptionView = lazyWithRetry(() => import('./views/SubscriptionView').then((m) => ({ default: m.SubscriptionView })));
 
 class ViewErrorBoundary extends React.Component<
   { onRecover: () => void; children: React.ReactNode },
@@ -136,6 +138,7 @@ class ViewErrorBoundary extends React.Component<
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewState>('SPLASH');
+  const [subscriptionUnlockedFor, setSubscriptionUnlockedFor] = useState<string | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [postSplashView, setPostSplashView] = useState<ViewState>('LOGIN');
   const [peopleRegisteredCount, setPeopleRegisteredCount] = useState(0);
@@ -533,6 +536,26 @@ export default function App() {
         />
       );
     }
+
+    const subscriptionProfile = StorageService.getProfile();
+    const mayOpenWithoutSubscription = currentView === 'SETTINGS' || currentView === 'PRIVACY_POLICY';
+    if (
+      !mayOpenWithoutSubscription
+      && subscriptionUnlockedFor !== subscriptionProfile.id
+      && requiresIndividualAppleSubscription(subscriptionProfile)
+    ) {
+      return (
+        <SubscriptionView
+          profile={subscriptionProfile}
+          onSubscribed={() => {
+            setSubscriptionUnlockedFor(subscriptionProfile.id);
+            setView('DASHBOARD');
+          }}
+          onOpenAccountSettings={() => setView('SETTINGS')}
+        />
+      );
+    }
+
     switch (currentView) {
       case 'SPLASH':
         return (
