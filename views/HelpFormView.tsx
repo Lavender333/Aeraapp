@@ -13,7 +13,7 @@ import { StorageService } from '../services/storage';
 import { notifyEmergencyContact } from '../services/api';
 import { getReportStepErrors } from '../services/reportFlow';
 import { t } from '../services/translations';
-import { ArrowLeft, CheckCircle, Ambulance, Flame, Droplets, Zap, Shield, Camera, StopCircle, RefreshCw, MessageSquare, Navigation, MapPin, X, Wifi, Settings, HelpCircle, Globe, AlertTriangle, AlertOctagon, WifiOff, Clock, LocateFixed } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Ambulance, Flame, Droplets, Zap, Shield, Camera, StopCircle, RefreshCw, MessageSquare, Navigation, MapPin, X, Wifi, Settings, HelpCircle, Globe, AlertCircle, AlertTriangle, AlertOctagon, WifiOff, Clock, LocateFixed } from 'lucide-react';
 
 delete (L.Icon.Default as any).prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -125,12 +125,19 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
       location: prev.location || profile.address || '',
     }));
     
-    // Check if permission was already granted previously
-    navigator.permissions?.query({ name: 'geolocation' }).then(result => {
-        if (result.state === 'granted') {
-            setIsTracking(true);
-        }
-    });
+    // The Permissions API is not available in every iOS WKWebView. Treat it as
+    // an optional enhancement so the report form still loads and lets the
+    // Geolocation API surface its normal permission prompt or manual fallback.
+    if (navigator.permissions && typeof navigator.permissions.query === 'function') {
+      void navigator.permissions
+        .query({ name: 'geolocation' })
+        .then((result) => {
+          if (result.state === 'granted') setIsTracking(true);
+        })
+        .catch(() => {
+          // Unsupported permission queries must not prevent incident reporting.
+        });
+    }
 
     const handleOnline = () => setIsOfflineMode(false);
     const handleOffline = () => setIsOfflineMode(true);
