@@ -24,6 +24,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentView, setView }) =>
           const isActive = currentView === item.id;
           return (
             <button
+              type="button"
               key={item.id}
               onClick={() => setView(item.id)}
               aria-current={isActive ? 'page' : undefined}
