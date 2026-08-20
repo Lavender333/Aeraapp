@@ -40,19 +40,20 @@ describe('universal authenticated access', () => {
     }
   });
 
-  it('does not show authenticated navigation on public or sign-in flows', () => {
-    const publicViews: ViewState[] = [
+  it('does not show authenticated navigation on public, sign-in, or full-screen wizard flows', () => {
+    const viewsWithoutAuthenticatedNav: ViewState[] = [
       'SPLASH',
       'LOGIN',
       'REGISTRATION',
       'ACCOUNT_SETUP',
       'RESET_PASSWORD',
+      'HELP_WIZARD',
       'EVENT_REGISTRATION',
       'PUBLIC_INTAKE',
       'PRIVACY_POLICY',
     ];
 
-    for (const view of publicViews) {
+    for (const view of viewsWithoutAuthenticatedNav) {
       expect(shouldShowEssentialNavigation(view, true)).toBe(false);
     }
     expect(shouldShowEssentialNavigation('DASHBOARD', false)).toBe(false);

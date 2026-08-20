@@ -104,7 +104,7 @@ export const PrivacyPolicyView: React.FC<PrivacyPolicyViewProps> = ({ setView })
         <ul className="list-disc list-inside text-sm text-slate-700 space-y-1">
           <li>Active Accounts: Data is retained while your account remains active</li>
           <li>Location Data: Real-time location data is used to support active safety features and is not retained beyond operational or safety-related needs</li>
-          <li>Account Closure: You may close your account through Settings → Close My Account. Access is disabled, active memberships and subscriptions end, personal profile details are minimized, and limited operational and audit records are retained for security, legal, and seat-accounting purposes</li>
+          <li>Account Closure: You may close your account through Settings → Close My Account. AERA access and organization memberships end, personal profile details are minimized, and limited operational and audit records are retained for security, legal, and seat-accounting purposes. Closing your AERA account does not automatically cancel an Apple subscription; cancel it through Manage Plan or your Apple Account subscription settings to prevent future renewal</li>
           <li>Inactive Accounts: Accounts inactive for two (2) years may be automatically deleted</li>
         </ul>
       </section>

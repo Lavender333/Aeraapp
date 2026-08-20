@@ -40,7 +40,8 @@ import {
   Home,
   User,
   BriefcaseBusiness,
-  BarChart2
+  BarChart2,
+  AlertCircle
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -1242,6 +1243,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
             </button>
           </div>
         </div>
+      )}
+
+      {(isGeneralUser || userRole === 'MEMBER') && (
+        <button
+          type="button"
+          onClick={() => setView('HELP_WIZARD')}
+          className="w-full rounded-2xl border border-red-200 bg-white px-4 py-4 text-left shadow-sm hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-300"
+          aria-label="Report an incident or request help"
+        >
+          <span className="flex items-center gap-4">
+            <span className="rounded-xl bg-red-100 p-3 text-red-700">
+              <AlertCircle size={24} />
+            </span>
+            <span className="flex-1">
+              <span className="block text-lg font-bold text-slate-900">Report an Incident</span>
+              <span className="block text-sm text-slate-600">Request help and share the details responders need.</span>
+              <span className="block text-xs font-semibold text-red-700 mt-1">For immediate danger, call 911 first.</span>
+            </span>
+            <ChevronRight size={20} className="text-slate-400" />
+          </span>
+        </button>
       )}
 
       {checklistCompletionPct > 0 && (

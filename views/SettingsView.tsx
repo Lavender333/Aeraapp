@@ -5,6 +5,7 @@ import { Input, Textarea } from '../components/Input';
 import { Button } from '../components/Button';
 import { HouseholdManager } from '../components/HouseholdManager';
 import { SignaturePad } from '../components/SignaturePad';
+import { SubscriptionAccountCard } from '../components/SubscriptionAccountCard';
 import { StorageService } from '../services/storage';
 import { signOutCurrentSession } from '../services/authSession';
 import {
@@ -3187,7 +3188,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const handleCloseAccount = async () => {
     if (isClosingAccount) return;
     const confirmed = window.confirm(
-      'Close your AERA account? You will lose access, active memberships and subscriptions will end, and required audit history will be retained.',
+      'Close your AERA account? You will lose AERA access and organization memberships. Closing the account does not cancel an Apple subscription; use Manage Plan first to prevent future renewal. Required audit history will be retained.',
     );
     if (!confirmed) return;
     const confirmationText = window.prompt('Type CLOSE to confirm this account closure request.');
@@ -6293,6 +6294,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             <span className="text-sm font-medium text-green-600 flex items-center gap-1 animate-fade-in">
               <Check size={16} /> Saved
             </span>
+            
           )}
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sky-400 to-teal-400 text-white font-semibold flex items-center justify-center overflow-hidden border border-white shadow-sm">
             {profileImageDataUrl ? (
@@ -8743,7 +8745,62 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
 
       </section>
 
-      <div id="settings-account-actions" className="space-y-4 pt-4 border-t border-slate-200 order-8 scroll-mt-4">
+      <SubscriptionAccountCard profile={profile} onChoosePlan={() => setView('DASHBOARD')} />
+
+      <section id="settings-account-actions" className="bg-white/95 border border-teal-200 rounded-2xl p-5 shadow-sm space-y-4 order-9 scroll-mt-4">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-teal-700">Account Essentials</p>
+          <p className="text-sm text-slate-600 mt-1">Support, privacy, consent, and account controls.</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => scrollToEssentialAccountSection('settings-contact-support')}
+            className="min-h-[48px] rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800"
+          >
+            Account Support
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollToEssentialAccountSection('settings-privacy-consent')}
+            className="min-h-[48px] rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800"
+          >
+            Privacy &amp; Consent
+          </button>
+        </div>
+
+        <div
+          id="settings-privacy-consent"
+          aria-label="Privacy and consent"
+          className="scroll-mt-4 border-t border-slate-100 pt-4 text-center"
+        >
+          <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Privacy &amp; Consent</p>
+          <div className="mt-1 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[10px] text-slate-400">
+            <button
+              type="button"
+              onClick={() => {
+                sessionStorage.setItem('privacyReturnView', 'SETTINGS');
+                setView('PRIVACY_POLICY');
+              }}
+              className="hover:text-slate-600 hover:underline underline-offset-2 focus:outline-none focus:ring-1 focus:ring-slate-400 rounded"
+            >
+              Privacy Notice &amp; Analytics Disclosure
+            </button>
+            <span aria-hidden="true">•</span>
+            <button
+              type="button"
+              onClick={() => {
+                sessionStorage.setItem('privacyReturnView', 'SETTINGS');
+                setView('PRIVACY_POLICY');
+              }}
+              className="hover:text-slate-600 hover:underline underline-offset-2 focus:outline-none focus:ring-1 focus:ring-slate-400 rounded"
+            >
+              Household Planning Consent
+            </button>
+          </div>
+        </div>
+
         <Button
           onClick={() => void handleLogout()}
           disabled={isLoggingOut}
@@ -8762,37 +8819,6 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
             className="text-[10px] font-medium text-slate-300 transition-colors hover:text-slate-500 hover:underline disabled:cursor-wait disabled:opacity-60"
           >
             {isClosingAccount ? 'Closing account…' : 'Close my account'}
-          </button>
-        </div>
-      </div>
-
-      <section
-        id="settings-privacy-consent"
-        aria-label="Privacy and consent"
-        className="order-9 scroll-mt-4 border-t border-slate-100 pt-4 pb-2 text-center"
-      >
-        <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Privacy &amp; Consent</p>
-        <div className="mt-1 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[10px] text-slate-400">
-          <button
-            type="button"
-            onClick={() => {
-              sessionStorage.setItem('privacyReturnView', 'SETTINGS');
-              setView('PRIVACY_POLICY');
-            }}
-            className="hover:text-slate-600 hover:underline underline-offset-2 focus:outline-none focus:ring-1 focus:ring-slate-400 rounded"
-          >
-            Privacy Notice &amp; Analytics Disclosure
-          </button>
-          <span aria-hidden="true">•</span>
-          <button
-            type="button"
-            onClick={() => {
-              sessionStorage.setItem('privacyReturnView', 'SETTINGS');
-              setView('PRIVACY_POLICY');
-            }}
-            className="hover:text-slate-600 hover:underline underline-offset-2 focus:outline-none focus:ring-1 focus:ring-slate-400 rounded"
-          >
-            Household Planning Consent
           </button>
         </div>
       </section>
