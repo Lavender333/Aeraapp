@@ -740,6 +740,12 @@ export async function registerParticipant(
     return data as EventRegistration;
   }
 
+  const event = await getEvent(input.eventId);
+  const session = event?.sessions?.find((item) => item.id === input.sessionId);
+  if (!event || event.status !== 'ACTIVE' || !session || !isRegistrationSessionAvailable(session)) {
+    throw new Error('Registration for this event session is closed. Please choose an available event.');
+  }
+
   const { code, ticketId } = await generateUniqueCode(input.eventId, input.eventName);
 
   const payload = {
@@ -798,6 +804,31 @@ export interface EventRegistrationWithEvent extends EventRegistration {
   session: DistributionEventSession | null;
 }
 
+export function isRegistrationSessionAvailable(
+  session: DistributionEventSession,
+  now = new Date(),
+): boolean {
+  if (session.status !== 'ACTIVE') return false;
+
+  const nowMs = now.getTime();
+  const opensAt = session.registration_open_at ? new Date(session.registration_open_at).getTime() : null;
+  if (opensAt !== null && Number.isFinite(opensAt) && opensAt > nowMs) return false;
+
+  const startsAt = new Date(session.start_at).getTime();
+  const explicitClose = session.registration_close_at
+    ? new Date(session.registration_close_at).getTime()
+    : session.end_at
+      ? new Date(session.end_at).getTime()
+      : null;
+  const closesAt = explicitClose !== null && Number.isFinite(explicitClose)
+    ? explicitClose
+    : Number.isFinite(startsAt)
+      ? startsAt + (24 * 60 * 60 * 1000)
+      : null;
+
+  return closesAt === null || closesAt > nowMs;
+}
+
 export async function listPublicActiveEvents(): Promise<DistributionEvent[]> {
   const { data, error } = await supabase
     .from('distribution_events')
@@ -806,10 +837,12 @@ export async function listPublicActiveEvents(): Promise<DistributionEvent[]> {
     .order('distribution_date', { ascending: true });
   if (error) throw new Error(error.message);
   const events = await hydrateEventsWithSessions((data ?? []) as DistributionEvent[]);
-  return events.map((event) => ({
-    ...event,
-    sessions: (event.sessions ?? []).filter((session) => session.status === 'ACTIVE'),
-  }));
+  return events
+    .map((event) => ({
+      ...event,
+      sessions: (event.sessions ?? []).filter((session) => isRegistrationSessionAvailable(session)),
+    }))
+    .filter((event) => (event.sessions ?? []).length > 0);
 }
 
 export async function listMyEventRegistrations(profileId?: string): Promise<EventRegistrationWithEvent[]> {

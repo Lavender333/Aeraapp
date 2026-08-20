@@ -8648,15 +8648,29 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                           ) : (
                             <div className="space-y-2 max-h-64 overflow-y-auto">
                               {mySupportTickets.map((ticket) => (
-                                <div key={ticket.id} className={`rounded-lg border p-3 text-xs ${ticket.status === 'RESOLVED' ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
-                                  <div className="flex items-start justify-between gap-2">
-                                    <div>
-                                      <p className="font-semibold text-slate-800">{ticket.subject || 'Untitled'}</p>
-                                      <p className="text-slate-600 mt-1">{ticket.message || 'No message'}</p>
-                                      <p className={`text-[10px] font-bold uppercase mt-1 ${ticket.status === 'RESOLVED' ? 'text-emerald-700' : 'text-amber-700'}`}>
-                                        {ticket.status || 'PENDING'}
-                                      </p>
-                                    </div>
+                                <div key={ticket.id} className={`rounded-lg border p-3 text-xs space-y-2 ${ticket.status === 'RESOLVED' ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+                                  <div>
+                                    <p className="font-semibold text-slate-800">{ticket.subject || 'Untitled'}</p>
+                                    <p className={`text-[10px] font-bold uppercase mt-1 ${ticket.status === 'RESOLVED' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                                      {ticket.status || 'PENDING'}
+                                    </p>
+                                  </div>
+                                  <div className="space-y-2">
+                                    {(ticket.messages.length > 0 ? ticket.messages : [{
+                                      authorId: ticket.userId,
+                                      authorName: ticket.requesterName || 'You',
+                                      authorRole: ticket.requesterRole || 'GENERAL_USER',
+                                      message: ticket.message || 'No message',
+                                      createdAt: ticket.createdAt,
+                                    }]).map((entry, index) => (
+                                      <div key={`${ticket.id}-${entry.createdAt}-${index}`} className="rounded-lg border border-slate-200 bg-white p-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <p className="font-semibold text-slate-700">{entry.authorName}</p>
+                                          <p className="text-[10px] text-slate-400">{new Date(entry.createdAt).toLocaleString()}</p>
+                                        </div>
+                                        <p className="text-slate-600 mt-1 break-words">{entry.message}</p>
+                                      </div>
+                                    ))}
                                   </div>
                                 </div>
                               ))}
@@ -8669,12 +8683,32 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                     {/* Organization Mailbox Tab */}
                     {contactUsTab === 'org_inbox' && isOrgScopedAdmin && (
                       <div className="space-y-3 border border-slate-200 rounded-lg p-4 bg-slate-50">
-                        <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">Organization Support Mailbox</p>
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">Organization Support Mailbox</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">Reply, resolve, or escalate member tickets to AERA.</p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setOrgInboxLoading(true);
+                              void listContactSupportTicketsForOrgAdmin(50)
+                                .then(setOrgInboxTickets)
+                                .catch((error: any) => setOrgInboxError(String(error?.message || 'Unable to refresh tickets.')))
+                                .finally(() => setOrgInboxLoading(false));
+                            }}
+                          >
+                            <RefreshCcw size={13} className={orgInboxLoading ? 'animate-spin' : ''} />
+                          </Button>
+                        </div>
+                        {orgInboxError && <p className="text-xs font-semibold text-rose-700">{orgInboxError}</p>}
+                        {orgInboxSuccess && <p className="text-xs font-semibold text-emerald-700">{orgInboxSuccess}</p>}
                         {orgInboxTickets.length === 0 ? (
                           <p className="text-xs text-slate-600">No tickets from your members.</p>
                         ) : (
                           <div className="space-y-2">
-                            {orgInboxTickets.map((ticket) => (
+                            {orgInboxTickets.filter((ticket) => !ticket.escalatedToAdmin && ticket.status !== 'RESOLVED' && !ticket.resolvedViaFaq).map((ticket) => (
                               <div key={ticket.id} className={`rounded-lg border p-3 text-xs space-y-2 ${ticket.status === 'RESOLVED' ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="min-w-0 flex-1">
@@ -8686,8 +8720,63 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
                                     {ticket.status}
                                   </span>
                                 </div>
+                                <div className="space-y-2">
+                                  {ticket.messages.map((entry, index) => (
+                                    <div key={`${ticket.id}-${entry.createdAt}-${index}`} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <p className="font-semibold text-slate-700">{entry.authorName}</p>
+                                        <p className="text-[10px] text-slate-400">{new Date(entry.createdAt).toLocaleString()}</p>
+                                      </div>
+                                      <p className="text-slate-600 mt-1 break-words">{entry.message}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                                <label className="block space-y-1">
+                                  <span className="font-semibold text-slate-700">Your response</span>
+                                  <textarea
+                                    className="w-full min-h-20 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-fuchsia-200"
+                                    placeholder="Reply to the member or note what action you took..."
+                                    value={orgInboxReplyDrafts[ticket.id] || ''}
+                                    onChange={(event) => setOrgInboxReplyDrafts((current) => ({ ...current, [ticket.id]: event.target.value }))}
+                                  />
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                  <Button size="sm" variant="outline" onClick={() => void handleOrgAdminRespond(ticket.id, 'IN_PROGRESS')} disabled={orgInboxBusyId === ticket.id}>
+                                    {orgInboxBusyId === ticket.id ? <Loader2 size={12} className="mr-1 animate-spin" /> : null}
+                                    Send Reply
+                                  </Button>
+                                  <Button size="sm" onClick={() => void handleOrgAdminRespond(ticket.id, 'RESOLVED')} disabled={orgInboxBusyId === ticket.id}>
+                                    Resolve
+                                  </Button>
+                                  <Button size="sm" variant="ghost" className="text-rose-600 hover:bg-rose-50" onClick={() => void handleEscalateTicket(ticket.id)} disabled={escalatingTicketId === ticket.id}>
+                                    {escalatingTicketId === ticket.id ? <Loader2 size={12} className="mr-1 animate-spin" /> : null}
+                                    Escalate to AERA
+                                  </Button>
+                                </div>
                               </div>
                             ))}
+                            {orgInboxTickets.some((ticket) => ticket.escalatedToAdmin) && (
+                              <div className="space-y-2">
+                                <p className="text-[10px] font-bold text-rose-600 uppercase tracking-wider">Escalated to AERA</p>
+                                {orgInboxTickets.filter((ticket) => ticket.escalatedToAdmin).map((ticket) => (
+                                  <div key={ticket.id} className="rounded-lg border border-rose-200 bg-rose-50 p-3">
+                                    <p className="font-semibold text-slate-800">{ticket.subject}</p>
+                                    <p className="text-[11px] text-rose-700 mt-1">Awaiting AERA admin response.</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {orgInboxTickets.some((ticket) => ticket.status === 'RESOLVED' && !ticket.resolvedViaFaq) && (
+                              <div className="space-y-2">
+                                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Resolved</p>
+                                {orgInboxTickets.filter((ticket) => ticket.status === 'RESOLVED' && !ticket.resolvedViaFaq).map((ticket) => (
+                                  <div key={ticket.id} className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                                    <p className="font-semibold text-slate-800">{ticket.subject}</p>
+                                    <p className="text-[11px] text-emerald-700 mt-1">Resolved by {ticket.resolvedByAdminName || ticket.assignedAdminName || 'an administrator'}.</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

@@ -3,6 +3,7 @@ import {
   buildEventRegistrationLink,
   buildQrPayload,
   DEFAULT_EVENT_REGISTRATION_BASE_URL,
+  isRegistrationSessionAvailable,
   parseQrPayload,
 } from '../services/eventDistribution';
 
@@ -44,5 +45,45 @@ describe('event setup QR links', () => {
       sessionId: 'session-3',
       participantCode: 'AERA-4821',
     });
+  });
+
+  it('hides an active session after its registration window ends', () => {
+    expect(isRegistrationSessionAvailable({
+      id: 'session-expired',
+      event_id: 'event-1',
+      session_name: 'Expired session',
+      start_at: '2026-03-17T12:00:00.000Z',
+      end_at: null,
+      registration_open_at: null,
+      registration_close_at: null,
+      location_name: null,
+      latitude: null,
+      longitude: null,
+      max_registrants: null,
+      status: 'ACTIVE',
+      sort_order: 0,
+      created_at: '2026-03-01T00:00:00.000Z',
+      updated_at: '2026-03-01T00:00:00.000Z',
+    }, new Date('2026-08-20T00:00:00.000Z'))).toBe(false);
+  });
+
+  it('keeps a future active session available', () => {
+    expect(isRegistrationSessionAvailable({
+      id: 'session-future',
+      event_id: 'event-2',
+      session_name: 'Future session',
+      start_at: '2026-09-17T12:00:00.000Z',
+      end_at: '2026-09-17T16:00:00.000Z',
+      registration_open_at: null,
+      registration_close_at: '2026-09-17T11:00:00.000Z',
+      location_name: null,
+      latitude: null,
+      longitude: null,
+      max_registrants: null,
+      status: 'ACTIVE',
+      sort_order: 0,
+      created_at: '2026-03-01T00:00:00.000Z',
+      updated_at: '2026-03-01T00:00:00.000Z',
+    }, new Date('2026-08-20T00:00:00.000Z'))).toBe(true);
   });
 });
