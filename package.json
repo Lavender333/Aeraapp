@@ -41,6 +41,7 @@
     "express": "^5.2.1",
     "express-mongo-sanitize": "^2.2.0",
     "express-rate-limit": "^7.1.5",
+    "heic2any": "^0.0.4",
     "helmet": "^7.1.0",
     "ioredis": "^5.4.2",
     "jsonwebtoken": "^9.0.3",
