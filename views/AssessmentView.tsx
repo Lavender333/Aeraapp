@@ -9,6 +9,58 @@ import { submitDamageAssessment, getAssessmentPhotoSignedUrl, listDamageAssessme
 import { StorageService } from '../services/storage';
 import { analyzeDamagePhoto as analyzeDamagePhotoLocally } from '../services/visionAssessment';
 
+const ASSESSMENT_PHOTO_MAX_BYTES = 2 * 1024 * 1024;
+const ASSESSMENT_PHOTO_MAX_DIMENSION = 1600;
+
+const assessmentPhotoDataUrlSize = (dataUrl: string) => {
+  const base64 = String(dataUrl || '').split(',')[1] || '';
+  return Math.ceil((base64.length * 3) / 4);
+};
+
+const loadAssessmentPhoto = (file: File): Promise<HTMLImageElement> => new Promise((resolve, reject) => {
+  const objectUrl = URL.createObjectURL(file);
+  const image = new Image();
+  image.onload = () => {
+    URL.revokeObjectURL(objectUrl);
+    resolve(image);
+  };
+  image.onerror = () => {
+    URL.revokeObjectURL(objectUrl);
+    reject(new Error('This photo format could not be opened. Try selecting it again or choose a JPEG or PNG.'));
+  };
+  image.src = objectUrl;
+});
+
+const prepareAssessmentPhoto = async (file: File): Promise<string> => {
+  const extensionLooksLikeImage = /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name || '');
+  if (!String(file.type || '').startsWith('image/') && !extensionLooksLikeImage) {
+    throw new Error('Please select an image from your photo library or camera.');
+  }
+
+  const image = await loadAssessmentPhoto(file);
+  const sourceWidth = Math.max(1, image.naturalWidth || image.width);
+  const sourceHeight = Math.max(1, image.naturalHeight || image.height);
+  const scale = Math.min(1, ASSESSMENT_PHOTO_MAX_DIMENSION / Math.max(sourceWidth, sourceHeight));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+  canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Photo processing is unavailable on this device.');
+
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  for (const quality of [0.82, 0.72, 0.62, 0.52, 0.42]) {
+    const compressed = canvas.toDataURL('image/jpeg', quality);
+    if (
+      compressed.startsWith('data:image/jpeg') &&
+      assessmentPhotoDataUrlSize(compressed) <= ASSESSMENT_PHOTO_MAX_BYTES
+    ) {
+      return compressed;
+    }
+  }
+
+  throw new Error('This photo is still too large after resizing. Please choose a different photo.');
+};
+
 export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView }) => {
   const normalizeRole = (role: any): UserRole => {
     const normalized = String(role || 'GENERAL_USER').toUpperCase();
@@ -139,54 +191,19 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
     loadAssessmentResults();
   }, [canViewReportedResults]);
 
-  const compressImageDataUrl = async (dataUrl: string, maxDimension = 1600, quality = 0.78): Promise<string> => {
-    const image = new Image();
-    image.src = dataUrl;
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () => reject(new Error('Unable to load image.'));
-    });
-
-    const originalWidth = image.width || 1;
-    const originalHeight = image.height || 1;
-    const scale = Math.min(1, maxDimension / Math.max(originalWidth, originalHeight));
-    const width = Math.max(1, Math.round(originalWidth * scale));
-    const height = Math.max(1, Math.round(originalHeight * scale));
-
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return dataUrl;
-    ctx.drawImage(image, 0, 0, width, height);
-    return canvas.toDataURL('image/jpeg', quality);
-  };
-
   const handleUploadPhoto: React.ChangeEventHandler<HTMLInputElement> = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      setSubmitError('Please select an image file.');
-      return;
-    }
+    event.target.value = '';
 
     try {
-      const reader = new FileReader();
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve(String(reader.result || ''));
-        reader.onerror = () => reject(new Error('Unable to read image file.'));
-        reader.readAsDataURL(file);
-      });
-      const compressed = await compressImageDataUrl(dataUrl);
+      setSubmitError(null);
+      const compressed = await prepareAssessmentPhoto(file);
       setCapturedImage(compressed);
       setAiAnalysis(null);
       analyzeImage(compressed);
-      setSubmitError(null);
-    } catch {
-      setSubmitError('Unable to process selected photo. Please try a different image.');
-    } finally {
-      event.target.value = '';
+    } catch (error: any) {
+      setSubmitError(error?.message || 'Unable to process selected photo. Please try a different image.');
     }
   };
 
@@ -475,7 +492,7 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                    <div className="flex flex-col items-center justify-center h-60 bg-slate-100 text-slate-400">
                      <Camera size={48} className="mb-3 opacity-50" />
                      <p className="font-bold text-slate-600">No Evidence Added</p>
-                     <p className="text-xs mb-4 text-center px-4">Use your phone camera or choose an existing photo.</p>
+                     <p className="text-xs mb-4 text-center px-4">Use your phone camera or choose an existing photo. HEIC and large photos are converted and compressed automatically.</p>
                      <div className="flex flex-wrap gap-2 justify-center">
                        <Button onClick={() => cameraInputRef.current?.click()} className="font-bold bg-slate-800 text-white hover:bg-slate-700">
                          <Camera size={18} className="mr-2" /> Open Camera
@@ -487,7 +504,7 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                      <input
                        ref={cameraInputRef}
                        type="file"
-                       accept="image/*"
+                       accept="image/*,.heic,.heif"
                        capture="environment"
                        className="hidden"
                        onChange={handleUploadPhoto}
@@ -495,7 +512,7 @@ export const AssessmentView: React.FC<{ setView: (v: ViewState) => void }> = ({ 
                      <input
                        ref={fileInputRef}
                        type="file"
-                       accept="image/*"
+                       accept="image/*,.heic,.heif"
                        className="hidden"
                        onChange={handleUploadPhoto}
                      />

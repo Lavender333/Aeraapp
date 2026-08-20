@@ -73,6 +73,68 @@ const maskPhoneNumber = (value: string) => {
 const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '').trim());
 
+const PROFILE_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
+const PROFILE_IMAGE_MAX_DIMENSION = 1200;
+const DIRECT_PROFILE_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+const readFileAsDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result || ''));
+  reader.onerror = () => reject(new Error('Could not read image. Please try again.'));
+  reader.readAsDataURL(file);
+});
+
+const loadImageFile = (file: File): Promise<HTMLImageElement> => new Promise((resolve, reject) => {
+  const objectUrl = URL.createObjectURL(file);
+  const image = new Image();
+  image.onload = () => {
+    URL.revokeObjectURL(objectUrl);
+    resolve(image);
+  };
+  image.onerror = () => {
+    URL.revokeObjectURL(objectUrl);
+    reject(new Error('This photo format could not be opened. Try selecting it again or choose a JPEG or PNG.'));
+  };
+  image.src = objectUrl;
+});
+
+const profileImageDataUrlSize = (dataUrl: string) => {
+  const base64 = String(dataUrl || '').split(',')[1] || '';
+  return Math.ceil((base64.length * 3) / 4);
+};
+
+const prepareProfileImage = async (file: File): Promise<string> => {
+  const extensionLooksLikeImage = /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name || '');
+  if (!String(file.type || '').startsWith('image/') && !extensionLooksLikeImage) {
+    throw new Error('Please select an image from your photo library or camera.');
+  }
+
+  if (DIRECT_PROFILE_IMAGE_TYPES.has(file.type) && file.size <= PROFILE_IMAGE_MAX_BYTES) {
+    const original = await readFileAsDataUrl(file);
+    if (original.startsWith('data:image/')) return original;
+  }
+
+  const image = await loadImageFile(file);
+  const sourceWidth = Math.max(1, image.naturalWidth || image.width);
+  const sourceHeight = Math.max(1, image.naturalHeight || image.height);
+  const scale = Math.min(1, PROFILE_IMAGE_MAX_DIMENSION / Math.max(sourceWidth, sourceHeight));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+  canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Photo processing is unavailable on this device.');
+
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  for (const quality of [0.88, 0.78, 0.68, 0.58, 0.48]) {
+    const converted = canvas.toDataURL('image/jpeg', quality);
+    if (converted.startsWith('data:image/jpeg') && profileImageDataUrlSize(converted) <= PROFILE_IMAGE_MAX_BYTES) {
+      return converted;
+    }
+  }
+
+  throw new Error('This photo is still too large after resizing. Please choose a different photo.');
+};
+
 // --- Mock Data for Access Control ---
 const DEFAULT_ROLES: RoleDefinition[] = [
   {
@@ -641,6 +703,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
   const [isSavingVitals, setIsSavingVitals] = useState(false);
   const [savingSection, setSavingSection] = useState<SettingsAccordionKey | null>(null);
   const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
+  const [isUploadingProfileImage, setIsUploadingProfileImage] = useState(false);
   const [profileRequiredErrors, setProfileRequiredErrors] = useState<Record<'address' | 'city' | 'state' | 'zipCode', boolean>>({
     address: false,
     city: false,
@@ -1222,59 +1285,38 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
     await handleProfileSave();
   };
 
-  const handleProfileImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfileImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      setProfileSaveError('Please select a JPEG, PNG, or WebP image.');
-      event.target.value = '';
-      return;
-    }
-
-    const maxBytes = 2 * 1024 * 1024;
-    if (file.size > maxBytes) {
-      setProfileSaveError('Image is too large. Please choose one under 2MB.');
-      event.target.value = '';
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = String(reader.result || '');
-      if (!dataUrl.startsWith('data:image/')) {
-        setProfileSaveError('Could not read image. Please try a different file.');
-        return;
-      }
-      try {
-        setProfileSaveError(null);
-        const uploadedAvatar = await uploadProfileAvatarDataUrl(dataUrl);
-        await updateProfileForUser({
-          fullName: profile.fullName,
-          phone: profile.phone,
-          email: profile.email,
-          address: profile.address,
-          emergencyContactName: profile.emergencyContactName,
-          emergencyContactPhone: profile.emergencyContactPhone,
-          emergencyContactRelation: profile.emergencyContactRelation,
-          avatarDataUrl: uploadedAvatar.storageRef,
-        });
-        const saved = StorageService.saveProfileImageDataUrl(uploadedAvatar.displayUrl, profile.id, { skipRemoteSync: true });
-        if (!saved) {
-          setProfileSaveError('Photo was uploaded, but it could not be cached on this device.');
-          return;
-        }
-        setProfileImageDataUrl(uploadedAvatar.displayUrl);
-        showSavedIndicator('profile');
-      } catch (error: any) {
-        setProfileSaveError(error?.message || 'Could not upload profile image. Please try again.');
-      }
-    };
-    reader.onerror = () => {
-      setProfileSaveError('Could not read image. Please try again.');
-    };
-    reader.readAsDataURL(file);
     event.target.value = '';
+
+    setIsUploadingProfileImage(true);
+    setProfileSaveError(null);
+    try {
+      const preparedImage = await prepareProfileImage(file);
+      const uploadedAvatar = await uploadProfileAvatarDataUrl(preparedImage);
+      await updateProfileForUser({
+        fullName: profile.fullName,
+        phone: profile.phone,
+        email: profile.email,
+        address: profile.address,
+        emergencyContactName: profile.emergencyContactName,
+        emergencyContactPhone: profile.emergencyContactPhone,
+        emergencyContactRelation: profile.emergencyContactRelation,
+        avatarDataUrl: uploadedAvatar.storageRef,
+      });
+      const cacheBustedDisplayUrl = `${uploadedAvatar.displayUrl}${uploadedAvatar.displayUrl.includes('?') ? '&' : '?'}v=${Date.now()}`;
+      const saved = StorageService.saveProfileImageDataUrl(cacheBustedDisplayUrl, profile.id, { skipRemoteSync: true });
+      if (!saved) {
+        throw new Error('Photo was uploaded, but it could not be cached on this device.');
+      }
+      setProfileImageDataUrl(cacheBustedDisplayUrl);
+      showSavedIndicator('profile');
+    } catch (error: any) {
+      setProfileSaveError(error?.message || 'Could not upload profile image. Please try again.');
+    } finally {
+      setIsUploadingProfileImage(false);
+    }
   };
 
   const removeProfileImage = async () => {
@@ -6580,24 +6622,33 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-slate-900">Profile Photo</p>
-                <p className="text-xs text-slate-500">PNG or JPG, up to 2MB.</p>
+                <p className="text-xs text-slate-500">Choose from your camera or photo library. Large phone photos are resized automatically.</p>
                 <div className="flex items-center gap-2 mt-2">
                   <input
                     ref={profileImageInputRef}
                     type="file"
-                    accept="image/jpeg,image/png,image/webp"
+                    accept="image/*,.heic,.heif"
                     className="hidden"
                     onChange={handleProfileImageUpload}
                   />
-                  <Button type="button" size="sm" variant="outline" onClick={() => profileImageInputRef.current?.click()}>
-                    Upload Photo
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={isUploadingProfileImage}
+                    onClick={() => profileImageInputRef.current?.click()}
+                  >
+                    {isUploadingProfileImage ? <><Loader2 size={16} className="mr-2 animate-spin" /> Uploading…</> : 'Upload Photo'}
                   </Button>
                   {profileImageDataUrl && (
-                    <Button type="button" size="sm" variant="ghost" className="text-slate-600" onClick={removeProfileImage}>
+                    <Button type="button" size="sm" variant="ghost" className="text-slate-600" disabled={isUploadingProfileImage} onClick={removeProfileImage}>
                       Remove
                     </Button>
                   )}
                 </div>
+                {profileSaveError && (
+                  <p role="alert" className="mt-2 text-xs font-semibold text-red-700">{profileSaveError}</p>
+                )}
               </div>
             </div>
 
