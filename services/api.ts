@@ -4903,6 +4903,9 @@ export async function notifyEmergencyContact(payload: {
     body: payload,
   });
   if (error) throw error;
+  if (data?.ok === false && !data?.terminal) {
+    throw new Error(String(data?.error || 'Emergency contact notification is waiting to retry'));
+  }
   return data;
 }
 
@@ -5078,7 +5081,13 @@ export async function submitDamageAssessment(payload: {
     .select('id, photo_path')
     .single();
 
-  if (error || !data) throw new Error('Failed to submit assessment');
+  if (error || !data) {
+    const message = String(error?.message || '');
+    if (message.includes('AERA_ASSESSMENT_')) {
+      throw new Error(message.replace(/^.*AERA_ASSESSMENT_(?:RATE_LIMIT|DUPLICATE):\s*/, ''));
+    }
+    throw new Error('Failed to submit assessment');
+  }
   await safeLogActivity({
     action: 'CREATE',
     entityType: 'damage_assessments',
@@ -5259,7 +5268,17 @@ export async function createHelpRequest(userId: string, payload: any) {
     .select('id, user_id, status, priority, data, location, created_at')
     .single();
 
-  if (error || !data) throw new Error('Failed to create help request');
+  if (error || !data) {
+    const message = String(error?.message || '');
+    if (message.includes('AERA_REPORT_')) {
+      const reportError = new Error(message.replace(/^.*AERA_REPORT_(?:RATE_LIMIT|DUPLICATE):\s*/, ''));
+      (reportError as any).code = message.includes('AERA_REPORT_DUPLICATE')
+        ? 'AERA_REPORT_DUPLICATE'
+        : 'AERA_REPORT_RATE_LIMIT';
+      throw reportError;
+    }
+    throw new Error('Failed to create help request');
+  }
   await safeLogActivity({
     action: 'CREATE',
     entityType: 'help_requests',

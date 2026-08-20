@@ -1,7 +1,7 @@
 
 import { HelpRequestData, HelpRequestRecord, UserProfile, UserRole, OrgMember, OrgInventory, OrganizationProfile, DatabaseSchema, HouseholdMember, ReplenishmentRequest, ReplenishmentAggregate, RoleDefinition, GapRevenueSettings } from '../types';
 import { REQUEST_ITEM_MAP } from './validation';
-import { ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, fetchProfileForUser, fetchVitalsForUser, createHouseholdSafetyNotificationsForCurrentUser, listChildOrganizations, sendMemberPing, uploadProfileAvatarDataUrl, uploadGapDocumentForCurrentUser, getGapDocumentSignedUrl, updateHelpRequestData, getPendingPingForCurrentUser as getPendingPingForCurrentUserApi, createRequest, updateRequestStatus, stockReplenishmentRequest, saveReplenishmentSignature, updateOrganizationActiveByCode, setGlobalSystemAlert, getGlobalSystemAlert } from './api';
+import { ensureHouseholdForCurrentUser, fetchHouseholdForCurrentUser, getInventory, saveInventory, getBroadcast, setBroadcast, createHelpRequest, getActiveHelpRequest, updateHelpRequestLocation, listMembers, addMember, updateMember, removeMember, registerAuth, loginAuth, forgotPassword, resetPassword, updateProfileForUser, updateVitalsForUser, syncHouseholdMembersForUser, syncPetsForUser, syncMemberDirectoryForUser, fetchProfileForUser, fetchVitalsForUser, createHouseholdSafetyNotificationsForCurrentUser, listChildOrganizations, sendMemberPing, uploadProfileAvatarDataUrl, uploadGapDocumentForCurrentUser, getGapDocumentSignedUrl, updateHelpRequestData, getPendingPingForCurrentUser as getPendingPingForCurrentUserApi, createRequest, updateRequestStatus, stockReplenishmentRequest, saveReplenishmentSignature, updateOrganizationActiveByCode, setGlobalSystemAlert, getGlobalSystemAlert, notifyEmergencyContact } from './api';
 import { getMemberStatus, setMemberStatus } from './api';
 
 const DB_KEY = 'aera_backend_db_v4'; // Force fresh database
@@ -31,7 +31,7 @@ const sensitiveMemoryCache = new Map<string, string>();
 
 type OfflineOperation = {
   id: string;
-  type: 'createHelpRequest' | 'updateHelpRequestLocation' | 'createReplenishmentRequest' | 'updateReplenishmentRequestStatus' | 'stockReplenishmentRequest' | 'signReplenishmentRequest' | 'setOrganizationStatus' | 'setBroadcast' | 'setGlobalSystemAlert';
+  type: 'createHelpRequest' | 'notifyEmergencyContact' | 'updateHelpRequestLocation' | 'createReplenishmentRequest' | 'updateReplenishmentRequestStatus' | 'stockReplenishmentRequest' | 'signReplenishmentRequest' | 'setOrganizationStatus' | 'setBroadcast' | 'setGlobalSystemAlert';
   timestamp: string;
   localRequestId?: string;
   payload: any;
@@ -435,6 +435,17 @@ export const StorageService = {
     if (operation.type === 'updateHelpRequestLocation' && operation.payload?.requestId) {
       const existingIdx = queue.findIndex(
         (q) => q.type === 'updateHelpRequestLocation' && q.payload?.requestId === operation.payload.requestId
+      );
+      if (existingIdx >= 0) {
+        queue[existingIdx] = operation;
+        this.saveOfflineQueue(queue);
+        return;
+      }
+    }
+
+    if (operation.type === 'notifyEmergencyContact' && operation.payload?.requestId) {
+      const existingIdx = queue.findIndex(
+        (q) => q.type === 'notifyEmergencyContact' && q.payload?.requestId === operation.payload.requestId
       );
       if (existingIdx >= 0) {
         queue[existingIdx] = operation;
@@ -1701,6 +1712,11 @@ export const StorageService = {
         synced: true,
       };
     } catch (e) {
+      if (String((e as any)?.code || '').startsWith('AERA_REPORT_')) {
+        db.requests = db.requests.filter((request) => request.id !== record.id);
+        this.saveDB(db);
+        throw e;
+      }
       console.warn('Help request API failed; keeping local only', e);
       this.enqueueOfflineOperation({
         type: 'createHelpRequest',
@@ -2147,6 +2163,21 @@ export const StorageService = {
           continue;
         }
 
+        if (op.type === 'notifyEmergencyContact') {
+          let requestId = op.payload?.requestId;
+          if (requestId && idMap.has(requestId)) {
+            requestId = idMap.get(requestId);
+            op.payload.requestId = requestId;
+          }
+          if (!requestId) throw new Error('Invalid emergency contact notification payload');
+          const result = await notifyEmergencyContact({ ...op.payload, requestId });
+          if (result?.terminal) {
+            console.warn('Emergency contact notification reached its retry limit', requestId);
+          }
+          processed++;
+          continue;
+        }
+
         if (op.type === 'updateHelpRequestLocation') {
           let { requestId, location } = op.payload || {};
           if (requestId && idMap.has(requestId)) {
@@ -2263,6 +2294,17 @@ export const StorageService = {
 
     this.saveOfflineQueue(remaining);
     this.saveSyncIdMap(syncMap);
+    if (typeof window !== 'undefined' && remaining.some((op) => op.type === 'notifyEmergencyContact')) {
+      const retryFlag = '__aera_emergency_contact_retry_timer__';
+      if (!(window as any)[retryFlag]) {
+        (window as any)[retryFlag] = window.setTimeout(() => {
+          delete (window as any)[retryFlag];
+          this.syncPendingData().catch((error) => {
+            console.warn('Scheduled emergency contact retry failed', error);
+          });
+        }, 65_000);
+      }
+    }
     if (processed > 0) {
       this.saveDB(db);
       if (typeof window !== 'undefined') {

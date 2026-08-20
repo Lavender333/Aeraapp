@@ -470,8 +470,7 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
       const record = await StorageService.submitRequest({ ...data, location: locationToUse });
       setSubmittedId(record.id);
       if (data.emergencyContactPhone) {
-        setSmsStatus('sending');
-        notifyEmergencyContact({
+        const notificationPayload = {
           contactName: data.emergencyContactName,
           contactPhone: data.emergencyContactPhone,
           userName: data.fullName,
@@ -479,17 +478,30 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
           description: data.situationDescription,
           location: locationToUse,
           requestId: record.id,
-        })
-          .then(() => setSmsStatus('sent'))
+        };
+        setSmsStatus('sending');
+        notifyEmergencyContact(notificationPayload)
+          .then((result) => setSmsStatus(result?.ok ? 'sent' : 'failed'))
           .catch((err) => {
             console.warn('Emergency contact notify failed', err);
             setSmsStatus('failed');
+            StorageService.enqueueOfflineOperation({
+              type: 'notifyEmergencyContact',
+              localRequestId: record.clientId || record.id,
+              payload: notificationPayload,
+            });
+            window.setTimeout(() => {
+              StorageService.syncPendingData().catch((syncError) => {
+                console.warn('Emergency contact retry failed', syncError);
+              });
+            }, 65_000);
           });
       }
       setIsSuccess(true);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert('Failed to submit request. Saved locally; will retry when online.');
+      setStepErrors([e?.message || 'Unable to submit this report. Please try again.']);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setIsSubmitting(false);
     }
@@ -582,7 +594,7 @@ export const HelpFormView: React.FC<HelpFormViewProps> = ({ setView }) => {
                 : 'bg-slate-50 text-slate-700 border-slate-200'
           }`}>
             {smsStatus === 'sent' && 'Emergency contact notified via SMS.'}
-            {smsStatus === 'failed' && 'Unable to notify emergency contact. You can continue.'}
+            {smsStatus === 'failed' && 'SMS delivery is delayed. AERA will retry automatically.'}
             {smsStatus === 'sending' && 'Notifying emergency contact...'}
           </div>
         )}
