@@ -1,5 +1,6 @@
 import type { GapDisbursement, GapRevenueSettings, HouseholdMember, OrgBankInfo, OrgInventory, ReplenishmentRequest, UserProfile } from '../types';
 import { supabase, getOrgByCode, getOrgIdByCode } from './supabase';
+import { getConfirmationErrorMessage, getSignupErrorMessage, isExistingAccountError } from './authErrors';
 import { calculateAgeFromDob, isValidPhoneForInvite, normalizePhoneDigits, validateHouseholdMembers } from './validation';
 import type { VisionAssessmentResult } from './visionAssessment';
 
@@ -4777,7 +4778,7 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
   const emailRedirectTo = typeof window !== 'undefined'
     ? `${window.location.origin}${window.location.pathname}`
     : undefined;
-  const { data, error } = await supabase.auth.signUp({
+  const signupResult = await supabase.auth.signUp({
     email: normalizedEmail || undefined,
     phone: phone || undefined,
     password,
@@ -4789,12 +4790,26 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
     },
   });
 
-  if (error) {
-    const message = String((error as any)?.message || '').toLowerCase();
-    if (message.includes('already registered') || message.includes('already been registered') || message.includes('already exists')) {
-      throw new Error('That email already has an account. Log in or reset your password.');
+  let data = signupResult.data;
+  let createdAccount = true;
+
+  if (signupResult.error) {
+    // Account creation is idempotent when the same person immediately retries
+    // with the same credentials (for example, after a slow network response).
+    if (normalizedEmail && isExistingAccountError(signupResult.error)) {
+      const loginResult = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
+      if (!loginResult.error && loginResult.data.user && loginResult.data.session) {
+        data = loginResult.data;
+        createdAccount = false;
+      } else {
+        throw new Error(getSignupErrorMessage(signupResult.error));
+      }
+    } else {
+      throw new Error(getSignupErrorMessage(signupResult.error));
     }
-    throw error;
   }
 
   const userId = data.user?.id;
@@ -4817,7 +4832,7 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
     }
   }
 
-  if (userId) {
+  if (userId && createdAccount) {
     try {
       await incrementPeopleRegisteredCount();
     } catch (e) {
@@ -4852,7 +4867,7 @@ export async function resendSignupConfirmation(email: string): Promise<void> {
     email: normalizedEmail,
     options: { emailRedirectTo },
   });
-  if (error) throw error;
+  if (error) throw new Error(getConfirmationErrorMessage(error));
 }
 
 export async function loginAuth(payload: { email?: string; phone?: string; password: string }) {
@@ -6193,7 +6208,7 @@ export async function saveGapRevenueSettingsRemote(settings: GapRevenueSettings)
   const userId = authData?.user?.id || null;
 
   const payload = {
-    membershipPriceUsd: Number(settings.membershipPriceUsd || 9.99),
+    membershipPriceUsd: Number(settings.membershipPriceUsd || 2.99),
     appStoreFeePercent: Number(settings.appStoreFeePercent || 30),
     gapFundAllocationPercent: Number(settings.gapFundAllocationPercent || 30),
     billingCycle: settings.billingCycle === 'annual' ? 'annual' : 'monthly',

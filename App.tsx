@@ -17,6 +17,7 @@ import { clearPendingOrganizationCode, savePendingOrganizationCode } from './ser
 import { canRoleAccessView } from './services/rolePageAccess';
 import { requiresIndividualAppleSubscription } from './services/subscription';
 import { initializePushNotifications } from './services/pushNotifications';
+import { useMyCommercialAccess } from './services/commercialAccess';
 
 let initialSessionPromise: ReturnType<typeof supabase.auth.getSession> | null = null;
 
@@ -145,6 +146,9 @@ export default function App() {
   const [peopleRegisteredCount, setPeopleRegisteredCount] = useState(0);
   const showSetupNotice = !hasSupabaseConfig;
   const currentRole = String(StorageService.getProfile()?.role || 'GENERAL_USER').toUpperCase();
+  const { features: commercialFeatures } = useMyCommercialAccess();
+  const canAccessView = (role: unknown, view: ViewState) =>
+    canRoleAccessView(role, view, commercialFeatures);
   const isPresentationPath = typeof window !== 'undefined' && window.location.pathname === '/presentation';
   const isPresentationView = currentView === 'PRESENTATION' || isPresentationPath;
 
@@ -188,14 +192,14 @@ export default function App() {
     sessionStorage.removeItem('aera.viewAfterChunkReload');
     const requestedStandaloneView = getStandaloneRequestedView() || recoveredView || (sessionStorage.getItem('postLoginView') as ViewState | null);
 
-    if (requestedStandaloneView && canRoleAccessView(role, requestedStandaloneView)) {
+    if (requestedStandaloneView && canAccessView(role, requestedStandaloneView)) {
       sessionStorage.removeItem('postLoginView');
       return requestedStandaloneView;
     }
     if (requestedStandaloneView) sessionStorage.removeItem('postLoginView');
 
     if (shouldCompleteNewAccountSetup(profile?.email, onboardComplete)) return 'ACCOUNT_SETUP';
-    if (role === 'BUYER') return 'BUYER_PORTAL';
+    if (role === 'BUYER' && canAccessView(role, 'BUYER_PORTAL')) return 'BUYER_PORTAL';
     if (role === 'INSTITUTION_ADMIN' || role === 'ORG_ADMIN') return 'ORG_DASHBOARD';
     return 'DASHBOARD';
   };
@@ -228,7 +232,7 @@ export default function App() {
     if (isBootstrapping || unauthenticatedViews.includes(currentView)) return;
 
     void initializePushNotifications((requestedView) => {
-      setView(canRoleAccessView(currentRole, requestedView) ? requestedView : 'DASHBOARD');
+      setView(canAccessView(currentRole, requestedView) ? requestedView : 'DASHBOARD');
     }).catch((error) => console.warn('Push notifications are unavailable', error));
   }, [currentRole, currentView, isBootstrapping]);
 
@@ -605,25 +609,25 @@ export default function App() {
       case 'SETTINGS':
         return <SettingsView setView={setView} />;
       case 'NEW_SIGNUPS':
-        return canRoleAccessView(currentRole, 'NEW_SIGNUPS') ? <NewSignupsView setView={setView} /> : <DashboardView setView={setView} />;
+        return canAccessView(currentRole, 'NEW_SIGNUPS') ? <NewSignupsView setView={setView} /> : <DashboardView setView={setView} />;
       case 'MAP':
-        return canRoleAccessView(currentRole, 'MAP') ? <MapView setView={setView} /> : <DashboardView setView={setView} />;
+        return canAccessView(currentRole, 'MAP') ? <MapView setView={setView} /> : <DashboardView setView={setView} />;
       case 'ALERTS':
         return <DashboardView setView={setView} />;
       case 'GAP':
         return <GapView setView={setView} />;
       case 'GAP_MANAGEMENT':
-        return canRoleAccessView(currentRole, 'GAP_MANAGEMENT') ? <GapManagementView setView={setView} /> : <DashboardView setView={setView} />;
+        return canAccessView(currentRole, 'GAP_MANAGEMENT') ? <GapManagementView setView={setView} /> : <DashboardView setView={setView} />;
       case 'ASSESSMENT':
         return <AssessmentView setView={setView} />;
       case 'POPULATION':
-        return canRoleAccessView(currentRole, 'POPULATION') ? <PopulationView setView={setView} /> : <DashboardView setView={setView} />;
+        return canAccessView(currentRole, 'POPULATION') ? <PopulationView setView={setView} /> : <DashboardView setView={setView} />;
       case 'RECOVERY':
-        return canRoleAccessView(currentRole, 'RECOVERY') ? <RecoveryView setView={setView} /> : <DashboardView setView={setView} />;
+        return canAccessView(currentRole, 'RECOVERY') ? <RecoveryView setView={setView} /> : <DashboardView setView={setView} />;
       case 'DRONE':
-        return canRoleAccessView(currentRole, 'DRONE') ? <DroneView setView={setView} /> : <DashboardView setView={setView} />;
+        return canAccessView(currentRole, 'DRONE') ? <DroneView setView={setView} /> : <DashboardView setView={setView} />;
       case 'LOGISTICS':
-        return canRoleAccessView(currentRole, 'LOGISTICS') ? <LogisticsView setView={setView} /> : <DashboardView setView={setView} />;
+        return canAccessView(currentRole, 'LOGISTICS') ? <LogisticsView setView={setView} /> : <DashboardView setView={setView} />;
       case 'ORG_DASHBOARD':
         {
           const requestedTab = sessionStorage.getItem('orgDashboardInitialTab');
@@ -631,7 +635,7 @@ export default function App() {
             ? requestedTab
             : 'MEMBERS';
           sessionStorage.removeItem('orgDashboardInitialTab');
-          return canRoleAccessView(currentRole, 'ORG_DASHBOARD')
+          return canAccessView(currentRole, 'ORG_DASHBOARD')
             ? <OrgDashboardView setView={setView} initialTab={initialOrgDashboardTab} />
             : <DashboardView setView={setView} />;
         }
@@ -640,21 +644,21 @@ export default function App() {
       case 'EVENTS':
         return <EventsView setView={setView} />;
       case 'EVENT_SETUP':
-        return canRoleAccessView(currentRole, 'EVENT_SETUP') ? <EventSetupView setView={setView} /> : <DashboardView setView={setView} />;
+        return canAccessView(currentRole, 'EVENT_SETUP') ? <EventSetupView setView={setView} /> : <DashboardView setView={setView} />;
       case 'EVENT_REGISTRATION':
         return <EventRegistrationView setView={setView} />;
       case 'VOLUNTEER_SCAN':
-        return canRoleAccessView(currentRole, 'VOLUNTEER_SCAN') ? <VolunteerScanView setView={setView} /> : <DashboardView setView={setView} />;
+        return canAccessView(currentRole, 'VOLUNTEER_SCAN') ? <VolunteerScanView setView={setView} /> : <DashboardView setView={setView} />;
       case 'EVENT_DASHBOARD':
-        return canRoleAccessView(currentRole, 'EVENT_DASHBOARD') ? <EventDashboardView setView={setView} /> : <DashboardView setView={setView} />;
+        return canAccessView(currentRole, 'EVENT_DASHBOARD') ? <EventDashboardView setView={setView} /> : <DashboardView setView={setView} />;
       case 'SHELTER_LOCATOR':
         return <ShelterLocatorView setView={setView} />;
       case 'BUYER_PORTAL':
-        return canRoleAccessView(currentRole, 'BUYER_PORTAL') ? <BuyerPortalView setView={setView} /> : <DashboardView setView={setView} />;
+        return canAccessView(currentRole, 'BUYER_PORTAL') ? <BuyerPortalView setView={setView} /> : <DashboardView setView={setView} />;
       case 'LEAD_INTAKE':
-        return canRoleAccessView(currentRole, 'LEAD_INTAKE') ? <LeadIntakeView setView={setView} /> : <DashboardView setView={setView} />;
+        return canAccessView(currentRole, 'LEAD_INTAKE') ? <LeadIntakeView setView={setView} /> : <DashboardView setView={setView} />;
       case 'LEAD_ADMIN':
-        return canRoleAccessView(currentRole, 'LEAD_ADMIN') ? <LeadAdminView setView={setView} /> : <DashboardView setView={setView} />;
+        return canAccessView(currentRole, 'LEAD_ADMIN') ? <LeadAdminView setView={setView} /> : <DashboardView setView={setView} />;
       case 'PUBLIC_INTAKE': {
         const searchParams = new URLSearchParams(window.location.search || '');
         const hash = window.location.hash || '';
@@ -672,7 +676,7 @@ export default function App() {
         return <PublicIntakeView shareToken={shareToken} />;
       }
       case 'FINANCE_DASHBOARD':
-        return canRoleAccessView(currentRole, 'FINANCE_DASHBOARD') ? <FinanceDashboardView setView={setView} /> : <DashboardView setView={setView} />;
+        return canAccessView(currentRole, 'FINANCE_DASHBOARD') ? <FinanceDashboardView setView={setView} /> : <DashboardView setView={setView} />;
       default:
         return <DashboardView setView={setView} />;
     }

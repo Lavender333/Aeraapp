@@ -9,7 +9,7 @@ The app code expects this exact App Store Connect product:
 | Product ID | `com.aera.emergencyresponse.monthly` |
 | Subscription group | AERA Membership |
 | Duration | 1 month |
-| United States price | $1.99 USD |
+| United States price | $2.99 USD |
 | Introductory offer | Free trial, 1 month |
 
 ## App Store Connect steps
@@ -17,7 +17,7 @@ The app code expects this exact App Store Connect product:
 1. Open **AERA → Monetization → Subscriptions**.
 2. Create the **AERA Membership** subscription group.
 3. Create an auto-renewable subscription using the exact product ID above.
-4. Set its duration to one month and choose the App Store price point that displays **$1.99 USD** in the United States. Apple supplies localized prices in other storefronts.
+4. Set its duration to one month and choose the App Store price point that displays **$2.99 USD** in the United States. Apple supplies localized prices in other storefronts.
 5. Add the localization:
    - Display name: **AERA Monthly Membership**
    - Description: **Household preparedness, trusted community updates, incident reporting, and recovery resources.**

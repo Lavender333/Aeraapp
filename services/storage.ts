@@ -2317,7 +2317,7 @@ export const StorageService = {
 
   getGapRevenueSettings(): GapRevenueSettings {
     const defaults: GapRevenueSettings = {
-      membershipPriceUsd: 9.99,
+      membershipPriceUsd: 2.99,
       appStoreFeePercent: 30,
       gapFundAllocationPercent: 30,
       billingCycle: 'monthly',

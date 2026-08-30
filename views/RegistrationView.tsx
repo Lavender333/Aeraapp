@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ViewState, UserProfile, LanguageCode, HouseholdMember } from '../types';
 import { Button } from '../components/Button';
 import { Input, Textarea } from '../components/Input';
@@ -84,6 +84,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
   const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
   const [isResendingConfirmation, setIsResendingConfirmation] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
+  const registrationInFlight = useRef(false);
   const [pendingCommunityId, setPendingCommunityId] = useState('');
   const [outreachLocationStatus, setOutreachLocationStatus] = useState<string | null>(null);
   const pendingCommunityName = pendingCommunityId
@@ -208,9 +209,11 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
   };
 
   const handleAuthRegister = async () => {
+    if (registrationInFlight.current || needsEmailConfirm) return;
     setAuthError(null);
     setAuthSuccess(null);
-    if (!email || !password || !confirmPassword) {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !password || !confirmPassword) {
       setAuthError('Email and password required.');
       return;
     }
@@ -224,19 +227,26 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
       return;
     }
     try {
+      registrationInFlight.current = true;
       setIsRegistering(true);
-      const resp: any = await StorageService.registerWithCredentials(email, password, formData.fullName);
-      markNewAccountSetupPending(email);
+      setEmail(normalizedEmail);
+      const resp: any = await StorageService.registerWithCredentials(normalizedEmail, password, formData.fullName);
+      markNewAccountSetupPending(normalizedEmail);
       if (resp?.needsEmailConfirm) {
         setNeedsEmailConfirm(true);
+        setPassword('');
+        setConfirmPassword('');
         setAuthSuccess('Check your email to confirm your account before continuing.');
         return;
       }
+      setPassword('');
+      setConfirmPassword('');
       setAuthSuccess('Account created. Continue with required setup.');
       setView('ACCOUNT_SETUP');
     } catch (e: any) {
       setAuthError(e?.message || 'Registration failed.');
     } finally {
+      registrationInFlight.current = false;
       setIsRegistering(false);
     }
   };
@@ -381,35 +391,62 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
           </Button>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 max-w-lg w-full">
+        <form
+          className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 max-w-lg w-full"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleAuthRegister();
+          }}
+        >
           <Input 
             label="Email"
+            type="email"
             placeholder="you@example.com"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setAuthError(null);
+            }}
+            autoComplete="email"
+            autoCapitalize="none"
+            spellCheck={false}
+            disabled={isRegistering || needsEmailConfirm}
+            required
           />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input 
               label="Password"
               type="password"
               placeholder="••••••••"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setAuthError(null);
+              }}
+              autoComplete="new-password"
+              disabled={isRegistering || needsEmailConfirm}
+              required
             />
             <Input 
               label="Confirm Password"
               type="password"
               placeholder="••••••••"
               value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                setAuthError(null);
+              }}
+              autoComplete="new-password"
+              disabled={isRegistering || needsEmailConfirm}
+              required
             />
           </div>
-          <Button size="lg" onClick={handleAuthRegister} className="font-bold" disabled={isRegistering}>
-            {isRegistering ? 'Creating…' : 'Create Account & Continue'}
+          <Button type="submit" size="lg" fullWidth className="font-bold" disabled={isRegistering || needsEmailConfirm}>
+            {isRegistering ? 'Creating…' : needsEmailConfirm ? 'Confirmation Email Sent' : 'Create Account & Continue'}
           </Button>
           <p className="text-xs text-slate-500">Password must be 8+ characters and include uppercase, lowercase, and a number.</p>
-          {authError && <p className="text-sm text-red-600">{authError}</p>}
-          {authSuccess && <p className="text-sm text-emerald-600">{authSuccess}</p>}
+          {authError && <p role="alert" className="text-sm text-red-600">{authError}</p>}
+          {authSuccess && <p role="status" className="text-sm text-emerald-600">{authSuccess}</p>}
           {needsEmailConfirm && (
             <div className="space-y-2">
               <Button
@@ -426,7 +463,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({ setView, mod
             </div>
           )}
           <p className="text-xs text-slate-500">Next: complete Identity, Home, and Safety setup.</p>
-        </div>
+        </form>
       </div>
     );
   }

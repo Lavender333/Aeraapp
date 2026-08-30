@@ -141,7 +141,7 @@ export const GapManagementView: React.FC<{ setView: (v: ViewState) => void }> = 
   // Derived: revenue math
   // ---------------------------------------------------------------------------
   const monthlyGapPerMember = (() => {
-    const price = Number(revenueSettings.membershipPriceUsd || 9.99);
+    const price = Number(revenueSettings.membershipPriceUsd || 2.99);
     const pfee = Number(revenueSettings.appStoreFeePercent || 30) / 100;
     const gpct = Number(revenueSettings.gapFundAllocationPercent || 30) / 100;
     const div = revenueSettings.billingCycle === 'annual' ? 12 : 1;
@@ -513,7 +513,7 @@ export const GapManagementView: React.FC<{ setView: (v: ViewState) => void }> = 
 
             {/* Always-visible math summary */}
             {(() => {
-              const price = Number(revenueSettings.membershipPriceUsd || 9.99);
+              const price = Number(revenueSettings.membershipPriceUsd || 2.99);
               const pfee = Number(revenueSettings.appStoreFeePercent || 30) / 100;
               const gpct = Number(revenueSettings.gapFundAllocationPercent || 30) / 100;
               const div = revenueSettings.billingCycle === 'annual' ? 12 : 1;
