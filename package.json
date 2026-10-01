@@ -50,7 +50,7 @@
     "lucide-react": "^0.556.0",
     "mongodb": "^7.0.0",
     "mongoose": "^9.0.1",
-    "morgan": "^1.10.0",
+    "morgan": "^1.12.1",
     "nodemailer": "^9.0.3",
     "pptxgenjs": "^4.0.1",
     "qrcode": "^1.5.4",
