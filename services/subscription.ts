@@ -57,18 +57,20 @@ export function hasOneMonthFreeTrial(product: Product | null | undefined): boole
 export function isActiveSubscriptionTransaction(transaction: Transaction): boolean {
   if (transaction.productIdentifier !== AERA_MONTHLY_SUBSCRIPTION_ID) return false;
   if (transaction.revocationDate || transaction.subscriptionState === 'revoked') return false;
+  if (transaction.subscriptionState === 'expired' || transaction.subscriptionState === 'inBillingRetryPeriod') return false;
   if (transaction.isInGracePeriod || transaction.subscriptionState === 'inGracePeriod') return true;
-  if (transaction.isActive === true || transaction.subscriptionState === 'subscribed') return true;
   if (transaction.expirationDate) {
     return new Date(transaction.expirationDate).getTime() > Date.now();
   }
-  return transaction.purchaseState === '1';
+  return transaction.isActive === true || transaction.subscriptionState === 'subscribed';
 }
 
 function appAccountToken(profile: Partial<UserProfile>): string | undefined {
   const id = String(profile.id || '').trim();
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
-    ? id
+    // The installed iOS plugin compares this string to Foundation UUID.uuidString.
+    // Foundation returns uppercase, so lowercase Supabase IDs otherwise fail restore.
+    ? id.toUpperCase()
     : undefined;
 }
 
@@ -80,7 +82,7 @@ export async function loadMonthlySubscriptionProduct(): Promise<Product> {
     productIdentifiers: [AERA_MONTHLY_SUBSCRIPTION_ID],
     productType: PURCHASE_TYPE.SUBS,
   });
-  const product = products.find((item) => item.identifier === AERA_MONTHLY_SUBSCRIPTION_ID) || products[0];
+  const product = products.find((item) => item.identifier === AERA_MONTHLY_SUBSCRIPTION_ID);
   if (!product) {
     throw new Error('The AERA monthly plan is not available from the App Store yet. Please try again later.');
   }

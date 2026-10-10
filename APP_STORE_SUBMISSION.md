@@ -9,7 +9,7 @@ This repository contains a **React + Vite web app**, a **Node API**, and an exis
 - [x] Automated test suite passes
 - [x] 1024×1024 App Store icon present with no transparency
 - [x] iOS permissions include purpose strings for location, camera, microphone, and photos
-- [x] Version set to 1.0 with build number 1
+- [x] Version set to 1.0 with build number 19 for this resubmission
 - [x] Non-exempt encryption declaration set to false
 - [x] Apple Developer team selected in Xcode
 - [x] Bundle identifier configured for the selected Apple Developer team
@@ -102,6 +102,10 @@ Before submitting to App Review:
 ---
 
 ## 7) Recommended Next Actions
+
+For the current resubmission, follow `APP_REVIEW_RESUBMISSION.md`. Earlier checked
+items in this document are historical and do not prove that build 19 was uploaded
+or tested through TestFlight.
 
 1. Select the Apple Developer team in Xcode under **Signing & Capabilities**.
 2. Confirm that `com.aera.emergencyresponse` is available and registered to that team.

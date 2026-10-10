@@ -45,7 +45,10 @@ describe('role page access', () => {
   });
 
   it('keeps Buyer, General User, and Member out of administrative operations', () => {
-    expect(canRoleAccessView('BUYER', 'BUYER_PORTAL')).toBe(true);
+    expect(canRoleAccessView('BUYER', 'BUYER_PORTAL')).toBe(false);
+    expect(canRoleAccessView('BUYER', 'BUYER_PORTAL', new Set(['BUYERS']))).toBe(true);
+    expect(canRoleAccessView('ORG_ADMIN', 'LEAD_INTAKE', new Set(['LEADS']))).toBe(true);
+    expect(canRoleAccessView('ORG_ADMIN', 'FINANCE_DASHBOARD', new Set(['FINANCE']))).toBe(true);
     for (const role of ['BUYER', 'GENERAL_USER', 'MEMBER']) {
       expect(canRoleAccessView(role, 'MAP')).toBe(false);
       expect(canRoleAccessView(role, 'ORG_DASHBOARD')).toBe(false);

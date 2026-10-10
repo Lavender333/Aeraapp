@@ -12,8 +12,15 @@ import { t } from '../services/translations';
 import { Building2, CheckCircle, AlertTriangle, HelpCircle, Package, ArrowLeft, Send, Truck, Copy, Save, Phone, MapPin, User, HeartPulse, BellRing, X, AlertOctagon, Loader2, Wand2, ShieldCheck, WifiOff, FileText, Printer, Mail, LocateFixed, DollarSign } from 'lucide-react';
 import { Textarea } from '../components/Input';
 import { GoogleGenAI } from "../services/mockGenAI";
+import {
+  COMMERCIAL_FEATURES,
+  CommercialAccessGrant,
+  CommercialFeature,
+  listOrganizationCommercialAccess,
+  setOrganizationCommercialAccess,
+} from '../services/commercialAccess';
 
-type OrgDashboardTab = 'MEMBERS' | 'OUTREACH' | 'PREPAREDNESS' | 'INVENTORY';
+type OrgDashboardTab = 'MEMBERS' | 'OUTREACH' | 'PREPAREDNESS' | 'INVENTORY' | 'ACCESS';
 type OrgSelectorOption = { id: string; org_code: string; name: string };
 
 const normalizeReplenishmentStatus = (status: string | undefined): ReplenishmentRequest['status'] => {
@@ -207,6 +214,11 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
   const [roleChangeBusy, setRoleChangeBusy] = useState(false);
   const [roleChangeError, setRoleChangeError] = useState<string | null>(null);
   const [roleChangeSuccess, setRoleChangeSuccess] = useState<string | null>(null);
+  const isPlatformAdmin = String(StorageService.getProfile()?.role || '').toUpperCase() === 'ADMIN';
+  const [commercialGrants, setCommercialGrants] = useState<CommercialAccessGrant[]>([]);
+  const [commercialAccessLoading, setCommercialAccessLoading] = useState(false);
+  const [commercialAccessError, setCommercialAccessError] = useState<string | null>(null);
+  const [commercialAccessBusyKey, setCommercialAccessBusyKey] = useState<string | null>(null);
   const [gapCenterVisibleToMembers, setGapCenterVisibleToMembers] = useState(false);
   const [gapVisibilityLoading, setGapVisibilityLoading] = useState(false);
   const [gapVisibilitySaving, setGapVisibilitySaving] = useState(false);
@@ -322,6 +334,61 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
   const activeOrgCode = viewOrgId === 'ALL'
     ? normalizeOrgCode(communityId)
     : normalizeOrgCode(String(viewOrgId));
+
+  useEffect(() => {
+    if (!isPlatformAdmin || activeTab !== 'ACCESS' || !activeOrgCode) return;
+    let active = true;
+    setCommercialAccessLoading(true);
+    setCommercialAccessError(null);
+    getOrgByCode(activeOrgCode)
+      .then(async (org) => {
+        if (!org?.orgId) throw new Error('Organization lookup failed.');
+        const grants = await listOrganizationCommercialAccess(org.orgId);
+        if (active) setCommercialGrants(grants);
+      })
+      .catch((error: any) => {
+        if (active) setCommercialAccessError(error?.message || 'Unable to load commercial access.');
+      })
+      .finally(() => {
+        if (active) setCommercialAccessLoading(false);
+      });
+    return () => { active = false; };
+  }, [activeOrgCode, activeTab, isPlatformAdmin]);
+
+  const hasMemberCommercialAccess = (userId: string, feature: CommercialFeature) =>
+    commercialGrants.some((grant) => grant.userId === userId && grant.feature === feature);
+
+  const handleCommercialAccessToggle = async (
+    member: OrgMember,
+    feature: CommercialFeature,
+    enabled: boolean
+  ) => {
+    const busyKey = `${member.id}:${feature}`;
+    setCommercialAccessBusyKey(busyKey);
+    setCommercialAccessError(null);
+    try {
+      const org = await getOrgByCode(activeOrgCode);
+      if (!org?.orgId) throw new Error('Organization lookup failed.');
+      await setOrganizationCommercialAccess({
+        organizationId: org.orgId,
+        userId: member.id,
+        feature,
+        enabled,
+      });
+      setCommercialGrants((current) => {
+        const remaining = current.filter(
+          (grant) => !(grant.userId === member.id && grant.feature === feature)
+        );
+        return enabled
+          ? [...remaining, { userId: member.id, organizationId: org.orgId, feature, canManage: false }]
+          : remaining;
+      });
+    } catch (error: any) {
+      setCommercialAccessError(error?.message || 'Unable to update commercial access.');
+    } finally {
+      setCommercialAccessBusyKey(null);
+    }
+  };
 
   useEffect(() => {
     if (!activeOrgCode) return;
@@ -1510,7 +1577,7 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex bg-white border-b border-slate-200">
+      <div className="flex overflow-x-auto bg-white border-b border-slate-200">
          <button 
            onClick={() => { setActiveTab('MEMBERS'); setSelectedMember(null); }}
            className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'MEMBERS' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500'}`}
@@ -1535,6 +1602,14 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
          >
            {t('org.tab.inventory')}
          </button>
+         {isPlatformAdmin && (
+           <button
+             onClick={() => { setActiveTab('ACCESS'); setSelectedMember(null); }}
+             className={`min-w-[110px] flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'ACCESS' ? 'border-violet-600 text-violet-700' : 'border-transparent text-slate-500'}`}
+           >
+             Commercial Access
+           </button>
+         )}
       </div>
 
       <div className="p-4 flex-1 overflow-y-auto">
@@ -1759,6 +1834,67 @@ export const OrgDashboardView: React.FC<{ setView: (v: ViewState) => void; initi
                ))}
             </div>
           )
+        )}
+
+        {activeTab === 'ACCESS' && isPlatformAdmin && (
+          <div className="space-y-4 animate-slide-up">
+            <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="mt-0.5 text-violet-700" size={22} />
+                <div>
+                  <h2 className="font-bold text-slate-900">Platform-controlled commercial access</h2>
+                  <p className="mt-1 text-sm text-slate-700">
+                    Organization owners and organization admins receive no access automatically. Only an AERA platform administrator can grant or revoke these controls.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {commercialAccessError && (
+              <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+                {commercialAccessError}
+              </div>
+            )}
+
+            {commercialAccessLoading ? (
+              <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-600">
+                <Loader2 className="animate-spin" size={18} /> Loading access assignments…
+              </div>
+            ) : members.length === 0 ? (
+              <p className="py-8 text-center text-sm text-slate-500">No organization members are available.</p>
+            ) : (
+              <div className="space-y-3">
+                {members.map((member) => (
+                  <div key={member.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="mb-3">
+                      <p className="font-bold text-slate-900">{member.name}</p>
+                      <p className="text-xs text-slate-500">{member.role || 'GENERAL_USER'}</p>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {COMMERCIAL_FEATURES.map((feature) => {
+                        const checked = hasMemberCommercialAccess(member.id, feature);
+                        const busyKey = `${member.id}:${feature}`;
+                        return (
+                          <label key={feature} className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700">
+                            <span>{feature === 'LEADS' ? 'Leads / Seller' : feature === 'BUYERS' ? 'Buyer Controls' : 'Finance Controls'}</span>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={commercialAccessBusyKey !== null}
+                              onChange={(event) => void handleCommercialAccessToggle(member, feature, event.target.checked)}
+                              aria-label={`${feature} access for ${member.name}`}
+                              className="h-4 w-4 accent-violet-600"
+                            />
+                            {commercialAccessBusyKey === busyKey && <Loader2 className="ml-2 animate-spin" size={14} />}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {activeTab === 'OUTREACH' && (

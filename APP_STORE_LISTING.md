@@ -30,13 +30,18 @@ Key features include:
 
 AERA is a safety-support and information-sharing platform. It does not provide emergency, medical, or rescue services and does not guarantee a response. For an immediate or life-threatening emergency, call 911 or your local emergency services.
 
+AERA Monthly is an auto-renewable, one-month subscription for individual members. The United States price is $2.99 per month; localized pricing appears before purchase. Eligible new subscribers receive a one-month free trial when the introductory offer is available. Payment is charged to your Apple Account, and the subscription renews automatically unless canceled at least 24 hours before the current period ends. Manage or cancel in your Apple Account subscription settings. Organization-sponsored members do not need an individual subscription.
+
+Privacy Policy: https://getaeraapp.com/privacy/
+Terms of Use (Apple Standard EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
+
 ## Keywords
 
 emergency,preparedness,disaster,safety,response,community,volunteer,household,shelter,relief
 
 ## URLs
 
-- **Support URL:** https://getaeraapp.com
+- **Support URL:** https://getaeraapp.com/support/
 - **Marketing URL:** https://getaeraapp.com
 - **Privacy Policy URL:** https://getaeraapp.com/privacy
 - **Support email:** aerapp369@gmail.com
@@ -85,7 +90,7 @@ Confirm these answers before submission:
 
 ## Final Submission Gate
 
-- Uploaded build 1.0 (1) finishes processing
+- Corrected build 1.0 (19), or a higher unused build number, finishes processing
 - TestFlight smoke test completed on a physical iPhone
 - Dedicated privacy-policy URL is publicly accessible at `https://getaeraapp.com/privacy`
 - Support URL and support email are monitored

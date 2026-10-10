@@ -9,7 +9,7 @@ export type GapSuggestedAmountInput = {
   immediateExpenseCategories?: string[] | null;
 };
 
-const BASELINE_MONTHLY_MEMBER_CONTRIBUTION = 9.99 * (1 - 0.30) * 0.30;
+const BASELINE_MONTHLY_MEMBER_CONTRIBUTION = 2.99 * (1 - 0.30) * 0.30;
 
 const EXPENSE_IMPACT_WEIGHTS: Record<string, number> = {
   'Rent / Mortgage': 700,
@@ -39,7 +39,7 @@ const getUrgencyMultiplier = (urgencyRisk: string | null | undefined): number =>
 };
 
 const getRevenueScale = (settings?: Partial<GapRevenueSettings> | null): number => {
-  const membershipPrice = toPositiveNumber(settings?.membershipPriceUsd, 9.99);
+  const membershipPrice = toPositiveNumber(settings?.membershipPriceUsd, 2.99);
   const appStoreFeePercent = clamp(Number(settings?.appStoreFeePercent ?? 30), 0, 50);
   const gapFundAllocationPercent = clamp(Number(settings?.gapFundAllocationPercent ?? 30), 1, 100);
   const billingCycle = settings?.billingCycle === 'annual' ? 'annual' : 'monthly';

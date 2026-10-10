@@ -503,7 +503,7 @@ export const StorageService = {
     const resp = await registerAuth({ email, password, fullName });
     if (resp?.token) this.setAuthToken(resp.token);
     if (resp?.refreshToken) this.setRefreshToken(resp.refreshToken);
-    if (resp?.user) {
+    if (resp?.token && resp?.user?.id) {
       const profile: UserProfile = {
         id: resp.user.id,
         fullName: resp.user.fullName || fullName || '',
@@ -524,7 +524,9 @@ export const StorageService = {
         onboardComplete: false,
         notifications: { push: true, sms: true, email: true }
       };
-      this.saveProfile(profile);
+      // Setup persists the user's actual details. Do not send this empty draft
+      // to the server or create a signed-in profile before email confirmation.
+      this.saveProfile(profile, { skipRemoteSync: true });
     }
     return resp;
   },
@@ -602,7 +604,7 @@ export const StorageService = {
           emergencyContactName: existing?.emergencyContactName || profile.emergencyContactName || '',
           emergencyContactPhone: existing?.emergencyContactPhone || profile.emergencyContactPhone || '',
           emergencyContactRelation: existing?.emergencyContactRelation || profile.emergencyContactRelation || '',
-          communityId: profile.communityId || existing?.communityId || '',
+          communityId: profile.communityId || '',
           role: profile.role || existing?.role || 'GENERAL_USER',
           language: profile.language || existing?.language || 'en',
           active: existing?.active ?? profile.active,
@@ -633,7 +635,7 @@ export const StorageService = {
               emergencyContactName: remoteProfile?.emergencyContactName || latest.emergencyContactName || '',
               emergencyContactPhone: remoteProfile?.emergencyContactPhone || latest.emergencyContactPhone || '',
               emergencyContactRelation: remoteProfile?.emergencyContactRelation || latest.emergencyContactRelation || '',
-              communityId: remoteProfile?.communityId || latest.communityId || resp.user.orgId || '',
+              communityId: remoteProfile?.communityId ?? resp.user.orgId ?? '',
               onboardComplete:
                 latest.onboardComplete ||
                 hasRemoteVitals ||
@@ -697,7 +699,7 @@ export const StorageService = {
               householdName: householdSummary?.householdName,
               householdCode: householdSummary?.householdCode,
               householdRole: householdSummary?.householdRole,
-              communityId: remoteProfile?.communityId || latest.communityId || resp.user.orgId || '',
+              communityId: remoteProfile?.communityId ?? resp.user.orgId ?? '',
               onboardComplete:
                 latest.onboardComplete ||
                 hasRemoteVitals || // If vitals exist in Supabase, assume onboarding was finished.
@@ -2317,7 +2319,7 @@ export const StorageService = {
 
   getGapRevenueSettings(): GapRevenueSettings {
     const defaults: GapRevenueSettings = {
-      membershipPriceUsd: 9.99,
+      membershipPriceUsd: 2.99,
       appStoreFeePercent: 30,
       gapFundAllocationPercent: 30,
       billingCycle: 'monthly',
