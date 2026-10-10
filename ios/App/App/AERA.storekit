@@ -1,0 +1,70 @@
+{
+  "identifier" : "8C918DBA-72D7-44E7-B84B-B0AE75F23E39",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_applicationInternalID" : "",
+    "_developerTeamID" : "",
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : 0,
+    "_locale" : "en_US",
+    "_renewalBillingIssuesEnabled" : false,
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ],
+    "_timeRate" : 0
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "AERA_MEMBERSHIP",
+      "localizations" : [
+        {
+          "description" : "AERA individual membership",
+          "displayName" : "AERA Membership",
+          "locale" : "en_US"
+        }
+      ],
+      "name" : "AERA Membership",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "2.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "5B180848-C0B4-47CD-9FB5-7E9331D3EA20",
+          "introductoryOffer" : {
+            "internalID" : "A8DCA6B8-D6E4-43E7-8330-101447E16380",
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P1M"
+          },
+          "localizations" : [
+            {
+              "description" : "Household preparedness, trusted community updates, incident reporting, and recovery resources.",
+              "displayName" : "AERA Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.aera.emergencyresponse.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "AERA Monthly Membership",
+          "subscriptionGroupID" : "AERA_MEMBERSHIP",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

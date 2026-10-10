@@ -1,5 +1,6 @@
 import { UserRole, ViewState } from '../types';
 import { normalizeUserRole } from './roles';
+import type { CommercialFeature } from './commercialAccess';
 
 type RestrictedView =
   | 'NEW_SIGNUPS'
@@ -47,8 +48,8 @@ const viewAccess: Record<RestrictedView, readonly UserRole[]> = {
   EVENT_SETUP: ['ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN'],
   VOLUNTEER_SCAN: ['ADMIN', 'FIRST_RESPONDER'],
   EVENT_DASHBOARD: ['ADMIN', 'STATE_ADMIN', 'COUNTY_ADMIN', 'ORG_ADMIN', 'INSTITUTION_ADMIN', 'FIRST_RESPONDER', 'LOCAL_AUTHORITY'],
-  BUYER_PORTAL: ['ADMIN', 'BUYER'],
-  LEAD_INTAKE: ['ADMIN', 'ORG_ADMIN'],
+  BUYER_PORTAL: ['ADMIN'],
+  LEAD_INTAKE: ['ADMIN'],
   LEAD_ADMIN: ['ADMIN'],
   FINANCE_DASHBOARD: ['ADMIN'],
 };
@@ -71,9 +72,25 @@ const adminAreaAccess: Record<AdminAreaFeature, readonly UserRole[]> = {
   FINANCE: ['ADMIN'],
 };
 
-export function canRoleAccessView(role: unknown, view: ViewState): boolean {
+const commercialViewFeature: Partial<Record<ViewState, CommercialFeature>> = {
+  BUYER_PORTAL: 'BUYERS',
+  LEAD_INTAKE: 'LEADS',
+  LEAD_ADMIN: 'LEADS',
+  FINANCE_DASHBOARD: 'FINANCE',
+};
+
+export function canRoleAccessView(
+  role: unknown,
+  view: ViewState,
+  commercialFeatures: ReadonlySet<CommercialFeature> = new Set()
+): boolean {
+  const normalizedRole = normalizeUserRole(role);
+  const commercialFeature = commercialViewFeature[view];
+  if (commercialFeature) {
+    return normalizedRole === 'ADMIN' || commercialFeatures.has(commercialFeature);
+  }
   const allowedRoles = viewAccess[view as RestrictedView];
-  return allowedRoles ? allowedRoles.includes(normalizeUserRole(role)) : true;
+  return allowedRoles ? allowedRoles.includes(normalizedRole) : true;
 }
 
 export function canRoleAccessAdminFeature(role: unknown, feature: AdminAreaFeature): boolean {

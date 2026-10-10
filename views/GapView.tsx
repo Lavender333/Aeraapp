@@ -827,7 +827,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
 
             {/* Revenue math summary (always visible) */}
             {(() => {
-              const price = Number(revenueSettings.membershipPriceUsd || 9.99);
+              const price = Number(revenueSettings.membershipPriceUsd || 2.99);
               const platformFee = Number(revenueSettings.appStoreFeePercent || 30) / 100;
               const gapPct = Number(revenueSettings.gapFundAllocationPercent || 30) / 100;
               const netPerMember = price * (1 - platformFee);
@@ -900,7 +900,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
 
                 {/* Live preview while editing */}
                 {(() => {
-                  const price = Number(revenueDraft.membershipPriceUsd || 9.99);
+                  const price = Number(revenueDraft.membershipPriceUsd || 2.99);
                   const pfee = Number(revenueDraft.appStoreFeePercent || 30) / 100;
                   const gpct = Number(revenueDraft.gapFundAllocationPercent || 30) / 100;
                   const net = price * (1 - pfee);
@@ -934,7 +934,7 @@ export const GapView: React.FC<{ setView: (v: ViewState) => void }> = ({ setView
                         {communityIds.map((cid) => {
                           const funding = communityFundingById.get(cid);
                           if (!funding) return null;
-                          const price = Number(revenueDraft.membershipPriceUsd || 9.99);
+                          const price = Number(revenueDraft.membershipPriceUsd || 2.99);
                           const pfee = Number(revenueDraft.appStoreFeePercent || 30) / 100;
                           const gpct = Number(revenueDraft.gapFundAllocationPercent || 30) / 100;
                           const monthlyDiv = revenueDraft.billingCycle === 'annual' ? 12 : 1;

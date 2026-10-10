@@ -58,12 +58,14 @@ import {
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { canRoleAccessView } from '../services/rolePageAccess';
+import { useMyCommercialAccess } from '../services/commercialAccess';
 
 interface DashboardViewProps {
   setView: (view: ViewState) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
+  const { features: commercialFeatures } = useMyCommercialAccess();
   const PING_REFRESH_INTERVAL_MS = 15000;
   const ONBOARDING_WELCOME_SNOOZE_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
   const ONBOARDING_BANNER_SNOOZE_MS = 1000 * 60 * 60 * 24; // 1 day
@@ -114,7 +116,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const [showFinanceModal, setShowFinanceModal] = useState(false);
   const [financeTierKey, setFinanceTierKey] = useState<'tier1' | 'tier2' | 'tier3'>('tier2');
   const [financeScenario, setFinanceScenario] = useState<'low' | 'medium' | 'high'>('high');
-  const [financePrice, setFinancePrice] = useState<number>(1.99);
+  const [financePrice, setFinancePrice] = useState<number>(2.99);
   const [financeUsersInput, setFinanceUsersInput] = useState<number>(3000);
   const [financeAppleFeePercent, setFinanceAppleFeePercent] = useState<number>(20);
   const [financeExporting, setFinanceExporting] = useState(false);
@@ -492,9 +494,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const isOrgAdmin = userRole === 'INSTITUTION_ADMIN' || userRole === 'ORG_ADMIN';
   const canOpenOrgDashboard = canRoleAccessView(userRole, 'ORG_DASHBOARD');
   const isContractor = userRole === 'CONTRACTOR';
-  const canAccessLeadIntake = canRoleAccessView(userRole, 'LEAD_INTAKE');
-  const canAccessBuyerPortal = canRoleAccessView(userRole, 'BUYER_PORTAL');
-  const canAccessLeadAdmin = canRoleAccessView(userRole, 'LEAD_ADMIN');
+  const canAccessLeadIntake = canRoleAccessView(userRole, 'LEAD_INTAKE', commercialFeatures);
+  const canAccessBuyerPortal = canRoleAccessView(userRole, 'BUYER_PORTAL', commercialFeatures);
+  const canAccessLeadAdmin = canRoleAccessView(userRole, 'LEAD_ADMIN', commercialFeatures);
+  const canAccessFinance = canRoleAccessView(userRole, 'FINANCE_DASHBOARD', commercialFeatures);
   const showCommunityBlocks = !isGeneralUser;
   const showCommunityAnnouncements = hasCommunity;
   const showLogisticsHome = canRoleAccessView(userRole, 'LOGISTICS');
@@ -674,9 +677,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
   const breakEvenUsersPrice = netPricePerUser > 0
     ? Math.max(0, Math.ceil(financeBurn / netPricePerUser))
     : null;
-  const netSubscriptionAt199 = 1.99 * (1 - appleFeeRate);
-  const breakEvenUsersAt199 = netSubscriptionAt199 > 0
-    ? Math.max(0, Math.ceil(financeBurn / netSubscriptionAt199))
+  const netSubscriptionAt299 = 2.99 * (1 - appleFeeRate);
+  const breakEvenUsersAt299 = netSubscriptionAt299 > 0
+    ? Math.max(0, Math.ceil(financeBurn / netSubscriptionAt299))
     : null;
   const projected12MonthProfit = monthlyProfit * 12;
   const initials = userName ? userName.trim().charAt(0).toUpperCase() : 'A';
@@ -1131,8 +1134,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
                     </p>
                   </div>
                   <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-                    <p className="text-[11px] uppercase font-bold text-slate-500">Minimum $1.99 subscribers to break even</p>
-                    <p className="text-lg font-bold text-slate-900">{breakEvenUsersAt199?.toLocaleString() ?? 'N/A'}</p>
+                    <p className="text-[11px] uppercase font-bold text-slate-500">Minimum $2.99 subscribers to break even</p>
+                    <p className="text-lg font-bold text-slate-900">{breakEvenUsersAt299?.toLocaleString() ?? 'N/A'}</p>
                     <p className="text-[10px] text-slate-500">After the {financeAppleFeePercent}% marketplace fee</p>
                   </div>
                   <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
@@ -1301,7 +1304,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
       </section>
       )}
 
-      {userRole === 'ADMIN' && (
+      {(canAccessLeadAdmin || canAccessBuyerPortal) && (
         <section className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 shadow-sm">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div>
@@ -1355,17 +1358,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setView }) => {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => setView('LEAD_ADMIN')}>
-              Lead Admin
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setView('BUYER_PORTAL')}>
-              Buyer Portal
-            </Button>
+            {canAccessLeadAdmin && (
+              <Button size="sm" onClick={() => setView('LEAD_ADMIN')}>Lead Admin</Button>
+            )}
+            {canAccessBuyerPortal && (
+              <Button size="sm" variant="outline" onClick={() => setView('BUYER_PORTAL')}>Buyer Portal</Button>
+            )}
           </div>
         </section>
       )}
 
-      {userRole === 'ADMIN' && (
+      {canAccessFinance && (
         <section className="bg-white/95 border border-emerald-200 rounded-2xl p-4 shadow-sm">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div>

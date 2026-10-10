@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { Product } from '@capgo/native-purchases';
 import { Check, Loader2, RefreshCcw, ShieldCheck } from 'lucide-react';
 import { UserProfile } from '../types';
@@ -31,29 +31,40 @@ export function SubscriptionView({ profile, onSubscribed, onOpenAccountSettings 
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<'purchase' | 'restore' | null>(null);
   const [error, setError] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
+  const subscribedCallback = useRef(onSubscribed);
+  const actionInFlight = useRef(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const entitlement = await getAppleSubscriptionEntitlement(profile);
-      if (entitlement.active) {
-        onSubscribed();
-        return;
-      }
-      setProduct(await loadMonthlySubscriptionProduct());
-    } catch (loadError) {
-      setError(friendlyPurchaseError(loadError));
-    } finally {
-      setLoading(false);
-    }
-  }, [onSubscribed, profile]);
+  useEffect(() => { subscribedCallback.current = onSubscribed; }, [onSubscribed]);
 
   useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      setProduct(null);
+      setError('');
+      try {
+        const entitlement = await getAppleSubscriptionEntitlement({ id: profile.id });
+        if (cancelled) return;
+        if (entitlement.active) {
+          subscribedCallback.current();
+          return;
+        }
+        const monthlyProduct = await loadMonthlySubscriptionProduct();
+        if (!cancelled) setProduct(monthlyProduct);
+      } catch (loadError) {
+        if (!cancelled) setError(friendlyPurchaseError(loadError));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
     void load();
-  }, [load]);
+    return () => { cancelled = true; };
+  }, [profile.id, retryCount]);
 
   const purchase = async () => {
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
     setBusyAction('purchase');
     setError('');
     try {
@@ -62,11 +73,14 @@ export function SubscriptionView({ profile, onSubscribed, onOpenAccountSettings 
     } catch (purchaseError) {
       setError(friendlyPurchaseError(purchaseError));
     } finally {
+      actionInFlight.current = false;
       setBusyAction(null);
     }
   };
 
   const restore = async () => {
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
     setBusyAction('restore');
     setError('');
     try {
@@ -76,6 +90,7 @@ export function SubscriptionView({ profile, onSubscribed, onOpenAccountSettings 
     } catch (restoreError) {
       setError(friendlyPurchaseError(restoreError));
     } finally {
+      actionInFlight.current = false;
       setBusyAction(null);
     }
   };
@@ -125,6 +140,12 @@ export function SubscriptionView({ profile, onSubscribed, onOpenAccountSettings 
         </ul>
 
         {error && <p role="alert" className="mt-5 rounded-xl bg-red-50 px-3 py-2 text-center text-xs font-semibold text-red-700">{error}</p>}
+        {!loading && !product && (
+          <button type="button" onClick={() => setRetryCount(count => count + 1)} disabled={busyAction !== null}
+            className="mt-3 min-h-11 w-full rounded-xl border border-emerald-700 text-sm font-semibold text-emerald-800 disabled:opacity-50">
+            Try Again
+          </button>
+        )}
 
         <button
           type="button"

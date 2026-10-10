@@ -1,5 +1,7 @@
 import type { GapDisbursement, GapRevenueSettings, HouseholdMember, OrgBankInfo, OrgInventory, ReplenishmentRequest, UserProfile } from '../types';
 import { supabase, getOrgByCode, getOrgIdByCode } from './supabase';
+import { getConfirmationErrorMessage, getSignupErrorMessage } from './authErrors';
+import { getAuthRedirectUrl } from './authRedirect';
 import { calculateAgeFromDob, isValidPhoneForInvite, normalizePhoneDigits, validateHouseholdMembers } from './validation';
 import type { VisionAssessmentResult } from './visionAssessment';
 
@@ -4774,10 +4776,8 @@ export async function incrementPeopleRegisteredCount() {
 export async function registerAuth(payload: { email?: string; phone?: string; password: string; fullName?: string }) {
   const normalizedEmail = payload.email ? String(payload.email).trim().toLowerCase() : undefined;
   const { phone, password, fullName } = payload;
-  const emailRedirectTo = typeof window !== 'undefined'
-    ? `${window.location.origin}${window.location.pathname}`
-    : undefined;
-  const { data, error } = await supabase.auth.signUp({
+  const emailRedirectTo = getAuthRedirectUrl();
+  const signupResult = await supabase.auth.signUp({
     email: normalizedEmail || undefined,
     phone: phone || undefined,
     password,
@@ -4789,12 +4789,11 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
     },
   });
 
-  if (error) {
-    const message = String((error as any)?.message || '').toLowerCase();
-    if (message.includes('already registered') || message.includes('already been registered') || message.includes('already exists')) {
-      throw new Error('That email already has an account. Log in or reset your password.');
-    }
-    throw error;
+  const data = signupResult.data;
+  if (signupResult.error) {
+    // Existing accounts must use login. Re-running signup initialization would
+    // overwrite their role, organization and saved household information.
+    throw new Error(getSignupErrorMessage(signupResult.error));
   }
 
   const userId = data.user?.id;
@@ -4806,7 +4805,7 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
       full_name: fullName || null,
       role: 'GENERAL_USER',
       org_id: null,
-    });
+    }, { onConflict: 'id', ignoreDuplicates: true });
 
     if (profileError) {
       const profileMessage = String((profileError as any)?.message || '').toLowerCase();
@@ -4817,7 +4816,7 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
     }
   }
 
-  if (userId) {
+  if (userId && data.session?.access_token) {
     try {
       await incrementPeopleRegisteredCount();
     } catch (e) {
@@ -4844,15 +4843,13 @@ export async function resendSignupConfirmation(email: string): Promise<void> {
   const normalizedEmail = String(email || '').trim().toLowerCase();
   if (!normalizedEmail) throw new Error('Enter the email address used to create the account.');
 
-  const emailRedirectTo = typeof window !== 'undefined'
-    ? `${window.location.origin}${window.location.pathname}`
-    : undefined;
+  const emailRedirectTo = getAuthRedirectUrl();
   const { error } = await supabase.auth.resend({
     type: 'signup',
     email: normalizedEmail,
     options: { emailRedirectTo },
   });
-  if (error) throw error;
+  if (error) throw new Error(getConfirmationErrorMessage(error));
 }
 
 export async function loginAuth(payload: { email?: string; phone?: string; password: string }) {
@@ -4904,9 +4901,7 @@ export async function loginAuth(payload: { email?: string; phone?: string; passw
 export async function forgotPassword(payload: { email: string }) {
   const normalizedEmail = String(payload.email || '').trim().toLowerCase();
   if (!normalizedEmail) throw new Error('Email is required');
-  const redirectTo = typeof window !== 'undefined'
-    ? `${window.location.origin}/reset-password`
-    : undefined;
+  const redirectTo = getAuthRedirectUrl('/reset-password');
 
   const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
     redirectTo,
@@ -6193,7 +6188,7 @@ export async function saveGapRevenueSettingsRemote(settings: GapRevenueSettings)
   const userId = authData?.user?.id || null;
 
   const payload = {
-    membershipPriceUsd: Number(settings.membershipPriceUsd || 9.99),
+    membershipPriceUsd: Number(settings.membershipPriceUsd || 2.99),
     appStoreFeePercent: Number(settings.appStoreFeePercent || 30),
     gapFundAllocationPercent: Number(settings.gapFundAllocationPercent || 30),
     billingCycle: settings.billingCycle === 'annual' ? 'annual' : 'monthly',

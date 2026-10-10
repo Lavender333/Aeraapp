@@ -24,14 +24,17 @@ export function SubscriptionAccountCard({ profile, onChoosePlan }: Props) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<'restore' | 'manage' | null>(null);
   const [message, setMessage] = useState('');
+  const showMembership = isAppleSubscriptionDevice() && requiresIndividualAppleSubscription(profile, true);
 
   const load = useCallback(async () => {
+    if (!showMembership) return;
     setLoading(true);
     setMessage('');
     try {
       const [access, storeProduct] = await Promise.all([
-        getAppleSubscriptionEntitlement(profile),
-        loadMonthlySubscriptionProduct(),
+        getAppleSubscriptionEntitlement({ id: profile.id }),
+        // A catalog outage must not hide a verified, already-paid membership.
+        loadMonthlySubscriptionProduct().catch(() => null),
       ]);
       setEntitlement(access);
       setProduct(storeProduct);
@@ -40,13 +43,13 @@ export function SubscriptionAccountCard({ profile, onChoosePlan }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [profile]);
+  }, [profile.id, showMembership]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  if (!isAppleSubscriptionDevice() || !requiresIndividualAppleSubscription(profile, true)) return null;
+  if (!showMembership) return null;
 
   const restore = async () => {
     setBusy('restore');

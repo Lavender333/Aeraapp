@@ -28,6 +28,10 @@
   },
   "exclude": [
     "dist",
+    "docs",
+    "ios",
+    "android",
+    "build",
     "node_modules",
     "supabase/functions"
   ]

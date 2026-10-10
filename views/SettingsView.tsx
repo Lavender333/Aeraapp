@@ -6275,7 +6275,7 @@ export const SettingsView: React.FC<{ setView: (v: ViewState) => void }> = ({ se
       items: [
         {
           label: 'Financial Dashboard',
-          description: 'See revenue, costs, and subscribers needed at $1.99',
+          description: 'See revenue, costs, and subscribers needed at $2.99',
           icon: Activity,
           action: openFinancialDashboard,
           visible: canRoleAccessAdminFeature(normalizedRole, 'FINANCE'),
