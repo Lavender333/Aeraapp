@@ -1,8 +1,7 @@
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
 import {
   PushNotifications,
   type ActionPerformed,
-  type PluginListenerHandle,
   type Token,
 } from '@capacitor/push-notifications';
 import type { ViewState } from '../types';

@@ -1,6 +1,7 @@
 import type { GapDisbursement, GapRevenueSettings, HouseholdMember, OrgBankInfo, OrgInventory, ReplenishmentRequest, UserProfile } from '../types';
 import { supabase, getOrgByCode, getOrgIdByCode } from './supabase';
-import { getConfirmationErrorMessage, getSignupErrorMessage, isExistingAccountError } from './authErrors';
+import { getConfirmationErrorMessage, getSignupErrorMessage } from './authErrors';
+import { getAuthRedirectUrl } from './authRedirect';
 import { calculateAgeFromDob, isValidPhoneForInvite, normalizePhoneDigits, validateHouseholdMembers } from './validation';
 import type { VisionAssessmentResult } from './visionAssessment';
 
@@ -4775,9 +4776,7 @@ export async function incrementPeopleRegisteredCount() {
 export async function registerAuth(payload: { email?: string; phone?: string; password: string; fullName?: string }) {
   const normalizedEmail = payload.email ? String(payload.email).trim().toLowerCase() : undefined;
   const { phone, password, fullName } = payload;
-  const emailRedirectTo = typeof window !== 'undefined'
-    ? `${window.location.origin}${window.location.pathname}`
-    : undefined;
+  const emailRedirectTo = getAuthRedirectUrl();
   const signupResult = await supabase.auth.signUp({
     email: normalizedEmail || undefined,
     phone: phone || undefined,
@@ -4790,26 +4789,11 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
     },
   });
 
-  let data = signupResult.data;
-  let createdAccount = true;
-
+  const data = signupResult.data;
   if (signupResult.error) {
-    // Account creation is idempotent when the same person immediately retries
-    // with the same credentials (for example, after a slow network response).
-    if (normalizedEmail && isExistingAccountError(signupResult.error)) {
-      const loginResult = await supabase.auth.signInWithPassword({
-        email: normalizedEmail,
-        password,
-      });
-      if (!loginResult.error && loginResult.data.user && loginResult.data.session) {
-        data = loginResult.data;
-        createdAccount = false;
-      } else {
-        throw new Error(getSignupErrorMessage(signupResult.error));
-      }
-    } else {
-      throw new Error(getSignupErrorMessage(signupResult.error));
-    }
+    // Existing accounts must use login. Re-running signup initialization would
+    // overwrite their role, organization and saved household information.
+    throw new Error(getSignupErrorMessage(signupResult.error));
   }
 
   const userId = data.user?.id;
@@ -4821,7 +4805,7 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
       full_name: fullName || null,
       role: 'GENERAL_USER',
       org_id: null,
-    });
+    }, { onConflict: 'id', ignoreDuplicates: true });
 
     if (profileError) {
       const profileMessage = String((profileError as any)?.message || '').toLowerCase();
@@ -4832,7 +4816,7 @@ export async function registerAuth(payload: { email?: string; phone?: string; pa
     }
   }
 
-  if (userId && createdAccount) {
+  if (userId && data.session?.access_token) {
     try {
       await incrementPeopleRegisteredCount();
     } catch (e) {
@@ -4859,9 +4843,7 @@ export async function resendSignupConfirmation(email: string): Promise<void> {
   const normalizedEmail = String(email || '').trim().toLowerCase();
   if (!normalizedEmail) throw new Error('Enter the email address used to create the account.');
 
-  const emailRedirectTo = typeof window !== 'undefined'
-    ? `${window.location.origin}${window.location.pathname}`
-    : undefined;
+  const emailRedirectTo = getAuthRedirectUrl();
   const { error } = await supabase.auth.resend({
     type: 'signup',
     email: normalizedEmail,
@@ -4919,9 +4901,7 @@ export async function loginAuth(payload: { email?: string; phone?: string; passw
 export async function forgotPassword(payload: { email: string }) {
   const normalizedEmail = String(payload.email || '').trim().toLowerCase();
   if (!normalizedEmail) throw new Error('Email is required');
-  const redirectTo = typeof window !== 'undefined'
-    ? `${window.location.origin}/reset-password`
-    : undefined;
+  const redirectTo = getAuthRedirectUrl('/reset-password');
 
   const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
     redirectTo,

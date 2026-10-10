@@ -347,7 +347,7 @@ export default function App() {
                   emergencyContactPhone: remoteProfile?.emergencyContactPhone || baseProfile.emergencyContactPhone || '',
                   emergencyContactRelation:
                     remoteProfile?.emergencyContactRelation || baseProfile.emergencyContactRelation || '',
-                  communityId: remoteProfile?.communityId || baseProfile.communityId || '',
+                  communityId: remoteProfile?.communityId ?? baseProfile.communityId ?? '',
                   role: remoteProfile?.role || baseProfile.role || 'GENERAL_USER',
                   onboardComplete: remoteProfile?.onboardComplete ?? baseProfile.onboardComplete,
                   notifications: baseProfile.notifications || { push: true, sms: true, email: true },
@@ -408,7 +408,7 @@ export default function App() {
               emergencyContactName: remoteProfile?.emergencyContactName || storedSessionProfile?.emergencyContactName || '',
               emergencyContactPhone: remoteProfile?.emergencyContactPhone || storedSessionProfile?.emergencyContactPhone || '',
               emergencyContactRelation: remoteProfile?.emergencyContactRelation || storedSessionProfile?.emergencyContactRelation || '',
-              communityId: remoteProfile?.communityId || storedSessionProfile?.communityId || '',
+              communityId: remoteProfile?.communityId ?? storedSessionProfile?.communityId ?? '',
               role: remoteProfile?.role || storedSessionProfile?.role || 'GENERAL_USER',
               language: 'en',
               active: true,
@@ -488,6 +488,7 @@ export default function App() {
       }
 
       if (event === 'SIGNED_OUT') {
+        setSubscriptionUnlockedFor(null);
         initialSessionPromise = null;
         StorageService.logoutUser();
         setPostSplashView('LOGIN');
@@ -497,6 +498,14 @@ export default function App() {
     return () => {
       subscription?.subscription?.unsubscribe();
     };
+  }, []);
+
+  useEffect(() => {
+    const recheckSubscription = () => {
+      if (document.visibilityState === 'visible') setSubscriptionUnlockedFor(null);
+    };
+    document.addEventListener('visibilitychange', recheckSubscription);
+    return () => document.removeEventListener('visibilitychange', recheckSubscription);
   }, []);
 
   useEffect(() => {
