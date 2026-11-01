@@ -119,10 +119,17 @@ export function SubscriptionView({ profile, onSubscribed, onOpenAccountSettings 
             <>
               <p className="text-sm font-semibold text-emerald-900">{product.title || 'AERA Monthly'}</p>
               <p className="mt-1 text-3xl font-bold text-slate-900">
-                {includesTrial ? '1 month free' : price}
+                {price} / month
               </p>
+              {includesTrial && (
+                <p className="mt-2 text-sm text-slate-600">
+                  First month free for eligible new subscribers
+                </p>
+              )}
               <p className="mt-1 text-sm text-slate-600">
-                {includesTrial ? `Then ${price} per month` : `${price} per month`}
+                {includesTrial
+                  ? `After any eligible trial, ${price}/month. Renews automatically until canceled.`
+                  : `${price}/month. Renews automatically until canceled.`}
               </p>
             </>
           ) : (
@@ -151,10 +158,10 @@ export function SubscriptionView({ profile, onSubscribed, onOpenAccountSettings 
           type="button"
           onClick={() => void purchase()}
           disabled={!product || loading || busyAction !== null}
-          className="mt-6 flex min-h-12 w-full items-center justify-center rounded-xl bg-emerald-700 px-4 font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-6 flex min-h-12 w-full items-center justify-center rounded-xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busyAction === 'purchase' && <Loader2 className="mr-2 animate-spin" size={18} />}
-          {includesTrial ? 'Start my free month' : price ? `Subscribe for ${price}/month` : 'Continue'}
+          {price ? `Subscribe for ${price}/month` : 'Continue'}
         </button>
 
         <button
